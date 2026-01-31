@@ -1,0 +1,47 @@
+{
+  "name": "endpoint-arena",
+  "version": "1.0.0",
+  "description": "AI models predict clinical trial outcomes",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "dev:all": "concurrently \"next dev --turbopack\" \"drizzle-kit studio\"",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "npx tsx scripts/db-push.ts",
+    "db:migrate": "npx tsx scripts/migrate-from-prisma.ts",
+    "db:seed": "npx tsx scripts/seed.ts",
+    "db:seed-fda": "npx tsx scripts/seed-fda.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@auth/drizzle-adapter": "^1.11.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.39.0",
+    "next": "15.1.6",
+    "next-auth": "^4.24.11",
+    "nodemailer": "^7.0.13",
+    "openai": "^4.77.0",
+    "postgres": "^3.4.8",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "resend": "^6.9.1",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.4.20",
+    "better-sqlite3": "^12.6.2",
+    "concurrently": "^9.2.1",
+    "drizzle-kit": "^0.30.2",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
