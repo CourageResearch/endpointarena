@@ -148,7 +148,7 @@ async function streamClaude(
   let responseText = ''
   let lastThinkingUpdate = Date.now()
 
-  stream.on('contentBlockDelta', (event) => {
+  stream.on('content_block_delta', (event) => {
     const delta = event.delta as any
     if (delta.type === 'thinking_delta') {
       thinkingText += delta.thinking || ''
@@ -167,8 +167,8 @@ async function streamClaude(
     }
   })
 
-  stream.on('contentBlockStart', (event) => {
-    const block = event.contentBlock as any
+  stream.on('content_block_start', (event) => {
+    const block = (event as any).content_block
     if (block?.type === 'thinking') {
       send({ type: 'status', status: 'Deep reasoning in progress...' })
     } else if (block?.type === 'text') {
