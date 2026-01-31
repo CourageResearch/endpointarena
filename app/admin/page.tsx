@@ -3,6 +3,8 @@ import { eq, asc, desc, gte, and } from 'drizzle-orm'
 import { FDAPredictionRunner } from '@/components/FDAPredictionRunner'
 import { Navbar } from '@/components/Navbar'
 
+export const dynamic = 'force-dynamic'
+
 async function getData() {
   const now = new Date()
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)

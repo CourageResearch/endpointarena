@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { db, fdaPredictions } from '@/lib/db'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+
+export const dynamic = 'force-dynamic'
 import { formatDate, getAccuracyColor } from '@/lib/utils'
 import Link from 'next/link'
 import { eq, and, desc } from 'drizzle-orm'

@@ -3,6 +3,8 @@ import { asc, sql } from 'drizzle-orm'
 import { FDACalendarTable } from '@/components/FDACalendarTable'
 import { Navbar } from '@/components/Navbar'
 
+export const dynamic = 'force-dynamic'
+
 async function getFDAEvents() {
   return db.query.fdaCalendarEvents.findMany({
     orderBy: [asc(fdaCalendarEvents.pdufaDate)],

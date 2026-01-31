@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm'
 import { Navbar } from '@/components/Navbar'
 import { MODEL_IDS, MODEL_INFO, getAccuracyColor, type ModelId } from '@/lib/constants'
 
+export const dynamic = 'force-dynamic'
+
 // =============================================================================
 // MODEL ICON COMPONENT
 // =============================================================================

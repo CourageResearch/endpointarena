@@ -3,6 +3,8 @@ import { eq, gte, and, or, desc, asc } from 'drizzle-orm'
 import { Navbar } from '@/components/Navbar'
 import { UpcomingFDAEventRow, PastFDAEventRow } from '@/components/FDAEventRow'
 
+export const dynamic = 'force-dynamic'
+
 async function getData() {
   const now = new Date()
 

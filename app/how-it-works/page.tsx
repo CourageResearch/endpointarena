@@ -3,6 +3,8 @@ import { eq, sql } from 'drizzle-orm'
 import { Navbar } from '@/components/Navbar'
 import { MODEL_IDS } from '@/lib/constants'
 
+export const dynamic = 'force-dynamic'
+
 async function getData() {
   const [fdaEventCount, predictionCount] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(fdaCalendarEvents),
