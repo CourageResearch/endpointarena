@@ -69,7 +69,7 @@ export async function generateOpenAIFDAPrediction(event: FDAEventInfo): Promise<
   } as any) // Type assertion for newer API features
 
   // Extract text from response
-  const textOutput = response.output?.find((o: any) => o.type === 'message')
+  const textOutput = response.output?.find((o: any) => o.type === 'message') as any
   const content = textOutput?.content?.[0]?.text || (response as any).output_text
 
   if (!content) {
