@@ -148,9 +148,10 @@ async function streamClaude(
   let responseText = ''
   let lastThinkingUpdate = Date.now()
 
-  stream.on('content_block_delta', (event) => {
-    const delta = event.delta as any
-    if (delta.type === 'thinking_delta') {
+  // Use 'as any' to handle event type flexibility across SDK versions
+  ;(stream as any).on('contentBlockDelta', (event: any) => {
+    const delta = event.delta
+    if (delta?.type === 'thinking_delta') {
       thinkingText += delta.thinking || ''
       // Throttle thinking updates to every 500ms
       if (Date.now() - lastThinkingUpdate > 500) {
@@ -161,14 +162,14 @@ async function streamClaude(
         })
         lastThinkingUpdate = Date.now()
       }
-    } else if (delta.type === 'text_delta') {
+    } else if (delta?.type === 'text_delta') {
       responseText += delta.text || ''
       send({ type: 'text', text: responseText.slice(-100) })
     }
   })
 
-  stream.on('content_block_start', (event) => {
-    const block = (event as any).content_block
+  ;(stream as any).on('contentBlockStart', (event: any) => {
+    const block = event.contentBlock
     if (block?.type === 'thinking') {
       send({ type: 'status', status: 'Deep reasoning in progress...' })
     } else if (block?.type === 'text') {
