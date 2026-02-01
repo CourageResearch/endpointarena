@@ -124,7 +124,7 @@ export default async function HowItWorksPage() {
                 <p className="text-zinc-500">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
               </div>
               <div>
-                <div className="text-zinc-300 font-medium mb-2">Our Solution</div>
+                <div className="text-zinc-300 font-medium mb-2">The Solution</div>
                 <p className="text-zinc-500">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
               </div>
               <div>
@@ -348,6 +348,7 @@ predict the outcome.
         </section>
 
         {/* Stats */}
+        <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Current Progress</h2>
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
             <div className="text-2xl font-bold text-white">{fdaEventCount}</div>

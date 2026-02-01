@@ -124,7 +124,7 @@ export default async function PromptsPage() {
                 <p className="text-zinc-500">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
               </div>
               <div>
-                <div className="text-zinc-300 font-medium mb-2">Our Solution</div>
+                <div className="text-zinc-300 font-medium mb-2">The Solution</div>
                 <p className="text-zinc-500">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
               </div>
               <div>

@@ -203,73 +203,82 @@ export default async function Home() {
         {/* Next FDA Decision Spotlight */}
         {nextFdaEvent && nextDays !== null && (
           <section className="mb-10">
-            <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-500/15 via-blue-500/5 to-transparent p-6">
-              <div className="flex items-start justify-between gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
-                    </span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">Next FDA Decision</span>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+              {/* Header with countdown */}
+              <div className="bg-gradient-to-r from-blue-500/10 to-transparent px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">Next FDA Decision</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-blue-400">{nextDays}</span>
+                  <span className="text-sm text-zinc-500">days</span>
+                  <span className="text-zinc-600 text-sm ml-2">
+                    ({new Date(nextFdaEvent.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
+                  </span>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <div className="mb-4">
+                  <h2 className="text-2xl font-bold mb-1">{nextFdaEvent.drugName}</h2>
+                  <p className="text-zinc-400 text-sm">{nextFdaEvent.companyName} • {nextFdaEvent.applicationType}</p>
+                </div>
+
+                {nextFdaEvent.eventDescription && (
+                  <p className="text-zinc-500 text-sm mb-4 leading-relaxed">{nextFdaEvent.eventDescription}</p>
+                )}
+
+                {nextFdaEvent.therapeuticArea && (
+                  <div className="mb-6">
+                    <span className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs text-blue-300">{nextFdaEvent.therapeuticArea}</span>
                   </div>
-                  <h2 className="text-2xl font-bold mb-2">{nextFdaEvent.drugName}</h2>
-                  <p className="text-zinc-400 text-sm mb-3">{nextFdaEvent.companyName} • {nextFdaEvent.applicationType}</p>
-                  {nextFdaEvent.eventDescription && (
-                    <p className="text-zinc-500 text-sm mb-4 leading-relaxed">{nextFdaEvent.eventDescription}</p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    {nextFdaEvent.therapeuticArea && (
-                      <span className="px-2.5 py-1 bg-zinc-800/80 border border-zinc-700 rounded-full text-xs text-zinc-300">{nextFdaEvent.therapeuticArea}</span>
-                    )}
-                  </div>
-                  {/* Predictions Summary */}
-                  <div className="pt-4 border-t border-zinc-800">
-                    <div className="text-xs text-zinc-500 uppercase tracking-wider mb-3">What do the models think?</div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {['claude', 'gpt', 'grok'].map((modelId) => {
-                        const pred = findPrediction(nextFdaEvent.predictions || [], modelId)
-                        const info = MODEL_INFO[modelId]
-                        return (
-                          <div key={modelId} className="bg-zinc-800/50 rounded-lg p-3 text-center">
-                            <div className="w-8 h-8 mx-auto mb-2 flex items-center justify-center text-zinc-300">
-                              <ModelIcon id={modelId} />
-                            </div>
-                            <div className="text-xs text-zinc-500 mb-1">{info.name}</div>
-                            {pred ? (
-                              <div className={`text-sm font-bold ${pred.prediction === 'approved' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {pred.prediction === 'approved' ? '✓ Yes' : '✗ No'}
-                              </div>
-                            ) : (
-                              <div className="text-sm text-zinc-600">—</div>
-                            )}
+                )}
+
+                {/* Predictions */}
+                <div className="pt-4 border-t border-zinc-800">
+                  <div className="text-xs text-zinc-500 uppercase tracking-wider mb-4">Model Predictions</div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {['claude', 'gpt', 'grok'].map((modelId) => {
+                      const pred = findPrediction(nextFdaEvent.predictions || [], modelId)
+                      const info = MODEL_INFO[modelId]
+                      const bgColor = modelId === 'claude' ? 'bg-orange-500/5 border-orange-500/20' :
+                                      modelId === 'gpt' ? 'bg-emerald-500/5 border-emerald-500/20' :
+                                      'bg-sky-500/5 border-sky-500/20'
+                      const iconColor = modelId === 'claude' ? 'text-orange-400' :
+                                        modelId === 'gpt' ? 'text-emerald-400' :
+                                        'text-sky-400'
+                      return (
+                        <div key={modelId} className={`${bgColor} border rounded-xl p-4 text-center`}>
+                          <div className={`w-8 h-8 mx-auto mb-2 flex items-center justify-center ${iconColor}`}>
+                            <ModelIcon id={modelId} />
                           </div>
-                        )
-                      })}
-                      <div className="bg-zinc-800/30 border border-dashed border-zinc-700 rounded-lg p-3 text-center">
-                        <div className="w-8 h-8 mx-auto mb-2 rounded-lg bg-blue-900/30 flex items-center justify-center text-blue-400 text-[10px] font-bold">
-                          FDA
+                          <div className="text-xs text-zinc-400 mb-2">{info.name.split(' ')[0]}</div>
+                          {pred ? (
+                            <div className={`text-base font-bold ${pred.prediction === 'approved' ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {pred.prediction === 'approved' ? '✓ Approve' : '✗ Reject'}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-zinc-600">—</div>
+                          )}
                         </div>
-                        <div className="text-xs text-zinc-500 mb-1">Actual</div>
-                        <div className="text-sm font-bold text-yellow-500">?</div>
+                      )
+                    })}
+                    <div className="bg-zinc-800/30 border border-dashed border-zinc-700 rounded-xl p-4 text-center">
+                      <div className="w-8 h-8 mx-auto mb-2 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500 text-xs font-bold">
+                        FDA
                       </div>
+                      <div className="text-xs text-zinc-400 mb-2">Actual</div>
+                      <div className="text-base font-bold text-yellow-500">Pending</div>
                     </div>
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="text-5xl font-bold text-blue-400">
-                    {nextDays}
-                  </div>
-                  <div className="text-sm text-zinc-400 font-medium">days</div>
-                  <div className="text-xs text-zinc-600 mt-2">
-                    {new Date(nextFdaEvent.pdufaDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </div>
-                </div>
               </div>
+            </div>
             </div>
           </section>
         )}
