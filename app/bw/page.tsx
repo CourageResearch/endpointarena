@@ -86,10 +86,10 @@ async function getData() {
   }
 }
 
-const MODEL_INFO: Record<string, { name: string }> = {
-  'claude': { name: 'Claude Opus 4.5' },
-  'gpt': { name: 'GPT-5.2' },
-  'grok': { name: 'Grok 4.1' },
+const MODEL_INFO: Record<string, { name: string; short: string }> = {
+  'claude': { name: 'Claude Opus 4.5', short: 'Claude' },
+  'gpt': { name: 'GPT-5.2', short: 'GPT' },
+  'grok': { name: 'Grok 4.1', short: 'Grok' },
 }
 
 function findPrediction(predictions: any[], canonicalId: string) {
@@ -103,7 +103,7 @@ function findPrediction(predictions: any[], canonicalId: string) {
 }
 
 function formatDate(date: Date) {
-  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 export default async function BWHome() {
@@ -112,104 +112,101 @@ export default async function BWHome() {
   return (
     <div className="min-h-screen bg-white text-black">
       {/* Dotted border top decoration */}
-      <div className="w-full h-8 border-b border-dashed border-gray-300 bg-[radial-gradient(circle,#ccc_1px,transparent_1px)] bg-[length:12px_12px]" />
+      <div className="w-full h-4 border-b border-dashed border-gray-300 bg-[radial-gradient(circle,#ccc_1px,transparent_1px)] bg-[length:10px_10px]" />
 
       {/* Navigation */}
-      <nav className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
-        <Link href="/bw" className="text-xl font-bold tracking-tight">Endpoint Arena</Link>
-        <div className="flex items-center gap-8">
+      <nav className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <Link href="/bw" className="text-lg font-bold tracking-tight">Endpoint Arena</Link>
+        <div className="flex items-center gap-6">
           <Link href="/leaderboard" className="text-sm text-gray-600 hover:text-black">Leaderboard</Link>
-          <Link href="/fda-calendar" className="text-sm text-gray-600 hover:text-black">FDA Calendar</Link>
+          <Link href="/fda-calendar" className="text-sm text-gray-600 hover:text-black">Calendar</Link>
           <Link href="/how-it-works" className="text-sm text-gray-600 hover:text-black">How It Works</Link>
-          <Link href="/" className="text-sm px-4 py-2 border border-gray-300 rounded-lg hover:border-gray-400">Dark Mode</Link>
+          <Link href="/" className="text-xs px-3 py-1.5 border border-gray-300 rounded hover:border-gray-400">Dark</Link>
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-6">
+      <main className="max-w-5xl mx-auto px-4">
         {/* Hero */}
-        <section className="py-16">
-          <div className="inline-block px-3 py-1 bg-gray-100 text-xs font-medium uppercase tracking-wider text-gray-600 mb-6">
-            ■ AI vs FDA Decisions
+        <section className="py-8">
+          <div className="inline-block px-2 py-0.5 bg-gray-100 text-[10px] font-medium uppercase tracking-wider text-gray-600 mb-3">
+            ■ AI vs FDA
           </div>
-          <h1 className="text-5xl font-bold leading-tight mb-2">
-            Can AI Predict FDA Decisions?
+          <h1 className="text-3xl font-bold leading-tight mb-1">
+            Which AI Predicts FDA Decisions Best?
           </h1>
-          <p className="text-3xl text-gray-400 mb-6">
-            Real predictions. Real outcomes.
+          <p className="text-xl text-gray-400 mb-4">
+            Real predictions. Real outcomes. Real competition.
           </p>
-          <p className="text-gray-600 max-w-xl mb-8">
-            Three frontier AI models predict FDA drug approval decisions before they're announced. No hindsight. No cheating. Just forecasting ability put to the test.
+          <p className="text-sm text-gray-600 max-w-lg mb-5">
+            Three frontier AI models predict FDA drug approval decisions before they're announced. No hindsight. No cheating.
           </p>
-          <div className="flex gap-4">
-            <Link href="/fda-calendar" className="px-6 py-3 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+          <div className="flex gap-3">
+            <Link href="/fda-calendar" className="px-4 py-2 bg-black text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors">
               View Predictions
             </Link>
-            <Link href="/how-it-works" className="px-6 py-3 border border-gray-300 text-sm font-medium rounded-lg hover:border-gray-400 transition-colors">
+            <Link href="/how-it-works" className="px-4 py-2 border border-gray-300 text-sm font-medium rounded hover:border-gray-400 transition-colors">
               How it works
             </Link>
           </div>
         </section>
 
-        {/* Dotted separator */}
-        <div className="w-full h-12 border-t border-b border-dashed border-gray-200 bg-[radial-gradient(circle,#ddd_1px,transparent_1px)] bg-[length:8px_8px]" />
+        {/* Stats bar */}
+        <section className="py-4 border-t border-b border-gray-200 mb-6">
+          <div className="flex justify-center items-center gap-12">
+            <div className="text-center">
+              <div className="text-2xl font-bold">{stats.fdaEventsTracked}</div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Events</div>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <div className="text-2xl font-bold">{stats.predictions}</div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Predictions</div>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <div className="text-2xl font-bold">{stats.modelsCompared}</div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Models</div>
+            </div>
+          </div>
+        </section>
 
         {/* Next FDA Decision */}
         {nextFdaEvent && (
-          <section className="py-16">
-            <h2 className="text-3xl font-bold text-center mb-12">Next FDA Decision</h2>
-
-            <div className="max-w-2xl mx-auto border border-gray-200 rounded-2xl overflow-hidden">
-              {/* Countdown header */}
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">PDUFA Date: {formatDate(nextFdaEvent.pdufaDate)}</span>
-                <div className="flex items-center gap-2 px-3 py-1 bg-black text-white rounded-full text-sm">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+          <section className="mb-6">
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-600">Next Decision · {formatDate(nextFdaEvent.pdufaDate)}</span>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-black text-white rounded text-xs">
                   <CountdownTimer targetDate={nextFdaEvent.pdufaDate} variant="light" />
                 </div>
               </div>
-
-              {/* Drug info */}
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="text-2xl font-bold mb-1">{nextFdaEvent.drugName}</h3>
-                    <p className="text-gray-500">{nextFdaEvent.companyName}</p>
+                    <h3 className="text-lg font-bold">{nextFdaEvent.drugName}</h3>
+                    <p className="text-sm text-gray-500">{nextFdaEvent.companyName}</p>
                   </div>
                   {nextFdaEvent.symbols && (
-                    <a
-                      href={`https://finance.yahoo.com/quote/${nextFdaEvent.symbols}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1 border border-gray-300 rounded text-sm font-mono text-gray-600 hover:bg-gray-50"
-                    >
+                    <a href={`https://finance.yahoo.com/quote/${nextFdaEvent.symbols}`} target="_blank" rel="noopener noreferrer"
+                      className="px-2 py-0.5 border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-gray-50">
                       ${nextFdaEvent.symbols}
                     </a>
                   )}
                 </div>
-                {nextFdaEvent.eventDescription && (
-                  <p className="text-gray-600 text-sm mb-6">{nextFdaEvent.eventDescription}</p>
-                )}
-
-                {/* AI Predictions */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-3">
                   {['claude', 'gpt', 'grok'].map((modelId) => {
                     const pred = findPrediction(nextFdaEvent.predictions || [], modelId)
                     const info = MODEL_INFO[modelId]
                     const isApproved = pred?.prediction === 'approved'
                     return (
-                      <div key={modelId} className="border border-gray-200 rounded-xl p-4 text-center">
-                        <div className="text-sm font-medium text-gray-500 mb-2">{info.name}</div>
+                      <div key={modelId} className="border border-gray-200 rounded p-2 text-center">
+                        <div className="text-xs text-gray-500 mb-1">{info.short}</div>
                         {pred ? (
-                          <>
-                            <div className={`text-lg font-bold ${isApproved ? 'text-black' : 'text-gray-400'}`}>
-                              {isApproved ? '✓ Approve' : '✗ Reject'}
-                            </div>
-                            <div className="text-sm text-gray-400">{pred.confidence}% confident</div>
-                          </>
+                          <div className={`text-sm font-bold ${isApproved ? 'text-black' : 'text-gray-400'}`}>
+                            {isApproved ? '↑' : '↓'} {pred.confidence}%
+                          </div>
                         ) : (
-                          <div className="text-gray-400">—</div>
+                          <div className="text-sm text-gray-300">—</div>
                         )}
                       </div>
                     )
@@ -220,54 +217,27 @@ export default async function BWHome() {
           </section>
         )}
 
-        {/* Stats bar */}
-        <section className="py-8 border-t border-b border-gray-200">
-          <div className="flex justify-center items-center gap-16">
-            <div className="text-center">
-              <div className="text-4xl font-bold">{stats.fdaEventsTracked}</div>
-              <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">FDA Events</div>
-            </div>
-            <div className="w-px h-12 bg-gray-200" />
-            <div className="text-center">
-              <div className="text-4xl font-bold">{stats.predictions}</div>
-              <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">Predictions</div>
-            </div>
-            <div className="w-px h-12 bg-gray-200" />
-            <div className="text-center">
-              <div className="text-4xl font-bold">{stats.modelsCompared}</div>
-              <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">AI Models</div>
-            </div>
-          </div>
-        </section>
-
         {/* Leaderboard */}
-        <section className="py-16">
-          <h2 className="text-3xl font-bold text-center mb-12">Model Leaderboard</h2>
-
-          <div className="max-w-3xl mx-auto space-y-4">
+        <section className="mb-6">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">Leaderboard</h2>
+          <div className="space-y-2">
             {leaderboard.map((model, i) => {
               const info = MODEL_INFO[model.id]
               return (
-                <div key={model.id} className="flex items-center gap-6 p-6 border border-gray-200 rounded-xl">
-                  <div className="text-3xl font-bold text-gray-300 w-8">#{i + 1}</div>
+                <div key={model.id} className="flex items-center gap-4 p-3 border border-gray-200 rounded">
+                  <div className="text-lg font-bold text-gray-300 w-6">#{i + 1}</div>
                   <div className="flex-1">
-                    <div className="font-bold text-lg">{info.name}</div>
-                    <div className="text-sm text-gray-500">
-                      {model.total > 0 ? `${model.correct}/${model.total} correct predictions` : 'No results yet'}
+                    <div className="font-medium text-sm">{info.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {model.total > 0 ? `${model.correct}/${model.total} correct` : 'No results'}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold">
-                      {model.total > 0 ? `${model.accuracy.toFixed(0)}%` : '—'}
-                    </div>
-                    <div className="text-xs text-gray-500">accuracy</div>
+                  <div className="text-xl font-bold">
+                    {model.total > 0 ? `${model.accuracy.toFixed(0)}%` : '—'}
                   </div>
-                  <div className="w-32">
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-black rounded-full"
-                        style={{ width: model.total > 0 ? `${model.accuracy}%` : '0%' }}
-                      />
+                  <div className="w-20">
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-black rounded-full" style={{ width: model.total > 0 ? `${model.accuracy}%` : '0%' }} />
                     </div>
                   </div>
                 </div>
@@ -276,98 +246,76 @@ export default async function BWHome() {
           </div>
         </section>
 
-        {/* Upcoming Decisions */}
-        <section className="py-16 border-t border-gray-200">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold">Upcoming Decisions</h2>
-            <Link href="/fda-calendar" className="text-sm text-gray-600 hover:text-black">View all →</Link>
-          </div>
+        {/* Upcoming & Recent side by side */}
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* Upcoming */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">Upcoming</h2>
+              <Link href="/fda-calendar" className="text-xs text-gray-500 hover:text-black">All →</Link>
+            </div>
+            <div className="space-y-1.5">
+              {upcomingFdaEvents.slice(0, 4).map((event) => {
+                const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(event.predictions || [], id))
+                return (
+                  <div key={event.id} className="flex items-center gap-3 p-2 border border-gray-200 rounded text-sm">
+                    <div className="w-16 text-xs text-gray-500">{formatDate(event.pdufaDate)}</div>
+                    <div className="flex-1 truncate font-medium">{event.drugName}</div>
+                    <div className="flex gap-1">
+                      {preds.map((pred, i) => (
+                        <div key={i} className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] ${
+                          pred ? pred.prediction === 'approved' ? 'border-black bg-black text-white' : 'border-gray-400 text-gray-400' : 'border-gray-200 text-gray-300'
+                        }`}>
+                          {pred ? (pred.prediction === 'approved' ? '↑' : '↓') : '?'}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
 
-          <div className="space-y-3">
-            {upcomingFdaEvents.map((event) => {
-              const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(event.predictions || [], id))
-              return (
-                <div key={event.id} className="flex items-center gap-6 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className="w-24 text-sm text-gray-500">{formatDate(event.pdufaDate)}</div>
-                  <div className="flex-1">
-                    <div className="font-medium">{event.drugName}</div>
-                    <div className="text-sm text-gray-500">{event.companyName}</div>
+          {/* Recent */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">Recent Results</h2>
+              <Link href="/fda-calendar" className="text-xs text-gray-500 hover:text-black">All →</Link>
+            </div>
+            <div className="space-y-1.5">
+              {recentFdaDecisions.slice(0, 4).map((event) => {
+                const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(event.predictions || [], id))
+                const isApproved = event.outcome === 'Approved'
+                return (
+                  <div key={event.id} className="flex items-center gap-3 p-2 border border-gray-200 rounded text-sm">
+                    <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isApproved ? 'bg-black text-white' : 'bg-gray-200 text-gray-600'}`}>
+                      {isApproved ? 'APP' : 'REJ'}
+                    </div>
+                    <div className="flex-1 truncate font-medium">{event.drugName}</div>
+                    <div className="flex gap-1">
+                      {preds.map((pred, i) => (
+                        <div key={i} className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold ${
+                          pred ? pred.correct ? 'border-black bg-black text-white' : 'border-gray-300 text-gray-400' : 'border-gray-200 text-gray-300'
+                        }`}>
+                          {pred ? (pred.correct ? '✓' : '✗') : '—'}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    {preds.map((pred, i) => (
-                      <div
-                        key={i}
-                        className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-medium ${
-                          pred
-                            ? pred.prediction === 'approved'
-                              ? 'border-black bg-black text-white'
-                              : 'border-gray-400 text-gray-400'
-                            : 'border-gray-200 text-gray-300'
-                        }`}
-                      >
-                        {pred ? (pred.prediction === 'approved' ? '↑' : '↓') : '?'}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* Recent Decisions */}
-        <section className="py-16 border-t border-gray-200">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold">Recent Results</h2>
-            <Link href="/fda-calendar" className="text-sm text-gray-600 hover:text-black">View all →</Link>
-          </div>
-
-          <div className="space-y-3">
-            {recentFdaDecisions.map((event) => {
-              const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(event.predictions || [], id))
-              const isApproved = event.outcome === 'Approved'
-              return (
-                <div key={event.id} className="flex items-center gap-6 p-4 border border-gray-200 rounded-lg">
-                  <div className="w-24 text-sm text-gray-500">{formatDate(event.pdufaDate)}</div>
-                  <div className="flex-1">
-                    <div className="font-medium">{event.drugName}</div>
-                    <div className="text-sm text-gray-500">{event.companyName}</div>
-                  </div>
-                  <div className={`px-3 py-1 rounded text-sm font-medium ${isApproved ? 'bg-black text-white' : 'bg-gray-200 text-gray-600'}`}>
-                    {event.outcome}
-                  </div>
-                  <div className="flex gap-2">
-                    {preds.map((pred, i) => (
-                      <div
-                        key={i}
-                        className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold ${
-                          pred
-                            ? pred.correct
-                              ? 'border-black bg-black text-white'
-                              : 'border-gray-300 text-gray-400'
-                            : 'border-gray-200 text-gray-300'
-                        }`}
-                      >
-                        {pred ? (pred.correct ? '✓' : '✗') : '—'}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
+                )
+              })}
+            </div>
+          </section>
+        </div>
 
         {/* Footer */}
-        <footer className="py-12 border-t border-gray-200 text-center">
-          <p className="text-sm text-gray-500">
-            Endpoint Arena — Testing AI prediction capabilities on real FDA decisions
-          </p>
+        <footer className="py-6 border-t border-gray-200 text-center">
+          <p className="text-xs text-gray-500">Endpoint Arena — AI predictions on real FDA decisions</p>
         </footer>
       </main>
 
-      {/* Dotted border bottom decoration */}
-      <div className="w-full h-8 border-t border-dashed border-gray-300 bg-[radial-gradient(circle,#ccc_1px,transparent_1px)] bg-[length:12px_12px]" />
+      {/* Dotted border bottom */}
+      <div className="w-full h-4 border-t border-dashed border-gray-300 bg-[radial-gradient(circle,#ccc_1px,transparent_1px)] bg-[length:10px_10px]" />
     </div>
   )
 }
