@@ -22,10 +22,10 @@ interface BWPredictionRowProps {
   type: 'upcoming' | 'recent'
 }
 
-const MODEL_LABELS: Record<string, string> = {
-  'claude-opus': 'Claude',
-  'gpt-5.2': 'GPT',
-  'grok-4': 'Grok',
+const MODEL_LABELS: Record<string, { short: string; full: string }> = {
+  'claude-opus': { short: 'C', full: 'Claude' },
+  'gpt-5.2': { short: 'G', full: 'GPT' },
+  'grok-4': { short: 'X', full: 'Grok' },
 }
 
 function formatDate(date: Date) {
@@ -58,32 +58,26 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
 
             if (type === 'upcoming') {
               return (
-                <div key={modelId} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-400 w-8">{label}</span>
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center text-[10px] font-medium ${
-                    pred
-                      ? pred.prediction === 'approved'
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                        : 'border-red-300 bg-red-50 text-red-500'
-                      : 'border-gray-200 bg-gray-50 text-gray-300'
-                  }`}>
-                    {pred ? (pred.prediction === 'approved' ? '↑' : '↓') : '?'}
-                  </div>
+                <div key={modelId} className={`w-6 h-6 rounded border flex items-center justify-center text-[10px] font-medium ${
+                  pred
+                    ? pred.prediction === 'approved'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                      : 'border-red-300 bg-red-50 text-red-500'
+                    : 'border-gray-200 bg-gray-50 text-gray-400'
+                }`} title={`${label.full}: ${pred ? (pred.prediction === 'approved' ? 'Approve' : 'Reject') : 'No prediction'}`}>
+                  {label.short}
                 </div>
               )
             } else {
               return (
-                <div key={modelId} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-400 w-8">{label}</span>
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center text-[10px] font-bold ${
-                    pred
-                      ? pred.correct
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                        : 'border-red-300 bg-red-50 text-red-500'
-                      : 'border-gray-200 bg-gray-50 text-gray-300'
-                  }`}>
-                    {pred ? (pred.correct ? '✓' : '✗') : '—'}
-                  </div>
+                <div key={modelId} className={`w-6 h-6 rounded border flex items-center justify-center text-[10px] font-bold ${
+                  pred
+                    ? pred.correct
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                      : 'border-red-300 bg-red-50 text-red-500'
+                    : 'border-gray-200 bg-gray-50 text-gray-400'
+                }`} title={`${label.full}: ${pred ? (pred.correct ? 'Correct' : 'Wrong') : 'No prediction'}`}>
+                  {label.short}
                 </div>
               )
             }
@@ -103,7 +97,7 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
             if (!pred) {
               return (
                 <div key={modelId} className="text-xs text-gray-400">
-                  <span className="font-medium">{label}:</span> No prediction
+                  <span className="font-medium">{label.full}:</span> No prediction
                 </div>
               )
             }
@@ -113,7 +107,7 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
             return (
               <div key={modelId} className="text-xs">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold">{label}</span>
+                  <span className="font-bold">{label.full}</span>
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                     isApprove ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
                   }`}>
