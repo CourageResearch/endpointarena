@@ -4,7 +4,6 @@ import { useState } from 'react'
 import {
   MODEL_IDS,
   MODEL_INFO,
-  LEGACY_MODEL_IDS,
   OUTCOME_COLORS,
   PREDICTION_COLORS,
   matchesModel,
@@ -375,14 +374,15 @@ function EventCard({
 }: EventCardProps) {
   const days = getDaysUntil(event.pdufaDate)
   const isAnyLoading = MODEL_IDS.some(m => loading[`${event.id}-${m}`])
+  const hasPredictions = event.predictions.length > 0
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       {/* Event Header */}
       <div className="p-4 border-b border-zinc-800">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-white text-lg">{event.drugName}</span>
               <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400">
                 {event.applicationType}
@@ -393,9 +393,9 @@ function EventCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* PDUFA Date */}
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <div className={`text-lg font-bold ${days === 0 ? 'text-red-400' : 'text-zinc-400'}`}>
                 {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
               </div>
@@ -425,17 +425,19 @@ function EventCard({
               className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
                 isAnyLoading
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-500'
+                  : hasPredictions
+                    ? 'bg-transparent text-zinc-400 border border-zinc-600 hover:border-zinc-500 hover:text-zinc-300'
+                    : 'bg-blue-600 text-white hover:bg-blue-500'
               }`}
             >
-              {isAnyLoading ? 'Running...' : 'Run All'}
+              {isAnyLoading ? 'Running...' : hasPredictions ? 'Regenerate' : 'Run All'}
             </button>
           </div>
         </div>
       </div>
 
       {/* Model Predictions */}
-      <div className="grid md:grid-cols-3 divide-x divide-zinc-800">
+      <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-800">
         {MODEL_IDS.map(modelId => (
           <ModelPredictionCard
             key={modelId}
