@@ -46,7 +46,7 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
     <div className="border-b border-gray-100 last:border-b-0">
       <button
         onClick={() => setExpanded(!expanded)}
-        className={`w-full grid ${gridCols} gap-1 px-2 py-2 text-sm hover:bg-gray-50 transition-colors text-left items-center`}
+        className={`w-full grid ${gridCols} gap-1 px-2 py-2 text-sm hover:bg-gray-50 transition-colors text-left items-start`}
       >
         {type === 'upcoming' ? (
           <div className="text-xs text-gray-500">{formatDate(event.pdufaDate)}</div>
@@ -56,9 +56,9 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
           </div>
         )}
         <div className="min-w-0">
-          <div className="truncate font-medium text-sm">{event.drugName}</div>
+          <div className="font-medium text-sm">{event.drugName}</div>
           {event.eventDescription && (
-            <div className="truncate text-[10px] text-gray-400">{event.eventDescription}</div>
+            <div className="text-[10px] text-gray-400 leading-tight">{event.eventDescription}</div>
           )}
         </div>
         {['claude-opus', 'gpt-5.2', 'grok-4'].map((modelId) => {
