@@ -318,7 +318,7 @@ async function streamGrok(
     max_tokens: 16000,
     stream: true,
     search_mode: 'auto', // Enable live web search
-  } as any) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+  } as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
 
   let responseText = ''
 
