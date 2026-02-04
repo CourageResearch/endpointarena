@@ -182,22 +182,25 @@ export default async function BWHome() {
           <section className="mb-6">
             <div className="border border-gray-200 rounded-lg overflow-hidden">
               <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-600">Next Decision · {formatDate(nextFdaEvent.pdufaDate)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-600">Next Decision · {formatDate(nextFdaEvent.pdufaDate)}</span>
+                  {nextFdaEvent.symbols && (
+                    <a href={`https://finance.yahoo.com/quote/${nextFdaEvent.symbols}`} target="_blank" rel="noopener noreferrer"
+                      className="px-1.5 py-0.5 border border-gray-300 rounded text-[10px] font-mono text-gray-500 hover:bg-white">
+                      ${nextFdaEvent.symbols}
+                    </a>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-black text-white rounded text-xs">
                   <CountdownTimer targetDate={nextFdaEvent.pdufaDate} variant="light" />
                 </div>
               </div>
               <div className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-lg font-bold">{nextFdaEvent.drugName}</h3>
-                    <p className="text-sm text-gray-500">{nextFdaEvent.companyName}</p>
-                  </div>
-                  {nextFdaEvent.symbols && (
-                    <a href={`https://finance.yahoo.com/quote/${nextFdaEvent.symbols}`} target="_blank" rel="noopener noreferrer"
-                      className="px-2 py-0.5 border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-gray-50">
-                      ${nextFdaEvent.symbols}
-                    </a>
+                <div className="mb-3">
+                  <h3 className="text-lg font-bold">{nextFdaEvent.drugName}</h3>
+                  <p className="text-sm text-gray-500">{nextFdaEvent.companyName}</p>
+                  {nextFdaEvent.eventDescription && (
+                    <p className="text-xs text-gray-400 mt-1">{nextFdaEvent.eventDescription}</p>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-3">
