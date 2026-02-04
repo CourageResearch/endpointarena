@@ -22,10 +22,10 @@ interface BWPredictionRowProps {
   type: 'upcoming' | 'recent'
 }
 
-const MODEL_LABELS: Record<string, { short: string; full: string }> = {
-  'claude-opus': { short: 'C', full: 'Claude' },
-  'gpt-5.2': { short: 'G', full: 'GPT' },
-  'grok-4': { short: 'X', full: 'Grok' },
+const MODEL_LABELS: Record<string, string> = {
+  'claude-opus': 'Claude',
+  'gpt-5.2': 'GPT',
+  'grok-4': 'Grok',
 }
 
 function formatDate(date: Date) {
@@ -37,59 +37,57 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
   const predictions = event.predictions || []
   const isApproved = event.outcome === 'Approved'
 
+  const gridCols = type === 'upcoming'
+    ? 'grid-cols-[60px_1fr_repeat(3,28px)]'
+    : 'grid-cols-[36px_1fr_repeat(3,28px)]'
+
   return (
-    <div className="border border-gray-200 rounded overflow-hidden">
+    <div className="border-b border-gray-100 last:border-b-0">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 p-2 text-sm hover:bg-gray-50 transition-colors text-left"
+        className={`w-full grid ${gridCols} gap-1 px-2 py-2 text-sm hover:bg-gray-50 transition-colors text-left items-center`}
       >
-        {type === 'recent' ? (
-          <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+        {type === 'upcoming' ? (
+          <div className="text-xs text-gray-500">{formatDate(event.pdufaDate)}</div>
+        ) : (
+          <div className={`px-1 py-0.5 rounded text-[9px] font-medium text-center ${isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
             {isApproved ? 'APP' : 'REJ'}
           </div>
-        ) : (
-          <div className="w-14 text-xs text-gray-500">{formatDate(event.pdufaDate)}</div>
         )}
-        <div className="flex-1 truncate font-medium">{event.drugName}</div>
-        <div className="flex gap-2">
-          {['claude-opus', 'gpt-5.2', 'grok-4'].map((modelId) => {
-            const pred = predictions.find(p => p.predictorId === modelId)
-            const label = MODEL_LABELS[modelId]
+        <div className="truncate font-medium text-sm">{event.drugName}</div>
+        {['claude-opus', 'gpt-5.2', 'grok-4'].map((modelId) => {
+          const pred = predictions.find(p => p.predictorId === modelId)
 
-            if (type === 'upcoming') {
-              return (
-                <div key={modelId} className={`w-6 h-6 rounded border flex items-center justify-center text-[10px] font-medium ${
-                  pred
-                    ? pred.prediction === 'approved'
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                      : 'border-red-300 bg-red-50 text-red-500'
-                    : 'border-gray-200 bg-gray-50 text-gray-400'
-                }`} title={`${label.full}: ${pred ? (pred.prediction === 'approved' ? 'Approve' : 'Reject') : 'No prediction'}`}>
-                  {label.short}
-                </div>
-              )
-            } else {
-              return (
-                <div key={modelId} className={`w-6 h-6 rounded border flex items-center justify-center text-[10px] font-bold ${
-                  pred
-                    ? pred.correct
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                      : 'border-red-300 bg-red-50 text-red-500'
-                    : 'border-gray-200 bg-gray-50 text-gray-400'
-                }`} title={`${label.full}: ${pred ? (pred.correct ? 'Correct' : 'Wrong') : 'No prediction'}`}>
-                  {label.short}
-                </div>
-              )
-            }
-          })}
-        </div>
-        <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+          if (type === 'upcoming') {
+            return (
+              <div key={modelId} className={`w-6 h-6 rounded flex items-center justify-center text-[11px] font-medium mx-auto ${
+                pred
+                  ? pred.prediction === 'approved'
+                    ? 'bg-emerald-100 text-emerald-600'
+                    : 'bg-red-100 text-red-500'
+                  : 'text-gray-300'
+              }`}>
+                {pred ? (pred.prediction === 'approved' ? '↑' : '↓') : '—'}
+              </div>
+            )
+          } else {
+            return (
+              <div key={modelId} className={`w-6 h-6 rounded flex items-center justify-center text-[11px] font-bold mx-auto ${
+                pred
+                  ? pred.correct
+                    ? 'bg-emerald-100 text-emerald-600'
+                    : 'bg-red-100 text-red-500'
+                  : 'text-gray-300'
+              }`}>
+                {pred ? (pred.correct ? '✓' : '✗') : '—'}
+              </div>
+            )
+          }
+        })}
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50 p-3 space-y-3">
+        <div className="bg-gray-50 px-3 py-2 space-y-2">
           {['claude-opus', 'gpt-5.2', 'grok-4'].map((modelId) => {
             const pred = predictions.find(p => p.predictorId === modelId)
             const label = MODEL_LABELS[modelId]
@@ -97,7 +95,7 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
             if (!pred) {
               return (
                 <div key={modelId} className="text-xs text-gray-400">
-                  <span className="font-medium">{label.full}:</span> No prediction
+                  <span className="font-medium">{label}:</span> No prediction
                 </div>
               )
             }
@@ -106,8 +104,8 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
 
             return (
               <div key={modelId} className="text-xs">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold">{label.full}</span>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="font-bold">{label}</span>
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                     isApprove ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
                   }`}>
