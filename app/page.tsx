@@ -3,6 +3,7 @@ import { eq, gte, and, or, desc, asc } from 'drizzle-orm'
 import { Navbar } from '@/components/Navbar'
 import { UpcomingFDAEventRow, PastFDAEventRow, MobileUpcomingFDAEventCard, MobilePastFDAEventCard } from '@/components/FDAEventRow'
 import { AcronymTooltip } from '@/components/AcronymTooltip'
+import { CountdownTimer } from '@/components/CountdownTimer'
 
 export const dynamic = 'force-dynamic'
 
@@ -216,7 +217,7 @@ export default async function Home() {
                   <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="text-sm font-bold text-blue-400">{nextDays} days</span>
+                  <CountdownTimer targetDate={nextFdaEvent.pdufaDate} />
                 </div>
               </div>
 
