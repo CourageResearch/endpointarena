@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 
 interface CountdownTimerProps {
   targetDate: Date | string
+  variant?: 'dark' | 'light'
 }
 
-export function CountdownTimer({ targetDate }: CountdownTimerProps) {
+export function CountdownTimer({ targetDate, variant = 'dark' }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 
   useEffect(() => {
@@ -34,15 +35,18 @@ export function CountdownTimer({ targetDate }: CountdownTimerProps) {
     return () => clearInterval(interval)
   }, [targetDate])
 
+  const textColor = variant === 'light' ? 'text-white' : 'text-blue-400'
+  const separatorColor = variant === 'light' ? 'text-white/60' : 'text-zinc-500'
+
   return (
     <div className="flex items-center gap-1 text-sm font-mono">
-      <span className="text-blue-400 font-bold">{timeLeft.days}d</span>
-      <span className="text-zinc-500">:</span>
-      <span className="text-blue-400 font-bold">{String(timeLeft.hours).padStart(2, '0')}h</span>
-      <span className="text-zinc-500">:</span>
-      <span className="text-blue-400 font-bold">{String(timeLeft.minutes).padStart(2, '0')}m</span>
-      <span className="text-zinc-500">:</span>
-      <span className="text-blue-400 font-bold">{String(timeLeft.seconds).padStart(2, '0')}s</span>
+      <span className={`${textColor} font-bold`}>{timeLeft.days}d</span>
+      <span className={separatorColor}>:</span>
+      <span className={`${textColor} font-bold`}>{String(timeLeft.hours).padStart(2, '0')}h</span>
+      <span className={separatorColor}>:</span>
+      <span className={`${textColor} font-bold`}>{String(timeLeft.minutes).padStart(2, '0')}m</span>
+      <span className={separatorColor}>:</span>
+      <span className={`${textColor} font-bold`}>{String(timeLeft.seconds).padStart(2, '0')}s</span>
     </div>
   )
 }
