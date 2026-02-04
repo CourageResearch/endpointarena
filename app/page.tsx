@@ -174,17 +174,17 @@ export default async function Home() {
           </p>
 
           {/* Stats Row */}
-          <div className="flex flex-col sm:flex-row justify-center gap-4 sm:gap-8 mb-8">
+          <div className="flex flex-col sm:flex-row justify-center items-end gap-4 sm:gap-8 mb-8">
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">{stats.fdaEventsTracked}</div>
+              <div className="text-3xl font-bold text-white h-9 flex items-center justify-center">{stats.fdaEventsTracked}</div>
               <div className="text-xs text-zinc-500 uppercase tracking-wider">FDA Events Tracked</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400">{stats.predictions}</div>
+              <div className="text-3xl font-bold text-blue-400 h-9 flex items-center justify-center">{stats.predictions}</div>
               <div className="text-xs text-zinc-500 uppercase tracking-wider">Predictions Made</div>
             </div>
             <div className="text-center">
-              <div className="flex justify-center gap-3 mb-1">
+              <div className="flex justify-center items-center gap-3 h-9">
                 {['claude', 'gpt', 'grok'].map((id) => {
                   const color = id === 'claude' ? 'text-orange-400' : id === 'gpt' ? 'text-emerald-400' : 'text-sky-400'
                   return (
@@ -222,12 +222,26 @@ export default async function Home() {
               <div className="p-5 sm:p-8">
                 {/* Question */}
                 <div className="mb-6">
-                  <h2 className="text-xl sm:text-2xl font-bold mb-1">
-                    Will the FDA approve <span className="text-blue-400">{nextFdaEvent.drugName.split(' ')[0]}</span>?
-                  </h2>
-                  <p className="text-sm text-zinc-500">
-                    {nextFdaEvent.companyName}'s treatment for {nextFdaEvent.therapeuticArea || 'this condition'}
-                  </p>
+                  <div className="flex items-center gap-3 mb-1">
+                    <h2 className="text-xl sm:text-2xl font-bold">
+                      Will the FDA approve <span className="text-blue-400">{nextFdaEvent.drugName.split(' ')[0]}</span>?
+                    </h2>
+                    {nextFdaEvent.symbols && (
+                      <a
+                        href={`https://finance.yahoo.com/quote/${nextFdaEvent.symbols}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-sm font-mono text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+                      >
+                        ${nextFdaEvent.symbols}
+                      </a>
+                    )}
+                  </div>
+                  {nextFdaEvent.eventDescription && (
+                    <p className="text-sm text-zinc-400 leading-relaxed">
+                      {nextFdaEvent.eventDescription}
+                    </p>
+                  )}
                 </div>
 
                 {/* AI Predictions - visual cards */}
@@ -278,37 +292,41 @@ export default async function Home() {
                   })}
                 </div>
 
-                {/* Consensus + details footer */}
-                <div className="mt-5 pt-4 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  {/* Consensus */}
-                  {(() => {
-                    const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(nextFdaEvent.predictions || [], id)).filter(Boolean)
-                    const approveCount = preds.filter(p => p.prediction === 'approved').length
-                    const rejectCount = preds.filter(p => p.prediction === 'rejected').length
-                    if (preds.length === 0) return <div className="text-xs text-zinc-600">No predictions yet</div>
-                    const unanimous = approveCount === 3 || rejectCount === 3
-                    const consensusPrediction = approveCount > rejectCount ? 'approval' : 'rejection'
-                    const majorityCount = Math.max(approveCount, rejectCount)
-                    return (
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${consensusPrediction === 'approval' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                        <span className="text-sm text-zinc-400">
+                {/* Consensus Banner */}
+                {(() => {
+                  const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(nextFdaEvent.predictions || [], id)).filter(Boolean)
+                  const approveCount = preds.filter(p => p.prediction === 'approved').length
+                  const rejectCount = preds.filter(p => p.prediction === 'rejected').length
+                  if (preds.length === 0) return null
+                  const unanimous = approveCount === 3 || rejectCount === 3
+                  const consensusPrediction = approveCount > rejectCount ? 'approval' : 'rejection'
+                  const majorityCount = Math.max(approveCount, rejectCount)
+                  const isApproval = consensusPrediction === 'approval'
+                  return (
+                    <div className={`mt-6 p-4 rounded-xl border ${
+                      isApproval
+                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                        : 'bg-red-500/10 border-red-500/30'
+                    }`}>
+                      <div className="flex items-center justify-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${isApproval ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                        <span className="text-lg font-semibold">
                           {unanimous ? (
-                            <>Unanimous: All models predict <span className={consensusPrediction === 'approval' ? 'text-emerald-400' : 'text-red-400'}>{consensusPrediction}</span></>
+                            <>All 3 models predict <span className={isApproval ? 'text-emerald-400' : 'text-red-400'}>{consensusPrediction}</span></>
                           ) : (
-                            <><span className="font-medium text-zinc-300">{majorityCount}/3</span> models predict <span className={consensusPrediction === 'approval' ? 'text-emerald-400' : 'text-red-400'}>{consensusPrediction}</span></>
+                            <><span className={isApproval ? 'text-emerald-400' : 'text-red-400'}>{majorityCount}/3</span> models predict <span className={isApproval ? 'text-emerald-400' : 'text-red-400'}>{consensusPrediction}</span></>
                           )}
                         </span>
                       </div>
-                    )
-                  })()}
+                    </div>
+                  )
+                })()}
 
-                  {/* Drug details */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
-                    <span>{nextFdaEvent.drugName}</span>
-                    <span>•</span>
-                    <AcronymTooltip acronym={nextFdaEvent.applicationType} />
-                  </div>
+                {/* Drug details footer */}
+                <div className="mt-4 pt-3 border-t border-zinc-800 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-500">
+                  <span>{nextFdaEvent.drugName}</span>
+                  <span>•</span>
+                  <AcronymTooltip acronym={nextFdaEvent.applicationType} />
                 </div>
               </div>
             </div>
