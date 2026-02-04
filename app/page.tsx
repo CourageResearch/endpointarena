@@ -174,16 +174,16 @@ export default async function Home() {
           </p>
 
           {/* Stats Row */}
-          <div className="flex flex-col sm:flex-row justify-center items-end gap-4 sm:gap-8 mb-8">
-            <div className="text-center">
+          <div className="flex flex-col sm:flex-row justify-center items-end gap-4 sm:gap-12 mb-8">
+            <div className="text-center min-w-[140px]">
               <div className="text-3xl font-bold text-white h-9 flex items-center justify-center">{stats.fdaEventsTracked}</div>
               <div className="text-xs text-zinc-500 uppercase tracking-wider">FDA Events Tracked</div>
             </div>
-            <div className="text-center">
+            <div className="text-center min-w-[140px]">
               <div className="text-3xl font-bold text-blue-400 h-9 flex items-center justify-center">{stats.predictions}</div>
               <div className="text-xs text-zinc-500 uppercase tracking-wider">Predictions Made</div>
             </div>
-            <div className="text-center">
+            <div className="text-center min-w-[140px]">
               <div className="flex justify-center items-center gap-3 h-9">
                 {['claude', 'gpt', 'grok'].map((id) => {
                   const color = id === 'claude' ? 'text-orange-400' : id === 'gpt' ? 'text-emerald-400' : 'text-sky-400'
