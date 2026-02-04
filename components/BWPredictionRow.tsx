@@ -56,7 +56,7 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
           </div>
         )}
         <div className="min-w-0">
-          <div className="font-medium text-sm">{event.drugName}</div>
+          <div className="text-sm">{event.drugName}</div>
           {event.eventDescription && (
             <div className="text-[10px] text-gray-400 leading-tight">{event.eventDescription}</div>
           )}

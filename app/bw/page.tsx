@@ -234,12 +234,12 @@ export default async function BWHome() {
               <Link href="/fda-calendar" className="text-xs text-gray-500 hover:text-black">All →</Link>
             </div>
             <div className="border border-gray-200 rounded overflow-hidden">
-              <div className="grid grid-cols-[60px_1fr_repeat(3,28px)] gap-1 px-2 py-1 bg-gray-50 border-b border-gray-200 text-[10px] text-gray-500 font-medium">
+              <div className="grid grid-cols-[60px_1fr_repeat(3,28px)] gap-1 px-2 py-1 bg-gray-50 border-b border-gray-200 text-[10px] text-gray-500 font-medium items-center">
                 <div>Date</div>
                 <div>Drug / Indication</div>
-                <div className="text-center">C</div>
-                <div className="text-center">G</div>
-                <div className="text-center">X</div>
+                <div className="w-4 h-4 mx-auto text-gray-400"><ModelIcon id="claude" /></div>
+                <div className="w-4 h-4 mx-auto text-gray-400"><ModelIcon id="gpt" /></div>
+                <div className="w-4 h-4 mx-auto text-gray-400"><ModelIcon id="grok" /></div>
               </div>
               {upcomingFdaEvents.slice(0, 4).map((event) => (
                 <BWPredictionRow key={event.id} event={event as any} type="upcoming" />
@@ -254,12 +254,12 @@ export default async function BWHome() {
               <Link href="/fda-calendar" className="text-xs text-gray-500 hover:text-black">All →</Link>
             </div>
             <div className="border border-gray-200 rounded overflow-hidden">
-              <div className="grid grid-cols-[36px_1fr_repeat(3,28px)] gap-1 px-2 py-1 bg-gray-50 border-b border-gray-200 text-[10px] text-gray-500 font-medium">
+              <div className="grid grid-cols-[36px_1fr_repeat(3,28px)] gap-1 px-2 py-1 bg-gray-50 border-b border-gray-200 text-[10px] text-gray-500 font-medium items-center">
                 <div>FDA</div>
                 <div>Drug / Indication</div>
-                <div className="text-center">C</div>
-                <div className="text-center">G</div>
-                <div className="text-center">X</div>
+                <div className="w-4 h-4 mx-auto text-gray-400"><ModelIcon id="claude" /></div>
+                <div className="w-4 h-4 mx-auto text-gray-400"><ModelIcon id="gpt" /></div>
+                <div className="w-4 h-4 mx-auto text-gray-400"><ModelIcon id="grok" /></div>
               </div>
               {recentFdaDecisions.slice(0, 4).map((event) => (
                 <BWPredictionRow key={event.id} event={event as any} type="recent" />
