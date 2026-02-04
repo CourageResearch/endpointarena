@@ -1,6 +1,6 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq, sql } from 'drizzle-orm'
-import { Navbar } from '@/components/Navbar'
+import { V1Navbar } from '@/components/V1Navbar'
 import { MODEL_IDS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
@@ -103,7 +103,7 @@ export default async function HowItWorksPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <Navbar />
+      <V1Navbar />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Page Header */}

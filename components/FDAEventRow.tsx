@@ -119,7 +119,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
         onClick={() => setExpanded(!expanded)}
       >
         <td className="px-4 py-3 text-sm text-zinc-400">
-          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         </td>
         <td className="px-4 py-3">
           <div className="font-medium truncate">{event.drugName}</div>
@@ -197,7 +197,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
         onClick={() => setExpanded(!expanded)}
       >
         <td className="px-4 py-3 text-sm text-zinc-400">
-          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         </td>
         <td className="px-4 py-3">
           <div className="font-medium truncate">{event.drugName}</div>

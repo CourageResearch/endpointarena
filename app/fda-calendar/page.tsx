@@ -1,7 +1,7 @@
 import { db, fdaCalendarEvents } from '@/lib/db'
-import { asc, sql } from 'drizzle-orm'
-import { FDACalendarTable } from '@/components/FDACalendarTable'
-import { Navbar } from '@/components/Navbar'
+import { asc } from 'drizzle-orm'
+import Link from 'next/link'
+import { FDACalendarTable2 } from './FDACalendarTable2'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,39 +25,10 @@ async function getFilterOptions() {
   }
 }
 
-async function getStats() {
-  const events = await db.query.fdaCalendarEvents.findMany()
-
-  const now = new Date()
-  const next30Days = events.filter(e => {
-    const diff = (new Date(e.pdufaDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    return diff >= 0 && diff <= 30
-  })
-  const next60Days = events.filter(e => {
-    const diff = (new Date(e.pdufaDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    return diff >= 0 && diff <= 60
-  })
-  const next90Days = events.filter(e => {
-    const diff = (new Date(e.pdufaDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    return diff >= 0 && diff <= 90
-  })
-
-  const priorityReviews = events.filter(e => e.drugStatus?.includes('Priority'))
-
-  return {
-    total: events.length,
-    next30Days: next30Days.length,
-    next60Days: next60Days.length,
-    next90Days: next90Days.length,
-    priorityReviews: priorityReviews.length,
-  }
-}
-
-export default async function FDACalendarPage() {
-  const [events, filterOptions, stats] = await Promise.all([
+export default async function FDACalendar2Page() {
+  const [events, filterOptions] = await Promise.all([
     getFDAEvents(),
     getFilterOptions(),
-    getStats(),
   ])
 
   // Transform dates to strings for client component
@@ -67,38 +38,31 @@ export default async function FDACalendarPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <Navbar />
+    <div className="min-h-screen bg-white text-neutral-900">
+      {/* Minimal Nav */}
+      <nav className="border-b border-neutral-200">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <Link href="/" className="text-base font-semibold tracking-tight">
+            Endpoint<span className="text-neutral-400">Arena</span>
+          </Link>
+          <div className="flex items-center gap-6 text-sm">
+            <Link href="/leaderboard" className="text-neutral-500 hover:text-neutral-900">Leaderboard</Link>
+            <Link href="/fda-calendar" className="text-neutral-900 font-medium">Calendar</Link>
+            <Link href="/method" className="text-neutral-500 hover:text-neutral-900">Method</Link>
+          </div>
+        </div>
+      </nav>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">FDA Calendar</h1>
-          <p className="text-zinc-500 text-sm mt-1">
+      <main className="max-w-5xl mx-auto px-6 py-16">
+        {/* Header */}
+        <div className="mb-12">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">FDA Calendar</h1>
+          <p className="text-neutral-500">
             Upcoming PDUFA dates for biotech and pharma companies
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="flex flex-wrap gap-6 mb-6 text-sm">
-          <div>
-            <span className="text-2xl font-bold text-white">{stats.total}</span>
-            <span className="text-zinc-500 ml-2">total</span>
-          </div>
-          <div>
-            <span className="text-2xl font-bold text-red-400">{stats.next30Days}</span>
-            <span className="text-zinc-500 ml-2">next 30d</span>
-          </div>
-          <div>
-            <span className="text-2xl font-bold text-orange-400">{stats.next60Days}</span>
-            <span className="text-zinc-500 ml-2">next 60d</span>
-          </div>
-          <div>
-            <span className="text-2xl font-bold text-yellow-400">{stats.next90Days}</span>
-            <span className="text-zinc-500 ml-2">next 90d</span>
-          </div>
-        </div>
-
-        <FDACalendarTable events={eventsForClient} filterOptions={filterOptions} />
+        <FDACalendarTable2 events={eventsForClient} filterOptions={filterOptions} />
       </main>
     </div>
   )

@@ -5,16 +5,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Home' },
-  { href: '/leaderboard', label: 'Leaderboard' },
-  { href: '/fda-calendar', label: 'FDA Calendar' },
-  { href: '/method', label: 'How It Works' },
+  { href: '/v1', label: 'Home' },
+  { href: '/v1/leaderboard', label: 'Leaderboard' },
+  { href: '/v1/fda-calendar', label: 'FDA Calendar' },
+  { href: '/v1/method', label: 'How It Works' },
   { href: '/glossary', label: 'Glossary' },
 ]
 
-export function Navbar() {
+export function V1Navbar() {
   const pathname = usePathname()
-  const isAdmin = pathname.startsWith('/admin')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleNavClick = () => {
@@ -26,7 +25,7 @@ export function Navbar() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
           {/* Logo / Brand */}
-          <Link href="/" className="flex items-center gap-2" onClick={handleNavClick}>
+          <Link href="/v1" className="flex items-center gap-2" onClick={handleNavClick}>
             {/* Logo icon - pill/capsule with chart */}
             <div className="w-7 h-7 relative">
               <svg viewBox="0 0 28 28" fill="none" className="w-full h-full">
@@ -45,11 +44,9 @@ export function Navbar() {
               <span className="text-lg font-bold text-white tracking-tight">Endpoint</span>
               <span className="text-lg font-bold text-blue-500 tracking-tight">Arena</span>
             </div>
-            {isAdmin && (
-              <span className="ml-1 px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded font-medium">
-                Admin
-              </span>
-            )}
+            <span className="ml-1 px-2 py-0.5 text-xs bg-zinc-700 text-zinc-300 rounded font-medium">
+              v1
+            </span>
           </Link>
 
           {/* Mobile Hamburger Button */}
@@ -88,16 +85,12 @@ export function Navbar() {
               )
             })}
 
-            {/* Admin link */}
+            {/* Link to new version */}
             <Link
-              href="/admin"
-              className={`ml-2 px-3 py-2 text-sm rounded-md transition-colors ${
-                isAdmin
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'
-              }`}
+              href="/"
+              className="ml-2 px-3 py-2 text-sm rounded-md transition-colors text-blue-400 hover:text-blue-300 hover:bg-zinc-800/50"
             >
-              Admin
+              New Version
             </Link>
           </div>
         </div>
@@ -123,15 +116,11 @@ export function Navbar() {
               )
             })}
             <Link
-              href="/admin"
+              href="/"
               onClick={handleNavClick}
-              className={`block px-4 py-3 text-base rounded-md transition-colors touch-target mt-2 border-t border-zinc-800 pt-4 ${
-                isAdmin
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'
-              }`}
+              className="block px-4 py-3 text-base rounded-md transition-colors touch-target mt-2 border-t border-zinc-800 pt-4 text-blue-400 hover:text-blue-300 hover:bg-zinc-800/50"
             >
-              Admin
+              New Version
             </Link>
           </div>
         )}

@@ -92,17 +92,23 @@ export default async function AdminPage() {
               RTTNews FDA Calendar
             </a>
             <a
-              href="https://local.drizzle.studio"
+              href="https://railway.app/dashboard"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
-              title="Run: npx drizzle-kit studio"
+              title="View database in Railway Dashboard"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 1v6m0 6v10M1 12h6m6 0h10" />
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
               </svg>
-              Drizzle Studio
+              Railway DB
+            </a>
+            <a
+              href="/v1"
+              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
+            >
+              v1 Site
             </a>
             <LogoutButton />
           </div>
