@@ -150,25 +150,6 @@ export default async function BWHome() {
           </div>
         </section>
 
-        {/* Stats bar */}
-        <section className="py-4 border-t border-b border-gray-200 mb-6">
-          <div className="flex justify-center items-center gap-12">
-            <div className="text-center">
-              <div className="text-2xl font-bold">{stats.fdaEventsTracked}</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Events</div>
-            </div>
-            <div className="w-px h-8 bg-gray-200" />
-            <div className="text-center">
-              <div className="text-2xl font-bold">{stats.predictions}</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Predictions</div>
-            </div>
-            <div className="w-px h-8 bg-gray-200" />
-            <div className="text-center">
-              <div className="text-2xl font-bold">{stats.modelsCompared}</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Models</div>
-            </div>
-          </div>
-        </section>
 
         {/* Next FDA Decision */}
         {nextFdaEvent && (
