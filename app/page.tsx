@@ -212,9 +212,11 @@ export default async function Home() {
                   </span>
                   <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">Next FDA Decision</span>
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xl font-bold text-blue-400">{nextDays}</span>
-                  <span className="text-xs text-zinc-500">days</span>
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-bold text-blue-400">{nextDays} days</span>
                 </div>
               </div>
 
@@ -322,12 +324,6 @@ export default async function Home() {
                   )
                 })()}
 
-                {/* Drug details footer */}
-                <div className="mt-4 pt-3 border-t border-zinc-800 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-500">
-                  <span>{nextFdaEvent.drugName}</span>
-                  <span>•</span>
-                  <AcronymTooltip acronym={nextFdaEvent.applicationType} />
-                </div>
               </div>
             </div>
           </section>
@@ -412,14 +408,14 @@ export default async function Home() {
             <div className="overflow-x-auto">
               <table className="w-full table-fixed min-w-[700px]">
                 <colgroup>
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '180px'}} />
-                  <col />
-                  <col style={{width: '60px'}} />
                   <col style={{width: '90px'}} />
-                  <col style={{width: '60px'}} />
-                  <col style={{width: '60px'}} />
-                  <col style={{width: '60px'}} />
+                  <col style={{width: '170px'}} />
+                  <col />
+                  <col style={{width: '95px'}} />
+                  <col style={{width: '90px'}} />
+                  <col style={{width: '55px'}} />
+                  <col style={{width: '55px'}} />
+                  <col style={{width: '55px'}} />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-zinc-800 text-zinc-500 text-sm">
@@ -447,8 +443,8 @@ export default async function Home() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2 border-t border-zinc-800/50 text-[11px] text-zinc-600">
-              ↑ predicts approval · ↓ predicts rejection · Click any prediction to see reasoning
+            <div className="px-4 py-2 border-t border-zinc-800/50 text-[11px] text-zinc-500">
+              <span className="text-emerald-500">↑</span> predicts approval · <span className="text-red-500">↓</span> predicts rejection · Click any prediction to see reasoning
             </div>
           </div>
         </section>
@@ -477,14 +473,14 @@ export default async function Home() {
             <div className="overflow-x-auto">
               <table className="w-full table-fixed min-w-[700px]">
                 <colgroup>
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '180px'}} />
-                  <col />
-                  <col style={{width: '60px'}} />
                   <col style={{width: '90px'}} />
-                  <col style={{width: '60px'}} />
-                  <col style={{width: '60px'}} />
-                  <col style={{width: '60px'}} />
+                  <col style={{width: '170px'}} />
+                  <col />
+                  <col style={{width: '95px'}} />
+                  <col style={{width: '90px'}} />
+                  <col style={{width: '55px'}} />
+                  <col style={{width: '55px'}} />
+                  <col style={{width: '55px'}} />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-zinc-800 text-zinc-500 text-sm">
@@ -512,8 +508,8 @@ export default async function Home() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2 border-t border-zinc-800/50 text-[11px] text-zinc-600">
-              ✓ correct prediction · ✗ wrong prediction · Click any result to see reasoning
+            <div className="px-4 py-2 border-t border-zinc-800/50 text-[11px] text-zinc-500">
+              <span className="text-emerald-500">✓</span> correct prediction · <span className="text-red-500">✗</span> wrong prediction · Click any result to see reasoning
             </div>
           </div>
         </section>

@@ -8,6 +8,33 @@ import { eq } from 'drizzle-orm'
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
 
+  // Always add credentials provider for quick demo/dev login
+  providers.push(
+    CredentialsProvider({
+      name: 'Demo Login',
+      credentials: {
+        email: { label: 'Email', type: 'email', placeholder: 'demo@example.com' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email) return null
+
+        let user = await db.query.users.findFirst({
+          where: eq(users.email, credentials.email),
+        })
+
+        if (!user) {
+          const [newUser] = await db.insert(users).values({
+            email: credentials.email,
+          }).returning()
+          user = newUser
+        }
+
+        return { id: user.id, email: user.email, name: user.name }
+      },
+    })
+  )
+
+  // Optionally add email provider if Resend is configured
   if (process.env.RESEND_API_KEY) {
     const { Resend } = require('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
@@ -48,31 +75,6 @@ function getProviders() {
             console.error('Failed to send verification email:', error)
             throw new Error('Failed to send verification email')
           }
-        },
-      })
-    )
-  } else {
-    providers.push(
-      CredentialsProvider({
-        name: 'Demo Login',
-        credentials: {
-          email: { label: 'Email', type: 'email', placeholder: 'demo@example.com' },
-        },
-        async authorize(credentials) {
-          if (!credentials?.email) return null
-
-          let user = await db.query.users.findFirst({
-            where: eq(users.email, credentials.email),
-          })
-
-          if (!user) {
-            const [newUser] = await db.insert(users).values({
-              email: credentials.email,
-            }).returning()
-            user = newUser
-          }
-
-          return { id: user.id, email: user.email, name: user.name }
         },
       })
     )

@@ -132,42 +132,75 @@ export default async function LeaderboardPage() {
           </div>
         )}
 
-        {/* Rankings Table */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden mb-8">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-zinc-500 text-xs">
-                <th className="text-left py-3 px-4">RANK</th>
-                <th className="text-left py-3 px-4">MODEL</th>
-                <th className="text-right py-3 px-4">ACCURACY</th>
-                <th className="text-right py-3 px-4">RECORD (W-L)</th>
-                <th className="text-right py-3 px-4">AVG CONFIDENCE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map((model, i) => (
-                <tr key={model.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                  <td className="py-5 px-4 font-bold text-zinc-400">{i + 1}</td>
-                  <td className="py-5 px-4">
-                    <span className="font-medium text-base">
-                      {MODEL_INFO[model.id].fullName}
-                    </span>
-                  </td>
-                  <td className={`py-5 px-4 text-right font-bold text-lg ${getAccuracyColor(model.accuracy)}`}>
-                    {model.decided > 0 ? `${model.accuracy.toFixed(1)}%` : '-'}
-                  </td>
-                  <td className="py-5 px-4 text-right">
-                    <span className="text-emerald-400">{model.correct}</span>
-                    <span className="text-zinc-600"> - </span>
-                    <span className="text-red-400">{model.wrong}</span>
-                  </td>
-                  <td className="py-5 px-4 text-right text-zinc-400">
-                    {model.avgConfidence.toFixed(0)}%
-                  </td>
+        {/* Mobile Card View */}
+        <div className="sm:hidden space-y-3 mb-8">
+          {leaderboard.map((model, i) => (
+            <div key={model.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-800 text-zinc-400 font-bold text-sm">
+                  {i + 1}
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium">{MODEL_INFO[model.id].fullName}</div>
+                </div>
+                <div className={`font-bold text-xl ${getAccuracyColor(model.accuracy)}`}>
+                  {model.decided > 0 ? `${model.accuracy.toFixed(1)}%` : '-'}
+                </div>
+              </div>
+              <div className="flex justify-between text-sm pt-3 border-t border-zinc-800">
+                <div>
+                  <span className="text-zinc-500">Record: </span>
+                  <span className="text-emerald-400">{model.correct}</span>
+                  <span className="text-zinc-600"> - </span>
+                  <span className="text-red-400">{model.wrong}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500">Confidence: </span>
+                  <span className="text-zinc-400">{model.avgConfidence.toFixed(0)}%</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden sm:block bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden mb-8">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-zinc-500 text-xs">
+                  <th className="text-left py-3 px-4">RANK</th>
+                  <th className="text-left py-3 px-4">MODEL</th>
+                  <th className="text-right py-3 px-4">ACCURACY</th>
+                  <th className="text-right py-3 px-4">RECORD (W-L)</th>
+                  <th className="text-right py-3 px-4">AVG CONFIDENCE</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {leaderboard.map((model, i) => (
+                  <tr key={model.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                    <td className="py-5 px-4 font-bold text-zinc-400">{i + 1}</td>
+                    <td className="py-5 px-4">
+                      <span className="font-medium text-base">
+                        {MODEL_INFO[model.id].fullName}
+                      </span>
+                    </td>
+                    <td className={`py-5 px-4 text-right font-bold text-lg ${getAccuracyColor(model.accuracy)}`}>
+                      {model.decided > 0 ? `${model.accuracy.toFixed(1)}%` : '-'}
+                    </td>
+                    <td className="py-5 px-4 text-right">
+                      <span className="text-emerald-400">{model.correct}</span>
+                      <span className="text-zinc-600"> - </span>
+                      <span className="text-red-400">{model.wrong}</span>
+                    </td>
+                    <td className="py-5 px-4 text-right text-zinc-400">
+                      {model.avgConfidence.toFixed(0)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
       </main>

@@ -20,6 +20,7 @@ export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   newsLinks: text('news_links'),
   nctId: text('nct_id'),
   rttDetailId: text('rtt_detail_id'),
+  metaAnalysis: text('meta_analysis'), // AI-generated comparison of model predictions
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
   updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
   scrapedAt: timestamp('scraped_at').$defaultFn(() => new Date()),

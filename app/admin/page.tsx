@@ -1,7 +1,12 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
-import { eq, asc, desc, gte, and } from 'drizzle-orm'
+import { eq, asc, gte } from 'drizzle-orm'
 import { FDAPredictionRunner } from '@/components/FDAPredictionRunner'
 import { Navbar } from '@/components/Navbar'
+import { LogoutButton } from '@/components/LogoutButton'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { ADMIN_EMAIL } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +43,12 @@ async function getData() {
 }
 
 export default async function AdminPage() {
+  // Check if user is authenticated and is admin
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
+    redirect('/login')
+  }
+
   const { events, stats } = await getData()
 
   // Transform dates to strings for client component
@@ -64,14 +75,14 @@ export default async function AdminPage() {
       <Navbar />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8 flex items-start justify-between">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Admin</h1>
             <p className="text-zinc-500 text-sm mt-1">
               Run AI predictions and record FDA decision outcomes
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <a
               href="https://www.rttnews.com/products/biotechinvestor/fdacalendar.aspx"
               target="_blank"
@@ -93,6 +104,7 @@ export default async function AdminPage() {
               </svg>
               Drizzle Studio
             </a>
+            <LogoutButton />
           </div>
         </div>
 
@@ -119,6 +131,25 @@ export default async function AdminPage() {
             <div className="bg-zinc-900/50 border border-orange-900/30 rounded-lg p-3">
               <div className="text-2xl font-bold text-orange-400">{stats.pendingPredictions}</div>
               <div className="text-orange-400/60 text-xs">Predictions Unscored</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Data Sources */}
+        <section className="mb-8">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Data Sources</h2>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 grid sm:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-zinc-300 font-medium">FDA Calendar:</span>
+              <span className="text-zinc-500 ml-1">PDUFA dates from RTTNews.</span>
+            </div>
+            <div>
+              <span className="text-zinc-300 font-medium">Research:</span>
+              <span className="text-zinc-500 ml-1">Clinical trials, regulatory history, advisory committees.</span>
+            </div>
+            <div>
+              <span className="text-zinc-300 font-medium">Results:</span>
+              <span className="text-zinc-500 ml-1">FDA announcements, press releases, filings.</span>
             </div>
           </div>
         </section>

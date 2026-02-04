@@ -24,7 +24,7 @@ export default function LoginPage() {
       })
 
       if (result?.ok) {
-        router.push('/')
+        router.push('/admin')
         router.refresh()
       } else {
         setError('Failed to sign in')

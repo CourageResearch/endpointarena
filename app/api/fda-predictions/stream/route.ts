@@ -309,15 +309,16 @@ async function streamGrok(
     baseURL: 'https://api.x.ai/v1',
   })
 
-  send({ type: 'status', status: useReasoning ? 'Starting Grok 4...' : 'Starting Grok 4 (fast mode)...' })
+  send({ type: 'status', status: useReasoning ? 'Starting Grok 4.1 with fast reasoning + search...' : 'Starting Grok 4.1 (fast mode)...' })
 
-  // Use chat completions with streaming for Grok
+  // Use chat completions with streaming for Grok 4.1 fast reasoning + live search
   const stream = await client.chat.completions.create({
-    model: 'grok-4',
+    model: 'grok-4-1-fast-reasoning',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 4096,
+    max_tokens: 16000,
     stream: true,
-  })
+    search_mode: 'auto', // Enable live web search
+  } as any)
 
   let responseText = ''
 

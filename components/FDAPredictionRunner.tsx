@@ -312,25 +312,58 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
       </div>
 
       {/* Events */}
-      {events.map(event => (
-        <EventCard
-          key={event.id}
-          event={event}
-          loading={loading}
-          timings={timings}
-          progress={progress}
-          updatingOutcome={updatingOutcome}
-          expandedReasoning={expandedReasoning}
-          setExpandedReasoning={setExpandedReasoning}
-          getPrediction={getPrediction}
-          getOutcomeStyle={getOutcomeStyle}
-          getPredictionStyle={getPredictionStyle}
-          runAllPredictions={runAllPredictions}
-          runStreamingPrediction={runStreamingPrediction}
-          deletePrediction={deletePrediction}
-          updateOutcome={updateOutcome}
-        />
-      ))}
+      {events.map((event, index) => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const eventDate = new Date(event.pdufaDate)
+        eventDate.setHours(0, 0, 0, 0)
+        const prevEvent = index > 0 ? events[index - 1] : null
+        const prevEventDate = prevEvent ? new Date(prevEvent.pdufaDate) : null
+        if (prevEventDate) prevEventDate.setHours(0, 0, 0, 0)
+
+        // Show separator before first future event (when previous was past or this is first and it's today/future)
+        const isPastOrToday = eventDate <= today
+        const prevWasPast = prevEventDate ? prevEventDate < today : true
+        const showTodaySeparator = !isPastOrToday && prevWasPast
+
+        return (
+          <div key={event.id}>
+            {showTodaySeparator && (
+              <div className="flex items-center gap-4 py-4">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
+                  <svg className="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-400">
+                    Today: {today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+              </div>
+            )}
+            <EventCard
+              event={event}
+              loading={loading}
+              timings={timings}
+              progress={progress}
+              updatingOutcome={updatingOutcome}
+              expandedReasoning={expandedReasoning}
+              setExpandedReasoning={setExpandedReasoning}
+              getPrediction={getPrediction}
+              getOutcomeStyle={getOutcomeStyle}
+              getPredictionStyle={getPredictionStyle}
+              runAllPredictions={runAllPredictions}
+              runStreamingPrediction={runStreamingPrediction}
+              deletePrediction={deletePrediction}
+              updateOutcome={updateOutcome}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 }

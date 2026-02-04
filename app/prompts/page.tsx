@@ -36,7 +36,7 @@ export default async function PromptsPage() {
       features: {
         internet: false,
         reasoning: 'Extended Thinking',
-        reasoningDetail: '10,000 token budget',
+        reasoningDetail: '10,000 token thinking budget',
         maxTokens: '16,000',
       }
     },
@@ -55,13 +55,13 @@ export default async function PromptsPage() {
         internetDetail: 'Agentic web search',
         reasoning: 'High Effort',
         reasoningDetail: 'reasoning.effort: high',
-        maxTokens: 'Default',
+        maxTokens: '16,000',
       }
     },
     {
       id: 'grok',
-      name: 'Grok 4',
-      version: 'grok-4',
+      name: 'Grok 4.1',
+      version: 'grok-4-1-fast-reasoning',
       color: 'blue',
       icon: (
         <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
@@ -71,9 +71,9 @@ export default async function PromptsPage() {
       features: {
         internet: true,
         internetDetail: 'Live search (auto)',
-        reasoning: 'Standard',
-        reasoningDetail: 'No enhanced reasoning',
-        maxTokens: '4,096',
+        reasoning: 'Fast Reasoning',
+        reasoningDetail: 'Built-in fast reasoning mode',
+        maxTokens: '16,000',
       }
     }
   ]
@@ -236,19 +236,26 @@ export default async function PromptsPage() {
               </svg>
               Key Differences
             </h2>
-            <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <div className="flex gap-3">
-                <div className="w-1 bg-emerald-500 rounded-full" />
-                <div>
-                  <p className="text-zinc-300 font-medium">GPT-5.2 & Grok 4 can search the web</p>
-                  <p className="text-zinc-500">They may find recent news, press releases, or analyst reports</p>
-                </div>
-              </div>
+            <div className="grid md:grid-cols-3 gap-4 text-sm">
               <div className="flex gap-3">
                 <div className="w-1 bg-orange-500 rounded-full" />
                 <div>
                   <p className="text-zinc-300 font-medium">Claude uses extended thinking</p>
-                  <p className="text-zinc-500">10,000 token budget for step-by-step reasoning</p>
+                  <p className="text-zinc-500">10,000 token budget for deep reasoning (no web access)</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-1 bg-emerald-500 rounded-full" />
+                <div>
+                  <p className="text-zinc-300 font-medium">GPT-5.2 has agentic web search</p>
+                  <p className="text-zinc-500">Actively searches and analyzes web results</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-1 bg-blue-500 rounded-full" />
+                <div>
+                  <p className="text-zinc-300 font-medium">Grok 4.1 has fast reasoning + live search</p>
+                  <p className="text-zinc-500">Built-in reasoning with real-time web access</p>
                 </div>
               </div>
             </div>

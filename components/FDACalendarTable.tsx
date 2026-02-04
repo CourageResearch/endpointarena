@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { AcronymTooltip } from './AcronymTooltip'
 
 interface FDAEvent {
   id: string
@@ -182,8 +183,50 @@ export function FDACalendarTable({ events, filterOptions }: FDACalendarTableProp
         {filteredAndSortedEvents.length} of {events.length} events
       </div>
 
-      {/* Table */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {filteredAndSortedEvents.map((event) => {
+          const daysUntil = getDaysUntil(event.pdufaDate)
+          const symbol = event.symbols.split(', ')[0]
+          return (
+            <div key={event.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-white truncate">{event.drugName}</div>
+                  <div className="text-sm text-zinc-400 truncate">{event.companyName}</div>
+                </div>
+                <span className={`ml-2 text-xs px-2 py-1 rounded whitespace-nowrap ${getOutcomeStyle(event.outcome)}`}>
+                  {event.outcome}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 mb-2">
+                <span className="font-medium text-white">{formatDate(event.pdufaDate)}</span>
+                <span className={`${getTimelineColor(daysUntil)}`}>
+                  ({daysUntil < 0 ? 'Past' : daysUntil === 0 ? 'Today' : `${daysUntil}d`})
+                </span>
+                <span className="text-zinc-600">•</span>
+                <AcronymTooltip acronym={event.applicationType}>
+                  <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded">{event.applicationType}</span>
+                </AcronymTooltip>
+                <a
+                  href={`https://finance.yahoo.com/quote/${symbol.replace('.', '-')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:underline"
+                >
+                  ${symbol}
+                </a>
+              </div>
+              {event.eventDescription && (
+                <p className="text-sm text-zinc-500 line-clamp-2">{event.eventDescription}</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -244,9 +287,11 @@ export function FDACalendarTable({ events, filterOptions }: FDACalendarTableProp
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs bg-zinc-800 text-zinc-300 px-2 py-1 rounded">
-                        {event.applicationType}
-                      </span>
+                      <AcronymTooltip acronym={event.applicationType}>
+                        <span className="text-xs bg-zinc-800 text-zinc-300 px-2 py-1 rounded">
+                          {event.applicationType}
+                        </span>
+                      </AcronymTooltip>
                     </td>
                     <td className="px-4 py-3 text-zinc-400 text-sm">
                       {event.eventDescription || '—'}

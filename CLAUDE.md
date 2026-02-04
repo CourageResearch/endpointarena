@@ -2,7 +2,7 @@
 
 ## Overview
 
-Endpoint Arena is a Next.js application that tests AI models' ability to predict FDA drug approval decisions. It compares Claude Opus 4.5, GPT-5.2, and Grok 4 by having them make predictions before actual FDA decisions are announced.
+Endpoint Arena is a Next.js application that tests AI models' ability to predict FDA drug approval decisions. It compares Claude Opus 4.5, GPT-5.2, and Grok 4.1 by having them make predictions before actual FDA decisions are announced.
 
 ## Tech Stack
 
@@ -48,7 +48,6 @@ All model configuration is in `lib/constants.ts`:
 ```typescript
 MODEL_IDS           // ['claude-opus', 'gpt-5.2', 'grok-4']
 MODEL_INFO          // { name, fullName, color, provider }
-LEGACY_MODEL_IDS    // For backwards compatibility
 OUTCOME_COLORS      // Pending, Approved, Rejected colors
 PREDICTION_COLORS   // approved, rejected colors
 ```
@@ -93,15 +92,9 @@ Use the exported types:
 
 ## Model IDs
 
-Current:
 - `claude-opus` - Claude Opus 4.5 (Anthropic)
 - `gpt-5.2` - GPT-5.2 (OpenAI)
-- `grok-4` - Grok 4 (xAI)
-
-Legacy (for backwards compatibility):
-- `claude-sonnet`
-- `gpt-4o`, `gpt-4-turbo`
-- `grok-3`, `grok-2`
+- `grok-4` - Grok 4.1 (xAI)
 
 ## Environment Variables
 

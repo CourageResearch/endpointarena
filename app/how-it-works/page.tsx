@@ -36,7 +36,7 @@ export default async function HowItWorksPage() {
       features: {
         internet: false,
         reasoning: 'Extended Thinking',
-        reasoningDetail: '10,000 token budget',
+        reasoningDetail: '10,000 token thinking budget',
         maxTokens: '16,000',
       }
     },
@@ -55,13 +55,13 @@ export default async function HowItWorksPage() {
         internetDetail: 'Agentic web search',
         reasoning: 'High Effort',
         reasoningDetail: 'reasoning.effort: high',
-        maxTokens: 'Default',
+        maxTokens: '16,000',
       }
     },
     {
       id: 'grok',
-      name: 'Grok 4',
-      version: 'grok-4',
+      name: 'Grok 4.1',
+      version: 'grok-4-1-fast-reasoning',
       color: 'blue',
       icon: (
         <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
@@ -71,9 +71,9 @@ export default async function HowItWorksPage() {
       features: {
         internet: true,
         internetDetail: 'Live search (auto)',
-        reasoning: 'Standard',
-        reasoningDetail: 'No enhanced reasoning',
-        maxTokens: '4,096',
+        reasoning: 'Fast Reasoning',
+        reasoningDetail: 'Built-in fast reasoning mode',
+        maxTokens: '16,000',
       }
     }
   ]
@@ -199,11 +199,7 @@ export default async function HowItWorksPage() {
 
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Reasoning</span>
-                    <span className={`${
-                      model.features.reasoning !== 'Standard'
-                        ? model.color === 'orange' ? 'text-orange-400' : 'text-emerald-400'
-                        : 'text-zinc-400'
-                    }`}>
+                    <span className={model.features.reasoning !== 'Standard' ? 'text-blue-400' : 'text-zinc-400'}>
                       {model.features.reasoning}
                     </span>
                   </div>
@@ -236,19 +232,26 @@ export default async function HowItWorksPage() {
               </svg>
               Key Differences
             </h2>
-            <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <div className="flex gap-3">
-                <div className="w-1 bg-emerald-500 rounded-full" />
-                <div>
-                  <p className="text-zinc-300 font-medium">GPT-5.2 & Grok 4 can search the web</p>
-                  <p className="text-zinc-500">They may find recent news, press releases, or analyst reports</p>
-                </div>
-              </div>
+            <div className="grid md:grid-cols-3 gap-4 text-sm">
               <div className="flex gap-3">
                 <div className="w-1 bg-orange-500 rounded-full" />
                 <div>
                   <p className="text-zinc-300 font-medium">Claude uses extended thinking</p>
-                  <p className="text-zinc-500">10,000 token budget for step-by-step reasoning</p>
+                  <p className="text-zinc-500">10,000 token budget for deep reasoning (no web access)</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-1 bg-emerald-500 rounded-full" />
+                <div>
+                  <p className="text-zinc-300 font-medium">GPT-5.2 has agentic web search</p>
+                  <p className="text-zinc-500">Actively searches and analyzes web results</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-1 bg-blue-500 rounded-full" />
+                <div>
+                  <p className="text-zinc-300 font-medium">Grok 4.1 has fast reasoning + live search</p>
+                  <p className="text-zinc-500">Built-in reasoning with real-time web access</p>
                 </div>
               </div>
             </div>
@@ -328,28 +331,9 @@ predict the outcome.
           </div>
         </section>
 
-        {/* Data Sources */}
-        <section className="mb-12">
-          <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Data Sources</h2>
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
-            <div>
-              <span className="text-zinc-300 font-medium">FDA Calendar:</span>
-              <span className="text-zinc-500 ml-2">Upcoming PDUFA dates from RTTNews FDA Calendar.</span>
-            </div>
-            <div>
-              <span className="text-zinc-300 font-medium">Research Context:</span>
-              <span className="text-zinc-500 ml-2">Clinical trial data, regulatory history, and advisory committee recommendations when available.</span>
-            </div>
-            <div>
-              <span className="text-zinc-300 font-medium">Results:</span>
-              <span className="text-zinc-500 ml-2">Official FDA announcements, company press releases, and regulatory filings.</span>
-            </div>
-          </div>
-        </section>
-
         {/* Stats */}
         <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Current Progress</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
             <div className="text-2xl font-bold text-white">{fdaEventCount}</div>
             <div className="text-xs text-zinc-500">FDA Events Tracked</div>

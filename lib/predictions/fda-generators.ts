@@ -60,6 +60,7 @@ export async function generateOpenAIFDAPrediction(event: FDAEventInfo): Promise<
   const response = await client.responses.create({
     model: 'gpt-5.2',
     input: prompt,
+    max_output_tokens: 16000,
     tools: [
       { type: 'web_search' },
     ],
@@ -79,7 +80,7 @@ export async function generateOpenAIFDAPrediction(event: FDAEventInfo): Promise<
   return parseFDAPredictionResponse(content)
 }
 
-// Grok 4 prediction (via xAI) with live web search
+// Grok 4.1 prediction (via xAI) with fast reasoning + live search
 export async function generateGrokFDAPrediction(event: FDAEventInfo): Promise<FDAPredictionResult> {
   const client = new OpenAI({
     apiKey: process.env.XAI_API_KEY,
@@ -88,16 +89,16 @@ export async function generateGrokFDAPrediction(event: FDAEventInfo): Promise<FD
 
   const prompt = buildFDAPredictionPrompt(event)
 
-  // Use Grok 4 with live web search enabled
+  // Use Grok 4.1 with fast reasoning + live web search
   const completion = await client.chat.completions.create({
-    model: 'grok-4',
+    model: 'grok-4-1-fast-reasoning',
     messages: [
       {
         role: 'user',
         content: prompt,
       },
     ],
-    max_tokens: 4096,
+    max_tokens: 16000,
     search_mode: 'auto', // Enable live web search
   } as any)
 
@@ -107,6 +108,73 @@ export async function generateGrokFDAPrediction(event: FDAEventInfo): Promise<FD
   }
 
   return parseFDAPredictionResponse(content)
+}
+
+// Generate meta-analysis comparing all model predictions
+interface PredictionSummary {
+  modelId: string
+  modelName: string
+  prediction: string
+  confidence: number
+  reasoning: string
+}
+
+export async function generateMetaAnalysis(
+  event: FDAEventInfo,
+  predictions: PredictionSummary[]
+): Promise<string> {
+  // Need at least 2 predictions to compare
+  if (predictions.length < 2) {
+    return ''
+  }
+
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  })
+
+  const predictionsText = predictions
+    .map(p => `### ${p.modelName}
+**Prediction:** ${p.prediction.toUpperCase()} (${p.confidence}% confidence)
+**Reasoning:** ${p.reasoning}`)
+    .join('\n\n')
+
+  const prompt = `You are analyzing FDA drug approval predictions from multiple AI models. Compare their reasoning approaches and identify key differences.
+
+## Drug Information
+- **Drug:** ${event.drugName}
+- **Company:** ${event.companyName}
+- **Application Type:** ${event.applicationType}
+- **Therapeutic Area:** ${event.therapeuticArea || 'Not specified'}
+
+## Model Predictions
+${predictionsText}
+
+## Your Task
+Write a concise meta-analysis (2-3 paragraphs) that:
+1. Identifies the key factors each model emphasized differently
+2. Explains why models may have reached different conclusions (if they disagree)
+3. Highlights any blind spots or unique insights from specific models
+4. Notes the confidence spread and what it suggests about prediction difficulty
+
+Be specific and reference actual reasoning from each model. Focus on analytical differences, not just restating predictions. Keep it under 300 words.`
+
+  const message = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+  })
+
+  const textContent = message.content.find((c) => c.type === 'text')
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('No text content in meta-analysis response')
+  }
+
+  return textContent.text
 }
 
 // Map model IDs to generators
