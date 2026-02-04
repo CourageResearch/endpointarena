@@ -236,7 +236,7 @@ export default async function BWHome() {
             <div className="border border-gray-200 rounded overflow-hidden">
               <div className="grid grid-cols-[60px_1fr_repeat(3,28px)] gap-1 px-2 py-1 bg-gray-50 border-b border-gray-200 text-[10px] text-gray-500 font-medium">
                 <div>Date</div>
-                <div>Drug</div>
+                <div>Drug / Indication</div>
                 <div className="text-center">C</div>
                 <div className="text-center">G</div>
                 <div className="text-center">X</div>
@@ -256,7 +256,7 @@ export default async function BWHome() {
             <div className="border border-gray-200 rounded overflow-hidden">
               <div className="grid grid-cols-[36px_1fr_repeat(3,28px)] gap-1 px-2 py-1 bg-gray-50 border-b border-gray-200 text-[10px] text-gray-500 font-medium">
                 <div>FDA</div>
-                <div>Drug</div>
+                <div>Drug / Indication</div>
                 <div className="text-center">C</div>
                 <div className="text-center">G</div>
                 <div className="text-center">X</div>

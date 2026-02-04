@@ -17,6 +17,7 @@ interface BWPredictionRowProps {
     companyName: string
     pdufaDate: Date
     outcome?: string
+    eventDescription?: string
     predictions?: Prediction[]
   }
   type: 'upcoming' | 'recent'
@@ -54,7 +55,12 @@ export function BWPredictionRow({ event, type }: BWPredictionRowProps) {
             {isApproved ? 'APP' : 'REJ'}
           </div>
         )}
-        <div className="truncate font-medium text-sm">{event.drugName}</div>
+        <div className="min-w-0">
+          <div className="truncate font-medium text-sm">{event.drugName}</div>
+          {event.eventDescription && (
+            <div className="truncate text-[10px] text-gray-400">{event.eventDescription}</div>
+          )}
+        </div>
         {['claude-opus', 'gpt-5.2', 'grok-4'].map((modelId) => {
           const pred = predictions.find(p => p.predictorId === modelId)
 
