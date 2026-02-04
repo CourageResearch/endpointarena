@@ -2,6 +2,7 @@ import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq, gte, and, or, desc, asc } from 'drizzle-orm'
 import Link from 'next/link'
 import { CountdownTimer } from '@/components/CountdownTimer'
+import { BWPredictionRow } from '@/components/BWPredictionRow'
 
 export const dynamic = 'force-dynamic'
 
@@ -208,8 +209,9 @@ export default async function BWHome() {
                       <div key={modelId} className="border border-gray-200 rounded p-2 text-center">
                         <div className="text-xs text-gray-500 mb-1">{info.short}</div>
                         {pred ? (
-                          <div className={`text-sm font-bold ${isApproved ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {isApproved ? '↑' : '↓'} {pred.confidence}%
+                          <div className={`text-sm font-medium ${isApproved ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {isApproved ? '↑ Approve' : '↓ Reject'}
+                            <span className="text-gray-400 ml-1">{pred.confidence}%</span>
                           </div>
                         ) : (
                           <div className="text-sm text-gray-300">—</div>
@@ -232,24 +234,9 @@ export default async function BWHome() {
               <Link href="/fda-calendar" className="text-xs text-gray-500 hover:text-black">All →</Link>
             </div>
             <div className="space-y-1.5">
-              {upcomingFdaEvents.slice(0, 4).map((event) => {
-                const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(event.predictions || [], id))
-                return (
-                  <div key={event.id} className="flex items-center gap-3 p-2 border border-gray-200 rounded text-sm">
-                    <div className="w-16 text-xs text-gray-500">{formatDate(event.pdufaDate)}</div>
-                    <div className="flex-1 truncate font-medium">{event.drugName}</div>
-                    <div className="flex gap-1">
-                      {preds.map((pred, i) => (
-                        <div key={i} className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] ${
-                          pred ? pred.prediction === 'approved' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-red-400 bg-red-400 text-white' : 'border-gray-200 text-gray-300'
-                        }`}>
-                          {pred ? (pred.prediction === 'approved' ? '↑' : '↓') : '?'}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
+              {upcomingFdaEvents.slice(0, 4).map((event) => (
+                <BWPredictionRow key={event.id} event={event as any} type="upcoming" />
+              ))}
             </div>
           </section>
 
@@ -260,27 +247,9 @@ export default async function BWHome() {
               <Link href="/fda-calendar" className="text-xs text-gray-500 hover:text-black">All →</Link>
             </div>
             <div className="space-y-1.5">
-              {recentFdaDecisions.slice(0, 4).map((event) => {
-                const preds = ['claude', 'gpt', 'grok'].map(id => findPrediction(event.predictions || [], id))
-                const isApproved = event.outcome === 'Approved'
-                return (
-                  <div key={event.id} className="flex items-center gap-3 p-2 border border-gray-200 rounded text-sm">
-                    <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isApproved ? 'bg-emerald-500 text-white' : 'bg-red-400 text-white'}`}>
-                      {isApproved ? 'APP' : 'REJ'}
-                    </div>
-                    <div className="flex-1 truncate font-medium">{event.drugName}</div>
-                    <div className="flex gap-1">
-                      {preds.map((pred, i) => (
-                        <div key={i} className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold ${
-                          pred ? pred.correct ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-red-400 bg-red-400 text-white' : 'border-gray-200 text-gray-300'
-                        }`}>
-                          {pred ? (pred.correct ? '✓' : '✗') : '—'}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
+              {recentFdaDecisions.slice(0, 4).map((event) => (
+                <BWPredictionRow key={event.id} event={event as any} type="recent" />
+              ))}
             </div>
           </section>
         </div>
