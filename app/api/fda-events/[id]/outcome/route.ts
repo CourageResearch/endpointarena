@@ -1,11 +1,16 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
+import { requireAdmin } from '@/lib/auth'
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Check admin authorization
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const { id } = await params
   const body = await request.json()
   const { outcome } = body

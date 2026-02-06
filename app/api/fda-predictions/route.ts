@@ -3,12 +3,17 @@ import { eq, and } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { FDA_GENERATORS } from '@/lib/predictions/fda-generators'
 import { MODEL_IDS, getAllModelIds, type ModelId } from '@/lib/constants'
+import { requireAdmin } from '@/lib/auth'
 
 // =============================================================================
 // POST - Generate predictions
 // =============================================================================
 
 export async function POST(request: NextRequest) {
+  // Check admin authorization
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   try {
     const { fdaEventId, modelId } = await request.json()
 
@@ -75,7 +80,6 @@ export async function POST(request: NextRequest) {
         return { model, status: 'created', prediction: saved, durationMs }
       } catch (error) {
         const durationMs = Date.now() - startTime
-        console.error(`Error generating ${model} prediction:`, error)
         return {
           model,
           status: 'error',
@@ -87,7 +91,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, results })
   } catch (error) {
-    console.error('Error generating predictions:', error)
     return NextResponse.json({ error: 'Failed to generate predictions' }, { status: 500 })
   }
 }
@@ -97,6 +100,10 @@ export async function POST(request: NextRequest) {
 // =============================================================================
 
 export async function DELETE(request: NextRequest) {
+  // Check admin authorization
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   try {
     const { searchParams } = new URL(request.url)
     const fdaEventId = searchParams.get('fdaEventId')
@@ -124,7 +131,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting predictions:', error)
     return NextResponse.json({ error: 'Failed to delete predictions' }, { status: 500 })
   }
 }

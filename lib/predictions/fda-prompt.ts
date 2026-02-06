@@ -70,10 +70,6 @@ export interface FDAPredictionResult {
 }
 
 export function parseFDAPredictionResponse(response: string): FDAPredictionResult {
-  // Log the response for debugging
-  console.log('[FDA Parser] Raw response length:', response.length)
-  console.log('[FDA Parser] Raw response preview:', response.substring(0, 500))
-
   if (!response || response.trim().length === 0) {
     throw new Error('Empty response received from model')
   }
@@ -162,18 +158,23 @@ function parseJsonResponse(jsonStr: string): FDAPredictionResult {
   }
 
   if (!['approved', 'rejected'].includes(parsed.prediction)) {
-    throw new Error('Invalid prediction value')
+    throw new Error(`Invalid prediction value: ${JSON.stringify(parsed.prediction)}. Expected 'approved' or 'rejected'.`)
   }
 
-  // Be more lenient with confidence - clamp to valid range
-  let confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 75
-  confidence = Math.max(50, Math.min(100, Math.round(confidence)))
-
-  // Be more lenient with reasoning
-  let reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : ''
-  if (reasoning.length < 10) {
-    throw new Error('Invalid or too short reasoning')
+  // Validate confidence - must be a number
+  if (typeof parsed.confidence !== 'number') {
+    throw new Error(`Invalid confidence value: ${JSON.stringify(parsed.confidence)}. Expected a number.`)
   }
+  const confidence = Math.max(50, Math.min(100, Math.round(parsed.confidence)))
+
+  // Validate reasoning - must be a non-empty string
+  if (typeof parsed.reasoning !== 'string') {
+    throw new Error(`Invalid reasoning value: ${JSON.stringify(parsed.reasoning)}. Expected a string.`)
+  }
+  if (parsed.reasoning.length < 10) {
+    throw new Error(`Reasoning too short (${parsed.reasoning.length} chars). Expected at least 10 characters.`)
+  }
+  const reasoning = parsed.reasoning
 
   return {
     prediction: parsed.prediction,

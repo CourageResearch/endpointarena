@@ -154,8 +154,49 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
         {filteredAndSortedEvents.length} of {events.length} events
       </div>
 
-      {/* Table */}
-      <div className="border border-neutral-200 overflow-hidden">
+      {/* Mobile Cards */}
+      <div className="sm:hidden space-y-3">
+        {filteredAndSortedEvents.map((event) => {
+          const daysUntil = getDaysUntil(event.pdufaDate)
+          const symbol = event.symbols.split(', ')[0]
+          return (
+            <div key={event.id} className="border border-neutral-200 p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm">{event.drugName}</div>
+                  <div className="text-xs text-neutral-500 mt-0.5">{event.companyName}</div>
+                </div>
+                <div className="text-right shrink-0 ml-3">
+                  <div className="text-xs text-neutral-500">{formatDate(event.pdufaDate)}</div>
+                  <div className={`text-xs ${daysUntil < 0 ? 'text-neutral-400' : daysUntil <= 30 ? 'text-red-500' : 'text-neutral-400'}`}>
+                    {daysUntil < 0 ? 'Past' : daysUntil === 0 ? 'Today' : `${daysUntil}d`}
+                  </div>
+                </div>
+              </div>
+              {event.eventDescription && (
+                <div className="text-xs text-neutral-400 mb-2 line-clamp-2">{event.eventDescription}</div>
+              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-xs font-medium px-2 py-0.5 ${getOutcomeStyle(event.outcome)}`}>
+                  {event.outcome.toUpperCase()}
+                </span>
+                <span className="text-xs text-neutral-400">{event.applicationType}</span>
+                <a
+                  href={`https://finance.yahoo.com/quote/${symbol}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-neutral-400 hover:text-neutral-900 hover:underline"
+                >
+                  ${symbol}
+                </a>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden sm:block border border-neutral-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

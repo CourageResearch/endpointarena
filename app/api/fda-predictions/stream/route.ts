@@ -4,9 +4,14 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { buildFDAPredictionPrompt, parseFDAPredictionResponse } from '@/lib/predictions/fda-prompt'
+import { requireAdmin } from '@/lib/auth'
 
 // Streaming prediction generator with progress events
 export async function POST(request: NextRequest) {
+  // Check admin authorization
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const body = await request.json()
   const { fdaEventId, modelId, useReasoning = true } = body
 
@@ -179,13 +184,6 @@ async function streamClaude(
 
   const finalMessage = await stream.finalMessage()
 
-  // Log full response structure for debugging
-  console.log('[Claude] Final message stop_reason:', finalMessage.stop_reason)
-  console.log('[Claude] Final message content blocks:', finalMessage.content?.length)
-  for (const block of finalMessage.content || []) {
-    console.log('[Claude] Block type:', block.type, 'length:', block.type === 'text' ? block.text?.length : (block.type === 'thinking' ? (block as any).thinking?.length : 'N/A'))
-  }
-
   // Extract text from final message content blocks
   let extractedText = ''
   for (const block of finalMessage.content || []) {
@@ -197,15 +195,12 @@ async function streamClaude(
   // Use extracted text if stream didn't capture it
   if (!responseText && extractedText) {
     responseText = extractedText
-    console.log('[Claude] Used text from finalMessage content blocks')
   }
 
   if (!responseText) {
-    console.error('[Claude] EMPTY RESPONSE. Full finalMessage:', JSON.stringify(finalMessage, null, 2))
     throw new Error(`Claude returned empty response. stop_reason: ${finalMessage.stop_reason}, content_blocks: ${finalMessage.content?.length}`)
   }
 
-  console.log('[Claude] Final response length:', responseText.length)
   setFinalText(responseText)
 }
 
@@ -246,7 +241,6 @@ async function streamGPT(
     eventCount++
     if (!eventTypes.includes(event.type)) {
       eventTypes.push(event.type)
-      console.log('[GPT-5.2] New event type:', event.type, 'Sample:', JSON.stringify(event).substring(0, 300))
     }
 
     if (event.type === 'response.reasoning.delta') {
@@ -286,9 +280,6 @@ async function streamGPT(
       }
     }
   }
-
-  console.log('[GPT-5.2] Total events:', eventCount, 'Event types seen:', eventTypes.join(', '))
-  console.log('[GPT-5.2] Final response length:', responseText.length)
 
   if (!responseText) {
     throw new Error(`GPT-5.2 returned empty response. Events: ${eventCount}, Types: ${eventTypes.join(', ')}`)
@@ -336,7 +327,6 @@ async function streamGrok(
   // Send final text
   send({ type: 'text', text: responseText.slice(-100) })
 
-  console.log('[Grok] Final response length:', responseText.length)
   if (!responseText) {
     throw new Error('Grok returned empty response')
   }

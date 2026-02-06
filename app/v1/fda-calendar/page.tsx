@@ -1,6 +1,6 @@
 import { db, fdaCalendarEvents } from '@/lib/db'
 import { asc, sql } from 'drizzle-orm'
-import { FDACalendarTable } from '@/components/FDACalendarTable'
+import { FDACalendarTable2 } from '@/app/fda-calendar/FDACalendarTable2'
 import { V1Navbar } from '@/components/V1Navbar'
 
 export const dynamic = 'force-dynamic'
@@ -98,7 +98,7 @@ export default async function FDACalendarPage() {
           </div>
         </div>
 
-        <FDACalendarTable events={eventsForClient} filterOptions={filterOptions} />
+        <FDACalendarTable2 events={eventsForClient} filterOptions={filterOptions} />
       </main>
     </div>
   )

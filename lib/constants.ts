@@ -95,3 +95,52 @@ export function getDaysUntil(date: Date | string): number {
   const diff = d.getTime() - new Date().getTime()
   return Math.ceil(diff / (1000 * 60 * 60 * 24))
 }
+
+// Model variant types for display purposes
+export type ModelVariant = 'claude' | 'gpt' | 'grok'
+
+// Map full model ID to short variant for display
+export function getModelVariant(modelId: ModelId): ModelVariant {
+  if (modelId === 'claude-opus') return 'claude'
+  if (modelId === 'gpt-5.2') return 'gpt'
+  if (modelId === 'grok-4') return 'grok'
+  throw new Error(`Unknown model ID: ${modelId}`)
+}
+
+// Map short variant back to full model ID
+export function getModelIdFromVariant(variant: ModelVariant): ModelId {
+  if (variant === 'claude') return 'claude-opus'
+  if (variant === 'gpt') return 'gpt-5.2'
+  if (variant === 'grok') return 'grok-4'
+  throw new Error(`Unknown model variant: ${variant}`)
+}
+
+// ID mapping for predictions lookup (short variant -> full model IDs that match)
+export const MODEL_ID_VARIANTS: Record<ModelVariant, string[]> = {
+  'claude': ['claude-opus'],
+  'gpt': ['gpt-5.2'],
+  'grok': ['grok-4'],
+}
+
+// Helper to find prediction by canonical model ID
+export function findPredictionByVariant<T extends { predictorId: string }>(
+  predictions: T[],
+  variant: ModelVariant
+): T | undefined {
+  const variants = MODEL_ID_VARIANTS[variant]
+  return predictions.find(p => variants.includes(p.predictorId))
+}
+
+// Model display names for short variants
+export const MODEL_DISPLAY_NAMES: Record<ModelVariant, string> = {
+  'claude': 'Claude Opus 4.5',
+  'gpt': 'GPT-5.2',
+  'grok': 'Grok 4.1',
+}
+
+// Model names by full ID
+export const MODEL_NAMES: Record<ModelId, string> = {
+  'claude-opus': 'Claude Opus 4.5',
+  'gpt-5.2': 'GPT-5.2',
+  'grok-4': 'Grok 4.1',
+}

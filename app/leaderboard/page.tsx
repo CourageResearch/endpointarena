@@ -1,51 +1,11 @@
 import { db, fdaPredictions } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import Link from 'next/link'
-import { MODEL_IDS, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
+import { ModelIcon } from '@/components/ModelIcon'
+import { WhiteNavbar } from '@/components/WhiteNavbar'
 
 export const dynamic = 'force-dynamic'
-
-const MODEL_INFO: Record<string, { name: string; fullName: string }> = {
-  'claude-opus': { name: 'Claude', fullName: 'Claude Opus 4.5' },
-  'gpt-5.2': { name: 'GPT', fullName: 'GPT-5.2' },
-  'grok-4': { name: 'Grok', fullName: 'Grok 4.1' },
-}
-
-const ModelIcon = ({ id }: { id: string }) => {
-  if (id === 'claude-opus') {
-    return (
-      <svg viewBox="0 0 24 24" className="w-full h-full" fill="currentColor">
-        <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"/>
-      </svg>
-    )
-  }
-  if (id === 'gpt-5.2') {
-    return (
-      <svg viewBox="0 0 24 24" className="w-full h-full" fill="currentColor">
-        <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/>
-      </svg>
-    )
-  }
-  if (id === 'grok-4') {
-    return (
-      <svg viewBox="0 0 24 24" className="w-full h-full" fill="currentColor">
-        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-      </svg>
-    )
-  }
-  return null
-}
-
-const FDAIcon = () => (
-  <svg viewBox="0 0 192.756 192.756" className="w-full h-full" fill="currentColor">
-    <path d="M23.673 111.078h23.803v-8.953h-32.4l-.342-.002v31.875h8.688v-22.787l.251-.133z"/>
-    <path d="M14.736 70.835l65.045-.008.138-.061c14.04.131 25.379 11.515 25.379 25.538 0 14.043-11.375 25.439-25.45 25.535l-.224-.01-15.913-.016v-32.24h8.983v23.471l.75-.02h6.197l.345-.004c9.091-.184 16.403-7.584 16.403-16.686 0-9.151-7.386-16.582-16.542-16.692H23.64l-.217.005v9.745l.007.175 23.983.008.024 8.953-32.604-.006-.099-.006.002-27.681z"/>
-    <path d="M145.012 59.104l39.297 66.242 5.613-9.297-34.826-56.945h-10.084z"/>
-    <path d="M104.686 134.002l40.294-67.134 33.237 54.995h-45.809v-8.578h29.738L144.98 84.648l-28.132 49.354h-12.162z"/>
-    <path d="M184.309 125.346l-51.901-.014v8.67l46.799-.018.07-.205 5.032-8.433z"/>
-    <path d="M50.993 125.064l.037-35.493h8.983v35.493l-.002.07h19.632l.206.006c15.905-.111 28.764-12.994 28.764-28.871 0-15.849-12.823-28.719-28.694-28.868l-.276.007-68.119-.002-.002 66.591H2.834l.003-75.239 76.806-.005h.347c18.266.165 33.43 12.854 36.708 30.149l18.232-29.799h10.082l-31.266 52.373-3.033 5.125c-6.725 9.855-17.889 17.195-30.723 17.311l-.347.002h-28.65v-8.85z"/>
-  </svg>
-)
 
 interface ModelStats {
   correct: number
@@ -101,23 +61,11 @@ export default async function Leaderboard2Page() {
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
-      {/* Minimal Nav */}
-      <nav className="border-b border-neutral-200">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="text-base font-semibold tracking-tight">
-            Endpoint<span className="text-neutral-400">Arena</span>
-          </Link>
-          <div className="flex items-center gap-6 text-sm">
-            <Link href="/leaderboard" className="text-neutral-900 font-medium">Leaderboard</Link>
-            <Link href="/fda-calendar" className="text-neutral-500 hover:text-neutral-900">Calendar</Link>
-            <Link href="/method" className="text-neutral-500 hover:text-neutral-900">Method</Link>
-          </div>
-        </div>
-      </nav>
+      <WhiteNavbar />
 
-      <main className="max-w-5xl mx-auto px-6 py-16">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-8 sm:mb-12">
           <h1 className="text-3xl font-bold tracking-tight mb-2">Leaderboard</h1>
           <p className="text-neutral-500">
             Model accuracy rankings based on FDA prediction results
@@ -127,17 +75,16 @@ export default async function Leaderboard2Page() {
         {/* Rankings */}
         <div className="space-y-4">
           {leaderboard.map((model, i) => {
-            const info = MODEL_INFO[model.id]
             return (
-              <div key={model.id} className="flex items-center gap-6 p-6 border border-neutral-200">
-                <div className="w-8 h-8 flex items-center justify-center text-neutral-400 font-bold">
+              <div key={model.id} className="flex items-center gap-3 sm:gap-6 p-4 sm:p-6 border border-neutral-200">
+                <div className="w-8 h-8 flex items-center justify-center text-neutral-400 font-bold shrink-0">
                   {i + 1}
                 </div>
-                <div className="w-12 h-12 text-neutral-700">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 text-neutral-700 shrink-0">
                   <ModelIcon id={model.id} />
                 </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-lg">{info.fullName}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-base sm:text-lg">{MODEL_NAMES[model.id]}</div>
                   <div className="text-sm text-neutral-400">
                     {model.decided > 0 ? (
                       <>
@@ -152,13 +99,13 @@ export default async function Leaderboard2Page() {
                     )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold">
+                <div className="text-right shrink-0">
+                  <div className="text-2xl sm:text-3xl font-bold">
                     {model.decided > 0 ? `${model.accuracy.toFixed(0)}%` : '—'}
                   </div>
                   <div className="text-sm text-neutral-400">accuracy</div>
                 </div>
-                <div className="w-32">
+                <div className="hidden sm:block w-32">
                   <div className="h-2 bg-neutral-100 overflow-hidden">
                     <div
                       className="h-full bg-neutral-900"

@@ -2,6 +2,7 @@ import { db, fdaCalendarEvents } from '@/lib/db'
 import { asc } from 'drizzle-orm'
 import Link from 'next/link'
 import { FDACalendarTable2 } from './FDACalendarTable2'
+import { WhiteNavbar } from '@/components/WhiteNavbar'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,23 +40,11 @@ export default async function FDACalendar2Page() {
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
-      {/* Minimal Nav */}
-      <nav className="border-b border-neutral-200">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="text-base font-semibold tracking-tight">
-            Endpoint<span className="text-neutral-400">Arena</span>
-          </Link>
-          <div className="flex items-center gap-6 text-sm">
-            <Link href="/leaderboard" className="text-neutral-500 hover:text-neutral-900">Leaderboard</Link>
-            <Link href="/fda-calendar" className="text-neutral-900 font-medium">Calendar</Link>
-            <Link href="/method" className="text-neutral-500 hover:text-neutral-900">Method</Link>
-          </div>
-        </div>
-      </nav>
+      <WhiteNavbar />
 
-      <main className="max-w-5xl mx-auto px-6 py-16">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-8 sm:mb-12">
           <h1 className="text-3xl font-bold tracking-tight mb-2">FDA Calendar</h1>
           <p className="text-neutral-500">
             Upcoming PDUFA dates for biotech and pharma companies

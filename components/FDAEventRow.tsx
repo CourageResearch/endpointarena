@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AcronymTooltip } from './AcronymTooltip'
+import { MODEL_NAMES, MODEL_ID_VARIANTS, type ModelVariant, type ModelId } from '@/lib/constants'
 
 interface Prediction {
   predictorId: string
@@ -25,20 +26,9 @@ interface FDAEvent {
   predictions: Prediction[]
 }
 
-const MODEL_NAMES: Record<string, string> = {
-  'claude-opus': 'Claude Opus 4.5',
-  'gpt-5.2': 'GPT-5.2',
-  'grok-4': 'Grok 4.1',
-}
-
 // Helper to find prediction by canonical model ID
-function findPrediction(predictions: Prediction[], canonicalId: string) {
-  const idVariants: Record<string, string[]> = {
-    'claude': ['claude-opus'],
-    'gpt': ['gpt-5.2'],
-    'grok': ['grok-4'],
-  }
-  const variants = idVariants[canonicalId] || [canonicalId]
+function findPrediction(predictions: Prediction[], variant: ModelVariant) {
+  const variants = MODEL_ID_VARIANTS[variant]
   return predictions.find(p => variants.includes(p.predictorId))
 }
 
@@ -50,7 +40,7 @@ function formatDuration(ms: number): string {
 
 // Inline prediction detail component
 function PredictionDetail({ prediction, outcome }: { prediction: Prediction; outcome: string }) {
-  const modelName = MODEL_NAMES[prediction.predictorId] || prediction.predictorId
+  const modelName = MODEL_NAMES[prediction.predictorId as ModelId] || prediction.predictorId
   const isApproved = prediction.prediction === 'approved'
   const fdaDecided = outcome !== 'Pending'
   const isPredictionCorrect = prediction.correct
@@ -103,9 +93,9 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
 
 export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<string | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: string) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
@@ -134,7 +124,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
             PENDING
           </span>
         </td>
-        {['claude', 'gpt', 'grok'].map((modelId) => {
+        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           const isExpanded = expandedPrediction === modelId
           return (
@@ -181,9 +171,9 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
 
 export function PastFDAEventRow({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<string | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: string) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
@@ -214,7 +204,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
             {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
           </span>
         </td>
-        {['claude', 'gpt', 'grok'].map((modelId) => {
+        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           if (!pred) return <td key={modelId} className="text-center px-4 py-3 text-zinc-600">—</td>
           const isCorrect = pred.correct
@@ -260,9 +250,9 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
 // Mobile Card Components for Home Page
 export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<string | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: string) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
@@ -297,7 +287,7 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
         </div>
       )}
       <div className={`grid grid-cols-3 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
-        {['claude', 'gpt', 'grok'].map((modelId) => {
+        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : 'Grok'
           const isExpanded = expandedPrediction === modelId
@@ -340,9 +330,9 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
 
 export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<string | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: string) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
@@ -379,7 +369,7 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
         </div>
       )}
       <div className={`grid grid-cols-3 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
-        {['claude', 'gpt', 'grok'].map((modelId) => {
+        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : 'Grok'
           if (!pred) {

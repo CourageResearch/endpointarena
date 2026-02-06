@@ -2,15 +2,15 @@ import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { generateMetaAnalysis } from '@/lib/predictions/fda-generators'
-
-const MODEL_NAMES: Record<string, string> = {
-  'claude-opus': 'Claude Opus 4.5',
-  'gpt-5.2': 'GPT-5.2',
-  'grok-4': 'Grok 4.1',
-}
+import { MODEL_NAMES, type ModelId } from '@/lib/constants'
+import { requireAdmin } from '@/lib/auth'
 
 // Generate meta-analysis for an FDA event
 export async function POST(request: NextRequest) {
+  // Check admin authorization
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const body = await request.json()
   const { fdaEventId } = body
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Format predictions for the meta-analysis generator
     const predictionSummaries = modelPredictions.map(p => ({
       modelId: p.predictorId,
-      modelName: MODEL_NAMES[p.predictorId] || p.predictorId,
+      modelName: MODEL_NAMES[p.predictorId as ModelId] || p.predictorId,
       prediction: p.prediction,
       confidence: p.confidence,
       reasoning: p.reasoning,
@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
       predictionsAnalyzed: modelPredictions.length
     })
   } catch (error) {
-    console.error('Meta-analysis generation failed:', error)
     return NextResponse.json({
       error: error instanceof Error ? error.message : 'Failed to generate meta-analysis'
     }, { status: 500 })

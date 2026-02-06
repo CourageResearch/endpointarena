@@ -1,9 +1,11 @@
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import type { NextAuthOptions } from 'next-auth'
+import { getServerSession } from 'next-auth'
 import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { db, users } from '@/lib/db'
 import { eq } from 'drizzle-orm'
+import { ADMIN_EMAIL } from '@/lib/constants'
 
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
@@ -72,7 +74,6 @@ function getProviders() {
               `,
             })
           } catch (error) {
-            console.error('Failed to send verification email:', error)
             throw new Error('Failed to send verification email')
           }
         },
@@ -101,4 +102,26 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
+}
+
+// Check if the current request is from an admin user
+// Returns null if authorized, or a Response object if unauthorized
+export async function requireAdmin(): Promise<Response | null> {
+  const session = await getServerSession(authOptions)
+
+  if (!session?.user?.email) {
+    return new Response(JSON.stringify({ error: 'Unauthorized - not logged in' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (session.user.email !== ADMIN_EMAIL) {
+    return new Response(JSON.stringify({ error: 'Forbidden - admin access required' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  return null // Authorized
 }
