@@ -1,8 +1,23 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { MODEL_NAMES, MODEL_ID_VARIANTS, MODEL_DISPLAY_NAMES, type ModelVariant, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
+
+const APP_TYPE_ABBREV: Record<string, string> = {
+  'Resubmitted BLA': 'rBLA',
+  'Resubmitted Biologics License Application': 'rBLA',
+  'Supplemental New Drug Application': 'sNDA',
+  'Supplemental Biologics License Application': 'sBLA',
+  'New Drug Application': 'NDA',
+  'Biologics License Application': 'BLA',
+}
+
+function abbreviateType(type: string): { display: string; anchor: string } {
+  const abbrev = APP_TYPE_ABBREV[type] || type
+  return { display: abbrev, anchor: abbrev }
+}
 
 interface Prediction {
   predictorId: string
@@ -32,6 +47,36 @@ function findPrediction(predictions: Prediction[], variant: ModelVariant) {
   return predictions.find(p => variants.includes(p.predictorId))
 }
 
+const STATUS_GRADIENTS = {
+  Pending: 'linear-gradient(90deg, #b5aa9e, #d4c9bc)',
+  Approved: 'linear-gradient(90deg, #7d8e6e, #a3b88f, #7d8e6e)',
+  Rejected: 'linear-gradient(90deg, #c07a5f, #d4a08a, #c07a5f)',
+}
+
+function StatusBadge({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) {
+  const color = status === 'Pending' ? '#b5aa9e' : status === 'Approved' ? '#7d8e6e' : '#c07a5f'
+  return (
+    <span className="inline-flex flex-col items-center gap-0.5">
+      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
+        {status}
+      </span>
+      <span className="w-full h-[2px] rounded-full" style={{ background: STATUS_GRADIENTS[status] }} />
+    </span>
+  )
+}
+
+function StatusBadgeMobile({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) {
+  const color = status === 'Pending' ? '#b5aa9e' : status === 'Approved' ? '#7d8e6e' : '#c07a5f'
+  return (
+    <span className="inline-flex flex-col items-center gap-0.5 px-2 py-0.5">
+      <span className="text-xs font-medium uppercase" style={{ color }}>
+        {status}
+      </span>
+      <span className="w-full h-[1.5px] rounded-full" style={{ background: STATUS_GRADIENTS[status] }} />
+    </span>
+  )
+}
+
 function PredictionDetail({ prediction, outcome, description }: { prediction: Prediction; outcome: string; description?: string }) {
   const modelName = MODEL_NAMES[prediction.predictorId as ModelId] || prediction.predictorId
   const isApproved = prediction.prediction === 'approved'
@@ -39,36 +84,32 @@ function PredictionDetail({ prediction, outcome, description }: { prediction: Pr
   const isPredictionCorrect = prediction.correct
 
   return (
-    <div className="bg-neutral-50 p-4 space-y-3">
+    <div className="bg-black/[0.03] p-4 space-y-3">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">{modelName}</span>
-          <span className={`px-2 py-0.5 text-xs font-semibold ${
-            isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-          }`}>
+          <span className="px-2 py-0.5 text-xs font-semibold" style={{ color: isApproved ? '#7d8e6e' : '#c07a5f' }}>
             {isApproved ? 'APPROVE' : 'REJECT'}
           </span>
-          <span className="text-sm text-neutral-500">{prediction.confidence}% confidence</span>
+          <span className="text-sm text-black/40"><span className="font-mono">{prediction.confidence}%</span> confidence</span>
         </div>
       </div>
 
       {fdaDecided && (
-        <div className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs ${
-          isPredictionCorrect ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-        }`}>
+        <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs" style={{ color: isPredictionCorrect ? '#7d8e6e' : '#c07a5f' }}>
           <span>{isPredictionCorrect ? '✓' : '✗'}</span>
           <span>{isPredictionCorrect ? 'Correct' : 'Incorrect'} — FDA ruled {outcome}</span>
         </div>
       )}
 
-      <p className="text-sm text-neutral-600 leading-relaxed">
+      <p className="text-sm text-black/50 leading-relaxed">
         {prediction.reasoning}
       </p>
 
       {description && (
-        <div className="pt-3 mt-3 border-t border-neutral-200">
-          <div className="text-xs text-neutral-400 uppercase tracking-wider mb-1">About this drug</div>
-          <p className="text-sm text-neutral-500 leading-relaxed">{description}</p>
+        <div className="pt-3 mt-3 border-t border-black/[0.08]">
+          <div className="text-xs text-black/30 uppercase tracking-[0.2em] mb-1">About this drug</div>
+          <p className="text-sm text-black/40 leading-relaxed">{description}</p>
         </div>
       )}
     </div>
@@ -87,18 +128,22 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
 
   return (
     <>
-      <tr className="hover:bg-neutral-50 border-b border-neutral-100">
-        <td className="px-3 py-3 text-sm text-neutral-500 align-top">
+      <tr className="hover:bg-black/[0.015] border-b border-black/[0.06] transition-colors align-top">
+        <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
         </td>
-        <td className="px-3 py-3 text-sm text-neutral-500 align-top">
+        <td className="px-4 py-5 text-sm font-medium text-black/70 whitespace-nowrap">
           {event.drugName}
         </td>
-        <td className="px-3 py-3 text-neutral-500 text-sm align-top">
+        <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
           {event.eventDescription || event.therapeuticArea || '—'}
         </td>
-        <td className="px-3 py-3 text-sm text-neutral-500 align-top">{event.applicationType}</td>
-        <td className="px-3 py-3 text-sm text-neutral-400 align-top font-mono">
+        <td className="px-4 py-5 text-sm text-black/35 whitespace-nowrap">
+          <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="hover:text-black/80 hover:underline" onClick={(e) => e.stopPropagation()}>
+            {abbreviateType(event.applicationType).display}
+          </Link>
+        </td>
+        <td className="px-4 py-5 text-sm text-black/35 font-mono whitespace-nowrap">
           {event.symbols ? (() => {
             const ticker = event.symbols.split(',')[0].trim()
             return (
@@ -106,7 +151,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
                 href={`https://finance.yahoo.com/quote/${ticker}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-neutral-900 hover:underline"
+                className="hover:text-black/80 hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
                 ${ticker}
@@ -114,38 +159,33 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
             )
           })() : '—'}
         </td>
-        <td className="text-center px-2 py-3 align-top">
-          <span className="px-2 py-1 text-xs font-medium bg-neutral-100 text-neutral-500">
-            PENDING
-          </span>
+        <td className="text-center px-3 py-5">
+          <StatusBadge status="Pending" />
         </td>
         {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           const isExpanded = expandedPrediction === modelId
           return (
-            <td key={modelId} className="text-center px-2 py-3 align-top">
+            <td key={modelId} className="text-center px-3 py-5">
               {pred ? (
                 <button
                   onClick={(e) => handlePredictionClick(e, modelId)}
-                  className={`text-xs font-medium px-2 py-1 transition-all cursor-pointer ${
-                    isExpanded ? 'ring-2 ring-neutral-300' : 'hover:ring-2 hover:ring-neutral-200'
-                  } ${
-                    pred.prediction === 'approved'
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'bg-red-50 text-red-500'
+                  className={`text-sm font-medium px-2 py-1 transition-all cursor-pointer rounded ${
+                    isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                   }`}
+                  style={{ color: pred.prediction === 'approved' ? '#7d8e6e' : '#c07a5f' }}
                 >
                   {pred.prediction === 'approved' ? '↑' : '↓'}
                 </button>
               ) : (
-                <span className="text-neutral-300">—</span>
+                <span className="text-black/15">—</span>
               )}
             </td>
           )
         })}
       </tr>
       {expandedPred && (
-        <tr className="border-b border-neutral-200">
+        <tr className="border-b border-black/[0.08]">
           <td colSpan={9} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
@@ -167,18 +207,22 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
 
   return (
     <>
-      <tr className="hover:bg-neutral-50 border-b border-neutral-200">
-        <td className="px-3 py-3 text-sm text-neutral-500">
+      <tr className="hover:bg-black/[0.015] border-b border-black/[0.06] transition-colors align-top">
+        <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
         </td>
-        <td className="px-3 py-3 text-sm text-neutral-500">
+        <td className="px-4 py-5 text-sm font-medium text-black/70 whitespace-nowrap">
           {event.drugName}
         </td>
-        <td className="px-3 py-3 text-neutral-500 text-sm">
+        <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
           {event.eventDescription || event.therapeuticArea || '—'}
         </td>
-        <td className="px-3 py-3 text-sm text-neutral-500">{event.applicationType}</td>
-        <td className="px-3 py-3 text-sm text-neutral-400 font-mono">
+        <td className="px-4 py-5 text-sm text-black/35 whitespace-nowrap">
+          <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="hover:text-black/80 hover:underline" onClick={(e) => e.stopPropagation()}>
+            {abbreviateType(event.applicationType).display}
+          </Link>
+        </td>
+        <td className="px-4 py-5 text-sm text-black/35 font-mono whitespace-nowrap">
           {event.symbols ? (() => {
             const ticker = event.symbols.split(',')[0].trim()
             return (
@@ -186,7 +230,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
                 href={`https://finance.yahoo.com/quote/${ticker}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-neutral-900 hover:underline"
+                className="hover:text-black/80 hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
                 ${ticker}
@@ -194,29 +238,22 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
             )
           })() : '—'}
         </td>
-        <td className="text-center px-2 py-3">
-          <span className={`px-2 py-1 text-xs font-medium ${
-            event.outcome === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
-          }`}>
-            {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
-          </span>
+        <td className="text-center px-3 py-5">
+          <StatusBadge status={event.outcome as 'Approved' | 'Rejected'} />
         </td>
         {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
-          if (!pred) return <td key={modelId} className="text-center px-2 py-3 text-neutral-300">—</td>
+          if (!pred) return <td key={modelId} className="text-center px-3 py-5 text-black/15">—</td>
           const isCorrect = pred.correct
           const isExpanded = expandedPrediction === modelId
           return (
-            <td key={modelId} className="text-center px-2 py-3">
+            <td key={modelId} className="text-center px-3 py-5">
               <button
                 onClick={(e) => handlePredictionClick(e, modelId)}
-                className={`text-xs font-medium px-2 py-1 transition-all cursor-pointer ${
-                  isExpanded ? 'ring-2 ring-neutral-300' : 'hover:ring-2 hover:ring-neutral-200'
-                } ${
-                  isCorrect
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-red-50 text-red-500'
+                className={`text-sm font-medium px-2 py-1 transition-all cursor-pointer rounded ${
+                  isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                 }`}
+                style={{ color: isCorrect ? '#7d8e6e' : '#c07a5f' }}
               >
                 {isCorrect ? '✓' : '✗'}
               </button>
@@ -225,7 +262,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
         })}
       </tr>
       {expandedPred && (
-        <tr className="border-b border-neutral-200">
+        <tr className="border-b border-black/[0.08]">
           <td colSpan={9} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} description={event.eventDescription} />
           </td>
@@ -277,8 +314,10 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
       </div>
 
       <div className="flex items-center gap-2 mb-1">
-        <span className="px-2 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-500">PENDING</span>
-        <span className="text-xs text-neutral-400">{event.applicationType}</span>
+        <StatusBadgeMobile status="Pending" />
+        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-neutral-400 hover:text-neutral-900 hover:underline">
+          {abbreviateType(event.applicationType).display}
+        </Link>
       </div>
 
       {/* Predictions */}
@@ -292,13 +331,11 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
               onClick={() => pred && handlePredictionClick(modelId)}
               className={`flex items-center justify-center gap-1.5 py-2 text-xs transition-all ${
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
-              } ${
-                pred
-                  ? pred.prediction === 'approved'
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-red-50 text-red-500'
-                  : 'bg-neutral-50 text-neutral-300'
-              }`}
+              } ${!pred ? 'bg-neutral-50 text-neutral-300' : ''}`}
+              style={pred ? {
+                backgroundColor: pred.prediction === 'approved' ? 'rgba(125, 142, 110, 0.08)' : 'rgba(192, 122, 95, 0.08)',
+                color: pred.prediction === 'approved' ? '#7d8e6e' : '#c07a5f',
+              } : undefined}
             >
               <div className="w-3.5 h-3.5">
                 <ModelIcon id={modelId} />
@@ -356,12 +393,10 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
       </div>
 
       <div className="flex items-center gap-2 mb-1">
-        <span className={`px-2 py-0.5 text-xs font-medium ${
-          event.outcome === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
-        }`}>
-          {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
-        </span>
-        <span className="text-xs text-neutral-400">{event.applicationType}</span>
+        <StatusBadgeMobile status={event.outcome as 'Approved' | 'Rejected'} />
+        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-neutral-400 hover:text-neutral-900 hover:underline">
+          {abbreviateType(event.applicationType).display}
+        </Link>
       </div>
 
       {/* Predictions */}
@@ -384,9 +419,11 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
               onClick={() => handlePredictionClick(modelId)}
               className={`flex items-center justify-center gap-1.5 py-2 text-xs transition-all ${
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
-              } ${
-                isCorrect ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
               }`}
+              style={{
+                backgroundColor: isCorrect ? 'rgba(125, 142, 110, 0.08)' : 'rgba(192, 122, 95, 0.08)',
+                color: isCorrect ? '#7d8e6e' : '#c07a5f',
+              }}
             >
               <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
               {isCorrect ? '✓' : '✗'}

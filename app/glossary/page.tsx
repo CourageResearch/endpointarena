@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Navbar } from '@/components/Navbar'
+import { useState, useMemo, useEffect } from 'react'
+import { WhiteNavbar } from '@/components/WhiteNavbar'
 
 interface GlossaryTerm {
   term: string
@@ -34,6 +34,12 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     term: 'sBLA',
     fullName: 'Supplemental Biologics License Application',
     definition: 'An amendment to an existing BLA, similar to an sNDA but for biological products.',
+    category: 'Application Types',
+  },
+  {
+    term: 'rBLA',
+    fullName: 'Resubmitted Biologics License Application',
+    definition: 'A BLA that has been resubmitted after a Complete Response Letter (CRL). The sponsor addresses the deficiencies cited by the FDA and resubmits the application for further review.',
     category: 'Application Types',
   },
   {
@@ -199,9 +205,35 @@ const CATEGORIES = [
   'Clinical Trials',
 ]
 
+function HeaderDots() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
+    </div>
+  )
+}
+
 export default function GlossaryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const [highlightedTerm, setHighlightedTerm] = useState<string | null>(null)
+
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash && hash.startsWith('#term-')) {
+      const term = decodeURIComponent(hash.replace('#term-', ''))
+      setHighlightedTerm(term)
+      // Scroll to element after a brief delay to ensure render
+      setTimeout(() => {
+        const el = document.getElementById(`term-${term}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+      // Clear highlight after animation
+      setTimeout(() => setHighlightedTerm(null), 3000)
+    }
+  }, [])
 
   const filteredTerms = useMemo(() => {
     return GLOSSARY_TERMS.filter((term) => {
@@ -235,20 +267,23 @@ export default function GlossaryPage() {
   }, [filteredTerms, selectedCategory])
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <Navbar />
+    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">FDA Glossary</h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            Common FDA and clinical trial terminology explained. Hover over acronyms throughout the site to see quick definitions.
+        <div className="mb-8 sm:mb-12">
+          <div className="flex items-center gap-3 mb-4">
+            <h1 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Glossary</h1>
+            <HeaderDots />
+          </div>
+          <p className="text-[#8a8075] text-sm sm:text-base max-w-lg">
+            Common FDA and clinical trial terminology explained.
           </p>
         </div>
 
         {/* Search and Filter */}
-        <div className="sticky top-14 z-40 bg-[#0a0a0a] py-4 mb-6 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-zinc-800">
+        <div className="sticky top-14 z-40 bg-[#F5F2ED] py-4 mb-6 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-[#e8ddd0]">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <input
@@ -256,10 +291,10 @@ export default function GlossaryPage() {
                 placeholder="Search terms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 pl-10 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                className="w-full border border-[#e8ddd0] bg-white/80 px-4 py-2.5 pl-10 text-sm text-[#1a1a1a] placeholder-[#b5aa9e] focus:border-[#8a8075] focus:outline-none"
               />
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#b5aa9e]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -277,10 +312,10 @@ export default function GlossaryPage() {
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(category)}
-                  className={`px-3 py-2 text-sm rounded-lg whitespace-nowrap transition-colors ${
+                  className={`px-3 py-2 text-sm whitespace-nowrap transition-colors ${
                     selectedCategory === category
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-zinc-800/50 text-zinc-400 border border-zinc-700 hover:text-white hover:border-zinc-600'
+                      ? 'bg-[#1a1a1a] text-white'
+                      : 'bg-white/80 text-[#8a8075] border border-[#e8ddd0] hover:text-[#1a1a1a] hover:border-[#b5aa9e]'
                   }`}
                 >
                   {category}
@@ -291,48 +326,60 @@ export default function GlossaryPage() {
         </div>
 
         {/* Results count */}
-        <div className="text-sm text-zinc-500 mb-6">
+        <div className="text-xs text-[#b5aa9e] mb-6">
           {filteredTerms.length} {filteredTerms.length === 1 ? 'term' : 'terms'} found
         </div>
 
         {/* Terms by Category */}
         {Object.entries(groupedTerms).map(([category, terms]) => (
           <section key={category} className="mb-10">
-            <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              {category}
-            </h2>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">{category}</h2>
+              <HeaderDots />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {terms.map((term) => (
-                <div
-                  key={term.term}
-                  className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:border-zinc-700 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="text-lg font-bold text-blue-400">{term.term}</span>
+              {terms.map((term) => {
+                const isHighlighted = highlightedTerm === term.term
+                return (
+                  <div
+                    key={term.term}
+                    id={`term-${term.term}`}
+                    className={`p-[1px] rounded-sm scroll-mt-32 transition-shadow duration-500 ${isHighlighted ? 'shadow-[0_0_0_3px_rgba(212,96,74,0.3),0_0_0_3px_rgba(45,124,246,0.3)]' : ''}`}
+                    style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}
+                  >
+                    <div className={`rounded-sm p-4 h-full transition-colors duration-500 ${isHighlighted ? 'bg-[#f3ebe0]' : 'bg-white/95'}`}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className="text-lg font-bold text-[#1a1a1a]">{term.term}</span>
+                      </div>
+                      <div className="text-sm font-medium text-[#8a8075] mb-2">{term.fullName}</div>
+                      <p className="text-sm text-[#b5aa9e] leading-relaxed">{term.definition}</p>
+                    </div>
                   </div>
-                  <div className="text-sm font-medium text-white mb-2">{term.fullName}</div>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{term.definition}</p>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         ))}
 
         {filteredTerms.length === 0 && (
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl py-12 text-center">
-            <div className="text-zinc-500 mb-2">No terms found matching your search.</div>
-            <button
-              onClick={() => {
-                setSearchQuery('')
-                setSelectedCategory('All')
-              }}
-              className="text-blue-400 hover:text-blue-300 text-sm"
-            >
-              Clear filters
-            </button>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="bg-white/95 rounded-sm py-12 text-center">
+              <div className="text-[#b5aa9e] mb-2">No terms found matching your search.</div>
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  setSelectedCategory('All')
+                }}
+                className="text-[#8a8075] hover:text-[#1a1a1a] text-sm underline"
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
         )}
+
+        {/* Footer gradient line */}
+        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
       </main>
     </div>
   )

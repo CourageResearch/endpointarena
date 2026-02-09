@@ -6,6 +6,16 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 
 export const dynamic = 'force-dynamic'
 
+function HeaderDots() {
+  return (
+    <div className="flex items-center gap-1">
+      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.35 }} />
+      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.35 }} />
+      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.35 }} />
+    </div>
+  )
+}
+
 async function getFDAEvents() {
   return db.query.fdaCalendarEvents.findMany({
     orderBy: [asc(fdaCalendarEvents.pdufaDate)],
@@ -39,19 +49,25 @@ export default async function FDACalendar2Page() {
   }))
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900">
-      <WhiteNavbar />
+    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
         <div className="mb-8 sm:mb-12">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">FDA Calendar</h1>
-          <p className="text-neutral-500">
+          <div className="flex items-center gap-3 mb-4">
+            <h1 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">FDA Calendar</h1>
+            <HeaderDots />
+          </div>
+          <p className="text-[#8a8075] text-sm sm:text-base max-w-lg">
             Upcoming PDUFA dates for biotech and pharma companies
           </p>
         </div>
 
         <FDACalendarTable2 events={eventsForClient} filterOptions={filterOptions} />
+
+        {/* Footer gradient line */}
+        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
       </main>
     </div>
   )
