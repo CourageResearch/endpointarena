@@ -84,7 +84,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
         <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
-        <td className="px-4 py-5 text-sm font-medium text-black/70 whitespace-nowrap">
+        <td className="px-4 py-5 text-sm font-medium text-black/70">
           {event.drugName}
         </td>
         <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
@@ -163,7 +163,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
         <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
-        <td className="px-4 py-5 text-sm font-medium text-black/70 whitespace-nowrap">
+        <td className="px-4 py-5 text-sm font-medium text-black/70">
           {event.drugName}
         </td>
         <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">

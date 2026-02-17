@@ -184,8 +184,8 @@ export function HomePageContent({ data }: { data: HomeData }) {
               <table className="w-full table-fixed min-w-[640px]">
                 <colgroup>
                   <col style={{width: '60px'}} />
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '280px'}} />
+                  <col style={{width: '130px'}} />
+                  <col style={{width: '250px'}} />
                   <col style={{width: '60px'}} />
                   <col style={{width: '65px'}} />
                   <col style={{width: '90px'}} />
@@ -250,8 +250,8 @@ export function HomePageContent({ data }: { data: HomeData }) {
               <table className="w-full table-fixed min-w-[640px]">
                 <colgroup>
                   <col style={{width: '60px'}} />
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '280px'}} />
+                  <col style={{width: '130px'}} />
+                  <col style={{width: '250px'}} />
                   <col style={{width: '60px'}} />
                   <col style={{width: '65px'}} />
                   <col style={{width: '90px'}} />
