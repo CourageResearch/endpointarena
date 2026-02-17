@@ -24,7 +24,7 @@ export async function generateClaudeFDAPrediction(event: FDAEventInfo): Promise<
 
   // Use extended thinking for deep reasoning
   const message = await client.messages.create({
-    model: 'claude-opus-4-5-20251101',
+    model: 'claude-opus-4-6',
     max_tokens: 16000,
     thinking: {
       type: 'enabled',
@@ -159,7 +159,7 @@ Write a concise meta-analysis (2-3 paragraphs) that:
 Be specific and reference actual reasoning from each model. Focus on analytical differences, not just restating predictions. Keep it under 300 words.`
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5',
     max_tokens: 1000,
     messages: [
       {

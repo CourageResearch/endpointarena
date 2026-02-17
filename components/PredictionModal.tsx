@@ -21,7 +21,7 @@ interface PredictionModalProps {
 }
 
 const MODEL_NAMES: Record<string, string> = {
-  'claude-opus': 'Claude Opus 4.5',
+  'claude-opus': 'Claude Opus 4.6',
   'gpt-5.2': 'GPT-5.2',
   'grok-4': 'Grok 4.1',
 }
@@ -95,9 +95,10 @@ export function PredictionModal({ prediction, drugName, outcome, onClose }: Pred
         <div className="p-4 space-y-4">
           {/* Prediction + Confidence */}
           <div className="flex items-center gap-4">
-            <div className={`px-4 py-2 rounded-lg text-lg font-bold ${
-              isApproved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-            }`}>
+            <div className="px-4 py-2 rounded-lg text-lg font-bold" style={{
+              backgroundColor: isApproved ? 'rgba(125, 142, 110, 0.2)' : 'rgba(192, 122, 95, 0.2)',
+              color: isApproved ? '#a3b396' : '#d9a08a',
+            }}>
               {isApproved ? '✓ APPROVED' : '✗ REJECTED'}
             </div>
             <div className="text-center">
@@ -108,18 +109,19 @@ export function PredictionModal({ prediction, drugName, outcome, onClose }: Pred
 
           {/* Result Badge (if FDA decided) */}
           {fdaDecided && (
-            <div className={`flex items-center gap-2 p-3 rounded-lg ${
-              isPredictionCorrect ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-red-500/10 border border-red-500/30'
-            }`}>
-              <span className={`text-lg ${isPredictionCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div className="flex items-center gap-2 p-3 rounded-lg border" style={{
+              backgroundColor: isPredictionCorrect ? 'rgba(125, 142, 110, 0.1)' : 'rgba(192, 122, 95, 0.1)',
+              borderColor: isPredictionCorrect ? 'rgba(125, 142, 110, 0.3)' : 'rgba(192, 122, 95, 0.3)',
+            }}>
+              <span className="text-lg" style={{ color: isPredictionCorrect ? '#a3b396' : '#d9a08a' }}>
                 {isPredictionCorrect ? '✓' : '✗'}
               </span>
               <div>
-                <div className={`font-medium ${isPredictionCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="font-medium" style={{ color: isPredictionCorrect ? '#a3b396' : '#d9a08a' }}>
                   {isPredictionCorrect ? 'Correct Prediction' : 'Incorrect Prediction'}
                 </div>
                 <div className="text-xs text-zinc-500">
-                  FDA ruled: <span className={outcome === 'Approved' ? 'text-emerald-400' : 'text-red-400'}>{outcome}</span>
+                  FDA ruled: <span style={{ color: outcome === 'Approved' ? '#a3b396' : '#d9a08a' }}>{outcome}</span>
                 </div>
               </div>
             </div>

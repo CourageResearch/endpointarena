@@ -28,7 +28,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "resend": "^6.9.1",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

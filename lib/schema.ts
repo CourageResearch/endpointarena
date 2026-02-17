@@ -113,9 +113,23 @@ export const verificationTokens = pgTable('verification_tokens', {
   expires: timestamp('expires').notNull(),
 })
 
+// Analytics Events table
+export const analyticsEvents = pgTable('analytics_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  type: text('type').notNull(), // 'pageview' | 'click'
+  url: text('url').notNull(),
+  referrer: text('referrer'),
+  userAgent: text('user_agent'),
+  sessionHash: text('session_hash'),
+  elementId: text('element_id'),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+})
+
 // Type exports
 export type FDACalendarEvent = typeof fdaCalendarEvents.$inferSelect
 export type NewFDACalendarEvent = typeof fdaCalendarEvents.$inferInsert
 export type FDAPrediction = typeof fdaPredictions.$inferSelect
 export type NewFDAPrediction = typeof fdaPredictions.$inferInsert
 export type User = typeof users.$inferSelect
+export type AnalyticsEvent = typeof analyticsEvents.$inferSelect
+export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert

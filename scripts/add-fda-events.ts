@@ -6,7 +6,7 @@ const newEvents = [
     companyName: 'Atara Biotherapeutics, Inc.',
     symbols: 'ATRA',
     drugName: 'Tabelecleucel',
-    applicationType: 'Resubmitted BLA',
+    applicationType: 'rBLA',
     pdufaDate: new Date('2026-01-10'),
     eventDescription: 'Tabelecleucel for treatment of Epstein-Barr virus positive post-transplant lymphoproliferative disease (EBV+ PTLD)',
     outcome: 'Rejected',

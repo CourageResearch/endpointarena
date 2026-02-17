@@ -67,6 +67,7 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
               {new Date(prediction.createdAt).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
+                timeZone: 'UTC',
               })}
             </span>
           )}
@@ -109,7 +110,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
         onClick={() => setExpanded(!expanded)}
       >
         <td className="px-4 py-3 text-sm text-zinc-400">
-          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
         </td>
         <td className="px-4 py-3">
           <div className="font-medium truncate">{event.drugName}</div>
@@ -187,7 +188,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
         onClick={() => setExpanded(!expanded)}
       >
         <td className="px-4 py-3 text-sm text-zinc-400">
-          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
         </td>
         <td className="px-4 py-3">
           <div className="font-medium truncate">{event.drugName}</div>
@@ -274,7 +275,7 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
         </span>
       </div>
       <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
-        <span>{new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+        <span>{new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</span>
         <span className="text-zinc-600">•</span>
         <AcronymTooltip acronym={event.applicationType} />
         {event.eventDescription && (
@@ -356,7 +357,7 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
         </span>
       </div>
       <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
-        <span>{new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+        <span>{new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</span>
         <span className="text-zinc-600">•</span>
         <AcronymTooltip acronym={event.applicationType} />
         {event.eventDescription && (

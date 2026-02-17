@@ -1,16 +1,10 @@
 import { db, fdaPredictions } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, MODEL_NAMES, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 
 export const dynamic = 'force-dynamic'
-
-const MODEL_COLORS: Record<string, string> = {
-  'claude-opus': '#D4604A',
-  'gpt-5.2': '#C9A227',
-  'grok-4': '#2D7CF6',
-}
 
 interface ModelStats {
   correct: number
@@ -75,6 +69,22 @@ async function getData() {
   return { leaderboard, totalDecided: Math.round(totalDecided), totalPending: Math.round(totalPending) }
 }
 
+const SQ_COLORS = ['#f2544e', '#40bd4b', '#d4a017', '#299bff', '#31b8b5']
+
+function SquareDivider({ className = '' }: { className?: string }) {
+  return (
+    <div className={`w-full ${className}`}>
+      <svg className="w-full" height="8" preserveAspectRatio="none">
+        <rect x="20%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[0]} opacity="0.8" />
+        <rect x="35%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[1]} opacity="0.8" />
+        <rect x="50%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[2]} opacity="0.85" />
+        <rect x="65%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[3]} opacity="0.8" />
+        <rect x="80%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[4]} opacity="0.8" />
+      </svg>
+    </div>
+  )
+}
+
 function HeaderDots() {
   return (
     <div className="flex items-center gap-1.5">
@@ -109,7 +119,7 @@ export default async function LeaderboardPage() {
         <div className="p-[1px] rounded-sm mb-12 sm:mb-16" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
           <div className="bg-white/95 rounded-sm divide-y divide-[#e8ddd0]">
             {leaderboard.map((model, i) => {
-              const color = MODEL_COLORS[model.id]
+              const color = MODEL_INFO[model.id].color
               return (
                 <div key={model.id} className="px-4 sm:px-8 py-6 sm:py-8 hover:bg-[#f3ebe0]/30 transition-colors">
                   <div className="flex items-center gap-3 sm:gap-4">
@@ -141,7 +151,7 @@ export default async function LeaderboardPage() {
         </div>
 
         {/* Divider */}
-        <div className="mb-12 sm:mb-16 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+        <SquareDivider className="mb-12 sm:mb-16" />
 
         {/* ── COMPARISON TABLE ── */}
         <div className="mb-12 sm:mb-16">

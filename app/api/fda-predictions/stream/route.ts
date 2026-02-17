@@ -134,7 +134,7 @@ async function streamClaude(
 
   // Build request options conditionally
   const requestOptions: any = {
-    model: 'claude-opus-4-5-20251101',
+    model: 'claude-opus-4-6',
     max_tokens: useReasoning ? 16000 : 4096,
     messages: [{ role: 'user', content: prompt }],
   }

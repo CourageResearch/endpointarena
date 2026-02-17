@@ -7,6 +7,16 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 
 export const dynamic = 'force-dynamic'
 
+function HeaderDots() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
+    </div>
+  )
+}
+
 async function getData() {
   const [fdaEventCount, predictionCount] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(fdaCalendarEvents),
@@ -21,16 +31,17 @@ async function getData() {
   }
 }
 
-export default async function Method2Page() {
+export default async function MethodPage() {
   const { fdaEventCount, predictionCount } = await getData()
 
   const models = [
     {
       id: 'claude',
-      name: 'Claude Opus 4.5',
-      version: 'claude-opus-4-5-20251101',
+      name: 'Claude Opus 4.6',
+      version: 'claude-opus-4-6',
       features: {
         internet: false,
+        internetDetail: 'No web access during prediction',
         reasoning: 'Extended Thinking',
         reasoningDetail: '10,000 token thinking budget',
         maxTokens: '16,000',
@@ -68,8 +79,8 @@ export default async function Method2Page() {
       description: 'Monitor upcoming FDA drug approval decisions from the RTTNews FDA Calendar including PDUFA dates for NDAs, BLAs, and supplemental applications.'
     },
     {
-      title: 'Prepare Identical Context',
-      description: 'Each model receives the same information: drug name, company, application type, therapeutic area, clinical trial data, and regulatory history.'
+      title: 'Prepare Similar Context',
+      description: 'Each model receives the same core information—drug name, company, application type, therapeutic area, and event details. However, models aren\'t identical: some have web search, others use extended reasoning. Rather than handicapping them to a lowest common denominator, we let each model use its full capabilities so every prediction reflects its best effort.'
     },
     {
       title: 'Request Predictions',
@@ -86,102 +97,144 @@ export default async function Method2Page() {
   ]
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900">
-      <WhiteNavbar />
+    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
-        <div className="mb-8 sm:mb-12">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Method</h1>
-          <p className="text-neutral-500">
+        <div className="mb-10 sm:mb-14">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Method</span>
+            <HeaderDots />
+          </div>
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-light tracking-tight leading-[1.08] mb-4">
+            How we test AI prediction accuracy
+          </h1>
+          <p className="text-base sm:text-lg text-[#8a8075] max-w-xl leading-relaxed">
             A fair test of AI prediction capabilities on real-world FDA decisions
           </p>
         </div>
 
         {/* Why This Matters */}
         <section className="mb-10 sm:mb-16">
-          <h2 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-6">Why This Matters</h2>
-          <div className="grid md:grid-cols-3 gap-4 sm:gap-8">
-            <div>
-              <div className="font-medium mb-2">The Problem with AI Benchmarks</div>
-              <p className="text-sm text-neutral-500">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Why This Matters</span>
+              <HeaderDots />
             </div>
-            <div>
-              <div className="font-medium mb-2">The Solution</div>
-              <p className="text-sm text-neutral-500">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
+            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
+              Why traditional benchmarks fall short
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+              <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
+                <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Problem with AI Benchmarks</h3>
+                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
+              </div>
             </div>
-            <div>
-              <div className="font-medium mb-2">What We're Testing</div>
-              <p className="text-sm text-neutral-500">Can AI models reason about complex regulatory decisions and make accurate predictions about the future?</p>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+              <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
+                <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Solution</h3>
+                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
+              </div>
+            </div>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+              <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
+                <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">What We're Testing</h3>
+                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Can AI models reason about complex regulatory decisions and make accurate predictions about the future?</p>
+              </div>
             </div>
           </div>
         </section>
 
         {/* The Process */}
         <section className="mb-10 sm:mb-16">
-          <h2 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-6">The Process</h2>
-          <div className="border border-neutral-200 p-4 sm:p-8">
-            <div className="space-y-6 sm:space-y-8">
-              {processSteps.map((step, index) => (
-                <div key={index} className="flex gap-3 sm:gap-6">
-                  <div className="w-8 h-8 border border-neutral-900 flex items-center justify-center text-sm font-bold shrink-0">
-                    {index + 1}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">The Process</span>
+              <HeaderDots />
+            </div>
+            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
+              Our five-step evaluation process
+            </h2>
+          </div>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="bg-white/95 rounded-sm p-4 sm:p-8">
+              <div className="space-y-6 sm:space-y-8">
+                {processSteps.map((step, index) => (
+                  <div key={index} className="flex gap-3 sm:gap-6">
+                    <div className="w-8 h-8 p-[1px] rounded-sm shrink-0" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+                      <div className="w-full h-full bg-white rounded-sm flex items-center justify-center text-sm font-bold">
+                        {index + 1}
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-[#1a1a1a] mb-1">{step.title}</h3>
+                      <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">{step.description}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-medium mb-1">{step.title}</h3>
-                    <p className="text-sm text-neutral-500">{step.description}</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
         {/* Model Cards */}
         <section className="mb-10 sm:mb-16">
-          <h2 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-6">Model Configuration</h2>
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Model Configuration</span>
+              <HeaderDots />
+            </div>
+            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
+              The models we compare
+            </h2>
+          </div>
           <div className="grid md:grid-cols-3 gap-4">
             {models.map((model) => (
-              <div key={model.id} className="border border-neutral-200 p-4 sm:p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 text-neutral-700">
-                    <ModelIcon id={model.id} />
+              <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+                <div className="bg-white/95 rounded-sm p-4 sm:p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 text-[#1a1a1a]">
+                      <ModelIcon id={model.id} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{model.name}</h3>
+                      <p className="text-xs text-[#b5aa9e] font-mono">{model.version}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">{model.name}</h3>
-                    <p className="text-xs text-neutral-400 font-mono">{model.version}</p>
+
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#8a8075]">Web Search</span>
+                      {model.features.internet ? (
+                        <span className="text-[#7d8e6e]">Yes</span>
+                      ) : (
+                        <span className="text-[#b5aa9e]">No</span>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#8a8075]">Reasoning</span>
+                      <span className="text-[#1a1a1a]">{model.features.reasoning}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#8a8075]">Max Tokens</span>
+                      <span className="text-[#b5aa9e]">{model.features.maxTokens}</span>
+                    </div>
                   </div>
+
+                  {(model.features.internetDetail || model.features.reasoningDetail) && (
+                    <div className="mt-4 pt-4 border-t border-[#e8ddd0]">
+                      <p className="text-xs text-[#b5aa9e]">
+                        {model.features.internetDetail && <span className="block">{model.features.internetDetail}</span>}
+                        {model.features.reasoningDetail && <span className="block">{model.features.reasoningDetail}</span>}
+                      </p>
+                    </div>
+                  )}
                 </div>
-
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Web Search</span>
-                    {model.features.internet ? (
-                      <span className="text-emerald-600">Yes</span>
-                    ) : (
-                      <span className="text-neutral-400">No</span>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Reasoning</span>
-                    <span className="text-neutral-900">{model.features.reasoning}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Max Tokens</span>
-                    <span className="text-neutral-400">{model.features.maxTokens}</span>
-                  </div>
-                </div>
-
-                {(model.features.internetDetail || model.features.reasoningDetail) && (
-                  <div className="mt-4 pt-4 border-t border-neutral-100">
-                    <p className="text-xs text-neutral-400">
-                      {model.features.internetDetail && <span className="block">{model.features.internetDetail}</span>}
-                      {model.features.reasoningDetail && <span className="block">{model.features.reasoningDetail}</span>}
-                    </p>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -189,13 +242,21 @@ export default async function Method2Page() {
 
         {/* The Prompt */}
         <section className="mb-10 sm:mb-16">
-          <h2 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-6">Prediction Prompt</h2>
-          <div className="border border-neutral-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral-200 flex items-center justify-between bg-neutral-50">
-              <span className="text-sm text-neutral-500">All models receive the same prompt</span>
-              <span className="text-xs bg-neutral-200 text-neutral-600 px-2 py-1">fda-prompt.ts</span>
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Prediction Prompt</span>
+              <HeaderDots />
             </div>
-            <pre className="p-3 sm:p-6 text-sm text-neutral-600 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
+            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
+              The prompt every model receives
+            </h2>
+          </div>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="bg-white/95 rounded-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#e8ddd0] bg-[#f3ebe0]/50">
+                <span className="text-sm text-[#8a8075]">All models receive the same prompt</span>
+              </div>
+              <pre className="p-3 sm:p-6 text-sm text-[#8a8075] overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
 {`You are an expert pharmaceutical analyst specializing in FDA
 regulatory decisions. Analyze the following FDA decision and
 predict the outcome.
@@ -221,63 +282,84 @@ predict the outcome.
    - **Prediction:** Either "approved" or "rejected"
    - **Confidence:** A percentage between 50-100%
    - **Reasoning:** 150-300 words supporting your prediction`}
-            </pre>
+              </pre>
+            </div>
           </div>
         </section>
 
         {/* Response Format */}
         <section className="mb-10 sm:mb-16">
-          <h2 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-6">Expected Response</h2>
-          <div className="border border-neutral-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral-200 bg-neutral-50">
-              <span className="text-sm text-neutral-500">JSON format required</span>
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Expected Response</span>
+              <HeaderDots />
             </div>
-            <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
-<span className="text-neutral-400">{'{'}</span>
+            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
+              Required response format
+            </h2>
+          </div>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="bg-white/95 rounded-sm overflow-hidden">
+              <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
+<span className="text-[#b5aa9e]">{'{'}</span>
 {`
-  `}<span className="text-emerald-600">"prediction"</span><span className="text-neutral-400">:</span> <span className="text-amber-600">"approved"</span><span className="text-neutral-400">,</span>{`
-  `}<span className="text-emerald-600">"confidence"</span><span className="text-neutral-400">:</span> <span className="text-blue-600">75</span><span className="text-neutral-400">,</span>{`
-  `}<span className="text-emerald-600">"reasoning"</span><span className="text-neutral-400">:</span> <span className="text-amber-600">"Based on historical approval rates..."</span>
-<span className="text-neutral-400">{'}'}</span>
-            </pre>
+  `}<span className="text-[#7d8e6e]">"prediction"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"approved"</span><span className="text-[#b5aa9e]">,</span>{`
+  `}<span className="text-[#7d8e6e]">"confidence"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">75</span><span className="text-[#b5aa9e]">,</span>{`
+  `}<span className="text-[#7d8e6e]">"reasoning"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"Based on historical approval rates..."</span>{`
+`}<span className="text-[#b5aa9e]">{'}'}</span>
+              </pre>
+            </div>
           </div>
           <div className="mt-6 grid md:grid-cols-3 gap-4 text-sm">
             <div className="flex gap-2">
-              <span className="text-emerald-600 font-mono">prediction</span>
-              <span className="text-neutral-300">—</span>
-              <span className="text-neutral-500">"approved" or "rejected"</span>
+              <span className="text-[#7d8e6e] font-mono">prediction</span>
+              <span className="text-[#d4c9bc]">—</span>
+              <span className="text-[#8a8075]">"approved" or "rejected"</span>
             </div>
             <div className="flex gap-2">
-              <span className="text-emerald-600 font-mono">confidence</span>
-              <span className="text-neutral-300">—</span>
-              <span className="text-neutral-500">50-100 (percentage)</span>
+              <span className="text-[#7d8e6e] font-mono">confidence</span>
+              <span className="text-[#d4c9bc]">—</span>
+              <span className="text-[#8a8075]">50-100 (percentage)</span>
             </div>
             <div className="flex gap-2">
-              <span className="text-emerald-600 font-mono">reasoning</span>
-              <span className="text-neutral-300">—</span>
-              <span className="text-neutral-500">150-300 word explanation</span>
+              <span className="text-[#7d8e6e] font-mono">reasoning</span>
+              <span className="text-[#d4c9bc]">—</span>
+              <span className="text-[#8a8075]">150-300 word explanation</span>
             </div>
           </div>
         </section>
 
         {/* Stats */}
-        <section>
-          <h2 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-6">Current Progress</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="border border-neutral-200 p-4 sm:p-6">
-              <div className="text-3xl font-bold">{fdaEventCount}</div>
-              <div className="text-sm text-neutral-400 mt-1">FDA Events Tracked</div>
+        <section className="mb-10 sm:mb-16">
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Current Progress</span>
+              <HeaderDots />
             </div>
-            <div className="border border-neutral-200 p-4 sm:p-6">
-              <div className="text-3xl font-bold">{predictionCount}</div>
-              <div className="text-sm text-neutral-400 mt-1">Predictions Made</div>
-            </div>
-            <div className="border border-neutral-200 p-4 sm:p-6">
-              <div className="text-3xl font-bold">{MODEL_IDS.length}</div>
-              <div className="text-sm text-neutral-400 mt-1">Models Compared</div>
+            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
+              Results so far
+            </h2>
+          </div>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
+              <div className="p-4 sm:p-6">
+                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{fdaEventCount}</div>
+                <div className="text-sm text-[#b5aa9e] mt-1">FDA Events Tracked</div>
+              </div>
+              <div className="p-4 sm:p-6">
+                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{predictionCount}</div>
+                <div className="text-sm text-[#b5aa9e] mt-1">Predictions Made</div>
+              </div>
+              <div className="p-4 sm:p-6">
+                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{MODEL_IDS.length}</div>
+                <div className="text-sm text-[#b5aa9e] mt-1">Models Compared</div>
+              </div>
             </div>
           </div>
         </section>
+
+        {/* Footer gradient line */}
+        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
       </main>
     </div>
   )

@@ -2,20 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-
-const APP_TYPE_ABBREV: Record<string, string> = {
-  'Resubmitted BLA': 'rBLA',
-  'Resubmitted Biologics License Application': 'rBLA',
-  'Supplemental New Drug Application': 'sNDA',
-  'Supplemental Biologics License Application': 'sBLA',
-  'New Drug Application': 'NDA',
-  'Biologics License Application': 'BLA',
-}
-
-function abbreviateType(type: string): { display: string; anchor: string } {
-  const abbrev = APP_TYPE_ABBREV[type] || type
-  return { display: abbrev, anchor: abbrev }
-}
+import { abbreviateType } from '@/lib/constants'
 
 interface FDAEvent {
   id: string
@@ -106,7 +93,7 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+    return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })
   }
 
   const getDaysUntil = (dateStr: string) => {

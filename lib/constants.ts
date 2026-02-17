@@ -19,22 +19,22 @@ export const MODEL_INFO: Record<ModelId, {
 }> = {
   'claude-opus': {
     name: 'Claude',
-    fullName: 'Claude Opus 4.5',
-    color: '#F97316',
+    fullName: 'Claude Opus 4.6',
+    color: '#D4604A',
     provider: 'Anthropic',
     features: ['Extended Thinking'],
   },
   'gpt-5.2': {
     name: 'GPT-5.2',
     fullName: 'GPT-5.2',
-    color: '#10B981',
+    color: '#C9A227',
     provider: 'OpenAI',
     features: ['Web Search', 'Reasoning'],
   },
   'grok-4': {
     name: 'Grok',
     fullName: 'Grok 4.1',
-    color: '#3B82F6',
+    color: '#2D7CF6',
     provider: 'xAI',
     features: ['Fast Reasoning', 'Web Search'],
   },
@@ -54,11 +54,11 @@ export function matchesModel(predictorId: string, modelId: ModelId): boolean {
 export const FDA_OUTCOMES = ['Pending', 'Approved', 'Rejected'] as const
 export type FDAOutcome = (typeof FDA_OUTCOMES)[number]
 
-// Outcome colors
+// Outcome colors (warm production palette)
 export const OUTCOME_COLORS: Record<FDAOutcome, { bg: string; text: string }> = {
-  Pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
-  Approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  Rejected: { bg: 'bg-red-500/20', text: 'text-red-400' },
+  Pending: { bg: 'bg-[#b5aa9e]/10', text: 'text-[#b5aa9e]' },
+  Approved: { bg: 'bg-[#7d8e6e]/10', text: 'text-[#7d8e6e]' },
+  Rejected: { bg: 'bg-[#c07a5f]/10', text: 'text-[#c07a5f]' },
 }
 
 // Prediction outcomes
@@ -86,7 +86,7 @@ export function formatDuration(ms: number): string {
 // Format date for display
 export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', options || { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('en-US', { timeZone: 'UTC', ...(options || { month: 'short', day: 'numeric' }) })
 }
 
 // Calculate days until a date
@@ -133,14 +133,51 @@ export function findPredictionByVariant<T extends { predictorId: string }>(
 
 // Model display names for short variants
 export const MODEL_DISPLAY_NAMES: Record<ModelVariant, string> = {
-  'claude': 'Claude Opus 4.5',
+  'claude': 'Claude Opus 4.6',
   'gpt': 'GPT-5.2',
   'grok': 'Grok 4.1',
 }
 
 // Model names by full ID
 export const MODEL_NAMES: Record<ModelId, string> = {
-  'claude-opus': 'Claude Opus 4.5',
+  'claude-opus': 'Claude Opus 4.6',
   'gpt-5.2': 'GPT-5.2',
   'grok-4': 'Grok 4.1',
+}
+
+// Model colors by short variant
+export const MODEL_VARIANT_COLORS: Record<ModelVariant, string> = {
+  claude: '#D4604A',
+  gpt: '#C9A227',
+  grok: '#2D7CF6',
+}
+
+// Short display names by variant
+export const MODEL_SHORT_NAMES: Record<ModelVariant, string> = {
+  claude: 'Claude',
+  gpt: 'GPT',
+  grok: 'Grok',
+}
+
+// Status colors for FDA outcomes (hex values)
+export const STATUS_COLORS = {
+  Pending: '#b5aa9e',
+  Approved: '#7d8e6e',
+  Rejected: '#c07a5f',
+}
+
+// Application type abbreviations
+export const APP_TYPE_ABBREV: Record<string, string> = {
+  'Resubmitted BLA': 'rBLA',
+  'Resubmitted Biologics License Application': 'rBLA',
+  'Supplemental New Drug Application': 'sNDA',
+  'Supplemental Biologics License Application': 'sBLA',
+  'New Drug Application': 'NDA',
+  'Biologics License Application': 'BLA',
+}
+
+// Abbreviate application type for display
+export function abbreviateType(type: string): { display: string; anchor: string } {
+  const abbrev = APP_TYPE_ABBREV[type] || type
+  return { display: abbrev, anchor: abbrev }
 }

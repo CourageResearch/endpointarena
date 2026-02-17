@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 
 interface CountdownTimerProps {
   targetDate: Date | string
-  variant?: 'dark' | 'light'
+  variant?: 'dark' | 'light' | 'white'
 }
 
 export function CountdownTimer({ targetDate, variant = 'dark' }: CountdownTimerProps) {
@@ -35,8 +35,8 @@ export function CountdownTimer({ targetDate, variant = 'dark' }: CountdownTimerP
     return () => clearInterval(interval)
   }, [targetDate])
 
-  const textColor = variant === 'light' ? 'text-white' : 'text-blue-400'
-  const separatorColor = variant === 'light' ? 'text-white/60' : 'text-zinc-500'
+  const textColor = variant === 'light' ? 'text-white' : variant === 'white' ? 'text-neutral-900' : 'text-blue-400'
+  const separatorColor = variant === 'light' ? 'text-white/60' : variant === 'white' ? 'text-neutral-400' : 'text-zinc-500'
 
   return (
     <div className="flex items-center gap-1 text-sm font-mono">

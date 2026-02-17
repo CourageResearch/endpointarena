@@ -11,29 +11,21 @@ export default function Icon() {
     (
       <div
         style={{
-          fontSize: 24,
-          background: '#0a0a0a',
           width: '100%',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          background: '#FAF5F0',
           borderRadius: 6,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-          }}
-        >
-          <span style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>E</span>
-        </div>
+        {/* Three data points in ascending diagonal */}
+        <svg width="24" height="24" viewBox="0 0 24 24">
+          <circle cx="5" cy="18" r="3.5" fill="#2D7CF6" />
+          <circle cx="12" cy="11" r="3.5" fill="#C9A227" />
+          <circle cx="19" cy="4" r="3.5" fill="#D4604A" />
+        </svg>
       </div>
     ),
     {

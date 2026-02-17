@@ -10,6 +10,14 @@ interface GlossaryTerm {
   category: string
 }
 
+const CATEGORY_ORDER = [
+  'Application Types',
+  'FDA Actions',
+  'Review Processes',
+  'Expedited Pathways',
+  'Clinical Trials',
+]
+
 const GLOSSARY_TERMS: GlossaryTerm[] = [
   // Application Types
   {
@@ -196,14 +204,21 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
   },
 ]
 
-const CATEGORIES = [
-  'All',
-  'Application Types',
-  'FDA Actions',
-  'Review Processes',
-  'Expedited Pathways',
-  'Clinical Trials',
-]
+const SQ_COLORS = ['#f2544e', '#40bd4b', '#d4a017', '#299bff', '#31b8b5']
+
+function SquareDivider({ className = '' }: { className?: string }) {
+  return (
+    <div className={`w-full ${className}`}>
+      <svg className="w-full" height="8" preserveAspectRatio="none">
+        <rect x="20%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[0]} opacity="0.8" />
+        <rect x="35%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[1]} opacity="0.8" />
+        <rect x="50%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[2]} opacity="0.85" />
+        <rect x="65%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[3]} opacity="0.8" />
+        <rect x="80%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[4]} opacity="0.8" />
+      </svg>
+    </div>
+  )
+}
 
 function HeaderDots() {
   return (
@@ -216,8 +231,6 @@ function HeaderDots() {
 }
 
 export default function GlossaryPage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('All')
   const [highlightedTerm, setHighlightedTerm] = useState<string | null>(null)
 
   useEffect(() => {
@@ -225,46 +238,24 @@ export default function GlossaryPage() {
     if (hash && hash.startsWith('#term-')) {
       const term = decodeURIComponent(hash.replace('#term-', ''))
       setHighlightedTerm(term)
-      // Scroll to element after a brief delay to ensure render
       setTimeout(() => {
         const el = document.getElementById(`term-${term}`)
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 100)
-      // Clear highlight after animation
       setTimeout(() => setHighlightedTerm(null), 3000)
     }
   }, [])
 
-  const filteredTerms = useMemo(() => {
-    return GLOSSARY_TERMS.filter((term) => {
-      const matchesSearch =
-        searchQuery === '' ||
-        term.term.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        term.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        term.definition.toLowerCase().includes(searchQuery.toLowerCase())
-
-      const matchesCategory =
-        selectedCategory === 'All' || term.category === selectedCategory
-
-      return matchesSearch && matchesCategory
-    })
-  }, [searchQuery, selectedCategory])
-
-  // Group terms by category for display
   const groupedTerms = useMemo(() => {
-    if (selectedCategory !== 'All') {
-      return { [selectedCategory]: filteredTerms }
-    }
-
     const groups: Record<string, GlossaryTerm[]> = {}
-    for (const term of filteredTerms) {
+    for (const term of GLOSSARY_TERMS) {
       if (!groups[term.category]) {
         groups[term.category] = []
       }
       groups[term.category].push(term)
     }
     return groups
-  }, [filteredTerms, selectedCategory])
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
@@ -273,110 +264,49 @@ export default function GlossaryPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
         <div className="mb-8 sm:mb-12">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3">
             <h1 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Glossary</h1>
             <HeaderDots />
           </div>
-          <p className="text-[#8a8075] text-sm sm:text-base max-w-lg">
-            Common FDA and clinical trial terminology explained.
-          </p>
         </div>
 
-        {/* Search and Filter */}
-        <div className="sticky top-14 z-40 bg-[#F5F2ED] py-4 mb-6 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-[#e8ddd0]">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                placeholder="Search terms..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-[#e8ddd0] bg-white/80 px-4 py-2.5 pl-10 text-sm text-[#1a1a1a] placeholder-[#b5aa9e] focus:border-[#8a8075] focus:outline-none"
-              />
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#b5aa9e]"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
-              {CATEGORIES.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`px-3 py-2 text-sm whitespace-nowrap transition-colors ${
-                    selectedCategory === category
-                      ? 'bg-[#1a1a1a] text-white'
-                      : 'bg-white/80 text-[#8a8075] border border-[#e8ddd0] hover:text-[#1a1a1a] hover:border-[#b5aa9e]'
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Results count */}
-        <div className="text-xs text-[#b5aa9e] mb-6">
-          {filteredTerms.length} {filteredTerms.length === 1 ? 'term' : 'terms'} found
-        </div>
+        <SquareDivider className="mb-8" />
 
         {/* Terms by Category */}
-        {Object.entries(groupedTerms).map(([category, terms]) => (
-          <section key={category} className="mb-10">
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">{category}</h2>
-              <HeaderDots />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {terms.map((term) => {
-                const isHighlighted = highlightedTerm === term.term
-                return (
-                  <div
-                    key={term.term}
-                    id={`term-${term.term}`}
-                    className={`p-[1px] rounded-sm scroll-mt-32 transition-shadow duration-500 ${isHighlighted ? 'shadow-[0_0_0_3px_rgba(212,96,74,0.3),0_0_0_3px_rgba(45,124,246,0.3)]' : ''}`}
-                    style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}
-                  >
-                    <div className={`rounded-sm p-4 h-full transition-colors duration-500 ${isHighlighted ? 'bg-[#f3ebe0]' : 'bg-white/95'}`}>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-lg font-bold text-[#1a1a1a]">{term.term}</span>
+        {CATEGORY_ORDER.map((category, i) => {
+          const terms = groupedTerms[category]
+          if (!terms) return null
+          return (
+            <section key={category} className="mb-10">
+              {i > 0 && <SquareDivider className="mb-8" />}
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">{category}</h2>
+                <HeaderDots />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {terms.map((term) => {
+                  const isHighlighted = highlightedTerm === term.term
+                  return (
+                    <div
+                      key={term.term}
+                      id={`term-${term.term}`}
+                      className={`p-[1px] rounded-sm scroll-mt-32 transition-shadow duration-500 ${isHighlighted ? 'shadow-[0_0_0_3px_rgba(212,96,74,0.3),0_0_0_3px_rgba(45,124,246,0.3)]' : ''}`}
+                      style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}
+                    >
+                      <div className={`rounded-sm p-4 h-full transition-colors duration-500 ${isHighlighted ? 'bg-[#f3ebe0]' : 'bg-white/95'}`}>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className="text-lg font-bold text-[#1a1a1a]">{term.term}</span>
+                        </div>
+                        <div className="text-sm font-medium text-[#8a8075] mb-2">{term.fullName}</div>
+                        <p className="text-sm text-[#b5aa9e] leading-relaxed">{term.definition}</p>
                       </div>
-                      <div className="text-sm font-medium text-[#8a8075] mb-2">{term.fullName}</div>
-                      <p className="text-sm text-[#b5aa9e] leading-relaxed">{term.definition}</p>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        ))}
-
-        {filteredTerms.length === 0 && (
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
-            <div className="bg-white/95 rounded-sm py-12 text-center">
-              <div className="text-[#b5aa9e] mb-2">No terms found matching your search.</div>
-              <button
-                onClick={() => {
-                  setSearchQuery('')
-                  setSelectedCategory('All')
-                }}
-                className="text-[#8a8075] hover:text-[#1a1a1a] text-sm underline"
-              >
-                Clear filters
-              </button>
-            </div>
-          </div>
-        )}
+                  )
+                })}
+              </div>
+            </section>
+          )
+        })}
 
         {/* Footer gradient line */}
         <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />

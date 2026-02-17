@@ -92,6 +92,14 @@ export default async function AdminPage() {
               RTTNews FDA Calendar
             </a>
             <a
+              href="https://www.rttnews.com/corpinfo/fdacalendar.aspx?PageNum=5"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
+            >
+              RTTNews Corp Calendar
+            </a>
+            <a
               href="https://railway.app/dashboard"
               target="_blank"
               rel="noopener noreferrer"
@@ -105,10 +113,10 @@ export default async function AdminPage() {
               Railway DB
             </a>
             <a
-              href="/v1"
+              href="/"
               className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
             >
-              v1 Site
+              Live
             </a>
             <LogoutButton />
           </div>
