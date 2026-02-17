@@ -1,7 +1,7 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq, asc, gte } from 'drizzle-orm'
 import { FDAPredictionRunner } from '@/components/FDAPredictionRunner'
-import { Navbar } from '@/components/Navbar'
+import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { LogoutButton } from '@/components/LogoutButton'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -71,14 +71,14 @@ export default async function AdminPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <Navbar />
+    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Admin</h1>
-            <p className="text-zinc-500 text-sm mt-1">
+            <h1 className="text-2xl font-bold text-[#1a1a1a]">Admin</h1>
+            <p className="text-[#8a8075] text-sm mt-1">
               Run AI predictions and record FDA decision outcomes
             </p>
           </div>
@@ -87,7 +87,7 @@ export default async function AdminPage() {
               href="https://www.rttnews.com/products/biotechinvestor/fdacalendar.aspx"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
+              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors"
             >
               RTTNews FDA Calendar
             </a>
@@ -95,7 +95,7 @@ export default async function AdminPage() {
               href="https://www.rttnews.com/corpinfo/fdacalendar.aspx?PageNum=5"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
+              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors"
             >
               RTTNews Corp Calendar
             </a>
@@ -103,7 +103,7 @@ export default async function AdminPage() {
               href="https://railway.app/dashboard"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors flex items-center gap-2"
               title="View database in Railway Dashboard"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -114,7 +114,7 @@ export default async function AdminPage() {
             </a>
             <a
               href="/admin/analytics"
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors flex items-center gap-2"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 20V10M12 20V4M6 20v-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -123,7 +123,7 @@ export default async function AdminPage() {
             </a>
             <a
               href="/"
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
+              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors"
             >
               Live
             </a>
@@ -133,46 +133,46 @@ export default async function AdminPage() {
 
         {/* Quick Stats */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Quick Stats</h2>
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Quick Stats</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
-              <div className="text-2xl font-bold text-white">{stats.totalEvents}</div>
-              <div className="text-zinc-500 text-xs">FDA Events</div>
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#1a1a1a]">{stats.totalEvents}</div>
+              <div className="text-[#8a8075] text-xs">FDA Events</div>
             </div>
-            <div className="bg-zinc-900/50 border border-yellow-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-yellow-400">{stats.pendingEvents}</div>
-              <div className="text-yellow-400/60 text-xs">Awaiting FDA Decision</div>
+            <div className="bg-white/80 border border-[#C9A227]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#C9A227]">{stats.pendingEvents}</div>
+              <div className="text-[#C9A227]/60 text-xs">Awaiting FDA Decision</div>
             </div>
-            <div className="bg-zinc-900/50 border border-blue-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-blue-400">{stats.eventsWithPredictions}</div>
-              <div className="text-blue-400/60 text-xs">Have AI Predictions</div>
+            <div className="bg-white/80 border border-[#2D7CF6]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#2D7CF6]">{stats.eventsWithPredictions}</div>
+              <div className="text-[#2D7CF6]/60 text-xs">Have AI Predictions</div>
             </div>
-            <div className="bg-zinc-900/50 border border-emerald-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-emerald-400">{stats.totalPredictions}</div>
-              <div className="text-emerald-400/60 text-xs">Total Predictions Made</div>
+            <div className="bg-white/80 border border-[#7d8e6e]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#7d8e6e]">{stats.totalPredictions}</div>
+              <div className="text-[#7d8e6e]/60 text-xs">Total Predictions Made</div>
             </div>
-            <div className="bg-zinc-900/50 border border-orange-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-orange-400">{stats.pendingPredictions}</div>
-              <div className="text-orange-400/60 text-xs">Predictions Unscored</div>
+            <div className="bg-white/80 border border-[#D4604A]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#D4604A]">{stats.pendingPredictions}</div>
+              <div className="text-[#D4604A]/60 text-xs">Predictions Unscored</div>
             </div>
           </div>
         </section>
 
         {/* Data Sources */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Data Sources</h2>
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 grid sm:grid-cols-3 gap-4 text-sm">
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Data Sources</h2>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4 grid sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-zinc-300 font-medium">FDA Calendar:</span>
-              <span className="text-zinc-500 ml-1">PDUFA dates from RTTNews.</span>
+              <span className="text-[#1a1a1a] font-medium">FDA Calendar:</span>
+              <span className="text-[#8a8075] ml-1">PDUFA dates from RTTNews.</span>
             </div>
             <div>
-              <span className="text-zinc-300 font-medium">Research:</span>
-              <span className="text-zinc-500 ml-1">Clinical trials, regulatory history, advisory committees.</span>
+              <span className="text-[#1a1a1a] font-medium">Research:</span>
+              <span className="text-[#8a8075] ml-1">Clinical trials, regulatory history, advisory committees.</span>
             </div>
             <div>
-              <span className="text-zinc-300 font-medium">Results:</span>
-              <span className="text-zinc-500 ml-1">FDA announcements, press releases, filings.</span>
+              <span className="text-[#1a1a1a] font-medium">Results:</span>
+              <span className="text-[#8a8075] ml-1">FDA announcements, press releases, filings.</span>
             </div>
           </div>
         </section>
@@ -181,8 +181,8 @@ export default async function AdminPage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-bold">FDA Events</h2>
-              <p className="text-zinc-500 text-xs mt-0.5">
+              <h2 className="text-lg font-bold text-[#1a1a1a]">FDA Events</h2>
+              <p className="text-[#8a8075] text-xs mt-0.5">
                 Run predictions with AI models, then set the actual FDA outcome when announced
               </p>
             </div>
@@ -191,7 +191,10 @@ export default async function AdminPage() {
           <FDAPredictionRunner events={eventsForClient} />
         </section>
 
-              </main>
+      </main>
+
+      {/* Footer gradient line */}
+      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
     </div>
   )
 }

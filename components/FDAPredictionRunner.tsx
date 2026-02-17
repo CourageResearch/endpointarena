@@ -77,12 +77,12 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
 
   const getOutcomeStyle = (outcome: string) => {
     const colors = OUTCOME_COLORS[outcome as FDAOutcome]
-    return colors ? `${colors.bg} ${colors.text}` : 'bg-zinc-800 text-zinc-400'
+    return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
   }
 
   const getPredictionStyle = (prediction: string) => {
     const colors = PREDICTION_COLORS[prediction as PredictionOutcome]
-    return colors ? `${colors.bg} ${colors.text}` : 'bg-zinc-800 text-zinc-400'
+    return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
   }
 
   // ---------------------------------------------------------------------------
@@ -290,13 +290,13 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
   return (
     <div className="space-y-6">
       {/* Settings */}
-      <div className="flex items-center justify-between bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
+      <div className="flex items-center justify-between bg-white/80 border border-[#e8ddd0] rounded-lg p-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-400">Deep Reasoning</span>
+          <span className="text-sm text-[#8a8075]">Deep Reasoning</span>
           <button
             onClick={() => setUseReasoning(!useReasoning)}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              useReasoning ? 'bg-blue-600' : 'bg-zinc-700'
+              useReasoning ? 'bg-[#2D7CF6]' : 'bg-[#e8ddd0]'
             }`}
           >
             <span
@@ -306,7 +306,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
             />
           </button>
         </div>
-        <span className="text-xs text-zinc-600">
+        <span className="text-xs text-[#b5aa9e]">
           {useReasoning ? 'Extended thinking enabled' : 'Fast mode'}
         </span>
       </div>
@@ -330,19 +330,19 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
           <div key={event.id}>
             {showTodaySeparator && (
               <div className="flex items-center gap-4 py-4">
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
-                <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
-                  <svg className="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#2D7CF6] to-transparent" />
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-[#2D7CF6]/10 border border-[#2D7CF6]/30 rounded-full">
+                  <svg className="w-4 h-4 text-[#2D7CF6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                     <line x1="16" y1="2" x2="16" y2="6" />
                     <line x1="8" y1="2" x2="8" y2="6" />
                     <line x1="3" y1="10" x2="21" y2="10" />
                   </svg>
-                  <span className="text-sm font-medium text-blue-400">
+                  <span className="text-sm font-medium text-[#2D7CF6]">
                     Today: {today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                 </div>
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#2D7CF6] to-transparent" />
               </div>
             )}
             <EventCard
@@ -410,18 +410,18 @@ function EventCard({
   const hasPredictions = event.predictions.length > 0
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <div className="bg-white/95 border border-[#e8ddd0] rounded-lg overflow-hidden">
       {/* Event Header */}
-      <div className="p-4 border-b border-zinc-800">
+      <div className="p-4 border-b border-[#e8ddd0]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-white text-lg">{event.drugName}</span>
-              <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400">
+              <span className="font-bold text-[#1a1a1a] text-lg">{event.drugName}</span>
+              <span className="px-2 py-0.5 bg-[#F5F2ED] rounded text-xs text-[#8a8075] border border-[#e8ddd0]">
                 {event.applicationType}
               </span>
             </div>
-            <div className="text-sm text-zinc-500">
+            <div className="text-sm text-[#8a8075]">
               {event.companyName} · {event.therapeuticArea || 'No area'}
             </div>
           </div>
@@ -429,10 +429,10 @@ function EventCard({
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* PDUFA Date */}
             <div className="text-left sm:text-right">
-              <div className={`text-lg font-bold ${days === 0 ? 'text-red-400' : 'text-zinc-400'}`}>
+              <div className={`text-lg font-bold ${days === 0 ? 'text-[#D4604A]' : 'text-[#1a1a1a]'}`}>
                 {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
               </div>
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-[#b5aa9e]">
                 {formatDate(event.pdufaDate)}
               </div>
             </div>
@@ -446,9 +446,9 @@ function EventCard({
                 getOutcomeStyle(event.outcome)
               } ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
             >
-              <option value="Pending" className="bg-zinc-900 text-yellow-400">Pending</option>
-              <option value="Approved" className="bg-zinc-900 text-emerald-400">Approved</option>
-              <option value="Rejected" className="bg-zinc-900 text-red-400">Rejected</option>
+              <option value="Pending" className="bg-white text-[#C9A227]">Pending</option>
+              <option value="Approved" className="bg-white text-[#7d8e6e]">Approved</option>
+              <option value="Rejected" className="bg-white text-[#D4604A]">Rejected</option>
             </select>
 
             {/* Run All Button */}
@@ -457,9 +457,9 @@ function EventCard({
               disabled={isAnyLoading}
               className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
                 isAnyLoading
-                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  ? 'bg-[#e8ddd0] text-[#b5aa9e] cursor-not-allowed'
                   : hasPredictions
-                    ? 'bg-transparent text-zinc-400 border border-zinc-600 hover:border-zinc-500 hover:text-zinc-300'
+                    ? 'bg-transparent text-[#8a8075] border border-[#e8ddd0] hover:border-[#b5aa9e] hover:text-[#1a1a1a]'
                     : 'bg-blue-600 text-white hover:bg-blue-500'
               }`}
             >
@@ -470,7 +470,7 @@ function EventCard({
       </div>
 
       {/* Model Predictions */}
-      <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-800">
+      <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#e8ddd0]">
         {MODEL_IDS.map(modelId => (
           <ModelPredictionCard
             key={modelId}
@@ -533,16 +533,16 @@ function ModelPredictionCard({
       {/* Model Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm text-white">{info.name}</span>
+          <span className="font-medium text-sm text-[#1a1a1a]">{info.name}</span>
           {!loading && displayDuration && (
-            <span className="text-xs text-zinc-600">{formatDuration(displayDuration)}</span>
+            <span className="text-xs text-[#b5aa9e]">{formatDuration(displayDuration)}</span>
           )}
         </div>
         <div className="flex items-center gap-1">
           {!loading && (
             <button
               onClick={() => runStreamingPrediction(eventId, modelId)}
-              className="px-2 py-0.5 text-xs bg-zinc-800 text-zinc-400 rounded hover:bg-zinc-700"
+              className="px-2 py-0.5 text-xs bg-[#F5F2ED] text-[#8a8075] rounded hover:bg-[#e8ddd0] border border-[#e8ddd0]"
             >
               {prediction ? 'Re-run' : 'Run'}
             </button>
@@ -550,7 +550,7 @@ function ModelPredictionCard({
           {prediction && !loading && (
             <button
               onClick={() => deletePrediction(eventId, modelId)}
-              className="px-2 py-0.5 text-xs bg-red-900/30 text-red-400 rounded hover:bg-red-900/50"
+              className="px-2 py-0.5 text-xs bg-[#c07a5f]/10 text-[#c07a5f] rounded hover:bg-[#c07a5f]/20"
             >
               Del
             </button>
@@ -570,7 +570,7 @@ function ModelPredictionCard({
           getPredictionStyle={getPredictionStyle}
         />
       ) : (
-        <div className="text-sm text-zinc-600">No prediction</div>
+        <div className="text-sm text-[#b5aa9e]">No prediction</div>
       )}
     </div>
   )
@@ -584,14 +584,14 @@ function LoadingState({ progress, color }: { progress?: StreamProgress; color: s
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <div className="w-4 h-4 border-2 border-zinc-600 border-t-blue-400 rounded-full animate-spin" />
-        <span className="text-sm text-zinc-400">{progress?.status || 'Starting...'}</span>
+        <div className="w-4 h-4 border-2 border-[#e8ddd0] border-t-[#2D7CF6] rounded-full animate-spin" />
+        <span className="text-sm text-[#8a8075]">{progress?.status || 'Starting...'}</span>
       </div>
       {progress?.elapsed !== undefined && (
-        <div className="text-xs text-zinc-600 font-mono">{formatDuration(progress.elapsed)}</div>
+        <div className="text-xs text-[#b5aa9e] font-mono">{formatDuration(progress.elapsed)}</div>
       )}
       {progress?.thinkingTokens && (
-        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="h-1 bg-[#e8ddd0] rounded-full overflow-hidden">
           <div
             className="h-full transition-all duration-300"
             style={{
@@ -629,15 +629,15 @@ function PredictionResult({
         <span className={`px-2 py-0.5 rounded text-xs font-bold ${getPredictionStyle(prediction.prediction)}`}>
           {prediction.prediction.toUpperCase()}
         </span>
-        <span className="text-xs text-zinc-500">{prediction.confidence}%</span>
+        <span className="text-xs text-[#8a8075]">{prediction.confidence}%</span>
       </div>
-      <p className={`text-xs text-zinc-500 leading-relaxed ${isExpanded ? '' : 'line-clamp-4'}`}>
+      <p className={`text-xs text-[#8a8075] leading-relaxed ${isExpanded ? '' : 'line-clamp-4'}`}>
         {prediction.reasoning}
       </p>
       {prediction.reasoning.length > 200 && (
         <button
           onClick={() => setExpandedReasoning(prev => ({ ...prev, [reasoningKey]: !isExpanded }))}
-          className="text-xs text-blue-400 hover:text-blue-300 mt-1"
+          className="text-xs text-[#2D7CF6] hover:text-[#2D7CF6]/80 mt-1"
         >
           {isExpanded ? 'Show less' : 'Show more'}
         </button>

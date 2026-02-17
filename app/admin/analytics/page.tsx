@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
 import { gte, eq, sql, desc, and } from 'drizzle-orm'
-import { Navbar } from '@/components/Navbar'
+import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -137,14 +137,14 @@ export default async function AnalyticsPage({
   const maxDailyViews = Math.max(...data.dailyViews.map(d => d.count), 1)
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <Navbar />
+    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Analytics</h1>
-            <p className="text-zinc-500 text-sm mt-1">
+            <h1 className="text-2xl font-bold text-[#1a1a1a]">Analytics</h1>
+            <p className="text-[#8a8075] text-sm mt-1">
               Page views and click tracking
             </p>
           </div>
@@ -153,8 +153,8 @@ export default async function AnalyticsPage({
               href="/admin/analytics?days=7"
               className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                 days === 7
-                  ? 'bg-white text-black border-white'
-                  : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300 hover:text-white'
+                  ? 'bg-white text-[#1a1a1a] border-[#e8ddd0] font-medium shadow-sm'
+                  : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
               }`}
             >
               7 days
@@ -163,15 +163,15 @@ export default async function AnalyticsPage({
               href="/admin/analytics?days=30"
               className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                 days === 30
-                  ? 'bg-white text-black border-white'
-                  : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300 hover:text-white'
+                  ? 'bg-white text-[#1a1a1a] border-[#e8ddd0] font-medium shadow-sm'
+                  : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
               }`}
             >
               30 days
             </a>
             <a
               href="/admin"
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors"
+              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors"
             >
               Back to Admin
             </a>
@@ -180,39 +180,39 @@ export default async function AnalyticsPage({
 
         {/* Summary Cards */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Summary</h2>
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Summary</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
-              <div className="text-2xl font-bold text-white">{data.totalPageViews.toLocaleString()}</div>
-              <div className="text-zinc-500 text-xs">Page Views</div>
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#1a1a1a]">{data.totalPageViews.toLocaleString()}</div>
+              <div className="text-[#8a8075] text-xs">Page Views</div>
             </div>
-            <div className="bg-zinc-900/50 border border-blue-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-blue-400">{data.uniqueVisitors.toLocaleString()}</div>
-              <div className="text-blue-400/60 text-xs">Unique Visitors (approx)</div>
+            <div className="bg-white/80 border border-[#2D7CF6]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#2D7CF6]">{data.uniqueVisitors.toLocaleString()}</div>
+              <div className="text-[#2D7CF6]/60 text-xs">Unique Visitors (approx)</div>
             </div>
-            <div className="bg-zinc-900/50 border border-emerald-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-emerald-400">{data.totalClicks.toLocaleString()}</div>
-              <div className="text-emerald-400/60 text-xs">Total Clicks</div>
+            <div className="bg-white/80 border border-[#7d8e6e]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#7d8e6e]">{data.totalClicks.toLocaleString()}</div>
+              <div className="text-[#7d8e6e]/60 text-xs">Total Clicks</div>
             </div>
-            <div className="bg-zinc-900/50 border border-orange-900/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-orange-400">{data.uniquePages}</div>
-              <div className="text-orange-400/60 text-xs">Pages Tracked</div>
+            <div className="bg-white/80 border border-[#D4604A]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#D4604A]">{data.uniquePages}</div>
+              <div className="text-[#D4604A]/60 text-xs">Pages Tracked</div>
             </div>
           </div>
         </section>
 
         {/* Views Over Time */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Views Over Time</h2>
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Views Over Time</h2>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
             <div className="flex items-end gap-1" style={{ height: '160px' }}>
               {data.dailyViews.map(d => (
                 <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                   <div
-                    className="w-full bg-blue-500 rounded-t min-h-[2px] transition-all hover:bg-blue-400"
+                    className="w-full bg-[#2D7CF6] rounded-t min-h-[2px] transition-all hover:bg-[#2D7CF6]/80"
                     style={{ height: `${(d.count / maxDailyViews) * 100}%` }}
                   />
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                     {d.count} views
                   </div>
                 </div>
@@ -222,7 +222,7 @@ export default async function AnalyticsPage({
               {data.dailyViews.map((d, i) => (
                 <div key={d.date} className="flex-1 text-center">
                   {(i === 0 || i === data.dailyViews.length - 1 || i === Math.floor(data.dailyViews.length / 2)) && (
-                    <span className="text-zinc-600 text-[10px]">
+                    <span className="text-[#b5aa9e] text-[10px]">
                       {d.date.slice(5)}
                     </span>
                   )}
@@ -234,25 +234,25 @@ export default async function AnalyticsPage({
 
         {/* Top Pages */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Top Pages</h2>
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Top Pages</h2>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
             {data.topPages.length === 0 ? (
-              <div className="p-4 text-zinc-500 text-sm">No pageview data yet</div>
+              <div className="p-4 text-[#8a8075] text-sm">No pageview data yet</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="text-left text-zinc-500 font-medium px-4 py-2">Page</th>
-                    <th className="text-right text-zinc-500 font-medium px-4 py-2">Views</th>
-                    <th className="text-right text-zinc-500 font-medium px-4 py-2">%</th>
+                  <tr className="border-b border-[#e8ddd0]">
+                    <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Page</th>
+                    <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Views</th>
+                    <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">%</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.topPages.map(p => (
-                    <tr key={p.url} className="border-b border-zinc-800/50">
-                      <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{p.url}</td>
-                      <td className="px-4 py-2 text-right text-white">{p.count.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right text-zinc-500">{p.pct}%</td>
+                    <tr key={p.url} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                      <td className="px-4 py-2 text-[#8a8075] font-mono text-xs">{p.url}</td>
+                      <td className="px-4 py-2 text-right text-[#1a1a1a]">{p.count.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right text-[#8a8075]">{p.pct}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -263,25 +263,25 @@ export default async function AnalyticsPage({
 
         {/* Top Clicked Elements */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Top Clicked Elements</h2>
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Top Clicked Elements</h2>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
             {data.topClicks.length === 0 ? (
-              <div className="p-4 text-zinc-500 text-sm">No click data yet</div>
+              <div className="p-4 text-[#8a8075] text-sm">No click data yet</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="text-left text-zinc-500 font-medium px-4 py-2">Element</th>
-                    <th className="text-left text-zinc-500 font-medium px-4 py-2">Page</th>
-                    <th className="text-right text-zinc-500 font-medium px-4 py-2">Clicks</th>
+                  <tr className="border-b border-[#e8ddd0]">
+                    <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Element</th>
+                    <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Page</th>
+                    <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Clicks</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.topClicks.map((c, i) => (
-                    <tr key={i} className="border-b border-zinc-800/50">
-                      <td className="px-4 py-2 text-zinc-300 font-mono text-xs">{c.elementId}</td>
-                      <td className="px-4 py-2 text-zinc-500 font-mono text-xs">{c.url}</td>
-                      <td className="px-4 py-2 text-right text-white">{c.count.toLocaleString()}</td>
+                    <tr key={i} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                      <td className="px-4 py-2 text-[#8a8075] font-mono text-xs">{c.elementId}</td>
+                      <td className="px-4 py-2 text-[#b5aa9e] font-mono text-xs">{c.url}</td>
+                      <td className="px-4 py-2 text-right text-[#1a1a1a]">{c.count.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -292,26 +292,26 @@ export default async function AnalyticsPage({
 
         {/* Top Countries & Cities */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Geographic Distribution</h2>
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Geographic Distribution</h2>
           <div className="grid md:grid-cols-2 gap-4">
             {/* Top Countries */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
-              <div className="px-4 py-2 border-b border-zinc-800 text-zinc-400 text-xs font-medium">Top Countries</div>
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+              <div className="px-4 py-2 border-b border-[#e8ddd0] text-[#8a8075] text-xs font-medium">Top Countries</div>
               {data.topCountries.length === 0 ? (
-                <div className="p-4 text-zinc-500 text-sm">No geographic data yet</div>
+                <div className="p-4 text-[#8a8075] text-sm">No geographic data yet</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="text-left text-zinc-500 font-medium px-4 py-2">Country</th>
-                      <th className="text-right text-zinc-500 font-medium px-4 py-2">Views</th>
+                    <tr className="border-b border-[#e8ddd0]">
+                      <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Country</th>
+                      <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Views</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.topCountries.map(c => (
-                      <tr key={c.country} className="border-b border-zinc-800/50">
-                        <td className="px-4 py-2 text-zinc-300 text-xs">{c.country}</td>
-                        <td className="px-4 py-2 text-right text-white">{c.count.toLocaleString()}</td>
+                      <tr key={c.country} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                        <td className="px-4 py-2 text-[#8a8075] text-xs">{c.country}</td>
+                        <td className="px-4 py-2 text-right text-[#1a1a1a]">{c.count.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -319,23 +319,23 @@ export default async function AnalyticsPage({
               )}
             </div>
             {/* Top Cities */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
-              <div className="px-4 py-2 border-b border-zinc-800 text-zinc-400 text-xs font-medium">Top Cities</div>
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+              <div className="px-4 py-2 border-b border-[#e8ddd0] text-[#8a8075] text-xs font-medium">Top Cities</div>
               {data.topCities.length === 0 ? (
-                <div className="p-4 text-zinc-500 text-sm">No geographic data yet</div>
+                <div className="p-4 text-[#8a8075] text-sm">No geographic data yet</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="text-left text-zinc-500 font-medium px-4 py-2">City</th>
-                      <th className="text-right text-zinc-500 font-medium px-4 py-2">Views</th>
+                    <tr className="border-b border-[#e8ddd0]">
+                      <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">City</th>
+                      <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Views</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.topCities.map(c => (
-                      <tr key={c.city} className="border-b border-zinc-800/50">
-                        <td className="px-4 py-2 text-zinc-300 text-xs">{c.city}</td>
-                        <td className="px-4 py-2 text-right text-white">{c.count.toLocaleString()}</td>
+                      <tr key={c.city} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                        <td className="px-4 py-2 text-[#8a8075] text-xs">{c.city}</td>
+                        <td className="px-4 py-2 text-right text-[#1a1a1a]">{c.count.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -347,23 +347,23 @@ export default async function AnalyticsPage({
 
         {/* Top Referrers */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Top Referrers</h2>
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Top Referrers</h2>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
             {data.topReferrers.length === 0 ? (
-              <div className="p-4 text-zinc-500 text-sm">No referrer data yet</div>
+              <div className="p-4 text-[#8a8075] text-sm">No referrer data yet</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="text-left text-zinc-500 font-medium px-4 py-2">Referrer</th>
-                    <th className="text-right text-zinc-500 font-medium px-4 py-2">Views</th>
+                  <tr className="border-b border-[#e8ddd0]">
+                    <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Referrer</th>
+                    <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Views</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.topReferrers.map(r => (
-                    <tr key={r.referrer} className="border-b border-zinc-800/50">
-                      <td className="px-4 py-2 text-zinc-300 text-xs break-all">{r.referrer}</td>
-                      <td className="px-4 py-2 text-right text-white">{r.count.toLocaleString()}</td>
+                    <tr key={r.referrer} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                      <td className="px-4 py-2 text-[#8a8075] text-xs break-all">{r.referrer}</td>
+                      <td className="px-4 py-2 text-right text-[#1a1a1a]">{r.count.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -372,6 +372,9 @@ export default async function AnalyticsPage({
           </div>
         </section>
       </main>
+
+      {/* Footer gradient line */}
+      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
     </div>
   )
 }
