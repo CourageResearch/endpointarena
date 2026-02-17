@@ -69,8 +69,9 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
     [flush]
   )
 
-  // Track page views on route change
+  // Track page views on route change (skip admin pages)
   useEffect(() => {
+    if (pathname.startsWith('/admin')) return
     enqueue({
       type: 'pageview',
       url: pathname,
@@ -90,6 +91,7 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
 
   const trackClick = useCallback(
     (elementId: string) => {
+      if (pathname.startsWith('/admin')) return
       enqueue({
         type: 'click',
         url: pathname,

@@ -70,10 +70,10 @@ async function getAnalyticsData(days: number) {
       count: val.count,
     }))
 
-  // Top referrers
+  // Top referrers (filter self-referrals)
   const refCounts = new Map<string, number>()
   for (const pv of pageviews) {
-    if (pv.referrer) {
+    if (pv.referrer && !pv.referrer.includes('endpointarena.com')) {
       refCounts.set(pv.referrer, (refCounts.get(pv.referrer) || 0) + 1)
     }
   }
@@ -81,6 +81,31 @@ async function getAnalyticsData(days: number) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15)
     .map(([referrer, count]) => ({ referrer, count }))
+
+  // Top countries
+  const countryCounts = new Map<string, number>()
+  for (const pv of pageviews) {
+    if (pv.country) {
+      countryCounts.set(pv.country, (countryCounts.get(pv.country) || 0) + 1)
+    }
+  }
+  const topCountries = Array.from(countryCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([country, count]) => ({ country, count }))
+
+  // Top cities
+  const cityCounts = new Map<string, number>()
+  for (const pv of pageviews) {
+    if (pv.city) {
+      const label = pv.country ? `${pv.city}, ${pv.country}` : pv.city
+      cityCounts.set(label, (cityCounts.get(label) || 0) + 1)
+    }
+  }
+  const topCities = Array.from(cityCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([city, count]) => ({ city, count }))
 
   return {
     totalPageViews: pageviews.length,
@@ -91,6 +116,8 @@ async function getAnalyticsData(days: number) {
     topPages,
     topClicks,
     topReferrers,
+    topCountries,
+    topCities,
   }
 }
 
@@ -260,6 +287,61 @@ export default async function AnalyticsPage({
                 </tbody>
               </table>
             )}
+          </div>
+        </section>
+
+        {/* Top Countries & Cities */}
+        <section className="mb-8">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Geographic Distribution</h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Top Countries */}
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
+              <div className="px-4 py-2 border-b border-zinc-800 text-zinc-400 text-xs font-medium">Top Countries</div>
+              {data.topCountries.length === 0 ? (
+                <div className="p-4 text-zinc-500 text-sm">No geographic data yet</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="text-left text-zinc-500 font-medium px-4 py-2">Country</th>
+                      <th className="text-right text-zinc-500 font-medium px-4 py-2">Views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.topCountries.map(c => (
+                      <tr key={c.country} className="border-b border-zinc-800/50">
+                        <td className="px-4 py-2 text-zinc-300 text-xs">{c.country}</td>
+                        <td className="px-4 py-2 text-right text-white">{c.count.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {/* Top Cities */}
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
+              <div className="px-4 py-2 border-b border-zinc-800 text-zinc-400 text-xs font-medium">Top Cities</div>
+              {data.topCities.length === 0 ? (
+                <div className="p-4 text-zinc-500 text-sm">No geographic data yet</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="text-left text-zinc-500 font-medium px-4 py-2">City</th>
+                      <th className="text-right text-zinc-500 font-medium px-4 py-2">Views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.topCities.map(c => (
+                      <tr key={c.city} className="border-b border-zinc-800/50">
+                        <td className="px-4 py-2 text-zinc-300 text-xs">{c.city}</td>
+                        <td className="px-4 py-2 text-right text-white">{c.count.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </section>
 

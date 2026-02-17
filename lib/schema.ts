@@ -122,6 +122,9 @@ export const analyticsEvents = pgTable('analytics_events', {
   userAgent: text('user_agent'),
   sessionHash: text('session_hash'),
   elementId: text('element_id'),
+  ipAddress: text('ip_address'),
+  country: text('country'),
+  city: text('city'),
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
 })
 
