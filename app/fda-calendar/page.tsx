@@ -12,6 +12,7 @@ function HeaderDots() {
       <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.35 }} />
       <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.35 }} />
       <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.35 }} />
+      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.35 }} />
     </div>
   )
 }
@@ -67,7 +68,7 @@ export default async function FDACalendar2Page() {
         <FDACalendarTable2 events={eventsForClient} filterOptions={filterOptions} />
 
         {/* Footer gradient line */}
-        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
       </main>
     </div>
   )

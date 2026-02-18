@@ -32,6 +32,33 @@ function HeaderDots() {
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.8 }} />
+    </div>
+  )
+}
+
+function UpcomingLegend() {
+  return (
+    <div className="flex items-center justify-end gap-5 px-4 py-2.5 text-[11px] text-[#8a8075] border-t border-[#e8ddd0]">
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm font-medium" style={{ color: '#3a8a2e' }}>↑</span> Predicts Approval
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm font-medium" style={{ color: '#c43a2b' }}>↓</span> Predicts Rejection
+      </span>
+    </div>
+  )
+}
+
+function PastLegend() {
+  return (
+    <div className="flex items-center justify-end gap-5 px-4 py-2.5 text-[11px] text-[#8a8075] border-t border-[#e8ddd0]">
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm font-medium" style={{ color: '#3a8a2e' }}>✓</span> Correct Prediction
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm font-medium" style={{ color: '#c43a2b' }}>✗</span> Incorrect Prediction
+      </span>
     </div>
   )
 }
@@ -59,7 +86,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-10 sm:pt-20 pb-10 sm:pb-16">
           <div className="flex gap-6 sm:gap-8">
             {/* Left vertical accent rule */}
-            <div className="hidden sm:block w-[3px] shrink-0 rounded-full self-stretch" style={{ background: 'linear-gradient(180deg, #D4604A, #C9A227, #2D7CF6)' }} />
+            <div className="hidden sm:block w-[3px] shrink-0 rounded-full self-stretch" style={{ background: 'linear-gradient(180deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
             <div>
               <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-normal tracking-tight leading-[1.08] mb-5">
                 The{' '}
@@ -75,38 +102,15 @@ export function HomePageContent({ data }: { data: HomeData }) {
                 <br className="hidden sm:block" />
                 FDA predictions.
               </h1>
-              <p className="text-[#8a8075] text-base sm:text-lg max-w-xl leading-relaxed mb-6">
+              <p className="text-[#8a8075] text-base sm:text-lg max-w-xl leading-relaxed">
                 A live test of whether frontier AI models can reason about biomedical science and predict real regulatory outcomes.
               </p>
-
-              {/* Standings row */}
-              <div className="text-[10px] font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Current Standings</div>
-              <div className="flex items-center gap-6 sm:gap-10">
-                {leaderboard.map((model, i) => {
-                  const hasData = model.total > 0
-                  const pct = hasData ? model.accuracy.toFixed(0) : '0'
-                  return (
-                    <div key={model.id} className="flex items-center gap-2.5">
-                      <span className="text-sm font-mono" style={{ color: MODEL_VARIANT_COLORS[model.id] }}>#{i + 1}</span>
-                      <div className="w-4 h-4 sm:w-5 sm:h-5 text-[#8a8075]">
-                        <ModelIcon id={model.id} />
-                      </div>
-                      <span className="text-sm sm:text-base text-[#8a8075]">
-                        {MODEL_SHORT_NAMES[model.id]}
-                      </span>
-                      <span className="text-sm sm:text-base font-mono text-[#1a1a1a]">
-                        {pct}%
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
             </div>
           </div>
         </div>
 
         {/* Gradient accent line */}
-        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
       </section>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
@@ -120,7 +124,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
             <Link href="/leaderboard" className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">Full stats →</Link>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
             <div className="bg-white/95 rounded-sm divide-y divide-[#e8ddd0]">
               {leaderboard.map((model, i) => {
                 const color = MODEL_VARIANT_COLORS[model.id]
@@ -165,7 +169,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
             <Link href="/fda-calendar" className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">View all →</Link>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
           <div className="bg-white/95 rounded-sm">
             {/* Mobile */}
             <div className="sm:hidden divide-y divide-[#e8ddd0]">
@@ -192,6 +196,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
                   <col style={{width: '50px'}} />
                   <col style={{width: '50px'}} />
                   <col style={{width: '50px'}} />
+                  <col style={{width: '50px'}} />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-[#e8ddd0] text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em]">
@@ -201,9 +206,10 @@ export function HomePageContent({ data }: { data: HomeData }) {
                     <th className="text-left px-3 py-3 font-medium">Type</th>
                     <th className="text-left px-3 py-3 font-medium">Ticker</th>
                     <th className="text-center px-2 py-3"><div className="w-6 h-6 mx-auto text-[#8a8075]" title="FDA"><FDAIcon /></div></th>
-                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.5"><ModelIcon id="claude" /></div></th>
+                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.6"><ModelIcon id="claude" /></div></th>
                     <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="GPT-5.2"><ModelIcon id="gpt" /></div></th>
                     <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Grok 4.1"><ModelIcon id="grok" /></div></th>
+                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Gemini 2.5 Pro"><ModelIcon id="gemini" /></div></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -211,11 +217,12 @@ export function HomePageContent({ data }: { data: HomeData }) {
                     <BW2UpcomingRow key={event.id} event={event as any} />
                   ))}
                   {upcomingFdaEvents.length === 0 && (
-                    <tr><td colSpan={9} className="px-4 py-8 text-center text-[#b5aa9e]">No upcoming decisions</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-8 text-center text-[#b5aa9e]">No upcoming decisions</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            <UpcomingLegend />
           </div>
           </div>{/* close gradient border wrapper */}
         </section>
@@ -231,7 +238,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
             <Link href="/fda-calendar" className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">View all →</Link>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
           <div className="bg-white/95 rounded-sm">
             {/* Mobile */}
             <div className="sm:hidden divide-y divide-[#e8ddd0]">
@@ -258,6 +265,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
                   <col style={{width: '50px'}} />
                   <col style={{width: '50px'}} />
                   <col style={{width: '50px'}} />
+                  <col style={{width: '50px'}} />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-[#e8ddd0] text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em]">
@@ -267,9 +275,10 @@ export function HomePageContent({ data }: { data: HomeData }) {
                     <th className="text-left px-3 py-3 font-medium">Type</th>
                     <th className="text-left px-3 py-3 font-medium">Ticker</th>
                     <th className="text-center px-2 py-3"><div className="w-6 h-6 mx-auto text-[#8a8075]" title="FDA"><FDAIcon /></div></th>
-                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.5"><ModelIcon id="claude" /></div></th>
+                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.6"><ModelIcon id="claude" /></div></th>
                     <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="GPT-5.2"><ModelIcon id="gpt" /></div></th>
                     <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Grok 4.1"><ModelIcon id="grok" /></div></th>
+                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Gemini 2.5 Pro"><ModelIcon id="gemini" /></div></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -277,11 +286,12 @@ export function HomePageContent({ data }: { data: HomeData }) {
                     <BW2PastRow key={event.id} event={event as any} />
                   ))}
                   {recentFdaDecisions.length === 0 && (
-                    <tr><td colSpan={9} className="px-4 py-8 text-center text-[#b5aa9e]">No decisions yet</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-8 text-center text-[#b5aa9e]">No decisions yet</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            <PastLegend />
           </div>
           </div>{/* close gradient border wrapper */}
         </section>

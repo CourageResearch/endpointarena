@@ -91,6 +91,7 @@ function HeaderDots() {
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.8 }} />
     </div>
   )
 }
@@ -116,7 +117,7 @@ export default async function LeaderboardPage() {
         </div>
 
         {/* ── RANKINGS ── */}
-        <div className="p-[1px] rounded-sm mb-12 sm:mb-16" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+        <div className="p-[1px] rounded-sm mb-12 sm:mb-16" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
           <div className="bg-white/95 rounded-sm divide-y divide-[#e8ddd0]">
             {leaderboard.map((model, i) => {
               const color = MODEL_INFO[model.id].color
@@ -160,7 +161,7 @@ export default async function LeaderboardPage() {
             <HeaderDots />
           </div>
 
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
             <div className="bg-white/95 rounded-sm overflow-x-auto">
               <table className="w-full min-w-[480px]">
                 <thead>
@@ -185,7 +186,7 @@ export default async function LeaderboardPage() {
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
                     <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Correct</td>
                     {leaderboard.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#7d8e6e' }}>
+                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#3a8a2e' }}>
                         {model.correct}
                       </td>
                     ))}
@@ -193,7 +194,7 @@ export default async function LeaderboardPage() {
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
                     <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Wrong</td>
                     {leaderboard.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#c07a5f' }}>
+                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#c43a2b' }}>
                         {model.wrong}
                       </td>
                     ))}
@@ -217,7 +218,7 @@ export default async function LeaderboardPage() {
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
                     <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Confidence when correct</td>
                     {leaderboard.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#7d8e6e' }}>
+                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#3a8a2e' }}>
                         {model.correct > 0 ? `${model.avgConfidenceCorrect.toFixed(0)}%` : '—'}
                       </td>
                     ))}
@@ -225,7 +226,7 @@ export default async function LeaderboardPage() {
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
                     <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Confidence when wrong</td>
                     {leaderboard.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#c07a5f' }}>
+                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#c43a2b' }}>
                         {model.wrong > 0 ? `${model.avgConfidenceWrong.toFixed(0)}%` : '—'}
                       </td>
                     ))}
@@ -245,7 +246,7 @@ export default async function LeaderboardPage() {
         </div>
 
         {/* ── FOOTER ── */}
-        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
       </main>
     </div>
   )

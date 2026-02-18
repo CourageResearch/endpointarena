@@ -11,6 +11,7 @@ export function ModelIcon({ id, className = 'w-full h-full' }: ModelIconProps) {
   const normalizedId = id.startsWith('claude') ? 'claude'
     : id.startsWith('gpt') ? 'gpt'
     : id.startsWith('grok') ? 'grok'
+    : id.startsWith('gemini') ? 'gemini'
     : id
 
   if (normalizedId === 'claude') {
@@ -33,6 +34,14 @@ export function ModelIcon({ id, className = 'w-full h-full' }: ModelIconProps) {
     return (
       <svg viewBox="0 0 24 24" className={className} fill="currentColor">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+    )
+  }
+
+  if (normalizedId === 'gemini') {
+    return (
+      <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+        <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/>
       </svg>
     )
   }

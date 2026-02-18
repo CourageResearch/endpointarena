@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
+import { GoogleGenAI } from '@google/genai'
 import { buildFDAPredictionPrompt, parseFDAPredictionResponse, type FDAPredictionResult } from './fda-prompt'
 
 interface FDAEventInfo {
@@ -12,6 +13,7 @@ interface FDAEventInfo {
   rivalDrugs: string | null
   marketPotential: string | null
   otherApprovals: string | null
+  source: string | null
 }
 
 // Claude prediction with extended thinking (Deep Research)
@@ -110,6 +112,30 @@ export async function generateGrokFDAPrediction(event: FDAEventInfo): Promise<FD
   return parseFDAPredictionResponse(content)
 }
 
+// Gemini 2.5 Pro prediction with Google Search grounding + thinking
+export async function generateGeminiFDAPrediction(event: FDAEventInfo): Promise<FDAPredictionResult> {
+  const ai = new GoogleGenAI({
+    apiKey: process.env.GOOGLE_API_KEY,
+  })
+
+  const prompt = buildFDAPredictionPrompt(event)
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-pro',
+    contents: prompt,
+    config: {
+      tools: [{ googleSearch: {} }],
+    },
+  })
+
+  const content = response.text
+  if (!content) {
+    throw new Error('No content in Gemini response')
+  }
+
+  return parseFDAPredictionResponse(content)
+}
+
 // Generate meta-analysis comparing all model predictions
 interface PredictionSummary {
   modelId: string
@@ -193,5 +219,9 @@ export const FDA_GENERATORS: Record<string, {
   'grok-4': {
     generator: generateGrokFDAPrediction,
     enabled: () => !!process.env.XAI_API_KEY,
+  },
+  'gemini-2.5': {
+    generator: generateGeminiFDAPrediction,
+    enabled: () => !!process.env.GOOGLE_API_KEY,
   },
 }

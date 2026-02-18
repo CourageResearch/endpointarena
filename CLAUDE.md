@@ -2,7 +2,7 @@
 
 ## Overview
 
-Endpoint Arena is a Next.js application that tests AI models' ability to predict FDA drug approval decisions. It compares Claude Opus 4.6, GPT-5.2, and Grok 4.1 by having them make predictions before actual FDA decisions are announced.
+Endpoint Arena is a Next.js application that tests AI models' ability to predict FDA drug approval decisions. It compares Claude Opus 4.6, GPT-5.2, Grok 4.1, and Gemini 2.5 Pro by having them make predictions before actual FDA decisions are announced.
 
 ## Tech Stack
 
@@ -10,7 +10,7 @@ Endpoint Arena is a Next.js application that tests AI models' ability to predict
 - **Database:** PostgreSQL + Drizzle ORM
 - **Auth:** NextAuth.js
 - **Styling:** Tailwind CSS
-- **AI APIs:** Anthropic, OpenAI, xAI
+- **AI APIs:** Anthropic, OpenAI, xAI, Google
 
 ## Project Structure
 
@@ -49,7 +49,7 @@ lib/
 All model configuration is in `lib/constants.ts`:
 
 ```typescript
-MODEL_IDS           // ['claude-opus', 'gpt-5.2', 'grok-4']
+MODEL_IDS           // ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5']
 MODEL_INFO          // { name, fullName, color, provider }
 OUTCOME_COLORS      // Pending, Approved, Rejected colors
 PREDICTION_COLORS   // approved, rejected colors
@@ -89,7 +89,7 @@ import { MODEL_IDS, MODEL_INFO, getAllModelIds } from '@/lib/constants'
 ### 3. Type Safety
 
 Use the exported types:
-- `ModelId` - 'claude-opus' | 'gpt-5.2' | 'grok-4'
+- `ModelId` - 'claude-opus' | 'gpt-5.2' | 'grok-4' | 'gemini-2.5'
 - `FDAOutcome` - 'Pending' | 'Approved' | 'Rejected'
 - `PredictionOutcome` - 'approved' | 'rejected'
 
@@ -98,6 +98,7 @@ Use the exported types:
 - `claude-opus` - Claude Opus 4.6 (Anthropic)
 - `gpt-5.2` - GPT-5.2 (OpenAI)
 - `grok-4` - Grok 4.1 (xAI)
+- `gemini-2.5` - Gemini 2.5 Pro (Google)
 
 ## Analytics
 
@@ -130,6 +131,7 @@ Required:
 - `ANTHROPIC_API_KEY` - For Claude
 - `OPENAI_API_KEY` - For GPT
 - `XAI_API_KEY` - For Grok
+- `GOOGLE_API_KEY` - For Gemini
 
 Optional:
 - `NEXTAUTH_SECRET` - Auth secret

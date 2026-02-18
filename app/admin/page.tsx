@@ -1,5 +1,5 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
-import { eq, asc, gte } from 'drizzle-orm'
+import { eq, asc } from 'drizzle-orm'
 import { FDAPredictionRunner } from '@/components/FDAPredictionRunner'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { LogoutButton } from '@/components/LogoutButton'
@@ -11,19 +11,14 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 async function getData() {
-  const now = new Date()
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-
-  // Get events for the prediction runner (upcoming + recent)
+  // Get all events for the prediction runner
   const events = await db.query.fdaCalendarEvents.findMany({
-    where: gte(fdaCalendarEvents.pdufaDate, thirtyDaysAgo),
     with: {
       predictions: {
         where: eq(fdaPredictions.predictorType, 'model'),
       },
     },
     orderBy: [asc(fdaCalendarEvents.pdufaDate)],
-    limit: 50,
   })
 
   // Get prediction stats
@@ -60,6 +55,8 @@ export default async function AdminPage() {
     applicationType: e.applicationType,
     pdufaDate: e.pdufaDate.toISOString(),
     outcome: e.outcome,
+    source: e.source,
+    nctId: e.nctId,
     predictions: e.predictions.map(p => ({
       id: p.id,
       predictorId: p.predictorId,
@@ -147,9 +144,9 @@ export default async function AdminPage() {
               <div className="text-2xl font-bold text-[#2D7CF6]">{stats.eventsWithPredictions}</div>
               <div className="text-[#2D7CF6]/60 text-xs">Have AI Predictions</div>
             </div>
-            <div className="bg-white/80 border border-[#7d8e6e]/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-[#7d8e6e]">{stats.totalPredictions}</div>
-              <div className="text-[#7d8e6e]/60 text-xs">Total Predictions Made</div>
+            <div className="bg-white/80 border border-[#3a8a2e]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#3a8a2e]">{stats.totalPredictions}</div>
+              <div className="text-[#3a8a2e]/60 text-xs">Total Predictions Made</div>
             </div>
             <div className="bg-white/80 border border-[#D4604A]/30 rounded-lg p-3">
               <div className="text-2xl font-bold text-[#D4604A]">{stats.pendingPredictions}</div>
@@ -194,7 +191,7 @@ export default async function AdminPage() {
       </main>
 
       {/* Footer gradient line */}
-      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
     </div>
   )
 }

@@ -226,6 +226,7 @@ function HeaderDots() {
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.8 }} />
     </div>
   )
 }
@@ -291,7 +292,7 @@ export default function GlossaryPage() {
                       key={term.term}
                       id={`term-${term.term}`}
                       className={`p-[1px] rounded-sm scroll-mt-32 transition-shadow duration-500 ${isHighlighted ? 'shadow-[0_0_0_3px_rgba(212,96,74,0.3),0_0_0_3px_rgba(45,124,246,0.3)]' : ''}`}
-                      style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}
+                      style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}
                     >
                       <div className={`rounded-sm p-4 h-full transition-colors duration-500 ${isHighlighted ? 'bg-[#f3ebe0]' : 'bg-white/95'}`}>
                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -309,7 +310,7 @@ export default function GlossaryPage() {
         })}
 
         {/* Footer gradient line */}
-        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
       </main>
     </div>
   )

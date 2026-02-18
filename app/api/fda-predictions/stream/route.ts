@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
+import { GoogleGenAI } from '@google/genai'
 import { buildFDAPredictionPrompt, parseFDAPredictionResponse } from '@/lib/predictions/fda-prompt'
 import { requireAdmin } from '@/lib/auth'
 
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
     rivalDrugs: event.rivalDrugs,
     marketPotential: event.marketPotential,
     otherApprovals: event.otherApprovals,
+    source: event.source,
   })
 
   // Create a streaming response
@@ -79,6 +81,8 @@ export async function POST(request: NextRequest) {
           await streamGPT(prompt, send, (text) => { fullResponse = text }, useReasoning)
         } else if (modelId === 'grok-4') {
           await streamGrok(prompt, send, (text) => { fullResponse = text }, useReasoning)
+        } else if (modelId === 'gemini-2.5') {
+          await streamGemini(prompt, send, (text) => { fullResponse = text }, useReasoning)
         } else {
           throw new Error(`Unknown model: ${modelId}`)
         }
@@ -86,6 +90,13 @@ export async function POST(request: NextRequest) {
         // Parse the final response
         const parsed = parseFDAPredictionResponse(fullResponse)
         const durationMs = Date.now() - startTime
+
+        // Auto-score if event already has an outcome
+        const isDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
+        const correct = isDecided
+          ? (parsed.prediction === 'approved' && event.outcome === 'Approved') ||
+            (parsed.prediction === 'rejected' && event.outcome === 'Rejected')
+          : null
 
         // Save to database
         const [saved] = await db.insert(fdaPredictions).values({
@@ -96,6 +107,7 @@ export async function POST(request: NextRequest) {
           confidence: parsed.confidence,
           reasoning: parsed.reasoning,
           durationMs,
+          correct,
         }).returning()
 
         send({ type: 'complete', prediction: saved, durationMs })
@@ -329,6 +341,48 @@ async function streamGrok(
 
   if (!responseText) {
     throw new Error('Grok returned empty response')
+  }
+
+  setFinalText(responseText)
+}
+
+// Stream Gemini 2.5 Pro with Google Search grounding
+async function streamGemini(
+  prompt: string,
+  send: (data: any) => void,
+  setFinalText: (text: string) => void,
+  useReasoning: boolean = true
+) {
+  const ai = new GoogleGenAI({
+    apiKey: process.env.GOOGLE_API_KEY,
+  })
+
+  send({ type: 'status', status: useReasoning ? 'Starting Gemini 2.5 Pro with search grounding...' : 'Starting Gemini 2.5 Pro (fast mode)...' })
+
+  const response = await ai.models.generateContentStream({
+    model: 'gemini-2.5-pro',
+    contents: prompt,
+    config: {
+      tools: useReasoning ? [{ googleSearch: {} }] : undefined,
+    },
+  })
+
+  let responseText = ''
+
+  for await (const chunk of response) {
+    const text = chunk.text
+    if (text) {
+      responseText += text
+      if (responseText.length % 50 === 0 || text.includes('.')) {
+        send({ type: 'text', text: responseText.slice(-100) })
+      }
+    }
+  }
+
+  send({ type: 'text', text: responseText.slice(-100) })
+
+  if (!responseText) {
+    throw new Error('Gemini returned empty response')
   }
 
   setFinalText(responseText)

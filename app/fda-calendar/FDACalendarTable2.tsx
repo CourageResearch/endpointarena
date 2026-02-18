@@ -104,8 +104,8 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
   }
 
   const getOutcomeStyle = (outcome: string) => {
-    if (outcome === 'Approved') return 'bg-[#7d8e6e]/10 text-[#7d8e6e]'
-    if (outcome === 'Rejected') return 'bg-[#c07a5f]/10 text-[#c07a5f]'
+    if (outcome === 'Approved') return 'bg-[#3a8a2e]/10 text-[#3a8a2e]'
+    if (outcome === 'Rejected') return 'bg-[#c43a2b]/10 text-[#c43a2b]'
     return 'bg-[#e8ddd0]/30 text-[#b5aa9e]'
   }
 
@@ -162,7 +162,7 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
           const daysUntil = getDaysUntil(event.pdufaDate)
           const symbol = event.symbols.split(', ')[0]
           return (
-            <div key={event.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div key={event.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
               <div className="bg-white/95 rounded-sm p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div className="min-w-0 flex-1">
@@ -202,7 +202,7 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
       </div>
 
       {/* Desktop Table */}
-      <div className="hidden sm:block p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+      <div className="hidden sm:block p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
         <div className="bg-white/95 rounded-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -281,7 +281,7 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
       </div>
 
       {filteredAndSortedEvents.length === 0 && (
-        <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+        <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
           <div className="bg-white/95 rounded-sm py-12 text-center">
             <p className="text-[#b5aa9e]">No events found matching your filters.</p>
           </div>

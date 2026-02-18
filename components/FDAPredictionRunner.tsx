@@ -37,6 +37,8 @@ interface FDAEvent {
   applicationType: string
   pdufaDate: string
   outcome: string
+  source: string | null
+  nctId: string | null
   predictions: Prediction[]
 }
 
@@ -64,6 +66,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
   const [useReasoning, setUseReasoning] = useState(true)
   const [updatingOutcome, setUpdatingOutcome] = useState<Record<string, boolean>>({})
   const [expandedReasoning, setExpandedReasoning] = useState<Record<string, boolean>>({})
+  const [search, setSearch] = useState('')
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -283,6 +286,48 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
     }
   }
 
+  const updateSource = async (eventId: string, source: string) => {
+    try {
+      const response = await fetch(`/api/fda-events/${eventId}/outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update source')
+      }
+
+      setEvents(prev => prev.map(event =>
+        event.id === eventId ? { ...event, source } : event
+      ))
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update source')
+    }
+  }
+
+  const updateNctId = async (eventId: string, nctId: string) => {
+    try {
+      const response = await fetch(`/api/fda-events/${eventId}/outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nctId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update NCT ID')
+      }
+
+      setEvents(prev => prev.map(event =>
+        event.id === eventId ? { ...event, nctId } : event
+      ))
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update NCT ID')
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -290,34 +335,52 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
   return (
     <div className="space-y-6">
       {/* Settings */}
-      <div className="flex items-center justify-between bg-white/80 border border-[#e8ddd0] rounded-lg p-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-[#8a8075]">Deep Reasoning</span>
-          <button
-            onClick={() => setUseReasoning(!useReasoning)}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              useReasoning ? 'bg-[#2D7CF6]' : 'bg-[#e8ddd0]'
-            }`}
-          >
-            <span
-              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                useReasoning ? 'translate-x-5' : 'translate-x-1'
-              }`}
+      <div className="flex items-center justify-between gap-3 bg-white/80 border border-[#e8ddd0] rounded-lg p-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="relative flex-1 max-w-xs">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#b5aa9e] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter by drug name..."
+              className="w-full text-sm pl-8 pr-2 py-1.5 bg-[#F5F2ED] border border-[#e8ddd0] rounded text-[#1a1a1a] placeholder-[#b5aa9e] focus:outline-none focus:border-[#2D7CF6] focus:ring-1 focus:ring-[#2D7CF6]/20"
             />
-          </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-[#8a8075]">Deep Reasoning</span>
+            <button
+              onClick={() => setUseReasoning(!useReasoning)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                useReasoning ? 'bg-[#2D7CF6]' : 'bg-[#e8ddd0]'
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  useReasoning ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
-        <span className="text-xs text-[#b5aa9e]">
+        <span className="text-xs text-[#b5aa9e] shrink-0">
           {useReasoning ? 'Extended thinking enabled' : 'Fast mode'}
         </span>
       </div>
 
       {/* Events */}
-      {events.map((event, index) => {
+      {events.filter(event => {
+        if (!search.trim()) return true
+        return event.drugName.toLowerCase().includes(search.toLowerCase())
+      }).map((event, index, filteredEvents) => {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const eventDate = new Date(event.pdufaDate)
         eventDate.setHours(0, 0, 0, 0)
-        const prevEvent = index > 0 ? events[index - 1] : null
+        const prevEvent = index > 0 ? filteredEvents[index - 1] : null
         const prevEventDate = prevEvent ? new Date(prevEvent.pdufaDate) : null
         if (prevEventDate) prevEventDate.setHours(0, 0, 0, 0)
 
@@ -360,6 +423,8 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
               runStreamingPrediction={runStreamingPrediction}
               deletePrediction={deletePrediction}
               updateOutcome={updateOutcome}
+              updateSource={updateSource}
+              updateNctId={updateNctId}
             />
           </div>
         )
@@ -387,6 +452,8 @@ interface EventCardProps {
   runStreamingPrediction: (eventId: string, modelId: ModelId) => Promise<void>
   deletePrediction: (eventId: string, modelId: ModelId) => Promise<void>
   updateOutcome: (eventId: string, outcome: string) => Promise<void>
+  updateSource: (eventId: string, source: string) => Promise<void>
+  updateNctId: (eventId: string, nctId: string) => Promise<void>
 }
 
 function EventCard({
@@ -404,6 +471,8 @@ function EventCard({
   runStreamingPrediction,
   deletePrediction,
   updateOutcome,
+  updateSource,
+  updateNctId,
 }: EventCardProps) {
   const days = getDaysUntil(event.pdufaDate)
   const isAnyLoading = MODEL_IDS.some(m => loading[`${event.id}-${m}`])
@@ -423,6 +492,18 @@ function EventCard({
             </div>
             <div className="text-sm text-[#8a8075]">
               {event.companyName} · {event.therapeuticArea || 'No area'}
+            </div>
+            <div className="flex gap-2 mt-1.5">
+              <SourceInput
+                eventId={event.id}
+                initialSource={event.source}
+                updateSource={updateSource}
+              />
+              <NctIdInput
+                eventId={event.id}
+                initialNctId={event.nctId}
+                updateNctId={updateNctId}
+              />
             </div>
           </div>
 
@@ -447,7 +528,7 @@ function EventCard({
               } ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
             >
               <option value="Pending" className="bg-white text-[#C9A227]">Pending</option>
-              <option value="Approved" className="bg-white text-[#7d8e6e]">Approved</option>
+              <option value="Approved" className="bg-white text-[#3a8a2e]">Approved</option>
               <option value="Rejected" className="bg-white text-[#D4604A]">Rejected</option>
             </select>
 
@@ -470,7 +551,7 @@ function EventCard({
       </div>
 
       {/* Model Predictions */}
-      <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#e8ddd0]">
+      <div className="grid md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[#e8ddd0]">
         {MODEL_IDS.map(modelId => (
           <ModelPredictionCard
             key={modelId}
@@ -550,7 +631,7 @@ function ModelPredictionCard({
           {prediction && !loading && (
             <button
               onClick={() => deletePrediction(eventId, modelId)}
-              className="px-2 py-0.5 text-xs bg-[#c07a5f]/10 text-[#c07a5f] rounded hover:bg-[#c07a5f]/20"
+              className="px-2 py-0.5 text-xs bg-[#c43a2b]/10 text-[#c43a2b] rounded hover:bg-[#c43a2b]/20"
             >
               Del
             </button>
@@ -579,6 +660,97 @@ function ModelPredictionCard({
 // =============================================================================
 // SUB-COMPONENTS
 // =============================================================================
+
+function SourceInput({
+  eventId,
+  initialSource,
+  updateSource,
+}: {
+  eventId: string
+  initialSource: string | null
+  updateSource: (eventId: string, source: string) => Promise<void>
+}) {
+  const [value, setValue] = useState(initialSource || '')
+  const [saved, setSaved] = useState(false)
+
+  const handleBlur = async () => {
+    const trimmed = value.trim()
+    if (trimmed === (initialSource || '')) return
+    await updateSource(eventId, trimmed)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1500)
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        placeholder="Source links or notes..."
+        className="w-full text-xs px-2 py-1 bg-[#F5F2ED] border border-[#e8ddd0] rounded text-[#8a8075] placeholder-[#b5aa9e] focus:outline-none focus:border-[#2D7CF6] focus:ring-1 focus:ring-[#2D7CF6]/20"
+      />
+      {saved && (
+        <span className="text-xs text-[#7d8e6e] shrink-0">Saved</span>
+      )}
+    </div>
+  )
+}
+
+function NctIdInput({
+  eventId,
+  initialNctId,
+  updateNctId,
+}: {
+  eventId: string
+  initialNctId: string | null
+  updateNctId: (eventId: string, nctId: string) => Promise<void>
+}) {
+  const [value, setValue] = useState(initialNctId || '')
+  const [saved, setSaved] = useState(false)
+
+  const handleBlur = async () => {
+    const trimmed = value.trim()
+    if (trimmed === (initialNctId || '')) return
+    await updateNctId(eventId, trimmed)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1500)
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        placeholder="NCT ID..."
+        className="w-28 text-xs px-2 py-1 bg-[#F5F2ED] border border-[#e8ddd0] rounded text-[#8a8075] placeholder-[#b5aa9e] focus:outline-none focus:border-[#2D7CF6] focus:ring-1 focus:ring-[#2D7CF6]/20 font-mono"
+      />
+      {value.trim() && (
+        <a
+          href={`https://clinicaltrials.gov/study/${value.trim()}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#2D7CF6] hover:text-[#2D7CF6]/70 shrink-0"
+          title="View on ClinicalTrials.gov"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      )}
+      {saved && (
+        <span className="text-xs text-[#7d8e6e] shrink-0">Saved</span>
+      )}
+    </div>
+  )
+}
 
 function LoadingState({ progress, color }: { progress?: StreamProgress; color: string }) {
   return (

@@ -125,7 +125,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
             PENDING
           </span>
         </td>
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           const isExpanded = expandedPrediction === modelId
           return (
@@ -152,7 +152,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
       </tr>
       {expanded && event.eventDescription && (
         <tr className="bg-zinc-800/20">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <div className="text-sm text-zinc-400 leading-relaxed">
               {event.eventDescription}
             </div>
@@ -161,7 +161,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
       )}
       {expandedPred && (
         <tr className="bg-zinc-850/50">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
         </tr>
@@ -205,7 +205,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
             {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
           </span>
         </td>
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
           if (!pred) return <td key={modelId} className="text-center px-4 py-3 text-zinc-600">—</td>
           const isCorrect = pred.correct
@@ -230,7 +230,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
       </tr>
       {expanded && event.eventDescription && (
         <tr className="bg-zinc-800/20">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <div className="text-sm text-zinc-400 leading-relaxed">
               {event.eventDescription}
             </div>
@@ -239,7 +239,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
       )}
       {expandedPred && (
         <tr className="bg-zinc-850/50">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
         </tr>
@@ -287,10 +287,10 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
           {event.eventDescription}
         </div>
       )}
-      <div className={`grid grid-cols-3 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+      <div className={`grid grid-cols-4 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
-          const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : 'Grok'
+          const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : modelId === 'grok' ? 'Grok' : 'Gemini'
           const isExpanded = expandedPrediction === modelId
           return (
             <div key={modelId} className="text-center">
@@ -369,10 +369,10 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
           {event.eventDescription}
         </div>
       )}
-      <div className={`grid grid-cols-3 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+      <div className={`grid grid-cols-4 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
-          const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : 'Grok'
+          const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : modelId === 'grok' ? 'Grok' : 'Gemini'
           if (!pred) {
             return (
               <div key={modelId} className="text-center">

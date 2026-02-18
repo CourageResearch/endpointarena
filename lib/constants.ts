@@ -6,7 +6,7 @@
 export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
 
 // Model IDs used throughout the application
-export const MODEL_IDS = ['claude-opus', 'gpt-5.2', 'grok-4'] as const
+export const MODEL_IDS = ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5'] as const
 export type ModelId = (typeof MODEL_IDS)[number]
 
 // Model display information
@@ -38,6 +38,13 @@ export const MODEL_INFO: Record<ModelId, {
     provider: 'xAI',
     features: ['Fast Reasoning', 'Web Search'],
   },
+  'gemini-2.5': {
+    name: 'Gemini',
+    fullName: 'Gemini 2.5 Pro',
+    color: '#8E24AA',
+    provider: 'Google',
+    features: ['Google Search Grounding', 'Thinking'],
+  },
 }
 
 // Get all IDs for a model (just returns the model ID)
@@ -57,8 +64,8 @@ export type FDAOutcome = (typeof FDA_OUTCOMES)[number]
 // Outcome colors (warm production palette)
 export const OUTCOME_COLORS: Record<FDAOutcome, { bg: string; text: string }> = {
   Pending: { bg: 'bg-[#b5aa9e]/10', text: 'text-[#b5aa9e]' },
-  Approved: { bg: 'bg-[#7d8e6e]/10', text: 'text-[#7d8e6e]' },
-  Rejected: { bg: 'bg-[#c07a5f]/10', text: 'text-[#c07a5f]' },
+  Approved: { bg: 'bg-[#3a8a2e]/10', text: 'text-[#3a8a2e]' },
+  Rejected: { bg: 'bg-[#c43a2b]/10', text: 'text-[#c43a2b]' },
 }
 
 // Prediction outcomes
@@ -97,13 +104,14 @@ export function getDaysUntil(date: Date | string): number {
 }
 
 // Model variant types for display purposes
-export type ModelVariant = 'claude' | 'gpt' | 'grok'
+export type ModelVariant = 'claude' | 'gpt' | 'grok' | 'gemini'
 
 // Map full model ID to short variant for display
 export function getModelVariant(modelId: ModelId): ModelVariant {
   if (modelId === 'claude-opus') return 'claude'
   if (modelId === 'gpt-5.2') return 'gpt'
   if (modelId === 'grok-4') return 'grok'
+  if (modelId === 'gemini-2.5') return 'gemini'
   throw new Error(`Unknown model ID: ${modelId}`)
 }
 
@@ -112,6 +120,7 @@ export function getModelIdFromVariant(variant: ModelVariant): ModelId {
   if (variant === 'claude') return 'claude-opus'
   if (variant === 'gpt') return 'gpt-5.2'
   if (variant === 'grok') return 'grok-4'
+  if (variant === 'gemini') return 'gemini-2.5'
   throw new Error(`Unknown model variant: ${variant}`)
 }
 
@@ -120,6 +129,7 @@ export const MODEL_ID_VARIANTS: Record<ModelVariant, string[]> = {
   'claude': ['claude-opus'],
   'gpt': ['gpt-5.2'],
   'grok': ['grok-4'],
+  'gemini': ['gemini-2.5'],
 }
 
 // Helper to find prediction by canonical model ID
@@ -136,6 +146,7 @@ export const MODEL_DISPLAY_NAMES: Record<ModelVariant, string> = {
   'claude': 'Claude Opus 4.6',
   'gpt': 'GPT-5.2',
   'grok': 'Grok 4.1',
+  'gemini': 'Gemini 2.5 Pro',
 }
 
 // Model names by full ID
@@ -143,6 +154,7 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   'claude-opus': 'Claude Opus 4.6',
   'gpt-5.2': 'GPT-5.2',
   'grok-4': 'Grok 4.1',
+  'gemini-2.5': 'Gemini 2.5 Pro',
 }
 
 // Model colors by short variant
@@ -150,6 +162,7 @@ export const MODEL_VARIANT_COLORS: Record<ModelVariant, string> = {
   claude: '#D4604A',
   gpt: '#C9A227',
   grok: '#2D7CF6',
+  gemini: '#8E24AA',
 }
 
 // Short display names by variant
@@ -157,13 +170,14 @@ export const MODEL_SHORT_NAMES: Record<ModelVariant, string> = {
   claude: 'Claude',
   gpt: 'GPT',
   grok: 'Grok',
+  gemini: 'Gemini',
 }
 
 // Status colors for FDA outcomes (hex values)
 export const STATUS_COLORS = {
   Pending: '#b5aa9e',
-  Approved: '#7d8e6e',
-  Rejected: '#c07a5f',
+  Approved: '#3a8a2e',
+  Rejected: '#c43a2b',
 }
 
 // Application type abbreviations

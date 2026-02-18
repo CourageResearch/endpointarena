@@ -32,7 +32,7 @@ export async function getHomeData() {
   })
 
   const modelStats = new Map<ModelVariant, { correct: number; total: number; pending: number; confidenceSum: number }>()
-  const modelVariants: ModelVariant[] = ['claude', 'gpt', 'grok']
+  const modelVariants: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
   for (const id of modelVariants) {
     modelStats.set(id, { correct: 0, total: 0, pending: 0, confidenceSum: 0 })
   }
@@ -75,7 +75,7 @@ export async function getHomeData() {
     id: event.id,
     drugName: event.drugName,
     outcome: event.outcome as 'Approved' | 'Rejected',
-    predictions: (['claude', 'gpt', 'grok'] as const).map(variant => {
+    predictions: (['claude', 'gpt', 'grok', 'gemini'] as const).map(variant => {
       const pred = findPredictionByVariant(event.predictions, variant)
       if (!pred) return { model: variant, predicted: null, correct: null }
       return {

@@ -64,8 +64,16 @@ export async function POST(request: NextRequest) {
           rivalDrugs: event.rivalDrugs,
           marketPotential: event.marketPotential,
           otherApprovals: event.otherApprovals,
+          source: event.source,
         })
         const durationMs = Date.now() - startTime
+
+        // Auto-score if event already has an outcome
+        const isDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
+        const correct = isDecided
+          ? (result.prediction === 'approved' && event.outcome === 'Approved') ||
+            (result.prediction === 'rejected' && event.outcome === 'Rejected')
+          : null
 
         const [saved] = await db.insert(fdaPredictions).values({
           fdaEventId,
@@ -75,6 +83,7 @@ export async function POST(request: NextRequest) {
           confidence: result.confidence,
           reasoning: result.reasoning,
           durationMs,
+          correct,
         }).returning()
 
         return { model, status: 'created', prediction: saved, durationMs }

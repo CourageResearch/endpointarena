@@ -8,8 +8,8 @@ import { ModelIcon } from '@/components/ModelIcon'
 
 const STATUS_GRADIENTS = {
   Pending: 'linear-gradient(90deg, #b5aa9e, #d4c9bc)',
-  Approved: 'linear-gradient(90deg, #7d8e6e, #a3b88f, #7d8e6e)',
-  Rejected: 'linear-gradient(90deg, #c07a5f, #d4a08a, #c07a5f)',
+  Approved: 'linear-gradient(90deg, #3a8a2e, #5fb352, #3a8a2e)',
+  Rejected: 'linear-gradient(90deg, #c43a2b, #e05a4a, #c43a2b)',
 }
 
 function StatusBadge({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) {
@@ -33,6 +33,60 @@ function StatusBadgeMobile({ status }: { status: 'Pending' | 'Approved' | 'Rejec
       </span>
       <span className="w-full h-[1.5px] rounded-full" style={{ background: STATUS_GRADIENTS[status] }} />
     </span>
+  )
+}
+
+function SourceIndicator({ source }: { source: string }) {
+  const isUrl = source.startsWith('http')
+  if (isUrl) {
+    return (
+      <a
+        href={source}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-0.5 ml-1.5 text-black/30 hover:text-black/60 transition-colors"
+        title={source}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      </a>
+    )
+  }
+  return (
+    <span
+      className="inline-flex items-center ml-1.5 text-black/25 cursor-help"
+      title={source}
+    >
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+    </span>
+  )
+}
+
+function ClinicalTrialLink({ nctId }: { nctId: string }) {
+  return (
+    <a
+      href={`https://clinicaltrials.gov/study/${nctId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center ml-1 text-black/30 hover:text-black/60 transition-colors"
+      title={`ClinicalTrials.gov: ${nctId}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+        <polyline points="10 9 9 9 8 9" />
+      </svg>
+    </a>
   )
 }
 
@@ -85,7 +139,11 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
         <td className="px-4 py-5 text-sm font-medium text-black/70">
-          {event.drugName}
+          <span className="inline-flex items-center gap-1">
+            {event.drugName}
+            {event.source && <SourceIndicator source={event.source} />}
+            {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
+          </span>
         </td>
         <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
           {event.eventDescription || event.therapeuticArea || '—'}
@@ -114,7 +172,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
         <td className="text-center px-3 py-5">
           <StatusBadge status="Pending" />
         </td>
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           const isExpanded = expandedPrediction === modelId
           return (
@@ -138,7 +196,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
       </tr>
       {expandedPred && (
         <tr className="border-b border-black/[0.08]">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
         </tr>
@@ -164,7 +222,11 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
         <td className="px-4 py-5 text-sm font-medium text-black/70">
-          {event.drugName}
+          <span className="inline-flex items-center gap-1">
+            {event.drugName}
+            {event.source && <SourceIndicator source={event.source} />}
+            {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
+          </span>
         </td>
         <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
           {event.eventDescription || event.therapeuticArea || '—'}
@@ -193,7 +255,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
         <td className="text-center px-3 py-5">
           <StatusBadge status={event.outcome as 'Approved' | 'Rejected'} />
         </td>
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           if (!pred) return <td key={modelId} className="text-center px-3 py-5 text-black/15">—</td>
           const isCorrect = pred.correct
@@ -215,7 +277,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
       </tr>
       {expandedPred && (
         <tr className="border-b border-black/[0.08]">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
         </tr>
@@ -242,7 +304,11 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
     <div className="border border-neutral-200 p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm">{event.drugName}</div>
+          <div className="text-sm inline-flex items-center gap-1">
+            {event.drugName}
+            {event.source && <SourceIndicator source={event.source} />}
+            {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
+          </div>
           <div className="text-xs text-neutral-500 mt-0.5">{event.companyName}</div>
           {event.eventDescription && (
             <div className="text-xs text-neutral-400 mt-1 line-clamp-2">{event.eventDescription}</div>
@@ -273,8 +339,8 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
       </div>
 
       {/* Predictions */}
-      <div className="grid grid-cols-3 gap-2 mt-3">
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+      <div className="grid grid-cols-4 gap-2 mt-3">
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           const isExpanded = expandedPrediction === modelId
           return (
@@ -285,7 +351,7 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
               } ${!pred ? 'bg-neutral-50 text-neutral-300' : ''}`}
               style={pred ? {
-                backgroundColor: pred.prediction === 'approved' ? 'rgba(125, 142, 110, 0.08)' : 'rgba(192, 122, 95, 0.08)',
+                backgroundColor: pred.prediction === 'approved' ? 'rgba(58, 138, 46, 0.08)' : 'rgba(196, 58, 43, 0.08)',
                 color: pred.prediction === 'approved' ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected,
               } : undefined}
             >
@@ -321,7 +387,11 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
     <div className="border border-neutral-200 p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm">{event.drugName}</div>
+          <div className="text-sm inline-flex items-center gap-1">
+            {event.drugName}
+            {event.source && <SourceIndicator source={event.source} />}
+            {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
+          </div>
           <div className="text-xs text-neutral-500 mt-0.5">{event.companyName}</div>
           {event.eventDescription && (
             <div className="text-xs text-neutral-400 mt-1 line-clamp-2">{event.eventDescription}</div>
@@ -352,8 +422,8 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
       </div>
 
       {/* Predictions */}
-      <div className="grid grid-cols-3 gap-2 mt-3">
-        {(['claude', 'gpt', 'grok'] as const).map((modelId) => {
+      <div className="grid grid-cols-4 gap-2 mt-3">
+        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           if (!pred) {
             return (
@@ -373,7 +443,7 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
               }`}
               style={{
-                backgroundColor: isCorrect ? 'rgba(125, 142, 110, 0.08)' : 'rgba(192, 122, 95, 0.08)',
+                backgroundColor: isCorrect ? 'rgba(58, 138, 46, 0.08)' : 'rgba(196, 58, 43, 0.08)',
                 color: isCorrect ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected,
               }}
             >

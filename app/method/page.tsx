@@ -13,6 +13,7 @@ function HeaderDots() {
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
       <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.8 }} />
     </div>
   )
 }
@@ -69,6 +70,18 @@ export default async function MethodPage() {
         reasoning: 'Fast Reasoning',
         reasoningDetail: 'Built-in fast reasoning mode',
         maxTokens: '16,000',
+      }
+    },
+    {
+      id: 'gemini',
+      name: 'Gemini 2.5 Pro',
+      version: 'gemini-2.5-pro',
+      features: {
+        internet: true,
+        internetDetail: 'Google Search grounding',
+        reasoning: 'Thinking',
+        reasoningDetail: 'Built-in thinking mode',
+        maxTokens: '65,536',
       }
     }
   ]
@@ -127,19 +140,19 @@ export default async function MethodPage() {
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Problem with AI Benchmarks</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
               </div>
             </div>
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Solution</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
               </div>
             </div>
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">What We're Testing</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Can AI models reason about complex regulatory decisions and make accurate predictions about the future?</p>
@@ -159,12 +172,12 @@ export default async function MethodPage() {
               Our five-step evaluation process
             </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
             <div className="bg-white/95 rounded-sm p-4 sm:p-8">
               <div className="space-y-6 sm:space-y-8">
                 {processSteps.map((step, index) => (
                   <div key={index} className="flex gap-3 sm:gap-6">
-                    <div className="w-8 h-8 p-[1px] rounded-sm shrink-0" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+                    <div className="w-8 h-8 p-[1px] rounded-sm shrink-0" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
                       <div className="w-full h-full bg-white rounded-sm flex items-center justify-center text-sm font-bold">
                         {index + 1}
                       </div>
@@ -191,10 +204,10 @@ export default async function MethodPage() {
               The models we compare
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             {models.map((model) => (
-              <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
-                <div className="bg-white/95 rounded-sm p-4 sm:p-6">
+              <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+                <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 text-[#1a1a1a]">
                       <ModelIcon id={model.id} />
@@ -251,7 +264,7 @@ export default async function MethodPage() {
               The prompt every model receives
             </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[#e8ddd0] bg-[#f3ebe0]/50">
                 <span className="text-sm text-[#8a8075]">All models receive the same prompt</span>
@@ -298,7 +311,7 @@ predict the outcome.
               Required response format
             </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
 <span className="text-[#b5aa9e]">{'{'}</span>
@@ -340,7 +353,7 @@ predict the outcome.
               Results so far
             </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
             <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{fdaEventCount}</div>
@@ -359,7 +372,7 @@ predict the outcome.
         </section>
 
         {/* Footer gradient line */}
-        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
       </main>
     </div>
   )

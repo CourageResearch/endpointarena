@@ -190,9 +190,9 @@ export default async function AnalyticsPage({
               <div className="text-2xl font-bold text-[#2D7CF6]">{data.uniqueVisitors.toLocaleString()}</div>
               <div className="text-[#2D7CF6]/60 text-xs">Unique Visitors (approx)</div>
             </div>
-            <div className="bg-white/80 border border-[#7d8e6e]/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-[#7d8e6e]">{data.totalClicks.toLocaleString()}</div>
-              <div className="text-[#7d8e6e]/60 text-xs">Total Clicks</div>
+            <div className="bg-white/80 border border-[#3a8a2e]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#3a8a2e]">{data.totalClicks.toLocaleString()}</div>
+              <div className="text-[#3a8a2e]/60 text-xs">Total Clicks</div>
             </div>
             <div className="bg-white/80 border border-[#D4604A]/30 rounded-lg p-3">
               <div className="text-2xl font-bold text-[#D4604A]">{data.uniquePages}</div>
@@ -374,7 +374,7 @@ export default async function AnalyticsPage({
       </main>
 
       {/* Footer gradient line */}
-      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6)' }} />
+      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
     </div>
   )
 }
