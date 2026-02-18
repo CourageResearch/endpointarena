@@ -13,9 +13,17 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { outcome } = body
+  const { outcome, source, nctId } = body
 
-  if (!outcome || !['Pending', 'Approved', 'Rejected'].includes(outcome)) {
+  // Allow field-only updates (no outcome required)
+  if (!outcome && source === undefined && nctId === undefined) {
+    return new Response(JSON.stringify({ error: 'Must provide outcome, source, or nctId' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (outcome && !['Pending', 'Approved', 'Rejected'].includes(outcome)) {
     return new Response(JSON.stringify({ error: 'Invalid outcome. Must be Pending, Approved, or Rejected' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -34,35 +42,46 @@ export async function PATCH(
     })
   }
 
-  // Update the event outcome
+  // Build the update payload
+  const updateData: Record<string, any> = { updatedAt: new Date() }
+  if (outcome) {
+    updateData.outcome = outcome
+    updateData.outcomeDate = outcome !== 'Pending' ? new Date() : null
+  }
+  if (source !== undefined) {
+    updateData.source = source
+  }
+  if (nctId !== undefined) {
+    updateData.nctId = nctId
+  }
+
+  // Update the event
   const [updated] = await db.update(fdaCalendarEvents)
-    .set({
-      outcome,
-      outcomeDate: outcome !== 'Pending' ? new Date() : null,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(fdaCalendarEvents.id, id))
     .returning()
 
-  // If outcome is set (not Pending), update prediction correctness
-  if (outcome !== 'Pending') {
-    const predictions = await db.query.fdaPredictions.findMany({
-      where: eq(fdaPredictions.fdaEventId, id),
-    })
+  // If outcome was changed, update prediction correctness
+  if (outcome) {
+    if (outcome !== 'Pending') {
+      const predictions = await db.query.fdaPredictions.findMany({
+        where: eq(fdaPredictions.fdaEventId, id),
+      })
 
-    for (const pred of predictions) {
-      const isCorrect = (pred.prediction === 'approved' && outcome === 'Approved') ||
-                        (pred.prediction === 'rejected' && outcome === 'Rejected')
+      for (const pred of predictions) {
+        const isCorrect = (pred.prediction === 'approved' && outcome === 'Approved') ||
+                          (pred.prediction === 'rejected' && outcome === 'Rejected')
 
+        await db.update(fdaPredictions)
+          .set({ correct: isCorrect })
+          .where(eq(fdaPredictions.id, pred.id))
+      }
+    } else {
+      // Reset prediction correctness if outcome is set back to Pending
       await db.update(fdaPredictions)
-        .set({ correct: isCorrect })
-        .where(eq(fdaPredictions.id, pred.id))
+        .set({ correct: null })
+        .where(eq(fdaPredictions.fdaEventId, id))
     }
-  } else {
-    // Reset prediction correctness if outcome is set back to Pending
-    await db.update(fdaPredictions)
-      .set({ correct: null })
-      .where(eq(fdaPredictions.fdaEventId, id))
   }
 
   return new Response(JSON.stringify({ success: true, event: updated }), {

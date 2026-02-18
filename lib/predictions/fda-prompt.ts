@@ -8,6 +8,7 @@ interface FDAEventInfo {
   rivalDrugs: string | null
   marketPotential: string | null
   otherApprovals: string | null
+  source: string | null
 }
 
 export function buildFDAPredictionPrompt(event: FDAEventInfo): string {
@@ -16,6 +17,7 @@ export function buildFDAPredictionPrompt(event: FDAEventInfo): string {
   if (event.rivalDrugs) additionalInfo.push(`**Competing Drugs:** ${event.rivalDrugs}`)
   if (event.marketPotential) additionalInfo.push(`**Market Potential:** ${event.marketPotential}`)
   if (event.otherApprovals) additionalInfo.push(`**Other Approvals:** ${event.otherApprovals}`)
+  if (event.source) additionalInfo.push(`**Source Material:** ${event.source}`)
 
   const additionalSection = additionalInfo.length > 0
     ? `\n${additionalInfo.join('\n')}\n`

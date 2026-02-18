@@ -18,6 +18,7 @@ export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   marketPotential: text('market_potential'),
   otherApprovals: text('other_approvals'),
   newsLinks: text('news_links'),
+  source: text('source'),
   nctId: text('nct_id'),
   rttDetailId: text('rtt_detail_id'),
   metaAnalysis: text('meta_analysis'), // AI-generated comparison of model predictions

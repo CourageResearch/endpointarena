@@ -18,5 +18,7 @@ export interface FDAEvent {
   applicationType: string
   outcome: string
   eventDescription: string
+  source?: string | null
+  nctId?: string | null
   predictions: Prediction[]
 }

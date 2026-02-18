@@ -6,7 +6,7 @@ export function LogoutButton() {
   return (
     <button
       onClick={() => signOut({ callbackUrl: '/' })}
-      className="px-3 py-1.5 bg-[#c07a5f]/10 hover:bg-[#c07a5f]/20 border border-[#c07a5f]/30 rounded-lg text-sm text-[#c07a5f] hover:text-[#c07a5f] transition-colors flex items-center gap-2"
+      className="px-3 py-1.5 bg-[#c43a2b]/10 hover:bg-[#c43a2b]/20 border border-[#c43a2b]/30 rounded-lg text-sm text-[#c43a2b] hover:text-[#c43a2b] transition-colors flex items-center gap-2"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       rivalDrugs: event.rivalDrugs,
       marketPotential: event.marketPotential,
       otherApprovals: event.otherApprovals,
+      source: event.source,
     }, predictionSummaries)
 
     // Save to database
