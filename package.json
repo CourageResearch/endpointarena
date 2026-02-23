@@ -11,6 +11,7 @@
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit generate",
+    "db:ensure-market-schema": "node scripts/ensure-market-schema.js",
     "db:add-market-runtime-config": "npx tsx scripts/add-market-runtime-config.ts",
     "db:add-fda-prediction-usage-columns": "npx tsx scripts/add-fda-prediction-usage-columns.ts",
     "db:add-fda-prediction-provider-usage-columns": "npx tsx scripts/add-fda-prediction-provider-usage-columns.ts",
