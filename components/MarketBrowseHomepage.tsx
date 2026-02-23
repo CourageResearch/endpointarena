@@ -32,7 +32,7 @@ type MarketCardEntry = {
   absMove: number
 }
 
-const DEFAULT_SORT_MODE: SortMode = 'trending'
+const DEFAULT_SORT_MODE: SortMode = 'endingSoon'
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
 
 function parseTimestamp(value: string | null | undefined): number {
