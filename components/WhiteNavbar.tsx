@@ -3,9 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { SITE_CONTAINER_CLASS } from '@/lib/layout'
+import { BrandLink } from '@/components/site/Brand'
+import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home' },
+  { href: '/markets', label: 'Markets' },
   { href: '/leaderboard', label: 'Leaderboard' },
   { href: '/fda-calendar', label: 'Calendar' },
   { href: '/method', label: 'Method' },
@@ -15,31 +19,37 @@ const NAV_ITEMS = [
 export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neutral-200' }: { bgClass?: string; borderClass?: string } = {}) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const isAdmin = pathname.startsWith('/admin')
 
   const handleNavClick = () => {
     setMobileMenuOpen(false)
   }
 
+  const isItemActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    return pathname === href || pathname.startsWith(`${href}/`)
+  }
+
   return (
-    <nav className={`border-b ${borderClass} ${bgClass} backdrop-blur-sm sticky top-0 z-50`}>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-14">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 text-base font-semibold tracking-tight text-[#1a1a1a]" onClick={handleNavClick}>
-            <svg width="22" height="18" viewBox="0 0 30 24" className="shrink-0">
-              <circle cx="4" cy="18" r="3.2" fill="#D4604A" />
-              <circle cx="11" cy="11" r="3.2" fill="#C9A227" />
-              <circle cx="18" cy="4" r="3.2" fill="#2D7CF6" />
-              <circle cx="25" cy="11" r="3.2" fill="#8E24AA" />
-            </svg>
-            <span className="font-bold">Endpoint</span><span className="font-normal text-[#b5aa9e]">Arena</span>
-          </Link>
+    <nav className={cn('sticky top-0 z-50 border-b shadow-[0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-md', borderClass, bgClass)}>
+      <div className={SITE_CONTAINER_CLASS}>
+        <div className="flex h-14 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <BrandLink onClick={handleNavClick} />
+            {isAdmin ? (
+              <span className="hidden sm:inline-flex rounded-full border border-[#e8ddd0] bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a8075]">
+                Admin
+              </span>
+            ) : null}
+          </div>
 
           {/* Mobile Hamburger Button */}
           <button
-            className="md:hidden p-2 -mr-2 text-[#b5aa9e] hover:text-[#1a1a1a]"
+            className="touch-target -mr-2 rounded-md p-1.5 text-[#8a8075] transition-colors hover:bg-white/70 hover:text-[#1a1a1a] md:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="site-mobile-nav"
           >
             {mobileMenuOpen ? (
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,22 +63,26 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
           </button>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden items-center gap-0.5 md:flex">
             {NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = isItemActive(item.href)
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`relative px-3 py-2 text-sm transition-colors ${
+                  className={cn(
+                    'relative rounded-md px-2.5 py-1.5 text-sm transition-colors',
                     isActive
-                      ? 'text-[#1a1a1a] font-medium'
+                      ? 'font-medium text-[#1a1a1a]'
                       : 'text-[#8a8075] hover:text-[#1a1a1a]'
-                  }`}
+                  )}
                 >
                   {item.label}
                   {isActive && (
-                    <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
+                    <span
+                      className="absolute bottom-0 left-2 right-2 h-px rounded-full"
+                      style={{ background: 'linear-gradient(90deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}
+                    />
                   )}
                 </Link>
               )
@@ -78,19 +92,20 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
 
         {/* Mobile Navigation Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-[#e8ddd0] py-2">
+          <div id="site-mobile-nav" className="mobile-menu-slide border-t border-[#e8ddd0] pb-2 pt-1.5 md:hidden">
             {NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = isItemActive(item.href)
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={handleNavClick}
-                  className={`block px-4 py-3 text-base rounded-md transition-colors ${
+                  className={cn(
+                    'touch-target block rounded-md px-4 py-3 text-base transition-colors',
                     isActive
-                      ? 'bg-[#e8ddd0]/40 text-[#1a1a1a] font-medium'
+                      ? 'bg-white text-[#1a1a1a] shadow-[inset_0_0_0_1px_rgba(232,221,208,0.9)]'
                       : 'text-[#8a8075] hover:text-[#1a1a1a] hover:bg-[#e8ddd0]/20'
-                  }`}
+                  )}
                 >
                   {item.label}
                 </Link>

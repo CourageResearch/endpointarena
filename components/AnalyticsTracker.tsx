@@ -25,10 +25,16 @@ export function useAnalytics() {
 const FLUSH_DELAY = 2000
 const BATCH_MAX = 10
 
+function isLocalhostHostname(hostname: string) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
 export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const queueRef = useRef<AnalyticsEvent[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isLocalhost =
+    typeof window !== 'undefined' && isLocalhostHostname(window.location.hostname)
 
   const flush = useCallback(() => {
     if (timerRef.current) {
@@ -71,13 +77,14 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
 
   // Track page views on route change (skip admin pages)
   useEffect(() => {
+    if (isLocalhost) return
     if (pathname.startsWith('/admin')) return
     enqueue({
       type: 'pageview',
       url: pathname,
       referrer: typeof document !== 'undefined' ? document.referrer : undefined,
     })
-  }, [pathname, enqueue])
+  }, [isLocalhost, pathname, enqueue])
 
   // Flush on page unload
   useEffect(() => {
@@ -91,6 +98,7 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
 
   const trackClick = useCallback(
     (elementId: string) => {
+      if (isLocalhost) return
       if (pathname.startsWith('/admin')) return
       enqueue({
         type: 'click',
@@ -98,7 +106,7 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
         elementId,
       })
     },
-    [pathname, enqueue]
+    [isLocalhost, pathname, enqueue]
   )
 
   return (

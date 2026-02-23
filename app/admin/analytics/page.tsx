@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
-import { gte, eq, sql, desc, and } from 'drizzle-orm'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { gte } from 'drizzle-orm'
+import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -137,46 +137,35 @@ export default async function AnalyticsPage({
   const maxDailyViews = Math.max(...data.dailyViews.map(d => d.count), 1)
 
   return (
-    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[#1a1a1a]">Analytics</h1>
-            <p className="text-[#8a8075] text-sm mt-1">
-              Page views and click tracking
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <a
-              href="/admin/analytics?days=7"
-              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                days === 7
-                  ? 'bg-white text-[#1a1a1a] border-[#e8ddd0] font-medium shadow-sm'
-                  : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
-              }`}
-            >
-              7 days
-            </a>
-            <a
-              href="/admin/analytics?days=30"
-              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                days === 30
-                  ? 'bg-white text-[#1a1a1a] border-[#e8ddd0] font-medium shadow-sm'
-                  : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
-              }`}
-            >
-              30 days
-            </a>
-            <a
-              href="/admin"
-              className="px-3 py-1.5 bg-white/80 hover:bg-white border border-[#e8ddd0] rounded-lg text-sm text-[#8a8075] hover:text-[#1a1a1a] transition-colors"
-            >
-              Back to Admin
-            </a>
-          </div>
-        </div>
+    <AdminConsoleLayout
+      title="Traffic Analytics"
+      description="Track page activity, click behavior, referrers, and geo distribution."
+      activeTab="analytics"
+      topActions={(
+        <>
+          <a
+            href="/admin/analytics?days=7"
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+              days === 7
+                ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+                : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
+            }`}
+          >
+            7 days
+          </a>
+          <a
+            href="/admin/analytics?days=30"
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+              days === 30
+                ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+                : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
+            }`}
+          >
+            30 days
+          </a>
+        </>
+      )}
+    >
 
         {/* Summary Cards */}
         <section className="mb-8">
@@ -186,17 +175,17 @@ export default async function AnalyticsPage({
               <div className="text-2xl font-bold text-[#1a1a1a]">{data.totalPageViews.toLocaleString()}</div>
               <div className="text-[#8a8075] text-xs">Page Views</div>
             </div>
-            <div className="bg-white/80 border border-[#2D7CF6]/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-[#2D7CF6]">{data.uniqueVisitors.toLocaleString()}</div>
-              <div className="text-[#2D7CF6]/60 text-xs">Unique Visitors (approx)</div>
+            <div className="bg-white/80 border border-[#5BA5ED]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#5BA5ED]">{data.uniqueVisitors.toLocaleString()}</div>
+              <div className="text-[#5BA5ED]/60 text-xs">Unique Visitors (approx)</div>
             </div>
             <div className="bg-white/80 border border-[#3a8a2e]/30 rounded-lg p-3">
               <div className="text-2xl font-bold text-[#3a8a2e]">{data.totalClicks.toLocaleString()}</div>
               <div className="text-[#3a8a2e]/60 text-xs">Total Clicks</div>
             </div>
-            <div className="bg-white/80 border border-[#D4604A]/30 rounded-lg p-3">
-              <div className="text-2xl font-bold text-[#D4604A]">{data.uniquePages}</div>
-              <div className="text-[#D4604A]/60 text-xs">Pages Tracked</div>
+            <div className="bg-white/80 border border-[#EF6F67]/30 rounded-lg p-3">
+              <div className="text-2xl font-bold text-[#EF6F67]">{data.uniquePages}</div>
+              <div className="text-[#EF6F67]/60 text-xs">Pages Tracked</div>
             </div>
           </div>
         </section>
@@ -209,7 +198,7 @@ export default async function AnalyticsPage({
               {data.dailyViews.map(d => (
                 <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                   <div
-                    className="w-full bg-[#2D7CF6] rounded-t min-h-[2px] transition-all hover:bg-[#2D7CF6]/80"
+                    className="w-full bg-[#5BA5ED] rounded-t min-h-[2px] transition-all hover:bg-[#5BA5ED]/80"
                     style={{ height: `${(d.count / maxDailyViews) * 100}%` }}
                   />
                   <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
@@ -371,10 +360,6 @@ export default async function AnalyticsPage({
             )}
           </div>
         </section>
-      </main>
-
-      {/* Footer gradient line */}
-      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
-    </div>
+    </AdminConsoleLayout>
   )
 }

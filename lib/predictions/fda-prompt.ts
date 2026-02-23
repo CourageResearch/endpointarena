@@ -134,8 +134,9 @@ export function parseFDAPredictionResponse(response: string): FDAPredictionResul
     }
   }
 
-  // Strategy 4: Extract from natural language response
-  return parseNaturalLanguageResponse(response)
+  throw new Error(
+    `Model response did not contain a valid JSON prediction payload. Preview: ${response.slice(0, 240)}`
+  )
 }
 
 function parseJsonResponse(jsonStr: string): FDAPredictionResult {
@@ -183,86 +184,4 @@ function parseJsonResponse(jsonStr: string): FDAPredictionResult {
     confidence,
     reasoning,
   }
-}
-
-function parseNaturalLanguageResponse(response: string): FDAPredictionResult {
-  const lowerResponse = response.toLowerCase()
-
-  // Determine prediction
-  let prediction: 'approved' | 'rejected'
-
-  // Look for explicit prediction statements
-  if (lowerResponse.includes('predict: approved') ||
-      lowerResponse.includes('prediction: approved') ||
-      lowerResponse.includes('prediction is approved') ||
-      lowerResponse.includes('will be approved') ||
-      lowerResponse.includes('likely to be approved') ||
-      lowerResponse.includes('expect approval') ||
-      lowerResponse.includes('recommend approval')) {
-    prediction = 'approved'
-  } else if (lowerResponse.includes('predict: rejected') ||
-             lowerResponse.includes('prediction: rejected') ||
-             lowerResponse.includes('prediction is rejected') ||
-             lowerResponse.includes('will be rejected') ||
-             lowerResponse.includes('likely to be rejected') ||
-             lowerResponse.includes('expect rejection') ||
-             lowerResponse.includes('will not be approved')) {
-    prediction = 'rejected'
-  } else {
-    // Count positive vs negative indicators
-    const approvalWords = ['approved', 'approval', 'approve', 'favorable', 'positive', 'success', 'grant']
-    const rejectionWords = ['rejected', 'rejection', 'reject', 'unfavorable', 'negative', 'denied', 'refuse']
-
-    let approvalScore = 0
-    let rejectionScore = 0
-
-    for (const word of approvalWords) {
-      approvalScore += (lowerResponse.match(new RegExp(word, 'g')) || []).length
-    }
-    for (const word of rejectionWords) {
-      rejectionScore += (lowerResponse.match(new RegExp(word, 'g')) || []).length
-    }
-
-    prediction = approvalScore >= rejectionScore ? 'approved' : 'rejected'
-  }
-
-  // Extract confidence
-  let confidence = 75 // Default
-  const confidenceMatch = response.match(/(\d{2,3})\s*%\s*(?:confidence|confident|certainty|probability|likely)/i) ||
-                          response.match(/(?:confidence|confident|certainty|probability)[:\s]+(\d{2,3})\s*%/i) ||
-                          response.match(/(\d{2,3})\s*%/i)
-  if (confidenceMatch) {
-    const parsed = parseInt(confidenceMatch[1])
-    if (parsed >= 50 && parsed <= 100) {
-      confidence = parsed
-    }
-  }
-
-  // Extract reasoning - take a meaningful chunk of the response
-  // First try to keep the full response, just clean it up
-  let reasoning = response
-    .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-    .replace(/\n+/g, ' ')           // Normalize newlines
-    .replace(/\s+/g, ' ')           // Normalize spaces
-    .trim()
-
-  // If that removed too much, use the original response
-  if (reasoning.length < 50) {
-    reasoning = response
-      .replace(/\n+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }
-
-  // Limit reasoning length
-  if (reasoning.length > 1500) {
-    reasoning = reasoning.substring(0, 1500) + '...'
-  }
-
-  // If reasoning is STILL too short, throw an error with more context
-  if (reasoning.length < 20) {
-    throw new Error(`Failed to extract meaningful reasoning from model response. Response length: ${response.length}, extracted reasoning length: ${reasoning.length}. Response preview: ${response.substring(0, 200)}`)
-  }
-
-  return { prediction, confidence, reasoning }
 }

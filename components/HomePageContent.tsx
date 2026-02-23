@@ -2,49 +2,20 @@ import Link from 'next/link'
 import { BW2UpcomingRow, BW2PastRow, BW2MobileUpcomingCard, BW2MobilePastCard } from '@/app/rows'
 import { ModelIcon, FDAIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
-import { MODEL_SHORT_NAMES, MODEL_DISPLAY_NAMES, MODEL_VARIANT_COLORS, type ModelVariant } from '@/lib/constants'
-import { HeroSquares } from '@/components/HeroSquares'
+import { MODEL_DISPLAY_NAMES, MODEL_VARIANT_COLORS } from '@/lib/constants'
 import type { HomeData } from '@/lib/home-data'
-
-/* ── Band-themed decorative elements ── */
-
-const SQ_COLORS = ['#f2544e', '#40bd4b', '#d4a017', '#299bff', '#31b8b5']
-
-/** A sparse row of uniform colored squares — used between sections */
-function SquareDivider({ className = '' }: { className?: string }) {
-  return (
-    <div className={`w-full ${className}`}>
-      <svg className="w-full" height="8" preserveAspectRatio="none">
-        <rect x="20%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[0]} opacity="0.8" />
-        <rect x="35%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[1]} opacity="0.8" />
-        <rect x="50%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[2]} opacity="0.85" />
-        <rect x="65%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[3]} opacity="0.8" />
-        <rect x="80%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[4]} opacity="0.8" />
-      </svg>
-    </div>
-  )
-}
-
-/** Tiny colored square trio that sits next to section header labels */
-function HeaderDots() {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.8 }} />
-    </div>
-  )
-}
+import { FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
+import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
+import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 
 function UpcomingLegend() {
   return (
-    <div className="flex items-center justify-end gap-5 px-4 py-2.5 text-[11px] text-[#8a8075] border-t border-[#e8ddd0]">
+    <div className="mt-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-1 px-1 text-[11px] text-[#8a8075]">
       <span className="flex items-center gap-1.5">
-        <span className="text-sm font-medium" style={{ color: '#3a8a2e' }}>↑</span> Predicts Approval
+        <BrandDirectionMark direction="up" className="h-3.5 w-3.5" /> Predicts Approval
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="text-sm font-medium" style={{ color: '#c43a2b' }}>↓</span> Predicts Rejection
+        <BrandDirectionMark direction="down" className="h-3.5 w-3.5" /> Predicts Rejection
       </span>
     </div>
   )
@@ -52,12 +23,12 @@ function UpcomingLegend() {
 
 function PastLegend() {
   return (
-    <div className="flex items-center justify-end gap-5 px-4 py-2.5 text-[11px] text-[#8a8075] border-t border-[#e8ddd0]">
+    <div className="mt-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-1 px-1 text-[11px] text-[#8a8075]">
       <span className="flex items-center gap-1.5">
-        <span className="text-sm font-medium" style={{ color: '#3a8a2e' }}>✓</span> Correct Prediction
+        <BrandDecisionMark variant="correct" className="h-3.5 w-3.5" /> Correct Prediction
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="text-sm font-medium" style={{ color: '#c43a2b' }}>✗</span> Incorrect Prediction
+        <BrandDecisionMark variant="incorrect" className="h-3.5 w-3.5" /> Incorrect Prediction
       </span>
     </div>
   )
@@ -67,7 +38,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
   const { leaderboard, upcomingFdaEvents, recentFdaDecisions } = data
 
   return (
-    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+    <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       {/* ── 1. HERO ── */}
@@ -80,24 +51,21 @@ export function HomePageContent({ data }: { data: HomeData }) {
           }}
         />
 
-        <HeroSquares variant="bands-edge" />
-
-
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-10 sm:pt-20 pb-10 sm:pb-16">
           <div className="flex gap-6 sm:gap-8">
             {/* Left vertical accent rule */}
-            <div className="hidden sm:block w-[3px] shrink-0 rounded-full self-stretch" style={{ background: 'linear-gradient(180deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
+            <div className="hidden sm:block w-[2px] shrink-0 rounded-full self-stretch" style={{ background: 'linear-gradient(180deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }} />
             <div>
               <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-normal tracking-tight leading-[1.08] mb-5">
                 The{' '}
                 <span className="relative inline-block">
                   <span className="relative z-10">AI</span>
-                  <span className="absolute inset-0 -inset-x-1 bottom-[0.1em] top-[0.55em] bg-[#C9A227]/15 -skew-x-1 rounded-sm" />
+                  <span className="absolute inset-0 -inset-x-1 bottom-[0.1em] top-[0.55em] bg-[#D39D2E]/15 -skew-x-1 rounded-sm" />
                 </span>
                 {' '}benchmark for{' '}
                 <span className="relative inline-block">
                   <span className="relative z-10">real-world</span>
-                  <span className="absolute inset-0 -inset-x-1 bottom-[0.1em] top-[0.55em] bg-[#C9A227]/15 -skew-x-1 rounded-sm" />
+                  <span className="absolute inset-0 -inset-x-1 bottom-[0.1em] top-[0.55em] bg-[#D39D2E]/15 -skew-x-1 rounded-sm" />
                 </span>
                 <br className="hidden sm:block" />
                 FDA predictions.
@@ -109,8 +77,6 @@ export function HomePageContent({ data }: { data: HomeData }) {
           </div>
         </div>
 
-        {/* Gradient accent line */}
-        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
       </section>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
@@ -124,11 +90,10 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
             <Link href="/leaderboard" className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">Full stats →</Link>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm divide-y divide-[#e8ddd0]">
               {leaderboard.map((model, i) => {
                 const color = MODEL_VARIANT_COLORS[model.id]
-                const decided = model.total
                 const barWidth = model.total > 0 ? model.accuracy : 0
                 return (
                   <div key={model.id} className="px-4 sm:px-8 py-5 sm:py-6 hover:bg-[#f3ebe0]/30 transition-colors">
@@ -138,7 +103,6 @@ export function HomePageContent({ data }: { data: HomeData }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm sm:text-base text-[#1a1a1a]">{MODEL_DISPLAY_NAMES[model.id]}</div>
-                        <div className="text-xs text-[#b5aa9e]">{model.correct}/{model.total} correct</div>
                       </div>
                       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
                         <span className="text-2xl sm:text-3xl font-mono tracking-tight text-[#1a1a1a]">
@@ -169,7 +133,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
             <Link href="/fda-calendar" className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">View all →</Link>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
           <div className="bg-white/95 rounded-sm">
             {/* Mobile */}
             <div className="sm:hidden divide-y divide-[#e8ddd0]">
@@ -184,7 +148,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
 
             {/* Desktop table */}
-            <div className="hidden sm:block overflow-x-auto [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
+            <div className="hidden sm:block overflow-x-auto overscroll-x-contain [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
               <table className="w-full table-fixed min-w-[640px]">
                 <colgroup>
                   <col style={{width: '60px'}} />
@@ -222,9 +186,9 @@ export function HomePageContent({ data }: { data: HomeData }) {
                 </tbody>
               </table>
             </div>
-            <UpcomingLegend />
           </div>
           </div>{/* close gradient border wrapper */}
+          <UpcomingLegend />
         </section>
 
         <SquareDivider className="mb-16" />
@@ -238,7 +202,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
             <Link href="/fda-calendar" className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">View all →</Link>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
           <div className="bg-white/95 rounded-sm">
             {/* Mobile */}
             <div className="sm:hidden divide-y divide-[#e8ddd0]">
@@ -253,7 +217,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             </div>
 
             {/* Desktop table */}
-            <div className="hidden sm:block overflow-x-auto [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
+            <div className="hidden sm:block overflow-x-auto overscroll-x-contain [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
               <table className="w-full table-fixed min-w-[640px]">
                 <colgroup>
                   <col style={{width: '60px'}} />
@@ -291,14 +255,14 @@ export function HomePageContent({ data }: { data: HomeData }) {
                 </tbody>
               </table>
             </div>
-            <PastLegend />
           </div>
           </div>{/* close gradient border wrapper */}
+          <PastLegend />
         </section>
 
         {/* ── 6. FOOTER ── */}
-        <SquareDivider className="mb-0" />
+        <FooterGradientRule />
       </main>
-    </div>
+    </PageFrame>
   )
 }

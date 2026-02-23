@@ -1,24 +1,38 @@
+import { and, eq } from 'drizzle-orm'
+import { NextRequest } from 'next/server'
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
-import { eq, and } from 'drizzle-orm'
-import { NextRequest, NextResponse } from 'next/server'
+import { ensureAdmin } from '@/lib/auth'
 import { FDA_GENERATORS } from '@/lib/predictions/fda-generators'
+import { buildFDAPredictionPrompt } from '@/lib/predictions/fda-prompt'
+import { estimateTextGenerationCost, getCostEstimationProfileForModel } from '@/lib/ai-costs'
 import { MODEL_IDS, getAllModelIds, type ModelId } from '@/lib/constants'
-import { requireAdmin } from '@/lib/auth'
+import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
+import { NotFoundError, ValidationError } from '@/lib/errors'
 
-// =============================================================================
-// POST - Generate predictions
-// =============================================================================
+type GenerateBody = {
+  fdaEventId?: string
+  modelId?: ModelId
+}
+
+const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
+
+function isModelId(value: unknown): value is ModelId {
+  return typeof value === 'string' && MODEL_ID_SET.has(value as ModelId)
+}
 
 export async function POST(request: NextRequest) {
-  // Check admin authorization
-  const authError = await requireAdmin()
-  if (authError) return authError
+  const requestId = createRequestId()
 
   try {
-    const { fdaEventId, modelId } = await request.json()
+    await ensureAdmin()
 
+    const { fdaEventId, modelId } = await parseJsonBody<GenerateBody>(request)
     if (!fdaEventId) {
-      return NextResponse.json({ error: 'fdaEventId is required' }, { status: 400 })
+      throw new ValidationError('fdaEventId is required')
+    }
+
+    if (modelId && !isModelId(modelId)) {
+      throw new ValidationError(`Invalid modelId: ${modelId}`)
     }
 
     const event = await db.query.fdaCalendarEvents.findFirst({
@@ -26,13 +40,24 @@ export async function POST(request: NextRequest) {
     })
 
     if (!event) {
-      return NextResponse.json({ error: 'FDA event not found' }, { status: 404 })
+      throw new NotFoundError('FDA event not found')
     }
 
-    const models = modelId ? [modelId as ModelId] : [...MODEL_IDS]
+    const prompt = buildFDAPredictionPrompt({
+      drugName: event.drugName,
+      companyName: event.companyName,
+      applicationType: event.applicationType,
+      therapeuticArea: event.therapeuticArea,
+      eventDescription: event.eventDescription,
+      drugStatus: event.drugStatus,
+      rivalDrugs: event.rivalDrugs,
+      marketPotential: event.marketPotential,
+      otherApprovals: event.otherApprovals,
+      source: event.source,
+    })
 
+    const models = modelId ? [modelId] : [...MODEL_IDS]
     const results = await Promise.all(models.map(async (model) => {
-      // Check if prediction already exists
       const existing = await db.query.fdaPredictions.findFirst({
         where: and(
           eq(fdaPredictions.fdaEventId, fdaEventId),
@@ -42,19 +67,22 @@ export async function POST(request: NextRequest) {
       })
 
       if (existing) {
-        return { model, status: 'exists', prediction: existing, durationMs: 0 }
+        return { model, status: 'exists' as const, prediction: existing, durationMs: 0 }
       }
 
-      // Check if model is enabled
       const modelConfig = FDA_GENERATORS[model]
       if (!modelConfig?.enabled()) {
-        return { model, status: 'skipped', reason: 'API key not configured', durationMs: 0 }
+        return {
+          model,
+          status: 'error' as const,
+          reason: `${model} API key is not configured`,
+          durationMs: 0,
+        }
       }
 
-      // Generate prediction
       const startTime = Date.now()
       try {
-        const result = await modelConfig.generator({
+        const prediction = await modelConfig.generator({
           drugName: event.drugName,
           companyName: event.companyName,
           applicationType: event.applicationType,
@@ -68,63 +96,79 @@ export async function POST(request: NextRequest) {
         })
         const durationMs = Date.now() - startTime
 
-        // Auto-score if event already has an outcome
         const isDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
         const correct = isDecided
-          ? (result.prediction === 'approved' && event.outcome === 'Approved') ||
-            (result.prediction === 'rejected' && event.outcome === 'Rejected')
+          ? (prediction.prediction === 'approved' && event.outcome === 'Approved') ||
+            (prediction.prediction === 'rejected' && event.outcome === 'Rejected')
           : null
+        const estimatedUsage = estimateTextGenerationCost({
+          modelId: model,
+          promptText: prompt,
+          responseText: prediction.reasoning,
+          profile: getCostEstimationProfileForModel(model),
+        })
 
         const [saved] = await db.insert(fdaPredictions).values({
           fdaEventId,
           predictorType: 'model',
           predictorId: model,
-          prediction: result.prediction,
-          confidence: result.confidence,
-          reasoning: result.reasoning,
+          prediction: prediction.prediction,
+          confidence: prediction.confidence,
+          reasoning: prediction.reasoning,
           durationMs,
+          inputTokens: estimatedUsage.inputTokens,
+          outputTokens: estimatedUsage.outputTokens,
+          totalTokens: estimatedUsage.inputTokens + estimatedUsage.outputTokens,
+          reasoningTokens: null,
+          estimatedCostUsd: estimatedUsage.estimatedCostUsd,
+          costSource: 'estimated',
+          webSearchRequests: estimatedUsage.webSearchRequests,
           correct,
         }).returning()
 
-        return { model, status: 'created', prediction: saved, durationMs }
+        return { model, status: 'created' as const, prediction: saved, durationMs }
       } catch (error) {
         const durationMs = Date.now() - startTime
         return {
           model,
-          status: 'error',
+          status: 'error' as const,
           reason: error instanceof Error ? error.message : 'Unknown error',
           durationMs,
         }
       }
     }))
 
-    return NextResponse.json({ success: true, results })
+    return successResponse({ success: true, results }, {
+      headers: {
+        'X-Request-Id': requestId,
+      },
+    })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to generate predictions' }, { status: 500 })
+    return errorResponse(error, requestId, 'Failed to generate predictions')
   }
 }
 
-// =============================================================================
-// DELETE - Remove predictions
-// =============================================================================
-
 export async function DELETE(request: NextRequest) {
-  // Check admin authorization
-  const authError = await requireAdmin()
-  if (authError) return authError
+  const requestId = createRequestId()
 
   try {
+    await ensureAdmin()
+
     const { searchParams } = new URL(request.url)
     const fdaEventId = searchParams.get('fdaEventId')
-    const modelId = searchParams.get('modelId') as ModelId | null
+    const modelIdParam = searchParams.get('modelId')
 
     if (!fdaEventId) {
-      return NextResponse.json({ error: 'fdaEventId is required' }, { status: 400 })
+      throw new ValidationError('fdaEventId is required')
     }
 
-    if (modelId) {
-      // Delete predictions for specific model (including legacy IDs)
-      const idsToDelete = getAllModelIds(modelId)
+    if (modelIdParam && !isModelId(modelIdParam)) {
+      throw new ValidationError(`Invalid modelId: ${modelIdParam}`)
+    }
+
+    if (modelIdParam) {
+      const typedModelId = modelIdParam as ModelId
+      const idsToDelete = getAllModelIds(typedModelId)
       for (const id of idsToDelete) {
         await db.delete(fdaPredictions).where(
           and(
@@ -134,12 +178,15 @@ export async function DELETE(request: NextRequest) {
         )
       }
     } else {
-      // Delete all predictions for this event
       await db.delete(fdaPredictions).where(eq(fdaPredictions.fdaEventId, fdaEventId))
     }
 
-    return NextResponse.json({ success: true })
+    return successResponse({ success: true }, {
+      headers: {
+        'X-Request-Id': requestId,
+      },
+    })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete predictions' }, { status: 500 })
+    return errorResponse(error, requestId, 'Failed to delete predictions')
   }
 }

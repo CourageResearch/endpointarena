@@ -9,8 +9,15 @@ const cormorantGaramond = Cormorant_Garamond({ subsets: ['latin'], weight: ['300
 const dmMono = DM_Mono({ weight: ['400', '500'], subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
-  title: 'EndpointArena',
-  description: 'AI models predict clinical trial outcomes',
+  title: {
+    default: 'EndpointArena',
+    template: '%s • EndpointArena',
+  },
+  description: 'Live benchmark for AI models predicting real-world FDA drug approval outcomes.',
+  icons: {
+    icon: '/icon',
+    apple: '/apple-icon',
+  },
 }
 
 export default function RootLayout({
@@ -19,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} ${inter.variable} ${cormorantGaramond.variable} ${dmMono.variable}`}>
+    <html lang="en">
+      <body className={`${inter.className} ${inter.variable} ${cormorantGaramond.variable} ${dmMono.variable} font-sans`}>
         <Providers>
           <AnalyticsTracker>
             {children}

@@ -16,14 +16,16 @@ export default function AppleIcon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#FAF5F0',
-          borderRadius: 32,
+          background: 'transparent',
         }}
       >
-        <svg width="130" height="130" viewBox="0 0 24 24">
-          <circle cx="5" cy="18" r="3.5" fill="#2D7CF6" />
-          <circle cx="12" cy="11" r="3.5" fill="#C9A227" />
-          <circle cx="19" cy="4" r="3.5" fill="#D4604A" />
+        <svg width="168" height="168" viewBox="0 0 32 32" fill="none">
+          <g transform="translate(1.5 5)">
+            <rect x="0.8" y="7.8" width="6.4" height="6.4" rx="2" fill="#EF6F67" />
+            <rect x="7.8" y="14.8" width="6.4" height="6.4" rx="2" fill="#5DBB63" />
+            <rect x="14.8" y="7.8" width="6.4" height="6.4" rx="2" fill="#D39D2E" />
+            <rect x="21.8" y="0.8" width="6.4" height="6.4" rx="2" fill="#5BA5ED" />
+          </g>
         </svg>
       </div>
     ),

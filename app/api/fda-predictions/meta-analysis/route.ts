@@ -1,54 +1,49 @@
-import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { db, fdaCalendarEvents } from '@/lib/db'
+import { ensureAdmin } from '@/lib/auth'
 import { generateMetaAnalysis } from '@/lib/predictions/fda-generators'
 import { MODEL_NAMES, type ModelId } from '@/lib/constants'
-import { requireAdmin } from '@/lib/auth'
+import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
+import { NotFoundError, ValidationError } from '@/lib/errors'
 
-// Generate meta-analysis for an FDA event
+type MetaAnalysisBody = {
+  fdaEventId?: string
+}
+
 export async function POST(request: NextRequest) {
-  // Check admin authorization
-  const authError = await requireAdmin()
-  if (authError) return authError
-
-  const body = await request.json()
-  const { fdaEventId } = body
-
-  if (!fdaEventId) {
-    return NextResponse.json({ error: 'fdaEventId is required' }, { status: 400 })
-  }
-
-  // Get the FDA event with predictions
-  const event = await db.query.fdaCalendarEvents.findFirst({
-    where: eq(fdaCalendarEvents.id, fdaEventId),
-    with: { predictions: true },
-  })
-
-  if (!event) {
-    return NextResponse.json({ error: 'FDA event not found' }, { status: 404 })
-  }
-
-  // Get model predictions only
-  const modelPredictions = event.predictions.filter(p => p.predictorType === 'model')
-
-  if (modelPredictions.length < 2) {
-    return NextResponse.json({
-      error: 'Need at least 2 model predictions to generate meta-analysis',
-      predictions: modelPredictions.length
-    }, { status: 400 })
-  }
+  const requestId = createRequestId()
 
   try {
-    // Format predictions for the meta-analysis generator
-    const predictionSummaries = modelPredictions.map(p => ({
-      modelId: p.predictorId,
-      modelName: MODEL_NAMES[p.predictorId as ModelId] || p.predictorId,
-      prediction: p.prediction,
-      confidence: p.confidence,
-      reasoning: p.reasoning,
+    await ensureAdmin()
+
+    const { fdaEventId } = await parseJsonBody<MetaAnalysisBody>(request)
+    if (!fdaEventId) {
+      throw new ValidationError('fdaEventId is required')
+    }
+
+    const event = await db.query.fdaCalendarEvents.findFirst({
+      where: eq(fdaCalendarEvents.id, fdaEventId),
+      with: { predictions: true },
+    })
+
+    if (!event) {
+      throw new NotFoundError('FDA event not found')
+    }
+
+    const modelPredictions = event.predictions.filter((prediction) => prediction.predictorType === 'model')
+    if (modelPredictions.length < 2) {
+      throw new ValidationError('Need at least 2 model predictions to generate meta-analysis')
+    }
+
+    const predictionSummaries = modelPredictions.map((prediction) => ({
+      modelId: prediction.predictorId,
+      modelName: MODEL_NAMES[prediction.predictorId as ModelId] || prediction.predictorId,
+      prediction: prediction.prediction,
+      confidence: prediction.confidence,
+      reasoning: prediction.reasoning,
     }))
 
-    // Generate the meta-analysis
     const metaAnalysis = await generateMetaAnalysis({
       drugName: event.drugName,
       companyName: event.companyName,
@@ -62,41 +57,52 @@ export async function POST(request: NextRequest) {
       source: event.source,
     }, predictionSummaries)
 
-    // Save to database
     await db.update(fdaCalendarEvents)
       .set({ metaAnalysis })
       .where(eq(fdaCalendarEvents.id, fdaEventId))
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       metaAnalysis,
-      predictionsAnalyzed: modelPredictions.length
+      predictionsAnalyzed: modelPredictions.length,
+    }, {
+      headers: {
+        'X-Request-Id': requestId,
+      },
     })
   } catch (error) {
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Failed to generate meta-analysis'
-    }, { status: 500 })
+    return errorResponse(error, requestId, 'Failed to generate meta-analysis')
   }
 }
 
-// Get existing meta-analysis
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const fdaEventId = searchParams.get('fdaEventId')
+  const requestId = createRequestId()
 
-  if (!fdaEventId) {
-    return NextResponse.json({ error: 'fdaEventId is required' }, { status: 400 })
+  try {
+    const { searchParams } = new URL(request.url)
+    const fdaEventId = searchParams.get('fdaEventId')
+
+    if (!fdaEventId) {
+      throw new ValidationError('fdaEventId is required')
+    }
+
+    const event = await db.query.fdaCalendarEvents.findFirst({
+      where: eq(fdaCalendarEvents.id, fdaEventId),
+    })
+
+    if (!event) {
+      throw new NotFoundError('FDA event not found')
+    }
+
+    return successResponse({
+      metaAnalysis: event.metaAnalysis || null,
+    }, {
+      headers: {
+        'X-Request-Id': requestId,
+      },
+    })
+  } catch (error) {
+    return errorResponse(error, requestId, 'Failed to fetch meta-analysis')
   }
-
-  const event = await db.query.fdaCalendarEvents.findFirst({
-    where: eq(fdaCalendarEvents.id, fdaEventId),
-  })
-
-  if (!event) {
-    return NextResponse.json({ error: 'FDA event not found' }, { status: 404 })
-  }
-
-  return NextResponse.json({
-    metaAnalysis: event.metaAnalysis || null
-  })
 }
+

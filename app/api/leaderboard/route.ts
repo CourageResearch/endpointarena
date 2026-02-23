@@ -1,19 +1,30 @@
 import { NextResponse } from 'next/server'
 import { db, fdaPredictions } from '@/lib/db'
-import { isNotNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const allPredictions = await db.query.fdaPredictions.findMany({
-    where: isNotNull(fdaPredictions.correct),
+    where: eq(fdaPredictions.predictorType, 'model'),
+    with: { fdaEvent: true },
   })
 
   const predictorStats = new Map<string, { correct: number; total: number; type: string }>()
 
   for (const pred of allPredictions) {
+    const outcome = pred.fdaEvent?.outcome
+    const isDecided = outcome === 'Approved' || outcome === 'Rejected'
+    if (!isDecided) continue
+
+    const isCorrect =
+      (pred.prediction === 'approved' && outcome === 'Approved') ||
+      (pred.prediction === 'rejected' && outcome === 'Rejected')
+
     const key = pred.predictorId
     const current = predictorStats.get(key) || { correct: 0, total: 0, type: pred.predictorType }
     current.total++
-    if (pred.correct) current.correct++
+    if (isCorrect) current.correct++
     predictorStats.set(key, current)
   }
 

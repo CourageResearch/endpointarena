@@ -1,3 +1,5 @@
+import { getDaysUntilUtc } from './date'
+
 // =============================================================================
 // CENTRALIZED CONSTANTS
 // =============================================================================
@@ -22,7 +24,7 @@ export const MODEL_INFO: Record<ModelId, {
     fullName: 'Claude Opus 4.6',
     color: '#D4604A',
     provider: 'Anthropic',
-    features: ['Extended Thinking'],
+    features: ['Web Search', 'Extended Thinking'],
   },
   'gpt-5.2': {
     name: 'GPT-5.2',
@@ -98,9 +100,7 @@ export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOpt
 
 // Calculate days until a date
 export function getDaysUntil(date: Date | string): number {
-  const d = typeof date === 'string' ? new Date(date) : date
-  const diff = d.getTime() - new Date().getTime()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+  return getDaysUntilUtc(date) ?? Number.NaN
 }
 
 // Model variant types for display purposes

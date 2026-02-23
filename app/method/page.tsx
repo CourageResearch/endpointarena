@@ -1,22 +1,11 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq, sql } from 'drizzle-orm'
-import Link from 'next/link'
 import { MODEL_IDS } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
 export const dynamic = 'force-dynamic'
-
-function HeaderDots() {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.8 }} />
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.85 }} />
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.8 }} />
-      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.8 }} />
-    </div>
-  )
-}
 
 async function getData() {
   const [fdaEventCount, predictionCount] = await Promise.all([
@@ -41,11 +30,11 @@ export default async function MethodPage() {
       name: 'Claude Opus 4.6',
       version: 'claude-opus-4-6',
       features: {
-        internet: false,
-        internetDetail: 'No web access during prediction',
+        internet: true,
+        internetDetail: 'Anthropic web_search_20250305',
         reasoning: 'Extended Thinking',
-        reasoningDetail: '10,000 token thinking budget',
-        maxTokens: '16,000',
+        reasoningDetail: 'thinking.budget_tokens: 10,000',
+        maxTokens: '16,000 output',
       }
     },
     {
@@ -54,10 +43,10 @@ export default async function MethodPage() {
       version: 'gpt-5.2',
       features: {
         internet: true,
-        internetDetail: 'Agentic web search',
+        internetDetail: 'web_search_preview (high context)',
         reasoning: 'High Effort',
         reasoningDetail: 'reasoning.effort: high',
-        maxTokens: '16,000',
+        maxTokens: '16,000 output',
       }
     },
     {
@@ -66,10 +55,10 @@ export default async function MethodPage() {
       version: 'grok-4-1-fast-reasoning',
       features: {
         internet: true,
-        internetDetail: 'Live search (auto)',
+        internetDetail: 'search_mode: auto (live search)',
         reasoning: 'Fast Reasoning',
         reasoningDetail: 'Built-in fast reasoning mode',
-        maxTokens: '16,000',
+        maxTokens: '16,000 output',
       }
     },
     {
@@ -80,8 +69,8 @@ export default async function MethodPage() {
         internet: true,
         internetDetail: 'Google Search grounding',
         reasoning: 'Thinking',
-        reasoningDetail: 'Built-in thinking mode',
-        maxTokens: '65,536',
+        reasoningDetail: 'thinkingConfig.thinkingBudget: auto (-1)',
+        maxTokens: '65,536 output',
       }
     }
   ]
@@ -89,15 +78,15 @@ export default async function MethodPage() {
   const processSteps = [
     {
       title: 'Track FDA Calendar Events',
-      description: 'Monitor upcoming FDA drug approval decisions from the RTTNews FDA Calendar including PDUFA dates for NDAs, BLAs, and supplemental applications.'
+      description: 'Monitor upcoming FDA drug approval decisions, including PDUFA dates for NDAs, BLAs, and supplemental applications.'
     },
     {
-      title: 'Prepare Similar Context',
-      description: 'Each model receives the same core information—drug name, company, application type, therapeutic area, and event details. However, models aren\'t identical: some have web search, others use extended reasoning. Rather than handicapping them to a lowest common denominator, we let each model use its full capabilities so every prediction reflects its best effort.'
+      title: 'Prepare Shared Context',
+      description: 'Each model receives the same core FDA context and prediction task. Then each provider runs with native best-effort settings: web search where supported, strong reasoning/thinking mode, and generous output token budgets. We avoid lowest-common-denominator constraints so each model can perform at its best.'
     },
     {
       title: 'Request Predictions',
-      description: 'Ask each model: "Will the FDA approve this drug?" Models provide a binary APPROVED or REJECTED prediction with reasoning. All predictions are timestamped before decisions.'
+      description: 'Ask each model: "Will the FDA approve this drug?" Models provide a binary "approved" or "rejected" prediction with reasoning. All predictions are timestamped before decisions.'
     },
     {
       title: 'Wait for FDA Decisions',
@@ -105,12 +94,12 @@ export default async function MethodPage() {
     },
     {
       title: 'Score Results',
-      description: "Compare each model's prediction to the actual outcome. Correct if APPROVED matches approval, or REJECTED matches rejection/CRL."
+      description: "Compare each model's prediction to the actual outcome. A prediction is correct if \"approved\" matches approval, or if \"rejected\" matches rejection/CRL."
     }
   ]
 
   return (
-    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+    <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
@@ -120,9 +109,6 @@ export default async function MethodPage() {
             <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Method</span>
             <HeaderDots />
           </div>
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-light tracking-tight leading-[1.08] mb-4">
-            How we test AI prediction accuracy
-          </h1>
           <p className="text-base sm:text-lg text-[#8a8075] max-w-xl leading-relaxed">
             A fair test of AI prediction capabilities on real-world FDA decisions
           </p>
@@ -132,27 +118,24 @@ export default async function MethodPage() {
         <section className="mb-10 sm:mb-16">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Why This Matters</span>
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Why traditional benchmarks fall short</span>
               <HeaderDots />
             </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
-              Why traditional benchmarks fall short
-            </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Problem with AI Benchmarks</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
               </div>
             </div>
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Solution</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
               </div>
             </div>
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">What We're Testing</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Can AI models reason about complex regulatory decisions and make accurate predictions about the future?</p>
@@ -165,19 +148,16 @@ export default async function MethodPage() {
         <section className="mb-10 sm:mb-16">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">The Process</span>
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">The five-step evaluation process</span>
               <HeaderDots />
             </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
-              Our five-step evaluation process
-            </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm p-4 sm:p-8">
               <div className="space-y-6 sm:space-y-8">
                 {processSteps.map((step, index) => (
                   <div key={index} className="flex gap-3 sm:gap-6">
-                    <div className="w-8 h-8 p-[1px] rounded-sm shrink-0" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+                    <div className="w-8 h-8 p-[1px] rounded-sm shrink-0" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                       <div className="w-full h-full bg-white rounded-sm flex items-center justify-center text-sm font-bold">
                         {index + 1}
                       </div>
@@ -197,51 +177,62 @@ export default async function MethodPage() {
         <section className="mb-10 sm:mb-16">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Model Configuration</span>
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">The models we compare</span>
               <HeaderDots />
             </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
-              The models we compare
-            </h2>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             {models.map((model) => (
-              <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+              <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                 <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 text-[#1a1a1a]">
+                  <div className="flex items-center gap-3 mb-6" title={model.version}>
+                    <div className="w-10 h-10 text-[#8a8075]">
                       <ModelIcon id={model.id} />
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{model.name}</h3>
-                      <p className="text-xs text-[#b5aa9e] font-mono">{model.version}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-[#8a8075]">{model.name}</h3>
+                      <p
+                        className="text-xs text-[#b5aa9e] font-mono whitespace-nowrap truncate cursor-help"
+                        title={model.version}
+                      >
+                        {model.version}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[#8a8075]">Web Search</span>
-                      {model.features.internet ? (
-                        <span className="text-[#7d8e6e]">Yes</span>
-                      ) : (
-                        <span className="text-[#b5aa9e]">No</span>
-                      )}
+                  <dl className="space-y-2">
+                    <div className="rounded-sm border border-[#e8ddd0] bg-[#f7f4ef]/55 px-3 py-2">
+                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Web Search</dt>
+                      <dd className="mt-1 text-sm">
+                        {model.features.internet ? (
+                          <span className="inline-flex items-center gap-2 text-[#7d8e6e]">
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#7d8e6e]" />
+                            Enabled
+                          </span>
+                        ) : (
+                          <span className="text-[#b5aa9e]">Not available</span>
+                        )}
+                      </dd>
                     </div>
 
-                    <div className="flex justify-between items-center">
-                      <span className="text-[#8a8075]">Reasoning</span>
-                      <span className="text-[#1a1a1a]">{model.features.reasoning}</span>
+                    <div className="rounded-sm border border-[#e8ddd0] bg-[#f7f4ef]/55 px-3 py-2">
+                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Reasoning</dt>
+                      <dd className="mt-1 text-sm leading-snug text-[#8a8075]">
+                        {model.features.reasoning}
+                      </dd>
                     </div>
 
-                    <div className="flex justify-between items-center">
-                      <span className="text-[#8a8075]">Max Tokens</span>
-                      <span className="text-[#b5aa9e]">{model.features.maxTokens}</span>
+                    <div className="rounded-sm border border-[#e8ddd0] bg-[#f7f4ef]/55 px-3 py-2">
+                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Max Output</dt>
+                      <dd className="mt-1 text-sm leading-snug text-[#b5aa9e]">
+                        {model.features.maxTokens}
+                      </dd>
                     </div>
-                  </div>
+                  </dl>
 
                   {(model.features.internetDetail || model.features.reasoningDetail) && (
                     <div className="mt-4 pt-4 border-t border-[#e8ddd0]">
-                      <p className="text-xs text-[#b5aa9e]">
+                      <p className="text-xs leading-relaxed text-[#b5aa9e] break-words">
                         {model.features.internetDetail && <span className="block">{model.features.internetDetail}</span>}
                         {model.features.reasoningDetail && <span className="block">{model.features.reasoningDetail}</span>}
                       </p>
@@ -260,11 +251,8 @@ export default async function MethodPage() {
               <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Prediction Prompt</span>
               <HeaderDots />
             </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
-              The prompt every model receives
-            </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[#e8ddd0] bg-[#f3ebe0]/50">
                 <span className="text-sm text-[#8a8075]">All models receive the same prompt</span>
@@ -307,37 +295,34 @@ predict the outcome.
               <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Expected Response</span>
               <HeaderDots />
             </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
-              Required response format
-            </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
 <span className="text-[#b5aa9e]">{'{'}</span>
-{`
-  `}<span className="text-[#7d8e6e]">"prediction"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"approved"</span><span className="text-[#b5aa9e]">,</span>{`
-  `}<span className="text-[#7d8e6e]">"confidence"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">75</span><span className="text-[#b5aa9e]">,</span>{`
-  `}<span className="text-[#7d8e6e]">"reasoning"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"Based on historical approval rates..."</span>{`
-`}<span className="text-[#b5aa9e]">{'}'}</span>
+{`\n  `}<span className="text-[#7d8e6e]">"prediction"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"approved"</span><span className="text-[#b5aa9e]">,</span>{`\n  `}<span className="text-[#7d8e6e]">"confidence"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">75</span><span className="text-[#b5aa9e]">,</span>{`\n  `}<span className="text-[#7d8e6e]">"reasoning"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"..."</span>{`\n`}<span className="text-[#b5aa9e]">{'}'}</span>
               </pre>
-            </div>
-          </div>
-          <div className="mt-6 grid md:grid-cols-3 gap-4 text-sm">
-            <div className="flex gap-2">
-              <span className="text-[#7d8e6e] font-mono">prediction</span>
-              <span className="text-[#d4c9bc]">—</span>
-              <span className="text-[#8a8075]">"approved" or "rejected"</span>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-[#7d8e6e] font-mono">confidence</span>
-              <span className="text-[#d4c9bc]">—</span>
-              <span className="text-[#8a8075]">50-100 (percentage)</span>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-[#7d8e6e] font-mono">reasoning</span>
-              <span className="text-[#d4c9bc]">—</span>
-              <span className="text-[#8a8075]">150-300 word explanation</span>
+              <div className="border-t border-[#e8ddd0] bg-[#f3ebe0]/40">
+                <div className="px-3 sm:px-6 py-2 text-xs text-[#8a8075]">Schema (shape + constraints)</div>
+                <pre className="px-3 sm:px-6 pb-4 sm:pb-6 text-xs sm:text-sm overflow-x-auto font-mono text-[#8a8075] leading-relaxed">{`{
+  "type": "object",
+  "required": ["prediction", "confidence", "reasoning"],
+  "properties": {
+    "prediction": {
+      "type": "string",
+      "enum": ["approved", "rejected"]
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 100
+    },
+    "reasoning": {
+      "type": "string"
+    }
+  }
+}`}</pre>
+              </div>
             </div>
           </div>
         </section>
@@ -349,11 +334,8 @@ predict the outcome.
               <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Current Progress</span>
               <HeaderDots />
             </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-light tracking-tight leading-snug">
-              Results so far
-            </h2>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }}>
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{fdaEventCount}</div>
@@ -372,8 +354,8 @@ predict the outcome.
         </section>
 
         {/* Footer gradient line */}
-        <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
+        <FooterGradientRule />
       </main>
-    </div>
+    </PageFrame>
   )
 }

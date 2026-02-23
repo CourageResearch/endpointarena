@@ -3,6 +3,11 @@ import OpenAI from 'openai'
 import { GoogleGenAI } from '@google/genai'
 import { buildFDAPredictionPrompt, parseFDAPredictionResponse, type FDAPredictionResult } from './fda-prompt'
 
+const CLAUDE_MODEL = 'claude-opus-4-6'
+const GPT_MODEL = 'gpt-5.2'
+const GROK_MODEL = 'grok-4-1-fast-reasoning'
+const GEMINI_MODEL = 'gemini-2.5-pro'
+
 interface FDAEventInfo {
   drugName: string
   companyName: string
@@ -24,9 +29,8 @@ export async function generateClaudeFDAPrediction(event: FDAEventInfo): Promise<
 
   const prompt = buildFDAPredictionPrompt(event)
 
-  // Use extended thinking for deep reasoning
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: CLAUDE_MODEL,
     max_tokens: 16000,
     thinking: {
       type: 'enabled',
@@ -38,12 +42,13 @@ export async function generateClaudeFDAPrediction(event: FDAEventInfo): Promise<
         content: prompt,
       },
     ],
-  })
+    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+  } as any)
 
   // Extract text from response (may include thinking blocks)
   const textContent = message.content.find((c) => c.type === 'text')
   if (!textContent || textContent.type !== 'text') {
-    throw new Error('No text content in Claude response')
+    throw new Error('No text content in Claude Opus 4.6 response')
   }
 
   return parseFDAPredictionResponse(textContent.text)
@@ -59,20 +64,21 @@ export async function generateOpenAIFDAPrediction(event: FDAEventInfo): Promise<
 
   // Use GPT-5.2 with agentic web search for deep research
   // Model actively manages search process, analyzes results, and decides whether to keep searching
-  const response = await client.responses.create({
-    model: 'gpt-5.2',
+  const requestOptions: any = {
+    model: GPT_MODEL,
     input: prompt,
     max_output_tokens: 16000,
-    tools: [
-      { type: 'web_search' },
-    ],
     reasoning: {
       effort: 'high', // Use high reasoning effort for thorough analysis
     },
-  } as any) // Type assertion for newer API features
+  }
+
+  requestOptions.tools = [{ type: 'web_search' }]
+
+  const response = await client.responses.create(requestOptions)
 
   // Extract text from response
-  const textOutput = response.output?.find((o: any) => o.type === 'message') as any
+  const textOutput = (response as any).output?.find((o: any) => o.type === 'message') as any
   const content = textOutput?.content?.[0]?.text || (response as any).output_text
 
   if (!content) {
@@ -93,7 +99,7 @@ export async function generateGrokFDAPrediction(event: FDAEventInfo): Promise<FD
 
   // Use Grok 4.1 with fast reasoning + live web search
   const completion = await client.chat.completions.create({
-    model: 'grok-4-1-fast-reasoning',
+    model: GROK_MODEL,
     messages: [
       {
         role: 'user',
@@ -106,7 +112,7 @@ export async function generateGrokFDAPrediction(event: FDAEventInfo): Promise<FD
 
   const content = completion.choices[0]?.message?.content
   if (!content) {
-    throw new Error('No content in Grok response')
+    throw new Error('No content in Grok 4.1 response')
   }
 
   return parseFDAPredictionResponse(content)
@@ -121,16 +127,20 @@ export async function generateGeminiFDAPrediction(event: FDAEventInfo): Promise<
   const prompt = buildFDAPredictionPrompt(event)
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-pro',
+    model: GEMINI_MODEL,
     contents: prompt,
     config: {
+      maxOutputTokens: 65536,
+      thinkingConfig: {
+        thinkingBudget: -1, // -1 = automatic thinking budget
+      },
       tools: [{ googleSearch: {} }],
     },
   })
 
   const content = response.text
   if (!content) {
-    throw new Error('No content in Gemini response')
+    throw new Error('No content in Gemini 2.5 Pro response')
   }
 
   return parseFDAPredictionResponse(content)

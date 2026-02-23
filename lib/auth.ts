@@ -6,6 +6,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { db, users } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { ADMIN_EMAIL } from '@/lib/constants'
+import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
@@ -104,24 +105,35 @@ export const authOptions: NextAuthOptions = {
   },
 }
 
-// Check if the current request is from an admin user
-// Returns null if authorized, or a Response object if unauthorized
-export async function requireAdmin(): Promise<Response | null> {
+export async function ensureAdmin(): Promise<void> {
   const session = await getServerSession(authOptions)
 
   if (!session?.user?.email) {
-    return new Response(JSON.stringify({ error: 'Unauthorized - not logged in' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    throw new UnauthorizedError('Unauthorized - not logged in')
   }
 
   if (session.user.email !== ADMIN_EMAIL) {
-    return new Response(JSON.stringify({ error: 'Forbidden - admin access required' }), {
-      status: 403,
+    throw new ForbiddenError('Forbidden - admin access required')
+  }
+}
+
+// Check if the current request is from an admin user
+// Returns null if authorized, or a Response object if unauthorized
+export async function requireAdmin(): Promise<Response | null> {
+  try {
+    await ensureAdmin()
+    return null
+  } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: error.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    return new Response(JSON.stringify({ error: 'Authentication check failed' }), {
+      status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  return null // Authorized
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { MODEL_NAMES, type ModelId } from '@/lib/constants'
 
 interface Prediction {
   predictorId: string
@@ -20,13 +21,6 @@ interface PredictionModalProps {
   onClose: () => void
 }
 
-const MODEL_NAMES: Record<string, string> = {
-  'claude-opus': 'Claude Opus 4.6',
-  'gpt-5.2': 'GPT-5.2',
-  'grok-4': 'Grok 4.1',
-}
-
-
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
@@ -35,7 +29,7 @@ function formatDuration(ms: number): string {
 
 export function PredictionModal({ prediction, drugName, outcome, onClose }: PredictionModalProps) {
   const [mounted, setMounted] = useState(false)
-  const modelName = MODEL_NAMES[prediction.predictorId] || prediction.predictorId
+  const modelName = MODEL_NAMES[prediction.predictorId as ModelId] || prediction.predictorId
 
   const isPredictionCorrect = prediction.correct
   const isApproved = prediction.prediction === 'approved'

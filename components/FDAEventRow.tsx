@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AcronymTooltip } from './AcronymTooltip'
-import { MODEL_NAMES, MODEL_ID_VARIANTS, type ModelVariant, type ModelId } from '@/lib/constants'
+import { MODEL_NAMES, MODEL_DISPLAY_NAMES, MODEL_ID_VARIANTS, type ModelVariant, type ModelId } from '@/lib/constants'
 
 interface Prediction {
   predictorId: string
@@ -290,7 +290,7 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
       <div className={`grid grid-cols-4 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
         {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
-          const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : modelId === 'grok' ? 'Grok' : 'Gemini'
+          const label = MODEL_DISPLAY_NAMES[modelId]
           const isExpanded = expandedPrediction === modelId
           return (
             <div key={modelId} className="text-center">
@@ -372,7 +372,7 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
       <div className={`grid grid-cols-4 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
         {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPrediction(event.predictions, modelId)
-          const label = modelId === 'claude' ? 'Claude' : modelId === 'gpt' ? 'GPT' : modelId === 'grok' ? 'Grok' : 'Gemini'
+          const label = MODEL_DISPLAY_NAMES[modelId]
           if (!pred) {
             return (
               <div key={modelId} className="text-center">

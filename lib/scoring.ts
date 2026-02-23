@@ -10,14 +10,16 @@ export async function scoreFdaPredictions(fdaEventId: string, outcome: 'Approved
 
   for (const prediction of allPredictions) {
     const correct = (prediction.prediction === 'approved') === isApproved
+    const previousCorrect = prediction.correct
 
     await db.update(fdaPredictions)
       .set({ correct })
       .where(eq(fdaPredictions.id, prediction.id))
 
-    if (prediction.predictorType === 'user' && correct) {
+    if (prediction.predictorType === 'user' && previousCorrect !== correct) {
+      const delta = correct ? 1 : -1
       await db.update(users)
-        .set({ correctPreds: sql`${users.correctPreds} + 1` })
+        .set({ correctPreds: sql`GREATEST(${users.correctPreds} + ${delta}, 0)` })
         .where(eq(users.email, prediction.predictorId))
     }
   }

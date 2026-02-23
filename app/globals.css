@@ -1,14 +1,48 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../tailwind.config.js";
+@import "tailwindcss";
+
+:root {
+  --ea-bg: #f5f2ed;
+  --ea-surface: rgba(255, 255, 255, 0.92);
+  --ea-text: #1a1a1a;
+  --ea-muted: #8a8075;
+  --ea-subtle: #b5aa9e;
+  --ea-border: #e8ddd0;
+}
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
-  background-color: #09090b;
-  color: #fafafa;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  background-color: var(--ea-bg);
+  color: var(--ea-text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  text-underline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(45, 124, 246, 0.16);
+  color: var(--ea-text);
 }
 
 /* Custom scrollbar */
@@ -34,6 +68,12 @@ body {
 .touch-target {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* Prevent common table/card overflow issues in narrow viewports */
+.truncate-wrap {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Mobile menu slide animation */
@@ -65,4 +105,45 @@ body {
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Hide scrollbars while preserving scroll behavior (used for chart pans) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Visible, subtle scrollbar for reasoning feed panel */
+.reasoning-scrollbox {
+  scrollbar-width: thin;
+  scrollbar-color: #c8baaa #efe8dd;
+}
+
+@media (min-width: 1280px) {
+  .reasoning-scrollbox {
+    scrollbar-gutter: stable;
+  }
+}
+
+.reasoning-scrollbox::-webkit-scrollbar {
+  width: 6px;
+}
+
+.reasoning-scrollbox::-webkit-scrollbar-track {
+  background: #efe8dd;
+  border-radius: 9999px;
+}
+
+.reasoning-scrollbox::-webkit-scrollbar-thumb {
+  background: #c8baaa;
+  border-radius: 9999px;
+  border: 1px solid #efe8dd;
+}
+
+.reasoning-scrollbox::-webkit-scrollbar-thumb:hover {
+  background: #b2a28f;
 }

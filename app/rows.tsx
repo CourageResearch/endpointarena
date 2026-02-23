@@ -5,11 +5,9 @@ import Link from 'next/link'
 import { MODEL_NAMES, MODEL_DISPLAY_NAMES, findPredictionByVariant, abbreviateType, STATUS_COLORS, type ModelVariant, type ModelId } from '@/lib/constants'
 import type { Prediction, FDAEvent } from '@/lib/types'
 import { ModelIcon } from '@/components/ModelIcon'
-
-const BRAND_DOT_COLORS = {
-  green: '#5DBB63',
-  coral: '#EF6F67',
-} as const
+import { BRAND_DOT_COLORS } from '@/components/site/chrome'
+import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
+import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 
 function DecisionMark({
   isCorrect,
@@ -18,15 +16,17 @@ function DecisionMark({
   isCorrect: boolean
   sizeClass?: string
 }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center font-semibold leading-none ${sizeClass}`}
-      style={{ color: isCorrect ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral }}
-      aria-hidden="true"
-    >
-      {isCorrect ? '✓' : '✕'}
-    </span>
-  )
+  return <BrandDecisionMark variant={isCorrect ? 'correct' : 'incorrect'} className={sizeClass} />
+}
+
+function UpcomingDirectionMark({
+  prediction,
+  className,
+}: {
+  prediction: 'approved' | 'rejected'
+  className?: string
+}) {
+  return <BrandDirectionMark direction={prediction === 'approved' ? 'up' : 'down'} className={className} />
 }
 
 function getPastPredictionCellStyle(isCorrect: boolean | null) {
@@ -235,7 +235,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
                     isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                   }`}
                 >
-                  <DecisionMark isCorrect={pred.prediction === 'approved'} />
+                  <UpcomingDirectionMark prediction={pred.prediction as 'approved' | 'rejected'} className="h-4 w-4" />
                 </button>
               ) : (
                 <span className="text-black/15">—</span>
@@ -410,7 +410,7 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
               <div className="w-3.5 h-3.5">
                 <ModelIcon id={modelId} />
               </div>
-              {pred ? <DecisionMark isCorrect={pred.prediction === 'approved'} sizeClass="h-3.5 w-3.5" /> : '—'}
+              {pred ? <UpcomingDirectionMark prediction={pred.prediction as 'approved' | 'rejected'} className="h-3.5 w-3.5" /> : '—'}
             </button>
           )
         })}

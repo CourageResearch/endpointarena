@@ -1,21 +1,10 @@
 import { db, fdaCalendarEvents } from '@/lib/db'
 import { asc } from 'drizzle-orm'
-import Link from 'next/link'
 import { FDACalendarTable2 } from './FDACalendarTable2'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
 export const dynamic = 'force-dynamic'
-
-function HeaderDots() {
-  return (
-    <div className="flex items-center gap-1">
-      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#D4604A', opacity: 0.35 }} />
-      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#C9A227', opacity: 0.35 }} />
-      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#2D7CF6', opacity: 0.35 }} />
-      <div className="w-[5px] h-[5px] rounded-[1px]" style={{ backgroundColor: '#8E24AA', opacity: 0.35 }} />
-    </div>
-  )
-}
 
 async function getFDAEvents() {
   return db.query.fdaCalendarEvents.findMany({
@@ -50,7 +39,7 @@ export default async function FDACalendar2Page() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">
+    <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
@@ -68,8 +57,8 @@ export default async function FDACalendar2Page() {
         <FDACalendarTable2 events={eventsForClient} filterOptions={filterOptions} />
 
         {/* Footer gradient line */}
-        <div className="mt-10 h-[2px]" style={{ background: 'linear-gradient(90deg, #D4604A, #C9A227, #2D7CF6, #8E24AA)' }} />
+        <FooterGradientRule className="mt-10" />
       </main>
-    </div>
+    </PageFrame>
   )
 }
