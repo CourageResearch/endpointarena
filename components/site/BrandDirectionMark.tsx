@@ -13,7 +13,11 @@ const UP_BLOCKS: ReadonlyArray<readonly [number, number]> = [
   [6, 6],
   [10, 6],
   [14, 6],
+  [2, 10],
+  [6, 10],
   [10, 10],
+  [14, 10],
+  [18, 10],
   [10, 14],
   [10, 18],
 ]
@@ -21,8 +25,12 @@ const UP_BLOCKS: ReadonlyArray<readonly [number, number]> = [
 const DOWN_BLOCKS: ReadonlyArray<readonly [number, number]> = [
   [10, 2],
   [10, 6],
-  [10, 10],
+  [2, 10],
   [6, 14],
+  [6, 10],
+  [10, 10],
+  [14, 10],
+  [18, 10],
   [10, 14],
   [14, 14],
   [10, 18],
@@ -43,7 +51,7 @@ export function BrandDirectionMark({
       aria-hidden="true"
     >
       {blocks.map(([x, y], index) => (
-        <rect key={`${x}-${y}-${index}`} x={x} y={y} width="4" height="4" rx="0.8" fill={color} />
+        <rect key={`${x}-${y}-${index}`} x={x} y={y} width="4" height="4" rx="0" fill={color} />
       ))}
     </svg>
   )
