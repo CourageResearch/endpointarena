@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { db, fdaPredictions } from '@/lib/db'
-import { eq } from 'drizzle-orm'
+import { db, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
+import { eq, inArray } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
@@ -62,10 +62,38 @@ function formatMoney(value: number): string {
 }
 
 async function getData() {
-  const allPredictions = await db.query.fdaPredictions.findMany({
-    where: eq(fdaPredictions.predictorType, 'model'),
-    with: { fdaEvent: true },
-  })
+  const [allPredictions, accounts, openMarkets] = await Promise.all([
+    db.query.fdaPredictions.findMany({
+      where: eq(fdaPredictions.predictorType, 'model'),
+      with: { fdaEvent: true },
+    }),
+    db.query.marketAccounts.findMany(),
+    db.query.predictionMarkets.findMany({
+      where: eq(predictionMarkets.status, 'OPEN'),
+    }),
+  ])
+
+  const openMarketIds = openMarkets.map((market) => market.id)
+  const positions = openMarketIds.length > 0
+    ? await db.query.marketPositions.findMany({
+        where: inArray(marketPositions.marketId, openMarketIds),
+      })
+    : []
+
+  const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
+  const accountByModelId = new Map(accounts.map((account) => [account.modelId, account]))
+  const positionsValueByModelId = new Map<string, number>()
+
+  for (const position of positions) {
+    const market = openMarketById.get(position.marketId)
+    if (!market) continue
+
+    const markedValue = (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
+    positionsValueByModelId.set(
+      position.modelId,
+      (positionsValueByModelId.get(position.modelId) ?? 0) + markedValue
+    )
+  }
 
   const modelStats = new Map<string, ModelStats>()
   for (const id of MODEL_IDS) {
@@ -114,13 +142,30 @@ async function getData() {
         avgConfidence: stats.total > 0 ? stats.confidenceSum / stats.total : 0,
         avgConfidenceCorrect: stats.correct > 0 ? stats.confidenceCorrectSum / stats.correct : 0,
         avgConfidenceWrong: stats.wrong > 0 ? stats.confidenceWrongSum / stats.wrong : 0,
-        totalEquity: null as number | null,
-        pnl: null as number | null,
+        totalEquity: (() => {
+          const account = accountByModelId.get(id)
+          if (!account) return null
+          const positionsValue = positionsValueByModelId.get(id) ?? 0
+          return account.cashBalance + positionsValue
+        })(),
+        pnl: (() => {
+          const account = accountByModelId.get(id)
+          if (!account) return null
+          const positionsValue = positionsValueByModelId.get(id) ?? 0
+          const totalEquity = account.cashBalance + positionsValue
+          return totalEquity - account.startingCash
+        })(),
       }
     })
     .sort((a, b) => b.accuracy - a.accuracy || b.correct - a.correct)
 
-  const moneyLeaderboard = [...leaderboard]
+  const moneyLeaderboard = [...leaderboard].sort((a, b) => {
+    const aEquity = a.totalEquity ?? Number.NEGATIVE_INFINITY
+    const bEquity = b.totalEquity ?? Number.NEGATIVE_INFINITY
+    if (aEquity !== bEquity) return bEquity - aEquity
+    if (a.accuracy !== b.accuracy) return b.accuracy - a.accuracy
+    return b.correct - a.correct
+  })
 
   return {
     leaderboard,
