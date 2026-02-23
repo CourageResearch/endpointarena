@@ -2,24 +2,48 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { MODEL_NAMES, findPredictionByVariant, abbreviateType, STATUS_COLORS, type ModelVariant, type ModelId } from '@/lib/constants'
+import { MODEL_NAMES, MODEL_DISPLAY_NAMES, findPredictionByVariant, abbreviateType, STATUS_COLORS, type ModelVariant, type ModelId } from '@/lib/constants'
 import type { Prediction, FDAEvent } from '@/lib/types'
 import { ModelIcon } from '@/components/ModelIcon'
+import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 
-const STATUS_GRADIENTS = {
-  Pending: 'linear-gradient(90deg, #b5aa9e, #d4c9bc)',
-  Approved: 'linear-gradient(90deg, #3a8a2e, #5fb352, #3a8a2e)',
-  Rejected: 'linear-gradient(90deg, #c43a2b, #e05a4a, #c43a2b)',
+function DecisionMark({
+  isCorrect,
+  sizeClass = 'h-4 w-4',
+}: {
+  isCorrect: boolean
+  sizeClass?: string
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className={`inline-block ${sizeClass}`}
+      fill="none"
+      stroke={isCorrect ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral}
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {isCorrect ? (
+        <path d="M3.2 8.4l3 3 6.6-7.1" />
+      ) : (
+        <>
+          <path d="M4 4l8 8" />
+          <path d="M12 4L4 12" />
+        </>
+      )}
+    </svg>
+  )
 }
 
 function StatusBadge({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) {
   const color = STATUS_COLORS[status]
   return (
-    <span className="inline-flex flex-col items-center gap-0.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
+    <span className="inline-flex items-center">
+      <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color }}>
         {status}
       </span>
-      <span className="w-full h-[2px] rounded-full" style={{ background: STATUS_GRADIENTS[status] }} />
     </span>
   )
 }
@@ -27,11 +51,10 @@ function StatusBadge({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }
 function StatusBadgeMobile({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) {
   const color = STATUS_COLORS[status]
   return (
-    <span className="inline-flex flex-col items-center gap-0.5 px-2 py-0.5">
+    <span className="inline-flex items-center px-2 py-0.5">
       <span className="text-xs font-medium uppercase" style={{ color }}>
         {status}
       </span>
-      <span className="w-full h-[1.5px] rounded-full" style={{ background: STATUS_GRADIENTS[status] }} />
     </span>
   )
 }
@@ -97,7 +120,7 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
   const isPredictionCorrect = prediction.correct
 
   return (
-    <div className="bg-black/[0.03] p-4 space-y-3">
+    <div className="space-y-3 rounded-lg border border-black/[0.06] bg-black/[0.03] p-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">{modelName}</span>
@@ -109,13 +132,27 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
       </div>
 
       {fdaDecided && (
-        <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs" style={{ color: isPredictionCorrect ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected }}>
-          <span>{isPredictionCorrect ? '✓' : '✗'}</span>
-          <span>{isPredictionCorrect ? 'Correct' : 'Incorrect'} — FDA ruled {outcome}</span>
+        <div
+          className="inline-flex items-center gap-1.5 px-2 py-1 text-xs"
+          style={{
+            color:
+              isPredictionCorrect == null
+                ? STATUS_COLORS.Pending
+                : isPredictionCorrect
+                  ? BRAND_DOT_COLORS.green
+                  : BRAND_DOT_COLORS.coral,
+          }}
+        >
+          {isPredictionCorrect == null ? (
+            <span>—</span>
+          ) : (
+            <DecisionMark isCorrect={isPredictionCorrect} sizeClass="h-3.5 w-3.5" />
+          )}
+          <span>{isPredictionCorrect == null ? 'Unscored' : isPredictionCorrect ? 'Correct' : 'Incorrect'} — FDA ruled {outcome}</span>
         </div>
       )}
 
-      <p className="text-sm text-black/50 leading-relaxed">
+      <p className="truncate-wrap text-sm leading-relaxed text-black/50">
         {prediction.reasoning}
       </p>
     </div>
@@ -139,17 +176,21 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
         <td className="px-4 py-5 text-sm font-medium text-black/70">
-          <span className="inline-flex items-center gap-1">
-            {event.drugName}
+          <span className="flex max-w-full flex-wrap items-center gap-1 truncate-wrap">
+            <span className="truncate-wrap">{event.drugName}</span>
             {event.source && <SourceIndicator source={event.source} />}
             {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
           </span>
         </td>
-        <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
-          {event.eventDescription || event.therapeuticArea || '—'}
+        <td className="px-4 py-5 text-sm leading-relaxed text-black/35">
+          <div className="truncate-wrap">{event.eventDescription || event.therapeuticArea || '—'}</div>
         </td>
         <td className="px-4 py-5 text-sm text-black/35 whitespace-nowrap">
-          <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="hover:text-black/80 hover:underline" onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`}
+            className="underline decoration-dotted decoration-black/20 decoration-[1px] underline-offset-4 hover:text-black/80 hover:decoration-black/35"
+            onClick={(e) => e.stopPropagation()}
+          >
             {abbreviateType(event.applicationType).display}
           </Link>
         </td>
@@ -161,7 +202,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
                 href={`https://finance.yahoo.com/quote/${ticker}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-black/80 hover:underline"
+                className="underline decoration-dotted decoration-black/20 decoration-[1px] underline-offset-4 hover:text-black/80 hover:decoration-black/35"
                 onClick={(e) => e.stopPropagation()}
               >
                 ${ticker}
@@ -180,7 +221,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
               {pred ? (
                 <button
                   onClick={(e) => handlePredictionClick(e, modelId)}
-                  className={`text-sm font-medium px-2 py-1 transition-all cursor-pointer rounded ${
+                  className={`cursor-pointer rounded-md px-2 py-1 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
                     isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                   }`}
                   style={{ color: pred.prediction === 'approved' ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected }}
@@ -222,17 +263,21 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
         <td className="px-4 py-5 text-sm font-medium text-black/70">
-          <span className="inline-flex items-center gap-1">
-            {event.drugName}
+          <span className="flex max-w-full flex-wrap items-center gap-1 truncate-wrap">
+            <span className="truncate-wrap">{event.drugName}</span>
             {event.source && <SourceIndicator source={event.source} />}
             {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
           </span>
         </td>
-        <td className="px-4 py-5 text-black/35 text-sm leading-relaxed">
-          {event.eventDescription || event.therapeuticArea || '—'}
+        <td className="px-4 py-5 text-sm leading-relaxed text-black/35">
+          <div className="truncate-wrap">{event.eventDescription || event.therapeuticArea || '—'}</div>
         </td>
         <td className="px-4 py-5 text-sm text-black/35 whitespace-nowrap">
-          <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="hover:text-black/80 hover:underline" onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`}
+            className="underline decoration-dotted decoration-black/20 decoration-[1px] underline-offset-4 hover:text-black/80 hover:decoration-black/35"
+            onClick={(e) => e.stopPropagation()}
+          >
             {abbreviateType(event.applicationType).display}
           </Link>
         </td>
@@ -244,7 +289,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
                 href={`https://finance.yahoo.com/quote/${ticker}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-black/80 hover:underline"
+                className="underline decoration-dotted decoration-black/20 decoration-[1px] underline-offset-4 hover:text-black/80 hover:decoration-black/35"
                 onClick={(e) => e.stopPropagation()}
               >
                 ${ticker}
@@ -264,12 +309,19 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
             <td key={modelId} className="text-center px-3 py-5">
               <button
                 onClick={(e) => handlePredictionClick(e, modelId)}
-                className={`text-sm font-medium px-2 py-1 transition-all cursor-pointer rounded ${
+                className={`cursor-pointer rounded-md px-2 py-1 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
                   isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                 }`}
-                style={{ color: isCorrect ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected }}
+                style={{
+                  color:
+                    isCorrect == null
+                      ? STATUS_COLORS.Pending
+                      : isCorrect
+                        ? BRAND_DOT_COLORS.green
+                        : BRAND_DOT_COLORS.coral,
+                }}
               >
-                {isCorrect ? '✓' : '✗'}
+                {isCorrect == null ? '—' : <DecisionMark isCorrect={isCorrect} />}
               </button>
             </td>
           )
@@ -301,17 +353,17 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
   const ticker = event.symbols?.split(',')[0].trim()
 
   return (
-    <div className="border border-neutral-200 p-4">
+    <div className="rounded-lg border border-[#e8ddd0] bg-white/90 p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)]">
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm inline-flex items-center gap-1">
-            {event.drugName}
+          <div className="truncate-wrap flex flex-wrap items-center gap-1 text-sm">
+            <span className="truncate-wrap">{event.drugName}</span>
             {event.source && <SourceIndicator source={event.source} />}
             {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
           </div>
-          <div className="text-xs text-neutral-500 mt-0.5">{event.companyName}</div>
+          <div className="truncate-wrap mt-0.5 text-xs text-neutral-500">{event.companyName}</div>
           {event.eventDescription && (
-            <div className="text-xs text-neutral-400 mt-1 line-clamp-2">{event.eventDescription}</div>
+            <div className="truncate-wrap mt-1 text-xs text-neutral-400 line-clamp-2">{event.eventDescription}</div>
           )}
         </div>
         <div className="text-right shrink-0 ml-3">
@@ -323,7 +375,7 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
               href={`https://finance.yahoo.com/quote/${ticker}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-mono text-neutral-400 hover:text-neutral-900 hover:underline"
+              className="text-xs font-mono text-neutral-400 underline decoration-dotted decoration-neutral-300 decoration-[1px] underline-offset-2 hover:text-neutral-900 hover:decoration-neutral-500"
             >
               ${ticker}
             </a>
@@ -333,13 +385,13 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
 
       <div className="flex items-center gap-2 mb-1">
         <StatusBadgeMobile status="Pending" />
-        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-neutral-400 hover:text-neutral-900 hover:underline">
+        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-neutral-400 underline decoration-dotted decoration-neutral-300 decoration-[1px] underline-offset-2 hover:text-neutral-900 hover:decoration-neutral-500">
           {abbreviateType(event.applicationType).display}
         </Link>
       </div>
 
       {/* Predictions */}
-      <div className="grid grid-cols-4 gap-2 mt-3">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           const isExpanded = expandedPrediction === modelId
@@ -347,7 +399,9 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
             <button
               key={modelId}
               onClick={() => pred && handlePredictionClick(modelId)}
-              className={`flex items-center justify-center gap-1.5 py-2 text-xs transition-all ${
+              title={MODEL_DISPLAY_NAMES[modelId]}
+              aria-label={MODEL_DISPLAY_NAMES[modelId]}
+              className={`min-w-0 rounded-md border border-transparent px-1 py-2 text-xs transition-all flex items-center justify-center gap-1.5 ${
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
               } ${!pred ? 'bg-neutral-50 text-neutral-300' : ''}`}
               style={pred ? {
@@ -384,17 +438,17 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
   const ticker = event.symbols?.split(',')[0].trim()
 
   return (
-    <div className="border border-neutral-200 p-4">
+    <div className="rounded-lg border border-[#e8ddd0] bg-white/90 p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)]">
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm inline-flex items-center gap-1">
-            {event.drugName}
+          <div className="truncate-wrap flex flex-wrap items-center gap-1 text-sm">
+            <span className="truncate-wrap">{event.drugName}</span>
             {event.source && <SourceIndicator source={event.source} />}
             {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
           </div>
-          <div className="text-xs text-neutral-500 mt-0.5">{event.companyName}</div>
+          <div className="truncate-wrap mt-0.5 text-xs text-neutral-500">{event.companyName}</div>
           {event.eventDescription && (
-            <div className="text-xs text-neutral-400 mt-1 line-clamp-2">{event.eventDescription}</div>
+            <div className="truncate-wrap mt-1 text-xs text-neutral-400 line-clamp-2">{event.eventDescription}</div>
           )}
         </div>
         <div className="text-right shrink-0 ml-3">
@@ -406,7 +460,7 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
               href={`https://finance.yahoo.com/quote/${ticker}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-mono text-neutral-400 hover:text-neutral-900 hover:underline"
+              className="text-xs font-mono text-neutral-400 underline decoration-dotted decoration-neutral-300 decoration-[1px] underline-offset-2 hover:text-neutral-900 hover:decoration-neutral-500"
             >
               ${ticker}
             </a>
@@ -416,18 +470,23 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
 
       <div className="flex items-center gap-2 mb-1">
         <StatusBadgeMobile status={event.outcome as 'Approved' | 'Rejected'} />
-        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-neutral-400 hover:text-neutral-900 hover:underline">
+        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-neutral-400 underline decoration-dotted decoration-neutral-300 decoration-[1px] underline-offset-2 hover:text-neutral-900 hover:decoration-neutral-500">
           {abbreviateType(event.applicationType).display}
         </Link>
       </div>
 
       {/* Predictions */}
-      <div className="grid grid-cols-4 gap-2 mt-3">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           if (!pred) {
             return (
-              <div key={modelId} className="flex items-center justify-center gap-1.5 py-2 text-xs bg-neutral-50 text-neutral-300">
+              <div
+                key={modelId}
+                title={MODEL_DISPLAY_NAMES[modelId]}
+                aria-label={MODEL_DISPLAY_NAMES[modelId]}
+                className="flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent bg-neutral-50 px-1 py-2 text-xs text-neutral-300"
+              >
                 <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
                 —
               </div>
@@ -439,16 +498,28 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
             <button
               key={modelId}
               onClick={() => handlePredictionClick(modelId)}
-              className={`flex items-center justify-center gap-1.5 py-2 text-xs transition-all ${
+              title={MODEL_DISPLAY_NAMES[modelId]}
+              aria-label={MODEL_DISPLAY_NAMES[modelId]}
+              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-1 py-2 text-xs transition-all ${
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
               }`}
               style={{
-                backgroundColor: isCorrect ? 'rgba(58, 138, 46, 0.08)' : 'rgba(196, 58, 43, 0.08)',
-                color: isCorrect ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected,
+                backgroundColor:
+                  isCorrect == null
+                    ? 'rgba(181, 170, 158, 0.10)'
+                    : isCorrect
+                      ? 'rgba(93, 187, 99, 0.10)'
+                      : 'rgba(239, 111, 103, 0.10)',
+                color:
+                  isCorrect == null
+                    ? STATUS_COLORS.Pending
+                    : isCorrect
+                      ? BRAND_DOT_COLORS.green
+                      : BRAND_DOT_COLORS.coral,
               }}
             >
               <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
-              {isCorrect ? '✓' : '✗'}
+              {isCorrect == null ? '—' : <DecisionMark isCorrect={isCorrect} sizeClass="h-3.5 w-3.5" />}
             </button>
           )
         })}
