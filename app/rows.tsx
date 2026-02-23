@@ -5,7 +5,11 @@ import Link from 'next/link'
 import { MODEL_NAMES, MODEL_DISPLAY_NAMES, findPredictionByVariant, abbreviateType, STATUS_COLORS, type ModelVariant, type ModelId } from '@/lib/constants'
 import type { Prediction, FDAEvent } from '@/lib/types'
 import { ModelIcon } from '@/components/ModelIcon'
-import { BRAND_DOT_COLORS } from '@/components/site/chrome'
+
+const BRAND_DOT_COLORS = {
+  green: '#5DBB63',
+  coral: '#EF6F67',
+} as const
 
 function DecisionMark({
   isCorrect,
@@ -15,26 +19,32 @@ function DecisionMark({
   sizeClass?: string
 }) {
   return (
-    <svg
+    <span
+      className={`inline-flex items-center justify-center font-semibold leading-none ${sizeClass}`}
+      style={{ color: isCorrect ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral }}
       aria-hidden="true"
-      viewBox="0 0 16 16"
-      className={`inline-block ${sizeClass}`}
-      fill="none"
-      stroke={isCorrect ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral}
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
-      {isCorrect ? (
-        <path d="M3.2 8.4l3 3 6.6-7.1" />
-      ) : (
-        <>
-          <path d="M4 4l8 8" />
-          <path d="M12 4L4 12" />
-        </>
-      )}
-    </svg>
+      {isCorrect ? '✓' : '✕'}
+    </span>
   )
+}
+
+function getPastPredictionCellStyle(isCorrect: boolean | null) {
+  if (isCorrect == null) {
+    return {
+      color: STATUS_COLORS.Pending,
+    }
+  }
+
+  if (isCorrect) {
+    return {
+      color: BRAND_DOT_COLORS.green,
+    }
+  }
+
+  return {
+    color: BRAND_DOT_COLORS.coral,
+  }
 }
 
 function StatusBadge({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) {
@@ -221,12 +231,11 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
               {pred ? (
                 <button
                   onClick={(e) => handlePredictionClick(e, modelId)}
-                  className={`cursor-pointer rounded-md px-2 py-1 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
+                  className={`cursor-pointer rounded-md px-2 py-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
                     isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                   }`}
-                  style={{ color: pred.prediction === 'approved' ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected }}
                 >
-                  {pred.prediction === 'approved' ? '↑' : '↓'}
+                  <DecisionMark isCorrect={pred.prediction === 'approved'} />
                 </button>
               ) : (
                 <span className="text-black/15">—</span>
@@ -312,14 +321,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
                 className={`cursor-pointer rounded-md px-2 py-1 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
                   isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                 }`}
-                style={{
-                  color:
-                    isCorrect == null
-                      ? STATUS_COLORS.Pending
-                      : isCorrect
-                        ? BRAND_DOT_COLORS.green
-                        : BRAND_DOT_COLORS.coral,
-                }}
+                style={getPastPredictionCellStyle(isCorrect)}
               >
                 {isCorrect == null ? '—' : <DecisionMark isCorrect={isCorrect} />}
               </button>
@@ -404,15 +406,11 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
               className={`min-w-0 rounded-md border border-transparent px-1 py-2 text-xs transition-all flex items-center justify-center gap-1.5 ${
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
               } ${!pred ? 'bg-neutral-50 text-neutral-300' : ''}`}
-              style={pred ? {
-                backgroundColor: pred.prediction === 'approved' ? 'rgba(58, 138, 46, 0.08)' : 'rgba(196, 58, 43, 0.08)',
-                color: pred.prediction === 'approved' ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected,
-              } : undefined}
             >
               <div className="w-3.5 h-3.5">
                 <ModelIcon id={modelId} />
               </div>
-              {pred ? (pred.prediction === 'approved' ? '↑' : '↓') : '—'}
+              {pred ? <DecisionMark isCorrect={pred.prediction === 'approved'} sizeClass="h-3.5 w-3.5" /> : '—'}
             </button>
           )
         })}
@@ -503,20 +501,7 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
               className={`flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-1 py-2 text-xs transition-all ${
                 isExpanded ? 'ring-2 ring-neutral-300' : ''
               }`}
-              style={{
-                backgroundColor:
-                  isCorrect == null
-                    ? 'rgba(181, 170, 158, 0.10)'
-                    : isCorrect
-                      ? 'rgba(93, 187, 99, 0.10)'
-                      : 'rgba(239, 111, 103, 0.10)',
-                color:
-                  isCorrect == null
-                    ? STATUS_COLORS.Pending
-                    : isCorrect
-                      ? BRAND_DOT_COLORS.green
-                      : BRAND_DOT_COLORS.coral,
-              }}
+              style={getPastPredictionCellStyle(isCorrect)}
             >
               <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
               {isCorrect == null ? '—' : <DecisionMark isCorrect={isCorrect} sizeClass="h-3.5 w-3.5" />}

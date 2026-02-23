@@ -1,9 +1,9 @@
-import { db, fdaPredictions, marketPositions, predictionMarkets } from '@/lib/db'
-import { eq, inArray } from 'drizzle-orm'
+import type { ReactNode } from 'react'
+import { db, fdaPredictions } from '@/lib/db'
+import { eq } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
-import { FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +19,40 @@ interface ModelStats {
 
 const RANK_ORDER_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
 
+function PageFrame({ children }: { children: ReactNode }) {
+  return <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">{children}</div>
+}
+
+function HeaderDots() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#EF6F67', opacity: 0.85 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#5DBB63', opacity: 0.85 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#D39D2E', opacity: 0.9 }} />
+      <div className="w-[6px] h-[6px] rounded-[1px]" style={{ backgroundColor: '#5BA5ED', opacity: 0.85 }} />
+    </div>
+  )
+}
+
+const SQ_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
+
+function SquareDivider({ className = '' }: { className?: string }) {
+  return (
+    <div className={`w-full ${className}`}>
+      <svg className="w-full" height="8" preserveAspectRatio="none">
+        <rect x="22%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[0]} opacity="0.85" />
+        <rect x="40%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[1]} opacity="0.85" />
+        <rect x="58%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[2]} opacity="0.9" />
+        <rect x="76%" y="1" width="6" height="6" rx="1" fill={SQ_COLORS[3]} opacity="0.85" />
+      </svg>
+    </div>
+  )
+}
+
+function FooterGradientRule() {
+  return <div className="h-px w-full bg-[linear-gradient(90deg,rgba(239,111,103,0.15),rgba(91,165,237,0.45),rgba(93,187,99,0.15))]" />
+}
+
 function formatMoney(value: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -28,52 +62,10 @@ function formatMoney(value: number): string {
 }
 
 async function getData() {
-  const [allPredictions, accounts, openMarkets] = await Promise.all([
-    db.query.fdaPredictions.findMany({
-      where: eq(fdaPredictions.predictorType, 'model'),
-      with: { fdaEvent: true },
-    }),
-    db.query.marketAccounts.findMany(),
-    db.query.predictionMarkets.findMany({
-      where: eq(predictionMarkets.status, 'OPEN'),
-    }),
-  ])
-
-  const openMarketIds = openMarkets.map((market) => market.id)
-  const positions = openMarketIds.length > 0
-    ? await db.query.marketPositions.findMany({
-        where: inArray(marketPositions.marketId, openMarketIds),
-      })
-    : []
-
-  const positionByMarketModel = new Map<string, (typeof positions)[number]>()
-  for (const position of positions) {
-    positionByMarketModel.set(`${position.marketId}:${position.modelId}`, position)
-  }
-
-  const equityByModelId = new Map<string, {
-    startingCash: number
-    cashBalance: number
-    positionsValue: number
-    totalEquity: number
-  }>()
-
-  for (const account of accounts) {
-    let positionsValue = 0
-
-    for (const market of openMarkets) {
-      const position = positionByMarketModel.get(`${market.id}:${account.modelId}`)
-      if (!position) continue
-      positionsValue += (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
-    }
-
-    equityByModelId.set(account.modelId, {
-      startingCash: account.startingCash,
-      cashBalance: account.cashBalance,
-      positionsValue,
-      totalEquity: account.cashBalance + positionsValue,
-    })
-  }
+  const allPredictions = await db.query.fdaPredictions.findMany({
+    where: eq(fdaPredictions.predictorType, 'model'),
+    with: { fdaEvent: true },
+  })
 
   const modelStats = new Map<string, ModelStats>()
   for (const id of MODEL_IDS) {
@@ -111,7 +103,6 @@ async function getData() {
   const leaderboard = Array.from(modelStats.entries())
     .map(([id, stats]) => {
       const decided = stats.correct + stats.wrong
-      const equity = equityByModelId.get(id)
       return {
         id: id as ModelId,
         correct: stats.correct,
@@ -123,18 +114,13 @@ async function getData() {
         avgConfidence: stats.total > 0 ? stats.confidenceSum / stats.total : 0,
         avgConfidenceCorrect: stats.correct > 0 ? stats.confidenceCorrectSum / stats.correct : 0,
         avgConfidenceWrong: stats.wrong > 0 ? stats.confidenceWrongSum / stats.wrong : 0,
-        totalEquity: equity?.totalEquity ?? null,
-        pnl: equity ? equity.totalEquity - equity.startingCash : null,
+        totalEquity: null as number | null,
+        pnl: null as number | null,
       }
     })
     .sort((a, b) => b.accuracy - a.accuracy || b.correct - a.correct)
 
-  const moneyLeaderboard = [...leaderboard].sort((a, b) => {
-    if (a.totalEquity == null && b.totalEquity == null) return b.accuracy - a.accuracy || b.correct - a.correct
-    if (a.totalEquity == null) return 1
-    if (b.totalEquity == null) return -1
-    return b.totalEquity - a.totalEquity || b.accuracy - a.accuracy || b.correct - a.correct
-  })
+  const moneyLeaderboard = [...leaderboard]
 
   return {
     leaderboard,
