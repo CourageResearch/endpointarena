@@ -474,6 +474,16 @@ export const analyticsEvents = pgTable('analytics_events', {
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
 })
 
+// Waitlist signups
+export const waitlistEntries = pgTable('waitlist_entries', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull(),
+  name: text('name'),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+}, (table) => ({
+  emailUniqueIdx: uniqueIndex('waitlist_entries_email_unique_idx').on(table.email),
+}))
+
 // Type exports
 export type FDACalendarEvent = typeof fdaCalendarEvents.$inferSelect
 export type NewFDACalendarEvent = typeof fdaCalendarEvents.$inferInsert
@@ -482,6 +492,8 @@ export type NewFDAPrediction = typeof fdaPredictions.$inferInsert
 export type User = typeof users.$inferSelect
 export type AnalyticsEvent = typeof analyticsEvents.$inferSelect
 export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert
+export type WaitlistEntry = typeof waitlistEntries.$inferSelect
+export type NewWaitlistEntry = typeof waitlistEntries.$inferInsert
 export type PredictionMarket = typeof predictionMarkets.$inferSelect
 export type NewPredictionMarket = typeof predictionMarkets.$inferInsert
 export type MarketAccount = typeof marketAccounts.$inferSelect

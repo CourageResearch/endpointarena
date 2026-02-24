@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/fda-calendar', label: 'Calendar' },
   { href: '/method', label: 'Method' },
   { href: '/glossary', label: 'Glossary' },
+  { href: '/waitlist', label: 'Waitlist' },
 ]
 
 export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neutral-200' }: { bgClass?: string; borderClass?: string } = {}) {

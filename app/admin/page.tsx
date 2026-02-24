@@ -10,20 +10,19 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 async function getData() {
-  // Get all events for the prediction runner
-  const events = await db.query.fdaCalendarEvents.findMany({
-    with: {
-      predictions: {
-        where: eq(fdaPredictions.predictorType, 'model'),
+  const [events, allPredictions] = await Promise.all([
+    db.query.fdaCalendarEvents.findMany({
+      with: {
+        predictions: {
+          where: eq(fdaPredictions.predictorType, 'model'),
+        },
       },
-    },
-    orderBy: [asc(fdaCalendarEvents.pdufaDate)],
-  })
-
-  // Get prediction stats
-  const allPredictions = await db.query.fdaPredictions.findMany({
-    where: eq(fdaPredictions.predictorType, 'model'),
-  })
+      orderBy: [asc(fdaCalendarEvents.pdufaDate)],
+    }),
+    db.query.fdaPredictions.findMany({
+      where: eq(fdaPredictions.predictorType, 'model'),
+    }),
+  ])
 
   const stats = {
     totalEvents: events.length,

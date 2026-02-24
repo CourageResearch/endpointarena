@@ -1,11 +1,13 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { gte, sql } from 'drizzle-orm'
+import { db, waitlistEntries } from '@/lib/db'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { LogoutButton } from '@/components/LogoutButton'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
-type AdminTab = 'predictions' | 'markets' | 'settings' | 'analytics' | 'costs'
+type AdminTab = 'predictions' | 'waitlist' | 'markets' | 'settings' | 'analytics' | 'costs'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -21,15 +23,43 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
   { id: 'costs', href: '/admin/costs', label: 'Costs' },
+  { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
 ]
 
-export function AdminConsoleLayout({
+async function getWaitlistBadgeData() {
+  try {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+    const [totalRows, newRows] = await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(waitlistEntries),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(waitlistEntries)
+        .where(gte(waitlistEntries.createdAt, since)),
+    ])
+
+    return {
+      total: totalRows[0]?.count ?? 0,
+      newLast7d: newRows[0]?.count ?? 0,
+    }
+  } catch (error) {
+    console.error('Failed to load waitlist badge counts:', error)
+    return {
+      total: 0,
+      newLast7d: 0,
+    }
+  }
+}
+
+export async function AdminConsoleLayout({
   title,
   description,
   activeTab,
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
+  const waitlistBadge = await getWaitlistBadgeData()
+
   return (
     <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
@@ -63,13 +93,25 @@ export function AdminConsoleLayout({
                   <Link
                     key={tab.id}
                     href={tab.href}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                       isActive
                         ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
                         : 'bg-white/80 text-[#8a8075] border-[#e8ddd0] hover:text-[#1a1a1a] hover:bg-white'
                     }`}
                   >
                     {tab.label}
+                    {tab.id === 'waitlist' ? (
+                      <span
+                        title="New in last 7 days and total signups"
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[#f3ebe0] text-[#8a8075]'
+                        }`}
+                      >
+                        {waitlistBadge.newLast7d} new / {waitlistBadge.total}
+                      </span>
+                    ) : null}
                   </Link>
                 )
               })}
