@@ -150,41 +150,6 @@ export default async function AdminPage() {
         <p className="text-sm text-[#8a8075] mt-1">Run predictions per model, update outcome, and keep source links/NCT IDs current.</p>
       </section>
 
-      <section className="mb-6 rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
-        <h2 className="text-sm font-semibold text-[#1a1a1a]">Research Links</h2>
-        <p className="text-xs text-[#8a8075] mt-1">Reference sources while setting outcomes and notes.</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <a
-            href="https://www.rttnews.com/products/biotechinvestor/fdacalendar.aspx"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#8a8075] hover:text-[#1a1a1a] hover:border-[#d8ccb9] transition-colors"
-          >
-            RTTNews FDA Calendar
-          </a>
-          <a
-            href="https://www.rttnews.com/corpinfo/fdacalendar.aspx?PageNum=5"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#8a8075] hover:text-[#1a1a1a] hover:border-[#d8ccb9] transition-colors"
-          >
-            RTTNews Corporate Calendar
-          </a>
-          <a
-            href="/fda-calendar"
-            className="block rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#8a8075] hover:text-[#1a1a1a] hover:border-[#d8ccb9] transition-colors"
-          >
-            Public FDA Calendar View
-          </a>
-          <a
-            href="/brand"
-            className="block rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#8a8075] hover:text-[#1a1a1a] hover:border-[#d8ccb9] transition-colors"
-          >
-            Brand Preview Page
-          </a>
-        </div>
-      </section>
-
       <FDAPredictionRunner events={eventsForClient} />
     </AdminConsoleLayout>
   )

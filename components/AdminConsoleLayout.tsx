@@ -7,7 +7,7 @@ import { LogoutButton } from '@/components/LogoutButton'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
-type AdminTab = 'predictions' | 'waitlist' | 'markets' | 'settings' | 'analytics' | 'costs'
+type AdminTab = 'predictions' | 'waitlist' | 'markets' | 'settings' | 'resources' | 'analytics' | 'costs'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -21,6 +21,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'predictions', href: '/admin', label: 'Predictions' },
   { id: 'markets', href: '/admin/markets', label: 'Markets' },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
+  { id: 'resources', href: '/admin/resources', label: 'Resources' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
   { id: 'costs', href: '/admin/costs', label: 'Costs' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
