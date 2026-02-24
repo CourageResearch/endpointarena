@@ -1,12 +1,28 @@
-import { desc, gte, sql } from 'drizzle-orm'
+import { revalidatePath } from 'next/cache'
+import { desc, eq, gte, sql } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { authOptions } from '@/lib/auth'
+import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { db, waitlistEntries } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 
 export const dynamic = 'force-dynamic'
+
+async function deleteWaitlistEntry(formData: FormData) {
+  'use server'
+
+  await ensureAdmin()
+  const rawId = formData.get('entryId')
+  const entryId = typeof rawId === 'string' ? rawId.trim() : ''
+
+  if (!entryId) {
+    return
+  }
+
+  await db.delete(waitlistEntries).where(eq(waitlistEntries.id, entryId))
+  revalidatePath('/admin/waitlist')
+}
 
 async function getWaitlistData() {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
@@ -78,6 +94,7 @@ export default async function AdminWaitlistPage() {
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Joined</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -100,6 +117,17 @@ export default async function AdminWaitlistPage() {
                         >
                           {entry.email}
                         </a>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <form action={deleteWaitlistEntry} className="inline">
+                          <input type="hidden" name="entryId" value={entry.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
+                          >
+                            Delete
+                          </button>
+                        </form>
                       </td>
                     </tr>
                   )

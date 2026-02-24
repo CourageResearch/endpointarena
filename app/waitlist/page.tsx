@@ -5,7 +5,7 @@ import { BRAND_GRADIENT, FooterGradientRule, HeaderDots, PageFrame, SquareDivide
 
 export const metadata: Metadata = {
   title: 'Waitlist',
-  description: 'Join the EndpointArena waitlist for early access to new model benchmarking features.',
+  description: 'Join the Endpoint Arena waitlist for early access to new model benchmarking features.',
 }
 
 const BENEFITS = [

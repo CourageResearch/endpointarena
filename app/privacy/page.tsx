@@ -4,7 +4,7 @@ import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chr
 
 export const metadata: Metadata = {
   title: 'Privacy',
-  description: 'Privacy policy for EndpointArena.',
+  description: 'Privacy policy for Endpoint Arena.',
 }
 
 export default function PrivacyPage() {
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
 
           <div className="mt-5 space-y-4 text-sm leading-relaxed text-[#8a8075] sm:text-base">
             <p>
-              EndpointArena collects the information you submit (such as name and email)
+              Endpoint Arena collects the information you submit (such as name and email)
               to manage waitlist access, onboarding, and product updates.
             </p>
             <p>
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
             </p>
             <p>
               You can request removal from the waitlist and communications at any time by
-              replying to an email from EndpointArena.
+              replying to an email from Endpoint Arena.
             </p>
           </div>
         </section>

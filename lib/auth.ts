@@ -8,6 +8,8 @@ import { eq } from 'drizzle-orm'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
+
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
 
@@ -52,21 +54,21 @@ function getProviders() {
             pass: process.env.RESEND_API_KEY,
           },
         },
-        from: 'EndpointArena <noreply@endpointarena.com>',
+        from: RESEND_FROM_EMAIL,
         async sendVerificationRequest({ identifier: email, url }) {
           try {
             await resend.emails.send({
-              from: 'EndpointArena <onboarding@resend.dev>',
+              from: RESEND_FROM_EMAIL,
               to: email,
-              subject: 'Sign in to EndpointArena',
+              subject: 'Sign in to Endpoint Arena',
               html: `
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: sans-serif;">
-                  <h1 style="color: #2563eb; margin-bottom: 24px;">EndpointArena</h1>
+                  <h1 style="color: #2563eb; margin-bottom: 24px;">Endpoint Arena</h1>
                   <p style="color: #374151; font-size: 16px; line-height: 24px;">
                     Click the button below to sign in to your account. This link will expire in 24 hours.
                   </p>
                   <a href="${url}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; font-weight: 500;">
-                    Sign in to EndpointArena
+                    Sign in to Endpoint Arena
                   </a>
                   <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
                     If you didn't request this email, you can safely ignore it.

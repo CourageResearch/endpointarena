@@ -10,8 +10,8 @@ const dmMono = DM_Mono({ weight: ['400', '500'], subsets: ['latin'], variable: '
 
 export const metadata: Metadata = {
   title: {
-    default: 'EndpointArena',
-    template: '%s • EndpointArena',
+    default: 'Endpoint Arena',
+    template: '%s • Endpoint Arena',
   },
   description: 'Live benchmark for AI models predicting real-world FDA drug approval outcomes.',
   icons: {

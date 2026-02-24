@@ -21,11 +21,13 @@ export function WaitlistForm() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<FormStatus>('idle')
   const [feedback, setFeedback] = useState('')
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [submittedEmail, setSubmittedEmail] = useState('')
-  const [shareState, setShareState] = useState<'idle' | 'copied' | 'error'>('idle')
 
   const trimmedEmail = email.trim()
   const emailIsValid = EMAIL_PATTERN.test(trimmedEmail)
+  const showEmailError = !emailIsValid && trimmedEmail.length > 0 && (emailTouched || submitAttempted)
   const isSubmitting = status === 'submitting'
   const showSubmittedState = status === 'success' || status === 'exists'
 
@@ -33,27 +35,11 @@ export function WaitlistForm() {
     if (status === 'idle') return
     setStatus('idle')
     setFeedback('')
-    setShareState('idle')
-  }
-
-  async function handleCopyLink() {
-    const shareUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/waitlist`
-      : '/waitlist'
-
-    try {
-      if (!navigator?.clipboard) {
-        throw new Error('Clipboard unavailable')
-      }
-      await navigator.clipboard.writeText(shareUrl)
-      setShareState('copied')
-    } catch {
-      setShareState('error')
-    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setSubmitAttempted(true)
 
     if (!emailIsValid || isSubmitting) {
       return
@@ -86,7 +72,8 @@ export function WaitlistForm() {
         setStatus('exists')
         setFeedback('You are already on the waitlist. We will email you with updates.')
         setSubmittedEmail(trimmedEmail)
-        setShareState('idle')
+        setSubmitAttempted(false)
+        setEmailTouched(false)
         return
       }
 
@@ -97,7 +84,8 @@ export function WaitlistForm() {
         setFeedback('You are in. Check your inbox for a welcome email.')
       }
       setSubmittedEmail(trimmedEmail)
-      setShareState('idle')
+      setSubmitAttempted(false)
+      setEmailTouched(false)
       setName('')
       setEmail('')
     } catch {
@@ -122,40 +110,14 @@ export function WaitlistForm() {
         <ul className="mt-4 space-y-2 text-sm text-[#8a8075]">
           <li className="flex items-start gap-2">
             <BrandMark className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Next step: check <span className="font-medium text-[#1a1a1a]">{submittedEmail}</span> for updates.
-          </li>
-          <li className="flex items-start gap-2">
-            <BrandMark className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Early points are assigned by signup time; earlier joiners receive more.
+            <p className="min-w-0 leading-relaxed">
+              Next step: check{' '}
+              <span className="break-all font-medium text-[#1a1a1a]">{submittedEmail}</span>{' '}
+              for updates.
+            </p>
           </li>
         </ul>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-3 text-sm text-[#8a8075] transition-colors hover:text-[#1a1a1a] hover:border-[#d8ccb9]"
-          >
-            Copy Waitlist Link
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setStatus('idle')
-              setFeedback('')
-              setShareState('idle')
-            }}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-transparent px-2 text-sm text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
-          >
-            Use Another Email
-          </button>
-          {shareState === 'copied' ? (
-            <span className="text-xs text-[#5d8e60]">Link copied.</span>
-          ) : null}
-          {shareState === 'error' ? (
-            <span className="text-xs text-[#c24f45]">Could not copy link.</span>
-          ) : null}
-        </div>
       </div>
     )
   }
@@ -194,11 +156,13 @@ export function WaitlistForm() {
               resetFeedback()
               setEmail(event.target.value)
             }}
+            onBlur={() => setEmailTouched(true)}
             placeholder="you@company.com"
             required
+            aria-invalid={showEmailError}
             className="h-11 w-full rounded-md border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] focus:ring-2 focus:ring-[#d3b891]/30"
           />
-          {!emailIsValid && trimmedEmail.length > 0 ? (
+          {showEmailError ? (
             <p className="text-sm text-[#c24f45]">Enter a valid email address.</p>
           ) : null}
         </div>
