@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { Resend } from 'resend'
+import { sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { waitlistEntries } from '@/lib/schema'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
@@ -10,6 +11,11 @@ const WAITLIST_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint A
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __waitlistSchemaReadyPromise: Promise<void> | undefined
+}
 
 type WaitlistRequest = {
   email?: string
@@ -147,6 +153,35 @@ function buildWelcomeEmailHtml(safeGreeting: string): string {
   `
 }
 
+async function ensureWaitlistSchema(): Promise<void> {
+  if (globalThis.__waitlistSchemaReadyPromise) {
+    return globalThis.__waitlistSchemaReadyPromise
+  }
+
+  globalThis.__waitlistSchemaReadyPromise = (async () => {
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS waitlist_entries (
+          id text PRIMARY KEY,
+          email text NOT NULL,
+          name text,
+          created_at timestamp DEFAULT now()
+        )
+      `)
+
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_email_unique_idx
+        ON waitlist_entries (email)
+      `)
+    } catch (error) {
+      globalThis.__waitlistSchemaReadyPromise = undefined
+      throw error
+    }
+  })()
+
+  return globalThis.__waitlistSchemaReadyPromise
+}
+
 async function sendWelcomeEmail({
   email,
   name,
@@ -191,6 +226,8 @@ export async function POST(request: NextRequest) {
     const body = await parseJsonBody<WaitlistRequest>(request)
     const email = normalizeEmail(body.email)
     const name = normalizeName(body.name)
+
+    await ensureWaitlistSchema()
 
     const inserted = await db
       .insert(waitlistEntries)
