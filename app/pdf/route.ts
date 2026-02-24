@@ -11,7 +11,7 @@ export async function GET() {
     return new Response(file, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': 'inline; filename="endpointarena-app-summary.pdf"',
+        'Content-Disposition': 'inline; filename="Endpoint-Arena.pdf"',
         'Cache-Control': 'public, max-age=3600',
       },
     })
