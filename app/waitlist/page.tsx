@@ -16,12 +16,12 @@ const BENEFITS = [
   },
   {
     title: 'Get Model Alpha',
-    description: 'Receive concise notes on confidence shifts and model disagreements before major FDA dates.',
+    description: 'Get alerts when trial odds shift and high-impact trials enter the pipeline.',
     markerColor: '#5DBB63',
   },
   {
     title: 'Contribute to the Model',
-    description: 'Share feedback and edge cases that help improve model calibration, scoring quality, and decision reliability.',
+    description: 'Opt in to share data, earn points, and improve model quality.',
     markerColor: '#5BA5ED',
   },
 ]
@@ -50,10 +50,10 @@ export default function WaitlistPage() {
                   <HeaderDots />
                 </div>
                 <h2 className="max-w-3xl font-serif text-4xl leading-[1.08] tracking-tight text-[#1a1a1a] sm:text-5xl">
-                  Join now for priority access and launch-day points.
+                  Be first to know.
                 </h2>
                 <p className="max-w-2xl text-base leading-relaxed text-[#8a8075] sm:text-lg">
-                  Waitlist members receive an early-points grant at launch, first cohort invites, and pre-release model intelligence updates.
+                  Join the waitlist to get invited early, receive alerts when trial outlooks move, and optionally earn points by sharing data that improves the model.
                 </p>
               </div>
 
@@ -71,7 +71,17 @@ export default function WaitlistPage() {
                       aria-hidden="true"
                     />
                     <h3 className="text-sm font-medium text-[#1a1a1a]">{benefit.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-[#8a8075]">{benefit.description}</p>
+                    <p
+                      className="mt-2 text-sm leading-[1.45] text-[#8a8075]"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitBoxOrient: 'vertical',
+                        WebkitLineClamp: 2,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {benefit.description}
+                    </p>
                   </article>
                 ))}
               </div>

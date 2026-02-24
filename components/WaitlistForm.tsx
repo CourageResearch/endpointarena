@@ -198,6 +198,9 @@ export function WaitlistForm() {
             required
             className="h-11 w-full rounded-md border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] focus:ring-2 focus:ring-[#d3b891]/30"
           />
+          {!emailIsValid && trimmedEmail.length > 0 ? (
+            <p className="text-sm text-[#c24f45]">Enter a valid email address.</p>
+          ) : null}
         </div>
       </div>
 
@@ -211,11 +214,7 @@ export function WaitlistForm() {
         </button>
       </div>
 
-      <p className="text-xs text-[#8a8075] sm:text-right">No spam.</p>
-
-      {!emailIsValid && trimmedEmail.length > 0 ? (
-        <p className="text-sm text-[#c24f45]">Enter a valid email address.</p>
-      ) : null}
+      <p className="text-xs text-[#8a8075] sm:text-right">Only meaningful product updates. No spam. Unsubscribe anytime.</p>
 
       {feedback ? (
         <p
