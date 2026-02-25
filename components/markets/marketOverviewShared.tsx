@@ -402,6 +402,55 @@ export function MarketDetailChart({
   const activePoint = scrubSnapshotDate == null
     ? null
     : pointPositions.find(({ point }) => point.snapshotDate === scrubSnapshotDate) ?? null
+  const [lockedSnapshotDate, setLockedSnapshotDate] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Clear local lock when the parent resets scrub selection (for example on market switch).
+    if (scrubSnapshotDate == null && lockedSnapshotDate != null) {
+      setLockedSnapshotDate(null)
+    }
+  }, [lockedSnapshotDate, scrubSnapshotDate])
+
+  const isScrubLocked = lockedSnapshotDate != null && scrubSnapshotDate === lockedSnapshotDate
+  const handleScrubHover = (snapshotDate: string): void => {
+    if (isScrubLocked) return
+    onScrubSnapshotDateChange?.(snapshotDate)
+  }
+  const handleScrubToggleLock = (snapshotDate: string): void => {
+    if (!onScrubSnapshotDateChange) return
+
+    if (isScrubLocked && lockedSnapshotDate === snapshotDate) {
+      setLockedSnapshotDate(null)
+      onScrubSnapshotDateChange(null)
+      return
+    }
+
+    setLockedSnapshotDate(snapshotDate)
+    onScrubSnapshotDateChange(snapshotDate)
+  }
+
+  const activeTooltip = activePoint
+    ? (() => {
+        const label = `${formatShortDateUtc(activePoint.point.snapshotDate)} • YES ${formatPercent(activePoint.point.priceYes, 1)}`
+        const widthEstimate = Math.max(94, Math.ceil(label.length * 6.15) + 16)
+        const prefersAbove = activePoint.y - 28 >= padding
+        const y = prefersAbove
+          ? activePoint.y - 22
+          : Math.min(plotHeight - padding - 18, activePoint.y + 10)
+        const x = Math.min(
+          plotRight - widthEstimate,
+          Math.max(padding, activePoint.x - widthEstimate / 2),
+        )
+
+        return {
+          label,
+          x,
+          y,
+          width: widthEstimate,
+          height: 18,
+        }
+      })()
+    : null
   const interactiveHeight = plotHeight + xAxisBandHeight
   const scrubBands = pointPositions.map((entry, index) => {
     const prevMid = index === 0 ? 0 : (pointPositions[index - 1]!.x + entry.x) / 2
@@ -416,7 +465,10 @@ export function MarketDetailChart({
     <div className={cn('rounded-2xl border border-[#eadfce] bg-white/80 p-3', className)}>
       <div
         className="hide-scrollbar overflow-x-auto"
-        onPointerLeave={() => onScrubSnapshotDateChange?.(null)}
+        onPointerLeave={() => {
+          if (isScrubLocked) return
+          onScrubSnapshotDateChange?.(null)
+        }}
       >
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -506,6 +558,31 @@ export function MarketDetailChart({
               pointerEvents="none"
             />
           ) : null}
+          {activeTooltip ? (
+            <g pointerEvents="none">
+              <rect
+                x={activeTooltip.x}
+                y={activeTooltip.y}
+                width={activeTooltip.width}
+                height={activeTooltip.height}
+                rx={activeTooltip.height / 2}
+                fill="rgba(45, 76, 108, 0.92)"
+                stroke="rgba(171, 211, 243, 0.8)"
+                strokeWidth="0.75"
+              />
+              <text
+                x={activeTooltip.x + activeTooltip.width / 2}
+                y={activeTooltip.y + activeTooltip.height / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="9.5"
+                fontWeight="600"
+                fill="#f2f9ff"
+              >
+                {activeTooltip.label}
+              </text>
+            </g>
+          ) : null}
           {onScrubSnapshotDateChange
             ? scrubBands.map(({ point, hitX, hitWidth }) => (
                 <rect
@@ -516,14 +593,24 @@ export function MarketDetailChart({
                   height={interactiveHeight}
                   fill="transparent"
                   style={{ cursor: 'ew-resize' }}
-                  onPointerEnter={() => onScrubSnapshotDateChange(point.snapshotDate)}
-                  onPointerMove={() => onScrubSnapshotDateChange(point.snapshotDate)}
-                  onPointerDown={() => onScrubSnapshotDateChange(point.snapshotDate)}
+                  onPointerEnter={() => handleScrubHover(point.snapshotDate)}
+                  onPointerMove={() => handleScrubHover(point.snapshotDate)}
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    handleScrubToggleLock(point.snapshotDate)
+                  }}
                 />
               ))
             : null}
         </svg>
       </div>
+      {isScrubLocked && scrubSnapshotDate ? (
+        <div className="mt-2 flex items-center justify-end text-[11px] text-[#5c6f84]">
+          <span className="rounded-full border border-[#bad7ee] bg-[#eaf4fd] px-2.5 py-1">
+            Locked to {formatShortDateUtc(scrubSnapshotDate)}. Click that day again to clear.
+          </span>
+        </div>
+      ) : null}
       {showDateRangeFooter ? (
         <div className="mt-2 flex items-center justify-end text-[11px] text-[#6f6458]">
           <span>

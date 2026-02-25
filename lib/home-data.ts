@@ -1,5 +1,5 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
-import { eq, gte, and, or, desc, asc } from 'drizzle-orm'
+import { eq, or, desc, asc } from 'drizzle-orm'
 import { findPredictionByVariant, getModelVariant, type ModelVariant, type ModelId } from '@/lib/constants'
 
 function describeDataError(error: unknown): string {
@@ -30,13 +30,10 @@ function describeDataError(error: unknown): string {
 
 export async function getHomeData() {
   try {
-    const now = new Date()
-
     const upcomingFdaEvents = await db.query.fdaCalendarEvents.findMany({
-      where: and(
-        gte(fdaCalendarEvents.pdufaDate, now),
-        eq(fdaCalendarEvents.outcome, 'Pending')
-      ),
+      // Keep every undecided event on the pending/upcoming section until
+      // a final outcome is explicitly set.
+      where: eq(fdaCalendarEvents.outcome, 'Pending'),
       with: { predictions: true },
       orderBy: [asc(fdaCalendarEvents.pdufaDate)],
       limit: 5,
