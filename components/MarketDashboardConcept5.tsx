@@ -583,13 +583,13 @@ export function MarketDashboardConcept5({
     })
   }
 
-  const renderReasoningPanel = ({
-    className,
-    compactHeight = false,
-  }: {
-    className?: string
-    compactHeight?: boolean
-  } = {}) => (
+	  const renderReasoningPanel = ({
+	    className,
+	    compactHeight = false,
+	  }: {
+	    className?: string
+	    compactHeight?: boolean
+	  } = {}) => (
     <section className={cn('min-w-0 space-y-2', className)}>
       <div className="px-1 py-1">
         <div className="flex flex-wrap items-center gap-3">
@@ -687,16 +687,16 @@ export function MarketDashboardConcept5({
             {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
             {' '}for this market.
           </div>
-        ) : (
-          <div
-            className={cn(
-              'reasoning-scrollbox mx-1 h-[18rem] space-y-2 overflow-y-auto overscroll-contain pr-1 sm:h-[24rem] sm:pr-2',
-              compactHeight
-                ? 'md:h-[40rem] md:pr-2 lg:h-[46rem] xl:h-[56rem]'
-                : 'lg:h-[calc(100vh-30rem)] lg:pr-2',
-            )}
-          >
-            {selectedMarketActions.map((action) => (
+	        ) : (
+	          <div
+	            className={cn(
+	              'reasoning-scrollbox mx-1 h-[18rem] space-y-2 overflow-y-auto overscroll-contain pr-1 sm:h-[24rem] sm:pr-2',
+	              compactHeight
+	                ? 'md:h-[40rem] md:pr-2 lg:h-[46rem] xl:h-[56rem]'
+	                : 'lg:h-[calc(100vh-13rem)] lg:pr-2',
+	            )}
+	          >
+	            {selectedMarketActions.map((action) => (
               <CommentCard
                 key={action.id}
                 action={action}
@@ -797,12 +797,12 @@ export function MarketDashboardConcept5({
             </header>
 
 	            <div>
-              <div
-                className={cn(
-                  'grid grid-cols-1 gap-4',
-                  !useMarkets2Layout && 'lg:items-start lg:grid-cols-3',
-                )}
-              >
+	              <div
+	                className={cn(
+	                  'grid grid-cols-1 gap-4',
+	                  !useMarkets2Layout && 'lg:items-start lg:grid-cols-12',
+	                )}
+	              >
               <div
                 className={cn(
                   useMarkets2Layout
@@ -810,7 +810,7 @@ export function MarketDashboardConcept5({
                     : 'contents',
                 )}
               >
-                  <div className={cn('min-w-0', !useMarkets2Layout && 'px-1 lg:col-span-2')}>
+	                  <div className={cn('min-w-0', !useMarkets2Layout && 'px-1 lg:col-span-7')}>
 	                  <div className="mb-3">
 	                    <div>
 	                      <div className="flex items-center gap-3">
@@ -842,11 +842,11 @@ export function MarketDashboardConcept5({
 	                  {useMarkets2Layout ? renderReasoningPanel({ compactHeight: true }) : null}
 	                  </div>
 
-	                  <div className={cn(
-	                    'min-w-0',
-	                    !useMarkets2Layout && 'px-1 lg:col-span-2',
-	                    useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
-	                  )}>
+			                  <div className={cn(
+			                    'min-w-0',
+			                    !useMarkets2Layout && 'px-1 lg:col-span-7',
+			                    useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
+			                  )}>
 		                  <div className="space-y-3">
 	                    <div className="px-1">
 	                      <div className="flex items-center gap-3">
@@ -1102,9 +1102,9 @@ export function MarketDashboardConcept5({
                   </div>
               </div>
 
-              {!useMarkets2Layout
-                ? renderReasoningPanel({ className: 'lg:col-span-1 lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:self-start lg:pl-1 lg:sticky lg:top-20' })
-                : null}
+		              {!useMarkets2Layout
+		                ? renderReasoningPanel({ className: 'lg:col-span-5 lg:col-start-8 lg:row-start-1 lg:row-span-2 lg:self-start lg:pl-1 lg:sticky lg:top-20' })
+		                : null}
 
 	              </div>
 	            </div>
