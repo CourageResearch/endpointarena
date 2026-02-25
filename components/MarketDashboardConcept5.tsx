@@ -119,7 +119,7 @@ function formatDateTimeLocalCompact(value: string | null | undefined): string {
 }
 
 function getActionBadge(action: RecentMarketActionRow):
-  | { kind: 'trade'; verb: 'buy' | 'sell'; outcome: 'Approve' | 'Reject'; outcomeTone: 'approve' | 'reject' }
+  | { kind: 'trade'; verb: 'buy' | 'sell'; outcome: 'Yes' | 'No'; outcomeTone: 'approve' | 'reject' }
   | { kind: 'status'; label: 'Hold' | 'Error' | 'Skipped'; tone: 'neutral' | 'warning' | 'muted' } {
   if (action.status === 'error') {
     return { kind: 'status', label: 'Error', tone: 'warning' }
@@ -128,16 +128,16 @@ function getActionBadge(action: RecentMarketActionRow):
     return { kind: 'status', label: 'Skipped', tone: 'muted' }
   }
   if (action.action === 'BUY_YES') {
-    return { kind: 'trade', verb: 'buy', outcome: 'Approve', outcomeTone: 'approve' }
+    return { kind: 'trade', verb: 'buy', outcome: 'Yes', outcomeTone: 'approve' }
   }
   if (action.action === 'BUY_NO') {
-    return { kind: 'trade', verb: 'buy', outcome: 'Reject', outcomeTone: 'reject' }
+    return { kind: 'trade', verb: 'buy', outcome: 'No', outcomeTone: 'reject' }
   }
   if (action.action === 'SELL_YES') {
-    return { kind: 'trade', verb: 'sell', outcome: 'Approve', outcomeTone: 'approve' }
+    return { kind: 'trade', verb: 'sell', outcome: 'Yes', outcomeTone: 'approve' }
   }
   if (action.action === 'SELL_NO') {
-    return { kind: 'trade', verb: 'sell', outcome: 'Reject', outcomeTone: 'reject' }
+    return { kind: 'trade', verb: 'sell', outcome: 'No', outcomeTone: 'reject' }
   }
   return { kind: 'status', label: 'Hold', tone: 'neutral' }
 }
@@ -203,20 +203,56 @@ function CommentCard({
   const sizeText = action.usdAmount > 0 ? formatCompactMoney(action.usdAmount) : '—'
   const deltaText = changeText
   const deltaClass = hasPriceMove ? changeClass : 'text-[#6d645a]'
+  const actionValue =
+    badge.kind === 'trade' ? (
+      <span className="inline-flex flex-wrap items-baseline gap-1.5 font-medium text-[#6d645a]">
+        <span
+          className={cn(
+            'text-[12px] leading-none',
+            badge.verb === 'buy' ? APPROVE_TEXT_CLASS : REJECT_TEXT_CLASS,
+          )}
+          aria-hidden="true"
+        >
+          {badge.verb === 'buy' ? '↗' : '↘'}
+        </span>
+        <span className="capitalize">{badge.verb}</span>
+        <span className={badge.outcomeTone === 'approve' ? APPROVE_TEXT_CLASS : REJECT_TEXT_CLASS}>
+          {badge.outcome}
+        </span>
+      </span>
+    ) : (
+      <span
+        className={cn(
+          'font-medium',
+          badge.tone === 'warning'
+            ? 'text-amber-600'
+            : badge.tone === 'muted'
+              ? 'text-zinc-500'
+              : 'text-[#5f79a6]',
+        )}
+      >
+        {badge.label}
+      </span>
+    )
   return (
     <article data-reasoning-card="true" className="rounded-none p-[0.5px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
       <div className="rounded-none bg-white/95 p-3 sm:p-3.5">
         <div className="min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex flex-1 items-center gap-2">
               <div
                 className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-[#9a9084]"
                 aria-hidden="true"
               >
                 <ModelIcon id={action.modelId} className="h-3.5 w-3.5" />
               </div>
-              <div className="min-w-0 truncate text-[14px] leading-tight font-medium text-[#2f2a24]" title={model.fullName}>
-                {model.fullName}
+              <div className="min-w-0 flex items-baseline gap-3 sm:gap-4">
+                <div className="min-w-0 truncate text-[14px] leading-tight font-medium text-[#2f2a24]" title={model.fullName}>
+                  {model.fullName}
+                </div>
+                <div className="shrink-0 text-[13px] leading-[1.3]">
+                  {actionValue}
+                </div>
               </div>
             </div>
             <div className="shrink-0 text-right text-[12px] leading-tight font-medium tabular-nums text-[#8f8478]">
@@ -225,49 +261,10 @@ function CommentCard({
           </div>
 
           <dl className="mt-1.5 grid grid-cols-1 gap-y-1.5 text-[13px] leading-[1.35]">
-            <div className="min-w-0 flex items-baseline gap-2">
-              <dt className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Action:</dt>
-              <dd className="min-w-0 flex-1 break-words">
-                {badge.kind === 'trade' ? (
-                  <span className="inline-flex flex-wrap items-baseline gap-1.5 font-medium text-[#6d645a]">
-                    <span
-                      className={cn(
-                        'text-[12px] leading-none',
-                        badge.verb === 'buy' ? APPROVE_TEXT_CLASS : REJECT_TEXT_CLASS,
-                      )}
-                      aria-hidden="true"
-                    >
-                      {badge.verb === 'buy' ? '↗' : '↘'}
-                    </span>
-                    <span className="capitalize">{badge.verb}</span>
-                    <span className={badge.outcomeTone === 'approve' ? APPROVE_TEXT_CLASS : REJECT_TEXT_CLASS}>
-                      {badge.outcome}
-                    </span>
-                  </span>
-                ) : (
-                  <span
-                    className={cn(
-                      'font-medium',
-                      badge.tone === 'warning'
-                        ? 'text-amber-600'
-                        : badge.tone === 'muted'
-                          ? 'text-zinc-500'
-                          : 'text-[#5f79a6]',
-                    )}
-                  >
-                    {badge.label}
-                  </span>
-                )}
-              </dd>
-            </div>
-
-            <div className="min-w-0 flex items-baseline gap-2">
+            <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <dt className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Size:</dt>
-              <dd className="min-w-0 break-words font-medium tabular-nums text-[#6d645a]">{sizeText}</dd>
-            </div>
-
-            <div className="min-w-0 flex items-baseline gap-2">
-              <dt className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Delta:</dt>
+              <dd className="shrink-0 break-words font-medium tabular-nums text-[#6d645a]">{sizeText}</dd>
+              <dt className="ml-2 shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Delta:</dt>
               <dd className="min-w-0 flex-1 break-words font-medium tabular-nums">
                 <span className={cn('font-medium tabular-nums', deltaClass)}>{deltaText}</span>
                 <span className="text-[#6d645a]"> ({probabilityRangeText})</span>
@@ -510,9 +507,9 @@ export function MarketDashboardConcept5({
       : netShares > 0 ? 'YES' : 'NO'
     const netDisplayLabel =
       netLabel === 'YES'
-        ? 'Approve'
+        ? 'Yes'
         : netLabel === 'NO'
-          ? 'Reject'
+          ? 'No'
           : netLabel
     const netTextClass =
       netLabel === 'YES'
@@ -595,11 +592,17 @@ export function MarketDashboardConcept5({
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Reasoning</div>
           <HeaderDots />
-          {scrubbedChartDayKey && scrubbedChartDayLabel ? (
-            <span className="rounded-full border border-[#d9ccbc] bg-white/85 px-2.5 py-1 text-[11px] text-[#7c7267]">
-              Chart day: {scrubbedChartDayLabel}
-            </span>
-          ) : null}
+          <span
+            className={cn(
+              'inline-flex h-6 w-[10.5rem] items-center justify-center rounded-full border bg-white/85 px-2.5 text-[11px] text-[#7c7267] transition-opacity',
+              scrubbedChartDayKey && scrubbedChartDayLabel
+                ? 'border-[#d9ccbc] opacity-100'
+                : 'border-transparent opacity-0',
+            )}
+            aria-hidden={!scrubbedChartDayKey || !scrubbedChartDayLabel}
+          >
+            {scrubbedChartDayKey && scrubbedChartDayLabel ? `Chart day: ${scrubbedChartDayLabel}` : 'Chart day: --'}
+          </span>
         </div>
 
         <div className="mt-3 flex items-start gap-3">
@@ -810,7 +813,7 @@ export function MarketDashboardConcept5({
                     : 'contents',
                 )}
               >
-	                  <div className={cn('min-w-0', !useMarkets2Layout && 'px-1 lg:col-span-7')}>
+	                  <div className={cn('min-w-0', !useMarkets2Layout && 'px-1 lg:col-span-6')}>
 	                  <div className="mb-3">
 	                    <div>
 	                      <div className="flex items-center gap-3">
@@ -844,7 +847,7 @@ export function MarketDashboardConcept5({
 
 			                  <div className={cn(
 			                    'min-w-0',
-			                    !useMarkets2Layout && 'px-1 lg:col-span-7',
+			                    !useMarkets2Layout && 'px-1 lg:col-span-6',
 			                    useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
 			                  )}>
 		                  <div className="space-y-3">
@@ -855,35 +858,43 @@ export function MarketDashboardConcept5({
                       </div>
                     </div>
 
-                    <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-12">
-                      <div className="h-full rounded-sm p-[1px] xl:col-span-2" style={{ background: 'linear-gradient(135deg, #5DBB63, #3FAF58)' }}>
+                    <div className="space-y-2">
+                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[1.2fr_1.2fr_1.7fr_1fr_1fr]">
+                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #5DBB63, #3FAF58)' }}>
                         <div className="flex h-full flex-col justify-between rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#6f9b72]">Approve</dt>
+                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#6f9b72]">Yes</dt>
                           <dd className="mt-2">
                             <span className="text-xl font-semibold tracking-tight text-[#1f5f31]">
                               {formatPercent(selectedStats.yesPrice, 0)}
                             </span>
                           </dd>
                         </div>
-                      </div>
+                        </div>
 
-                      <div className="h-full rounded-sm p-[1px] xl:col-span-2" style={{ background: 'linear-gradient(135deg, #EF6F67, #D84A63)' }}>
+                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #D84A63)' }}>
                         <div className="flex h-full flex-col justify-between rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b07a84]">Reject</dt>
+                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b07a84]">No</dt>
                           <dd className="mt-2">
                             <span className="text-xl font-semibold tracking-tight text-[#7f1d2d]">
                               {formatPercent(selectedStats.noPrice, 0)}
                             </span>
                           </dd>
                         </div>
-                      </div>
+                        </div>
 
-                      <div className="h-full rounded-sm p-[1px] xl:col-span-4" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                         <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
                           <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">PDUFA Date</dt>
                           <dd className="mt-2 space-y-1.5 text-sm text-[#7c7267]">
-                            <div className="whitespace-nowrap">
-                              {selectedMarket.event?.pdufaDate ? formatDateUtc(selectedMarket.event.pdufaDate) : '-'}
+                            <div>
+                              {selectedMarket.event?.pdufaDate
+                                ? new Date(selectedMarket.event.pdufaDate).toLocaleDateString('en-US', {
+                                  month: 'numeric',
+                                  day: 'numeric',
+                                  year: '2-digit',
+                                  timeZone: 'UTC',
+                                })
+                                : '-'}
                             </div>
                             <div className="whitespace-nowrap">
                               {pdufaDays == null
@@ -892,22 +903,22 @@ export function MarketDashboardConcept5({
                                   ? `${Math.abs(pdufaDays)}d past`
                                   : pdufaDays === 0
                                     ? 'Today'
-                                    : `${pdufaDays}d left`}
+                                : `${pdufaDays}d left`}
                             </div>
                           </dd>
                         </div>
-                      </div>
+                        </div>
 
-                      <div className="h-full rounded-sm p-[1px] xl:col-span-2" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                         <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
                           <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Volume</dt>
                           <dd className="mt-2 text-sm font-medium whitespace-nowrap text-[#7c7267]">
                             {formatCompactMoney(selectedStats.totalVolumeUsd)}
                           </dd>
                         </div>
-                      </div>
+                        </div>
 
-                      <div className="h-full rounded-sm p-[1px] xl:col-span-2" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                         <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
                           <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Type</dt>
                           <dd className="mt-2 text-sm text-[#7c7267]">
@@ -923,9 +934,11 @@ export function MarketDashboardConcept5({
                               : '-'}
                           </dd>
                         </div>
-                      </div>
+                        </div>
+                      </dl>
 
-                      <div className="h-full rounded-sm p-[1px] sm:col-span-2 xl:col-span-4" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                      <dl className="grid grid-cols-1 gap-2 xl:grid-cols-[1.2fr_1.2fr_1.7fr_1fr_1fr]">
+                        <div className="h-full rounded-sm p-[1px] xl:col-span-2" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                         <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
                           <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Company</dt>
                           <dd className="mt-2 space-y-1.5 text-sm leading-snug text-[#7c7267]">
@@ -944,17 +957,18 @@ export function MarketDashboardConcept5({
                             </div>
                           </dd>
                         </div>
-                      </div>
+                        </div>
 
-                      <div className="h-full rounded-sm p-[1px] sm:col-span-2 xl:col-span-8" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                        <div className="h-full rounded-sm p-[1px] xl:col-span-3" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                         <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
                           <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Drug Description</dt>
                           <dd className="mt-2 text-sm leading-relaxed text-[#7c7267]">
                             {selectedMarket.event?.eventDescription?.trim() || '-'}
                           </dd>
                         </div>
-                      </div>
-                    </dl>
+                        </div>
+                      </dl>
+                    </div>
                   </div>
 
                   <div className="py-6" aria-hidden="true" />
@@ -1003,7 +1017,7 @@ export function MarketDashboardConcept5({
                                   className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
                                 />
                                 <SortablePositionHeader
-                                  label={useMarkets2Layout ? 'Appr' : 'Approve'}
+                                  label="Yes"
                                   sortKey="yesShares"
                                   sortState={positionSort}
                                   onSort={handlePositionSort}
@@ -1011,7 +1025,7 @@ export function MarketDashboardConcept5({
                                   className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
                                 />
                                 <SortablePositionHeader
-                                  label={useMarkets2Layout ? 'Rej' : 'Reject'}
+                                  label="No"
                                   sortKey="noShares"
                                   sortState={positionSort}
                                   onSort={handlePositionSort}
@@ -1103,7 +1117,7 @@ export function MarketDashboardConcept5({
               </div>
 
 		              {!useMarkets2Layout
-		                ? renderReasoningPanel({ className: 'lg:col-span-5 lg:col-start-8 lg:row-start-1 lg:row-span-2 lg:self-start lg:pl-1 lg:sticky lg:top-20' })
+		                ? renderReasoningPanel({ className: 'lg:col-span-6 lg:col-start-7 lg:row-start-1 lg:row-span-2 lg:self-start lg:pl-1 lg:sticky lg:top-20' })
 		                : null}
 
 	              </div>

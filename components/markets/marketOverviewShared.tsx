@@ -431,7 +431,7 @@ export function MarketDetailChart({
 
   const activeTooltip = activePoint
     ? (() => {
-        const label = `${formatShortDateUtc(activePoint.point.snapshotDate)} • YES ${formatPercent(activePoint.point.priceYes, 1)}`
+        const label = `YES ${formatPercent(activePoint.point.priceYes, 1)}`
         const widthEstimate = Math.max(94, Math.ceil(label.length * 6.15) + 16)
         const prefersAbove = activePoint.y - 28 >= padding
         const y = prefersAbove
@@ -604,13 +604,19 @@ export function MarketDetailChart({
             : null}
         </svg>
       </div>
-      {isScrubLocked && scrubSnapshotDate ? (
-        <div className="mt-2 flex items-center justify-end text-[11px] text-[#5c6f84]">
-          <span className="rounded-full border border-[#bad7ee] bg-[#eaf4fd] px-2.5 py-1">
-            Locked to {formatShortDateUtc(scrubSnapshotDate)}. Click that day again to clear.
-          </span>
-        </div>
-      ) : null}
+      <div className="mt-2 flex min-h-[32px] items-center justify-end text-[11px] text-[#5c6f84]">
+        <span
+          className={cn(
+            'max-w-full truncate whitespace-nowrap rounded-full border border-[#bad7ee] bg-[#eaf4fd] px-2.5 py-1 transition-opacity duration-150',
+            isScrubLocked && scrubSnapshotDate ? 'opacity-100' : 'pointer-events-none select-none opacity-0',
+          )}
+          aria-hidden={!isScrubLocked || !scrubSnapshotDate}
+        >
+          {isScrubLocked && scrubSnapshotDate
+            ? `Locked to ${formatShortDateUtc(scrubSnapshotDate)}. Click that day again to clear.`
+            : 'Locked to day. Click that day again to clear.'}
+        </span>
+      </div>
       {showDateRangeFooter ? (
         <div className="mt-2 flex items-center justify-end text-[11px] text-[#6f6458]">
           <span>
