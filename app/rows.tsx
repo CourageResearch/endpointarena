@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { MODEL_NAMES, MODEL_DISPLAY_NAMES, findPredictionByVariant, abbreviateType, STATUS_COLORS, type ModelVariant, type ModelId } from '@/lib/constants'
 import type { Prediction, FDAEvent } from '@/lib/types'
@@ -8,6 +8,155 @@ import { ModelIcon } from '@/components/ModelIcon'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
+
+const PREDICTION_ORDER: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
+const DOUBLE_ESCAPE_WINDOW_MS = 1200
+const COPY_STATUS_RESET_MS = 2200
+
+type CopyStatus = 'idle' | 'copied' | 'error'
+
+function getPredictionTag(prediction: string): 'APPROVE' | 'REJECT' {
+  return prediction === 'approved' ? 'APPROVE' : 'REJECT'
+}
+
+function formatPredictionForClipboard(modelId: ModelVariant, prediction?: Prediction): string {
+  if (!prediction) {
+    return `${MODEL_DISPLAY_NAMES[modelId]}
+Tag: —
+Confidence: —
+Reasoning:
+No prediction available.`
+  }
+
+  const reasoning = prediction.reasoning?.trim() || 'No reasoning provided.'
+  return `${MODEL_DISPLAY_NAMES[modelId]}
+Tag: ${getPredictionTag(prediction.prediction)}
+Confidence: ${prediction.confidence}%
+Reasoning:
+${reasoning}`
+}
+
+function buildClipboardTextForEvent(event: FDAEvent): string {
+  const pdufaDate = new Date(event.pdufaDate).toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+  const primaryTicker = event.symbols?.split(',')[0]?.trim() || '—'
+  const eventSummary = event.eventDescription || event.therapeuticArea || '—'
+
+  const header = [
+    `Drug: ${event.drugName}`,
+    `Company: ${event.companyName}`,
+    `PDUFA: ${pdufaDate}`,
+    `Type: ${abbreviateType(event.applicationType).display}`,
+    `Ticker: ${primaryTicker}`,
+    `FDA Status: ${event.outcome.toUpperCase()}`,
+    `Event: ${eventSummary}`,
+    '',
+    'Model Responses',
+    '==============',
+  ]
+
+  const modelBlocks = PREDICTION_ORDER
+    .map((modelId) => formatPredictionForClipboard(modelId, findPredictionByVariant(event.predictions, modelId)))
+    .join('\n\n---\n\n')
+
+  return `${header.join('\n')}\n\n${modelBlocks}`
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fall through to legacy copy strategy.
+    }
+  }
+
+  if (typeof document === 'undefined') {
+    return false
+  }
+
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    textarea.style.pointerEvents = 'none'
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    const didCopy = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return didCopy
+  } catch {
+    return false
+  }
+}
+
+function useSecretCopyForRow(event: FDAEvent) {
+  const [isSecretCopyUnlocked, setIsSecretCopyUnlocked] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
+  const lastEscapeTimestampRef = useRef<number>(0)
+  const resetTimerRef = useRef<number | null>(null)
+
+  const clearResetTimer = useCallback(() => {
+    if (resetTimerRef.current == null) return
+    window.clearTimeout(resetTimerRef.current)
+    resetTimerRef.current = null
+  }, [])
+
+  const setTransientCopyStatus = useCallback((status: CopyStatus) => {
+    clearResetTimer()
+    setCopyStatus(status)
+    resetTimerRef.current = window.setTimeout(() => {
+      setCopyStatus('idle')
+    }, COPY_STATUS_RESET_MS)
+  }, [clearResetTimer])
+
+  useEffect(() => {
+    const handleKeyDown = (keyboardEvent: KeyboardEvent) => {
+      const isEscapeKey =
+        keyboardEvent.key === 'Escape' ||
+        keyboardEvent.key === 'Esc' ||
+        keyboardEvent.code === 'Escape' ||
+        keyboardEvent.keyCode === 27
+      if (!isEscapeKey) return
+
+      const now = Date.now()
+      if (now - lastEscapeTimestampRef.current <= DOUBLE_ESCAPE_WINDOW_MS) {
+        setIsSecretCopyUnlocked(true)
+      }
+      lastEscapeTimestampRef.current = now
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      clearResetTimer()
+    }
+  }, [clearResetTimer])
+
+  const handleCopyAllPredictions = useCallback(async () => {
+    const didCopy = await copyTextToClipboard(buildClipboardTextForEvent(event))
+    setTransientCopyStatus(didCopy ? 'copied' : 'error')
+  }, [event, setTransientCopyStatus])
+
+  return {
+    copyStatus,
+    handleCopyAllPredictions,
+    isSecretCopyUnlocked,
+  }
+}
 
 function DecisionMark({
   isCorrect,
@@ -69,6 +218,124 @@ function StatusBadgeMobile({ status }: { status: 'Pending' | 'Approved' | 'Rejec
   )
 }
 
+type InlineSegment =
+  | { type: 'text'; value: string }
+  | { type: 'link'; value: string; href: string }
+
+const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g
+const RAW_URL_PATTERN = /https?:\/\/[^\s<>"']+/g
+const TRAILING_URL_PUNCTUATION = '.,;:!?)]'
+
+function trimTrailingUrlPunctuation(urlText: string): { url: string; trailing: string } {
+  let splitIndex = urlText.length
+  while (splitIndex > 0 && TRAILING_URL_PUNCTUATION.includes(urlText[splitIndex - 1])) {
+    splitIndex -= 1
+  }
+
+  if (splitIndex === 0) {
+    return { url: urlText, trailing: '' }
+  }
+
+  return {
+    url: urlText.slice(0, splitIndex),
+    trailing: urlText.slice(splitIndex),
+  }
+}
+
+function pushTextSegment(segments: InlineSegment[], value: string) {
+  if (!value) return
+  segments.push({ type: 'text', value })
+}
+
+function parseRawUrls(text: string): InlineSegment[] {
+  const segments: InlineSegment[] = []
+  let cursor = 0
+  RAW_URL_PATTERN.lastIndex = 0
+  let match = RAW_URL_PATTERN.exec(text)
+
+  while (match) {
+    const matchText = match[0]
+    const matchIndex = match.index
+    pushTextSegment(segments, text.slice(cursor, matchIndex))
+
+    const { url, trailing } = trimTrailingUrlPunctuation(matchText)
+    if (url) {
+      segments.push({ type: 'link', value: url, href: url })
+    } else {
+      pushTextSegment(segments, matchText)
+    }
+    pushTextSegment(segments, trailing)
+
+    cursor = matchIndex + matchText.length
+    match = RAW_URL_PATTERN.exec(text)
+  }
+
+  pushTextSegment(segments, text.slice(cursor))
+  return segments
+}
+
+function parseReasoningInline(text: string): InlineSegment[] {
+  const segments: InlineSegment[] = []
+  let cursor = 0
+  MARKDOWN_LINK_PATTERN.lastIndex = 0
+  let match = MARKDOWN_LINK_PATTERN.exec(text)
+
+  while (match) {
+    const [fullMatch, label, href] = match
+    const matchIndex = match.index
+    parseRawUrls(text.slice(cursor, matchIndex)).forEach((segment) => segments.push(segment))
+    segments.push({ type: 'link', value: label || href, href })
+    cursor = matchIndex + fullMatch.length
+    match = MARKDOWN_LINK_PATTERN.exec(text)
+  }
+
+  parseRawUrls(text.slice(cursor)).forEach((segment) => segments.push(segment))
+  return segments
+}
+
+function ReasoningText({ text, className }: { text: string; className?: string }) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+
+  if (paragraphs.length === 0) {
+    return <p className={className}>No reasoning provided.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {paragraphs.map((paragraph, paragraphIndex) => (
+        <p key={paragraphIndex} className={className}>
+          {paragraph.split('\n').map((line, lineIndex) => {
+            const inlineSegments = parseReasoningInline(line)
+            return (
+              <span key={lineIndex}>
+                {lineIndex > 0 ? <br /> : null}
+                {inlineSegments.map((segment, segmentIndex) => (
+                  segment.type === 'link' ? (
+                    <a
+                      key={segmentIndex}
+                      href={segment.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-dotted decoration-black/20 decoration-[1px] underline-offset-4 hover:text-black/80 hover:decoration-black/35 break-words"
+                    >
+                      {segment.value}
+                    </a>
+                  ) : (
+                    <span key={segmentIndex}>{segment.value}</span>
+                  )
+                ))}
+              </span>
+            )
+          })}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function SourceIndicator({ source }: { source: string }) {
   const isUrl = source.startsWith('http')
   if (isUrl) {
@@ -123,11 +390,29 @@ function ClinicalTrialLink({ nctId }: { nctId: string }) {
   )
 }
 
-function PredictionDetail({ prediction, outcome }: { prediction: Prediction; outcome: string }) {
+function PredictionDetail({
+  prediction,
+  outcome,
+  showCopyAllButton = false,
+  copyStatus = 'idle',
+  onCopyAllPredictions,
+}: {
+  prediction: Prediction
+  outcome: string
+  showCopyAllButton?: boolean
+  copyStatus?: CopyStatus
+  onCopyAllPredictions?: () => Promise<void>
+}) {
   const modelName = MODEL_NAMES[prediction.predictorId as ModelId] || prediction.predictorId
   const isApproved = prediction.prediction === 'approved'
   const fdaDecided = outcome !== 'Pending'
   const isPredictionCorrect = prediction.correct
+  const copyButtonLabel =
+    copyStatus === 'copied'
+      ? 'Copied all 4'
+      : copyStatus === 'error'
+        ? 'Copy failed'
+        : 'Copy all 4'
 
   return (
     <div className="space-y-3 rounded-lg border border-black/[0.06] bg-black/[0.03] p-4">
@@ -139,6 +424,17 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
           </span>
           <span className="text-sm text-black/40"><span className="font-mono">{prediction.confidence}%</span> confidence</span>
         </div>
+        {showCopyAllButton && onCopyAllPredictions && (
+          <button
+            type="button"
+            onClick={() => {
+              void onCopyAllPredictions()
+            }}
+            className="rounded-md border border-black/15 bg-white/60 px-2.5 py-1 text-xs font-medium text-black/60 transition-colors hover:bg-white/85"
+          >
+            {copyButtonLabel}
+          </button>
+        )}
       </div>
 
       {fdaDecided && (
@@ -162,9 +458,10 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
         </div>
       )}
 
-      <p className="truncate-wrap text-sm leading-relaxed text-black/50">
-        {prediction.reasoning}
-      </p>
+      <ReasoningText
+        text={prediction.reasoning}
+        className="truncate-wrap text-sm leading-relaxed text-black/50"
+      />
     </div>
   )
 }
@@ -178,6 +475,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
   }
 
   const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
 
   return (
     <>
@@ -223,7 +521,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
         <td className="text-center px-3 py-5">
           <StatusBadge status="Pending" />
         </td>
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
+        {PREDICTION_ORDER.map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           const isExpanded = expandedPrediction === modelId
           return (
@@ -247,7 +545,13 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
       {expandedPred && (
         <tr className="border-b border-black/[0.08]">
           <td colSpan={10} className="px-4 py-3">
-            <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
+            <PredictionDetail
+              prediction={expandedPred}
+              outcome={event.outcome}
+              showCopyAllButton={isSecretCopyUnlocked}
+              copyStatus={copyStatus}
+              onCopyAllPredictions={handleCopyAllPredictions}
+            />
           </td>
         </tr>
       )}
@@ -264,6 +568,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
   }
 
   const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
 
   return (
     <>
@@ -309,7 +614,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
         <td className="text-center px-3 py-5">
           <StatusBadge status={event.outcome as 'Approved' | 'Rejected'} />
         </td>
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
+        {PREDICTION_ORDER.map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           if (!pred) return <td key={modelId} className="text-center px-3 py-5 text-black/15">—</td>
           const isCorrect = pred.correct
@@ -332,7 +637,13 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
       {expandedPred && (
         <tr className="border-b border-black/[0.08]">
           <td colSpan={10} className="px-4 py-3">
-            <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
+            <PredictionDetail
+              prediction={expandedPred}
+              outcome={event.outcome}
+              showCopyAllButton={isSecretCopyUnlocked}
+              copyStatus={copyStatus}
+              onCopyAllPredictions={handleCopyAllPredictions}
+            />
           </td>
         </tr>
       )}
@@ -352,6 +663,7 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
   }
 
   const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
   const ticker = event.symbols?.split(',')[0].trim()
 
   return (
@@ -394,7 +706,7 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
 
       {/* Predictions */}
       <div className="mt-3 grid grid-cols-4 gap-2">
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
+        {PREDICTION_ORDER.map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           const isExpanded = expandedPrediction === modelId
           return (
@@ -418,7 +730,13 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
 
       {expandedPred && (
         <div className="mt-3">
-          <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
+          <PredictionDetail
+            prediction={expandedPred}
+            outcome={event.outcome}
+            showCopyAllButton={isSecretCopyUnlocked}
+            copyStatus={copyStatus}
+            onCopyAllPredictions={handleCopyAllPredictions}
+          />
         </div>
       )}
     </div>
@@ -433,6 +751,7 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
   }
 
   const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
   const ticker = event.symbols?.split(',')[0].trim()
 
   return (
@@ -475,7 +794,7 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
 
       {/* Predictions */}
       <div className="mt-3 grid grid-cols-4 gap-2">
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
+        {PREDICTION_ORDER.map((modelId) => {
           const pred = findPredictionByVariant(event.predictions,modelId)
           if (!pred) {
             return (
@@ -512,7 +831,13 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
 
       {expandedPred && (
         <div className="mt-3">
-          <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
+          <PredictionDetail
+            prediction={expandedPred}
+            outcome={event.outcome}
+            showCopyAllButton={isSecretCopyUnlocked}
+            copyStatus={copyStatus}
+            onCopyAllPredictions={handleCopyAllPredictions}
+          />
         </div>
       )}
     </div>

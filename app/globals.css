@@ -8,6 +8,7 @@
   --ea-muted: #8a8075;
   --ea-subtle: #b5aa9e;
   --ea-border: #e8ddd0;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
 }
 
 * {
