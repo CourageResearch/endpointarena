@@ -20,6 +20,8 @@ const CLAUDE_MODEL = 'claude-opus-4-6'
 const GPT_MODEL = 'gpt-5.2'
 const GROK_MODEL = 'grok-4-1-fast-reasoning'
 const GEMINI_MODEL = 'gemini-2.5-pro'
+const CLAUDE_MAX_OUTPUT_TOKENS = 4_096
+const CLAUDE_WEB_SEARCH_MAX_USES = 7
 
 type StreamRequestBody = {
   fdaEventId?: string
@@ -385,17 +387,16 @@ async function streamClaude(
 ) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  send({ type: 'status', status: useReasoning ? 'Starting Claude Opus 4.6 with deep reasoning...' : 'Starting Claude Opus 4.6...' })
+  send({ type: 'status', status: useReasoning ? 'Starting Claude Opus 4.6 with reasoning + search...' : 'Starting Claude Opus 4.6...' })
 
   const requestOptions: any = {
     model: CLAUDE_MODEL,
-    max_tokens: useReasoning ? 16_000 : 4_096,
+    max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
     messages: [{ role: 'user', content: prompt }],
   }
 
   if (useReasoning) {
-    requestOptions.thinking = { type: 'enabled', budget_tokens: 10_000 }
-    requestOptions.tools = [{ type: 'web_search_20250305', name: 'web_search' }]
+    requestOptions.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: CLAUDE_WEB_SEARCH_MAX_USES }]
   }
 
   const stream = client.messages.stream(requestOptions)

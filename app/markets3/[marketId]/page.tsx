@@ -5,7 +5,7 @@ import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 
 export const dynamic = 'force-dynamic'
 
-export default async function MarketDetailPage({
+export default async function MarketDetailPageMarkets3({
   params,
 }: {
   params: Promise<{ marketId: string }>

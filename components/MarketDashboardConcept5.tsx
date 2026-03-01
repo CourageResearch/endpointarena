@@ -30,6 +30,13 @@ type PositionSortDirection = 'asc' | 'desc'
 type PositionSortState = { key: PositionSortKey; direction: PositionSortDirection }
 const APPROVE_TEXT_CLASS = 'text-[#2f7b63]'
 const REJECT_TEXT_CLASS = 'text-[#b3566b]'
+const DETAILS_CARD_SHELL_CLASS = 'rounded-sm p-[1px]'
+const DETAILS_CARD_INNER_CLASS = 'h-full rounded-sm bg-white/95 px-3 py-2'
+const DETAILS_CARD_BORDER_STYLE = { background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' } as const
+const DETAILS_TOP_LABEL_CLASS = 'text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]'
+const DETAILS_TOP_VALUE_CLASS = 'text-sm leading-snug text-[#7c7267]'
+const DETAILS_TOP_SUBVALUE_CLASS = 'text-base leading-snug text-[#8b8176]'
+const DETAILS_BODY_TEXT_CLASS = 'text-sm leading-snug text-[#7c7267]'
 
 type MarketEntry = {
   market: OpenMarketRow
@@ -235,7 +242,7 @@ function CommentCard({
       </span>
     )
   return (
-    <article data-reasoning-card="true" className="rounded-none p-[0.5px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+    <article data-reasoning-card="true" className="w-full rounded-none p-[0.5px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
       <div className="rounded-none bg-white/95 p-3 sm:p-3.5">
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-2">
@@ -325,7 +332,7 @@ function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentM
 type MarketDashboardConcept5Props = {
   initialMarketId?: string | null
   showMarketList?: boolean
-  detailLayout?: 'default' | 'reason-under-graph'
+  detailLayout?: 'default' | 'reason-under-graph' | 'stacked'
 }
 
 export function MarketDashboardConcept5({
@@ -340,6 +347,7 @@ export function MarketDashboardConcept5({
   const [commentSort, setCommentSort] = useState<CommentSort>('newest')
   const [chartScrubSnapshotDate, setChartScrubSnapshotDate] = useState<string | null>(null)
   const [positionSort, setPositionSort] = useState<PositionSortState | null>(null)
+  const [showAllActivity, setShowAllActivity] = useState(false)
 
   const deferredMarketSearch = useDeferredValue(marketSearch.trim().toLowerCase())
 
@@ -400,6 +408,10 @@ export function MarketDashboardConcept5({
     setChartScrubSnapshotDate(null)
   }, [selectedEntry?.market.marketId])
 
+  useEffect(() => {
+    setShowAllActivity(false)
+  }, [selectedEntry?.market.marketId, commentModelFilter, commentSort, chartScrubSnapshotDate])
+
   const selectedMarketActions = useMemo(() => {
     if (!selectedEntry) return []
 
@@ -437,6 +449,8 @@ export function MarketDashboardConcept5({
   }, [chartScrubSnapshotDate, commentModelFilter, commentSort, data?.recentActions, selectedEntry])
 
   const allModelsSelected = commentModelFilter === 'all'
+  const visibleActivityActions = showAllActivity ? selectedMarketActions : selectedMarketActions.slice(0, 5)
+  const hasMoreActivity = selectedMarketActions.length > 5
 
   const selectedStats = useMemo(() => {
     if (!selectedEntry) return null
@@ -493,6 +507,27 @@ export function MarketDashboardConcept5({
   const scrubbedChartDayKey = toUtcDayKey(chartScrubSnapshotDate)
   const scrubbedChartDayLabel = chartScrubSnapshotDate ? formatShortDateUtc(chartScrubSnapshotDate) : null
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
+  const useStackedLayout = !showMarketList && detailLayout === 'stacked'
+  const pdufaDateText = selectedMarket.event?.pdufaDate
+    ? new Date(selectedMarket.event.pdufaDate).toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit',
+      timeZone: 'UTC',
+    })
+    : '-'
+  const pdufaCountdownText = pdufaDays == null
+    ? 'No date'
+    : pdufaDays < 0
+      ? `${Math.abs(pdufaDays)}d past`
+      : pdufaDays === 0
+        ? 'Today'
+        : `${pdufaDays}d left`
+  const applicationTypeMeta = selectedMarket.event?.applicationType
+    ? abbreviateType(selectedMarket.event.applicationType)
+    : null
+  const drugDescriptionText = selectedMarket.event?.eventDescription?.trim() || '-'
+  const companyNameText = selectedMarket.event?.companyName || selectedEntry.subtitle
   const positionRows = selectedMarket.modelStates.map((state, index) => {
     const model = MODEL_INFO[state.modelId]
     const yesShares = Math.max(0, state.yesShares)
@@ -590,7 +625,7 @@ export function MarketDashboardConcept5({
     <section className={cn('min-w-0 space-y-2', className)}>
       <div className="px-1 py-1">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Reasoning</div>
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Activity Feed</div>
           <HeaderDots />
           <span
             className={cn(
@@ -606,8 +641,9 @@ export function MarketDashboardConcept5({
         </div>
 
         <div className="mt-3 flex items-start gap-3">
-          <div className="min-w-0 flex flex-1 flex-wrap items-center gap-3">
-            <button
+          <div className="min-w-0 flex flex-1 flex-col gap-1.5">
+            <div className="min-w-0 flex flex-wrap items-center gap-3">
+              <button
               type="button"
               onClick={() => startTransition(() => setCommentModelFilter('all'))}
               aria-pressed={allModelsSelected}
@@ -619,93 +655,96 @@ export function MarketDashboardConcept5({
                   ? 'border-[#1a1a1a] text-[#1a1a1a]'
                   : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
               )}
-            >
-              <svg viewBox="0 0 12 12" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-                <circle cx="3" cy="3" r="1.25" />
-                <circle cx="9" cy="3" r="1.25" />
-                <circle cx="3" cy="9" r="1.25" />
-                <circle cx="9" cy="9" r="1.25" />
-              </svg>
-            </button>
+              >
+                <svg viewBox="0 0 12 12" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+                  <circle cx="3" cy="3" r="1.25" />
+                  <circle cx="9" cy="3" r="1.25" />
+                  <circle cx="3" cy="9" r="1.25" />
+                  <circle cx="9" cy="9" r="1.25" />
+                </svg>
+              </button>
 
-            {MODEL_IDS.map((modelId) => {
-              const active = commentModelFilter !== 'all' && commentModelFilter.includes(modelId)
-              const model = MODEL_INFO[modelId]
-              return (
-                <button
-                  key={`${selectedMarket.marketId}-${modelId}`}
-                  type="button"
-                  onClick={() => startTransition(() => {
-                    setCommentModelFilter((current) => {
-                      if (current === 'all') {
-                        return [modelId]
-                      }
-                      if (current.includes(modelId)) {
-                        if (current.length === 1) return 'all'
-                        return current.filter((id) => id !== modelId)
-                      }
-                      const next = MODEL_IDS.filter((id) => id === modelId || current.includes(id))
-                      return next.length === MODEL_IDS.length ? 'all' : next
-                    })
-                  })}
-                  aria-label={model.fullName}
-                  title={model.fullName}
-                  aria-pressed={active}
-                  className={cn(
-                    'inline-flex h-7 w-7 items-center justify-center border-b transition',
-                    active
-                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                      : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
-                  )}
-                >
-                  <span className="inline-flex h-4 w-4 items-center justify-center" aria-hidden="true">
-                    <ModelIcon id={modelId} className="h-3.5 w-3.5" />
-                  </span>
-                </button>
-              )
-            })}
+              {MODEL_IDS.map((modelId) => {
+                const active = commentModelFilter !== 'all' && commentModelFilter.includes(modelId)
+                const model = MODEL_INFO[modelId]
+                return (
+                  <button
+                    key={`${selectedMarket.marketId}-${modelId}`}
+                    type="button"
+                    onClick={() => startTransition(() => {
+                      setCommentModelFilter((current) => {
+                        if (current === 'all') {
+                          return [modelId]
+                        }
+                        if (current.includes(modelId)) {
+                          if (current.length === 1) return 'all'
+                          return current.filter((id) => id !== modelId)
+                        }
+                        const next = MODEL_IDS.filter((id) => id === modelId || current.includes(id))
+                        return next.length === MODEL_IDS.length ? 'all' : next
+                      })
+                    })}
+                    aria-label={model.fullName}
+                    title={model.fullName}
+                    aria-pressed={active}
+                    className={cn(
+                      'inline-flex h-7 w-7 items-center justify-center border-b transition',
+                      active
+                        ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                        : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
+                    )}
+                  >
+                    <span className="inline-flex h-4 w-4 items-center justify-center" aria-hidden="true">
+                      <ModelIcon id={modelId} className="h-3.5 w-3.5" />
+                    </span>
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => startTransition(() => setCommentSort(commentSort === 'newest' ? 'oldest' : 'newest'))}
+                aria-label={commentSort === 'newest' ? 'Sort newest first' : 'Sort oldest first'}
+                title={commentSort === 'newest' ? 'Sorting: newest first' : 'Sorting: oldest first'}
+                className="ml-auto inline-flex h-7 w-7 items-center justify-center text-sm font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
+              >
+                <span className="text-sm leading-none" aria-hidden="true">
+                  {commentSort === 'newest' ? '↓' : '↑'}
+                </span>
+              </button>
+            </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => startTransition(() => setCommentSort(commentSort === 'newest' ? 'oldest' : 'newest'))}
-            aria-label={commentSort === 'newest' ? 'Sort newest first' : 'Sort oldest first'}
-            title={commentSort === 'newest' ? 'Sorting: newest first' : 'Sorting: oldest first'}
-            className={cn(
-              'inline-flex h-7 w-7 shrink-0 items-center justify-center transition',
-              'text-[#8a8075] hover:text-[#1a1a1a]',
-            )}
-          >
-            <span className="text-sm leading-none" aria-hidden="true">
-              {commentSort === 'newest' ? '↓' : '↑'}
-            </span>
-          </button>
         </div>
       </div>
 
       <div className="pt-2">
-        {selectedMarketActions.length === 0 ? (
-          <div className="mx-1 rounded-xl border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
-            No reasoning entries match the current filters
-            {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
-            {' '}for this market.
-          </div>
+	        {selectedMarketActions.length === 0 ? (
+	          <div className="rounded-xl border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
+	            No activity entries match the current filters
+	            {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
+	            {' '}for this market.
+	          </div>
 	        ) : (
-	          <div
-	            className={cn(
-	              'reasoning-scrollbox mx-1 h-[18rem] space-y-2 overflow-y-auto overscroll-contain pr-1 sm:h-[24rem] sm:pr-2',
-	              compactHeight
-	                ? 'md:h-[40rem] md:pr-2 lg:h-[46rem] xl:h-[56rem]'
-	                : 'lg:h-[calc(100vh-13rem)] lg:pr-2',
-	            )}
-	          >
-	            {selectedMarketActions.map((action) => (
-              <CommentCard
-                key={action.id}
-                action={action}
-              />
-            ))}
-          </div>
+	          <>
+	            <div className="space-y-2">
+	              {visibleActivityActions.map((action) => (
+                  <CommentCard
+                    key={action.id}
+                    action={action}
+                  />
+                ))}
+	            </div>
+              {hasMoreActivity ? (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllActivity((current) => !current)}
+                    className="inline-flex items-center justify-center rounded-md border border-[#dfd3c3] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#8a8075] transition-colors hover:border-[#c8b7a2] hover:text-[#1a1a1a]"
+                  >
+                    {showAllActivity ? 'Show less' : `Show more (${selectedMarketActions.length - visibleActivityActions.length})`}
+                  </button>
+                </div>
+              ) : null}
+	          </>
         )}
       </div>
     </section>
@@ -803,17 +842,23 @@ export function MarketDashboardConcept5({
 	              <div
 	                className={cn(
 	                  'grid grid-cols-1 gap-4',
-	                  !useMarkets2Layout && 'lg:items-start lg:grid-cols-12',
+	                  !useMarkets2Layout && !useStackedLayout && 'lg:items-start lg:grid-cols-12',
 	                )}
 	              >
               <div
                 className={cn(
                   useMarkets2Layout
-                    ? 'min-w-0 px-1 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(21rem,26rem)] xl:items-start xl:gap-4'
+                    ? 'min-w-0 px-1 xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,24rem)] xl:items-start xl:gap-4'
+                    : useStackedLayout
+                      ? 'min-w-0 px-1 lg:grid lg:grid-cols-[minmax(0,2.25fr)_minmax(16rem,0.75fr)] lg:items-start lg:gap-4'
                     : 'contents',
                 )}
               >
-	                  <div className={cn('min-w-0', !useMarkets2Layout && 'px-1 lg:col-span-6')}>
+	                  <div className={cn(
+                      'min-w-0',
+                      !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
+                      useStackedLayout && 'px-1',
+                    )}>
 	                  <div className="mb-3">
 	                    <div>
 	                      <div className="flex items-center gap-3">
@@ -841,13 +886,14 @@ export function MarketDashboardConcept5({
                     onScrubSnapshotDateChange={setChartScrubSnapshotDate}
 	                  />
 
-	                  <div className="py-3" aria-hidden="true" />
+	                  <div className={cn(useMarkets2Layout ? 'py-3' : 'py-1')} aria-hidden="true" />
 	                  {useMarkets2Layout ? renderReasoningPanel({ compactHeight: true }) : null}
 	                  </div>
 
 			                  <div className={cn(
 			                    'min-w-0',
-			                    !useMarkets2Layout && 'px-1 lg:col-span-6',
+			                    !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
+			                    useStackedLayout && 'px-1',
 			                    useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
 			                  )}>
 		                  <div className="space-y-3">
@@ -859,270 +905,387 @@ export function MarketDashboardConcept5({
                     </div>
 
                     <div className="space-y-2">
-                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[1.2fr_1.2fr_1.7fr_1fr_1fr]">
-                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #5DBB63, #3FAF58)' }}>
-                        <div className="flex h-full flex-col justify-between rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#6f9b72]">Yes</dt>
-                          <dd className="mt-2">
-                            <span className="text-xl font-semibold tracking-tight text-[#1f5f31]">
-                              {formatPercent(selectedStats.yesPrice, 0)}
-                            </span>
-                          </dd>
-                        </div>
-                        </div>
-
-                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #D84A63)' }}>
-                        <div className="flex h-full flex-col justify-between rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b07a84]">No</dt>
-                          <dd className="mt-2">
-                            <span className="text-xl font-semibold tracking-tight text-[#7f1d2d]">
-                              {formatPercent(selectedStats.noPrice, 0)}
-                            </span>
-                          </dd>
-                        </div>
+                      <dl className="grid grid-cols-2 gap-2">
+                        <div className={DETAILS_CARD_SHELL_CLASS} style={{ background: '#5DBB63' }}>
+                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className={DETAILS_TOP_LABEL_CLASS}>Yes</dt>
+                            <dd className="mt-2 space-y-1">
+                              <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS, 'text-[#1f5f31]')}>
+                                {formatPercent(selectedStats.yesPrice, 0)}
+                              </div>
+                            </dd>
+                          </div>
                         </div>
 
-                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                        <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">PDUFA Date</dt>
-                          <dd className="mt-2 space-y-1.5 text-sm text-[#7c7267]">
-                            <div>
-                              {selectedMarket.event?.pdufaDate
-                                ? new Date(selectedMarket.event.pdufaDate).toLocaleDateString('en-US', {
-                                  month: 'numeric',
-                                  day: 'numeric',
-                                  year: '2-digit',
-                                  timeZone: 'UTC',
-                                })
-                                : '-'}
-                            </div>
-                            <div className="whitespace-nowrap">
-                              {pdufaDays == null
-                                ? 'No date'
-                                : pdufaDays < 0
-                                  ? `${Math.abs(pdufaDays)}d past`
-                                  : pdufaDays === 0
-                                    ? 'Today'
-                                : `${pdufaDays}d left`}
-                            </div>
-                          </dd>
-                        </div>
+                        <div className={DETAILS_CARD_SHELL_CLASS} style={{ background: '#EF6F67' }}>
+                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className={DETAILS_TOP_LABEL_CLASS}>No</dt>
+                            <dd className="mt-2 space-y-1">
+                              <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS, 'text-[#7f1d2d]')}>
+                                {formatPercent(selectedStats.noPrice, 0)}
+                              </div>
+                            </dd>
+                          </div>
                         </div>
 
-                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                        <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Volume</dt>
-                          <dd className="mt-2 text-sm font-medium whitespace-nowrap text-[#7c7267]">
-                            {formatCompactMoney(selectedStats.totalVolumeUsd)}
-                          </dd>
-                        </div>
+                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className={DETAILS_TOP_LABEL_CLASS}>PDUFA Clock</dt>
+                            <dd className="mt-2 space-y-1">
+                              <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS)}>{pdufaCountdownText}</div>
+                            </dd>
+                          </div>
                         </div>
 
-                        <div className="h-full rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                        <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Type</dt>
-                          <dd className="mt-2 text-sm text-[#7c7267]">
-                            {selectedMarket.event?.applicationType
-                              ? (
-                                <Link
-                                  href={`/glossary#term-${abbreviateType(selectedMarket.event.applicationType).anchor}`}
-                                  className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                                >
-                                  {abbreviateType(selectedMarket.event.applicationType).display}
-                                </Link>
-                              )
-                              : '-'}
-                          </dd>
+                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className={DETAILS_TOP_LABEL_CLASS}>Volume</dt>
+                            <dd className="mt-2 space-y-1">
+                              <div className={cn('tabular-nums whitespace-nowrap', DETAILS_TOP_VALUE_CLASS)}>
+                                {formatCompactMoney(selectedStats.totalVolumeUsd)}
+                              </div>
+                            </dd>
+                          </div>
                         </div>
+
+                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className={DETAILS_TOP_LABEL_CLASS}>Type</dt>
+                            <dd className="mt-2 space-y-1">
+                              <div className={DETAILS_BODY_TEXT_CLASS}>
+                                {applicationTypeMeta
+                                  ? (
+                                    <Link
+                                      href={`/glossary#term-${applicationTypeMeta.anchor}`}
+                                      className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                                    >
+                                      {applicationTypeMeta.display}
+                                    </Link>
+                                  )
+                                  : '-'}
+                              </div>
+                            </dd>
+                          </div>
+                        </div>
+
+                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className={DETAILS_TOP_LABEL_CLASS}>Ticker</dt>
+                            <dd className="mt-2 space-y-1">
+                              <div className={DETAILS_BODY_TEXT_CLASS}>
+                                {primaryTicker ? (
+                                  <a
+                                    href={`https://finance.yahoo.com/quote/${encodeURIComponent(primaryTicker)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                                  >
+                                    ${primaryTicker}
+                                  </a>
+                                ) : '-'}
+                              </div>
+                            </dd>
+                          </div>
                         </div>
                       </dl>
 
-                      <dl className="grid grid-cols-1 gap-2 xl:grid-cols-[1.2fr_1.2fr_1.7fr_1fr_1fr]">
-                        <div className="h-full rounded-sm p-[1px] xl:col-span-2" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                        <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Company</dt>
-                          <dd className="mt-2 space-y-1.5 text-sm leading-snug text-[#7c7267]">
-                            <div>{selectedMarket.event?.companyName || selectedEntry.subtitle}</div>
-                            <div>
-                              {primaryTicker ? (
-                                <a
-                                  href={`https://finance.yahoo.com/quote/${encodeURIComponent(primaryTicker)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono underline decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                                >
-                                  ${primaryTicker}
-                                </a>
-                              ) : <span className="text-[#b5aa9e]">-</span>}
-                            </div>
-                          </dd>
-                        </div>
-                        </div>
-
-                        <div className="h-full rounded-sm p-[1px] xl:col-span-3" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                        <div className="flex h-full flex-col rounded-sm bg-white/95 px-3 py-2.5">
-                          <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Drug Description</dt>
-                          <dd className="mt-2 text-sm leading-relaxed text-[#7c7267]">
-                            {selectedMarket.event?.eventDescription?.trim() || '-'}
-                          </dd>
-                        </div>
+                      <dl className="grid grid-cols-1 gap-2">
+                        <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
+                          <div className={cn('flex h-full flex-col', DETAILS_CARD_INNER_CLASS)}>
+                            <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Drug Description</dt>
+                            <dd className={cn('mt-2', DETAILS_BODY_TEXT_CLASS)}>
+                              {drugDescriptionText}
+                            </dd>
+                          </div>
                         </div>
                       </dl>
                     </div>
                   </div>
 
-                  <div className="py-6" aria-hidden="true" />
-
-                  <div>
-                    <div className="mb-2 px-1">
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Model Positions</div>
-                        <HeaderDots />
-                      </div>
-                    </div>
-                    <div className="mx-1 rounded-md p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                      <div className="overflow-hidden rounded-md bg-white/95">
-                        <div className="hide-scrollbar overflow-x-auto overscroll-x-contain [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
-                          <table className={cn(
-                            'w-full table-fixed',
-                            useMarkets2Layout ? 'min-w-0' : 'min-w-[560px] sm:min-w-[620px] xl:min-w-0',
-                          )}>
-                            <colgroup>
-                              <col style={{ width: useMarkets2Layout ? '82px' : '140px' }} />
-                              <col style={{ width: useMarkets2Layout ? '68px' : '92px' }} />
-                              <col style={{ width: useMarkets2Layout ? '58px' : '70px' }} />
-                              <col style={{ width: useMarkets2Layout ? '58px' : '70px' }} />
-                              <col style={{ width: useMarkets2Layout ? '58px' : '82px' }} />
-                              <col style={{ width: useMarkets2Layout ? '74px' : '82px' }} />
-                            </colgroup>
-                            <thead>
-                              <tr
-                                className={cn(
-                                  'border-b border-[#e8ddd0] uppercase text-[#b5aa9e]',
-                                  useMarkets2Layout ? 'text-[9px] tracking-[0.14em]' : 'text-[10px] tracking-[0.2em]',
-                                )}
-                              >
-                                <SortablePositionHeader
-                                  label="Model"
-                                  sortKey="model"
-                                  sortState={positionSort}
-                                  onSort={handlePositionSort}
-                                  className={useMarkets2Layout ? 'px-1.5' : 'pl-[2.625rem] pr-5'}
-                                />
-                                <SortablePositionHeader
-                                  label="View"
-                                  sortKey="netStance"
-                                  sortState={positionSort}
-                                  onSort={handlePositionSort}
-                                  className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                />
-                                <SortablePositionHeader
-                                  label="Yes"
-                                  sortKey="yesShares"
-                                  sortState={positionSort}
-                                  onSort={handlePositionSort}
-                                  align="right"
-                                  className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                />
-                                <SortablePositionHeader
-                                  label="No"
-                                  sortKey="noShares"
-                                  sortState={positionSort}
-                                  onSort={handlePositionSort}
-                                  align="right"
-                                  className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                />
-                                <SortablePositionHeader
-                                  label="Pos"
-                                  sortKey="position"
-                                  sortState={positionSort}
-                                  onSort={handlePositionSort}
-                                  align="right"
-                                  className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                />
-                                <SortablePositionHeader
-                                  label="P/L"
-                                  sortKey="pnl"
-                                  sortState={positionSort}
-                                  onSort={handlePositionSort}
-                                  align="right"
-                                  className={useMarkets2Layout ? 'px-1.5' : 'px-5'}
-                                />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sortedPositionRows.map((row) => {
-                                const {
-                                  state,
-                                  model,
-                                  yesShares,
-                                  noShares,
-                                  hasBothSides,
-                                  positionValueUsd,
-                                  pnlUsd,
-                                  netDisplayLabel,
-                                  netTextClass,
-                                } = row
-                                const compactModelLabel = model.name === 'GPT-5.2' ? 'GPT' : model.name
-                                return (
-                                  <tr key={`${selectedMarket.marketId}-${state.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
-                                    <td className={cn('align-top', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4')}>
-                                      <div className="flex items-center gap-1.5">
-                                        {!useMarkets2Layout ? (
-                                          <span
-                                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
-                                            aria-hidden="true"
-                                          >
-                                            <ModelIcon id={state.modelId} className="h-4 w-4" />
-                                          </span>
-                                        ) : null}
-                                        <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
-                                          {useMarkets2Layout ? compactModelLabel : getPositionModelLabel(state.modelId, model.fullName)}
-                                        </span>
-                                      </div>
-                                    </td>
-                                    <td className={cn('align-top', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className={cn('text-xs font-medium tracking-[0.02em]', netTextClass)}>
-                                          {netDisplayLabel}
-                                        </span>
-                                        {hasBothSides && !useMarkets2Layout ? (
-                                          <span className="text-[10px] text-[#9a8f82]">mixed</span>
-                                        ) : null}
-                                      </div>
-                                    </td>
-                                    <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                      {formatShares(yesShares)}
-                                    </td>
-                                    <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                      {formatShares(noShares)}
-                                    </td>
-                                    <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                      <span title={`Cost basis ${formatCompactMoney(state.costBasisUsd || 0)}`}>
-                                        {formatCompactMoney(positionValueUsd)}
-                                      </span>
-                                    </td>
-                                    <td className={cn('text-right align-top text-xs font-medium tabular-nums', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4', getSignedMoneyClass(pnlUsd))}>
-                                      {formatSignedCompactMoney(pnlUsd)}
-                                    </td>
+                  {useMarkets2Layout ? (
+                    <>
+                      <div className="py-6" aria-hidden="true" />
+                      <div>
+                        <div className="mb-2 px-1">
+                          <div className="flex items-center gap-3">
+                            <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Model Positions</div>
+                            <HeaderDots />
+                          </div>
+                        </div>
+                        <div className="mx-1 rounded-md p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                          <div className="overflow-hidden rounded-md bg-white/95">
+                            <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
+                              <table className={cn(
+                                'w-full table-fixed',
+                                useMarkets2Layout ? 'min-w-[420px]' : 'min-w-[560px] sm:min-w-[620px] xl:min-w-0',
+                              )}>
+                                <colgroup>
+                                  <col style={{ width: useMarkets2Layout ? '82px' : '140px' }} />
+                                  <col style={{ width: useMarkets2Layout ? '68px' : '92px' }} />
+                                  <col style={{ width: useMarkets2Layout ? '58px' : '70px' }} />
+                                  <col style={{ width: useMarkets2Layout ? '58px' : '70px' }} />
+                                  <col style={{ width: useMarkets2Layout ? '58px' : '82px' }} />
+                                  <col style={{ width: useMarkets2Layout ? '74px' : '82px' }} />
+                                </colgroup>
+                                <thead>
+                                  <tr
+                                    className={cn(
+                                      'border-b border-[#e8ddd0] uppercase text-[#b5aa9e]',
+                                      useMarkets2Layout ? 'text-[9px] tracking-[0.14em]' : 'text-[10px] tracking-[0.2em]',
+                                    )}
+                                  >
+                                    <SortablePositionHeader
+                                      label="Model"
+                                      sortKey="model"
+                                      sortState={positionSort}
+                                      onSort={handlePositionSort}
+                                      className={useMarkets2Layout ? 'px-1.5' : 'pl-[2.625rem] pr-5'}
+                                    />
+                                    <SortablePositionHeader
+                                      label="View"
+                                      sortKey="netStance"
+                                      sortState={positionSort}
+                                      onSort={handlePositionSort}
+                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
+                                    />
+                                    <SortablePositionHeader
+                                      label="Yes"
+                                      sortKey="yesShares"
+                                      sortState={positionSort}
+                                      onSort={handlePositionSort}
+                                      align="right"
+                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
+                                    />
+                                    <SortablePositionHeader
+                                      label="No"
+                                      sortKey="noShares"
+                                      sortState={positionSort}
+                                      onSort={handlePositionSort}
+                                      align="right"
+                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
+                                    />
+                                    <SortablePositionHeader
+                                      label="Pos"
+                                      sortKey="position"
+                                      sortState={positionSort}
+                                      onSort={handlePositionSort}
+                                      align="right"
+                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
+                                    />
+                                    <SortablePositionHeader
+                                      label="P/L"
+                                      sortKey="pnl"
+                                      sortState={positionSort}
+                                      onSort={handlePositionSort}
+                                      align="right"
+                                      className={useMarkets2Layout ? 'px-1.5' : 'px-5'}
+                                    />
                                   </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
+                                </thead>
+                                <tbody>
+                                  {sortedPositionRows.map((row) => {
+                                    const {
+                                      state,
+                                      model,
+                                      yesShares,
+                                      noShares,
+                                      hasBothSides,
+                                      positionValueUsd,
+                                      pnlUsd,
+                                      netDisplayLabel,
+                                      netTextClass,
+                                    } = row
+                                    const compactModelLabel = model.name === 'GPT-5.2' ? 'GPT' : model.name
+                                    return (
+                                      <tr key={`${selectedMarket.marketId}-${state.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
+                                        <td className={cn('align-top', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4')}>
+                                          <div className="flex items-center gap-1.5">
+                                            {!useMarkets2Layout ? (
+                                              <span
+                                                className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
+                                                aria-hidden="true"
+                                              >
+                                                <ModelIcon id={state.modelId} className="h-4 w-4" />
+                                              </span>
+                                            ) : null}
+                                            <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
+                                              {useMarkets2Layout ? compactModelLabel : getPositionModelLabel(state.modelId, model.fullName)}
+                                            </span>
+                                          </div>
+                                        </td>
+                                        <td className={cn('align-top', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={cn('text-xs font-medium tracking-[0.02em]', netTextClass)}>
+                                              {netDisplayLabel}
+                                            </span>
+                                            {hasBothSides && !useMarkets2Layout ? (
+                                              <span className="text-[10px] text-[#9a8f82]">mixed</span>
+                                            ) : null}
+                                          </div>
+                                        </td>
+                                        <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                                          {formatShares(yesShares)}
+                                        </td>
+                                        <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                                          {formatShares(noShares)}
+                                        </td>
+                                        <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                                          <span title={`Cost basis ${formatCompactMoney(state.costBasisUsd || 0)}`}>
+                                            {formatCompactMoney(positionValueUsd)}
+                                          </span>
+                                        </td>
+                                        <td className={cn('text-right align-top text-xs font-medium tabular-nums', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4', getSignedMoneyClass(pnlUsd))}>
+                                          {formatSignedCompactMoney(pnlUsd)}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    </>
+                  ) : null}
               </div>
-
-		              {!useMarkets2Layout
-		                ? renderReasoningPanel({ className: 'lg:col-span-6 lg:col-start-7 lg:row-start-1 lg:row-span-2 lg:self-start lg:pl-1 lg:sticky lg:top-20' })
-		                : null}
 
 	              </div>
 	            </div>
 	            </div>
+	            {!useMarkets2Layout ? renderReasoningPanel({ className: cn('px-1', useStackedLayout && '-mt-2') }) : null}
+	            {!useMarkets2Layout ? (
+	              <div className="mt-10 px-1">
+	                <div className="mb-2 px-1">
+	                  <div className="flex items-center gap-3">
+	                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Model Positions</div>
+	                    <HeaderDots />
+	                  </div>
+	                </div>
+	                <div className="mx-1 rounded-md p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+	                  <div className="overflow-hidden rounded-md bg-white/95">
+	                    <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
+	                      <table className="w-full table-fixed min-w-[560px] sm:min-w-[620px] xl:min-w-0">
+	                        <colgroup>
+	                          <col style={{ width: '140px' }} />
+	                          <col style={{ width: '92px' }} />
+	                          <col style={{ width: '70px' }} />
+	                          <col style={{ width: '70px' }} />
+	                          <col style={{ width: '82px' }} />
+	                          <col style={{ width: '82px' }} />
+	                        </colgroup>
+	                        <thead>
+	                          <tr className="border-b border-[#e8ddd0] uppercase text-[#b5aa9e] text-[10px] tracking-[0.2em]">
+	                            <SortablePositionHeader
+	                              label="Model"
+	                              sortKey="model"
+	                              sortState={positionSort}
+	                              onSort={handlePositionSort}
+	                              className="pl-[2.625rem] pr-5"
+	                            />
+	                            <SortablePositionHeader
+	                              label="View"
+	                              sortKey="netStance"
+	                              sortState={positionSort}
+	                              onSort={handlePositionSort}
+	                              className="px-1.5"
+	                            />
+	                            <SortablePositionHeader
+	                              label="Yes"
+	                              sortKey="yesShares"
+	                              sortState={positionSort}
+	                              onSort={handlePositionSort}
+	                              align="right"
+	                              className="px-1.5"
+	                            />
+	                            <SortablePositionHeader
+	                              label="No"
+	                              sortKey="noShares"
+	                              sortState={positionSort}
+	                              onSort={handlePositionSort}
+	                              align="right"
+	                              className="px-1.5"
+	                            />
+	                            <SortablePositionHeader
+	                              label="Pos"
+	                              sortKey="position"
+	                              sortState={positionSort}
+	                              onSort={handlePositionSort}
+	                              align="right"
+	                              className="px-1.5"
+	                            />
+	                            <SortablePositionHeader
+	                              label="P/L"
+	                              sortKey="pnl"
+	                              sortState={positionSort}
+	                              onSort={handlePositionSort}
+	                              align="right"
+	                              className="px-5"
+	                            />
+	                          </tr>
+	                        </thead>
+	                        <tbody>
+	                          {sortedPositionRows.map((row) => {
+	                            const {
+	                              state,
+	                              model,
+	                              yesShares,
+	                              noShares,
+	                              hasBothSides,
+	                              positionValueUsd,
+	                              pnlUsd,
+	                              netDisplayLabel,
+	                              netTextClass,
+	                            } = row
+	                            return (
+	                              <tr key={`${selectedMarket.marketId}-${state.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
+	                                <td className="align-top px-5 py-4">
+	                                  <div className="flex items-center gap-1.5">
+	                                    <span
+	                                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
+	                                      aria-hidden="true"
+	                                    >
+	                                      <ModelIcon id={state.modelId} className="h-4 w-4" />
+	                                    </span>
+	                                    <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
+	                                      {getPositionModelLabel(state.modelId, model.fullName)}
+	                                    </span>
+	                                  </div>
+	                                </td>
+	                                <td className="align-top px-1.5 py-4">
+	                                  <div className="flex items-center gap-1.5">
+	                                    <span className={cn('text-xs font-medium tracking-[0.02em]', netTextClass)}>
+	                                      {netDisplayLabel}
+	                                    </span>
+	                                    {hasBothSides ? (
+	                                      <span className="text-[10px] text-[#9a8f82]">mixed</span>
+	                                    ) : null}
+	                                  </div>
+	                                </td>
+	                                <td className="text-right align-top text-xs tabular-nums px-1.5 py-4">
+	                                  {formatShares(yesShares)}
+	                                </td>
+	                                <td className="text-right align-top text-xs tabular-nums px-1.5 py-4">
+	                                  {formatShares(noShares)}
+	                                </td>
+	                                <td className="text-right align-top text-xs tabular-nums px-1.5 py-4">
+	                                  <span title={`Cost basis ${formatCompactMoney(state.costBasisUsd || 0)}`}>
+	                                    {formatCompactMoney(positionValueUsd)}
+	                                  </span>
+	                                </td>
+	                                <td className={cn('text-right align-top text-xs font-medium tabular-nums px-5 py-4', getSignedMoneyClass(pnlUsd))}>
+	                                  {formatSignedCompactMoney(pnlUsd)}
+	                                </td>
+	                              </tr>
+	                            )
+	                          })}
+	                        </tbody>
+	                      </table>
+	                    </div>
+	                  </div>
+	                </div>
+	              </div>
+	            ) : null}
 	          </section>
 
         </section>

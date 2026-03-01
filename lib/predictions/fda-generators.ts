@@ -7,6 +7,8 @@ const CLAUDE_MODEL = 'claude-opus-4-6'
 const GPT_MODEL = 'gpt-5.2'
 const GROK_MODEL = 'grok-4-1-fast-reasoning'
 const GEMINI_MODEL = 'gemini-2.5-pro'
+const CLAUDE_MAX_OUTPUT_TOKENS = 4_096
+const CLAUDE_WEB_SEARCH_MAX_USES = 7
 
 interface FDAEventInfo {
   drugName: string
@@ -21,7 +23,7 @@ interface FDAEventInfo {
   source: string | null
 }
 
-// Claude prediction with extended thinking (Deep Research)
+// Claude prediction with reasoning + limited web search
 export async function generateClaudeFDAPrediction(event: FDAEventInfo): Promise<FDAPredictionResult> {
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
@@ -31,18 +33,14 @@ export async function generateClaudeFDAPrediction(event: FDAEventInfo): Promise<
 
   const message = await client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 16000,
-    thinking: {
-      type: 'enabled',
-      budget_tokens: 10000, // Allow deep reasoning
-    },
+    max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
     messages: [
       {
         role: 'user',
         content: prompt,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: CLAUDE_WEB_SEARCH_MAX_USES }],
   } as any)
 
   // Extract text from response (may include thinking blocks)

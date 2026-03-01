@@ -377,10 +377,10 @@ export function MarketDetailChart({
   const series = history.length > 0 ? history : [{ snapshotDate: new Date().toISOString(), priceYes: currentPrice }]
   const pointSpacing = 40
   const width = Math.min(5600, Math.max(560, 34 + (Math.max(1, series.length - 1) * pointSpacing) + 28))
-  const plotHeight = 188
+  const plotHeight = 212
   const xAxisBandHeight = 22
   const height = plotHeight + xAxisBandHeight
-  const padding = 7
+  const padding = 3
   const yAxisGutter = 34
   const plotWidth = width - yAxisGutter
   const plotRight = plotWidth - padding
@@ -498,7 +498,7 @@ export function MarketDetailChart({
                   x={width - 4}
                   y={y}
                   textAnchor="end"
-                  dominantBaseline="middle"
+                  dominantBaseline={tick === 1 ? 'hanging' : 'middle'}
                   fontSize="10"
                   fill="#74695d"
                 >
