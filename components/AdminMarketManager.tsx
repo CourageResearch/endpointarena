@@ -26,7 +26,11 @@ interface DailyRunProgressState {
   openMarkets: number
   totalActions: number
   completedActions: number
+  okCount: number
+  errorCount: number
+  skippedCount: number
   latestResult: DailyRunResult | null
+  latestError: DailyRunResult | null
 }
 
 function formatMoney(value: number): string {
@@ -84,6 +88,12 @@ function formatProgressLog(result: DailyRunResult): string {
   const modelName = MODEL_INFO[result.modelId].fullName
   const amountPart = result.amountUsd > 0 ? ` ${formatMoney(result.amountUsd)}` : ''
   return `${modelName} ${result.action}${amountPart} (${result.status}) - ${truncateText(result.detail, 110)}`
+}
+
+function statusLabel(status: DailyRunStatus): string {
+  if (status === 'ok') return 'OK'
+  if (status === 'error') return 'FAILED'
+  return 'SKIPPED'
 }
 
 function formatUtcLogPrefix(now: Date = new Date()): string {
@@ -189,7 +199,11 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
       openMarkets: 0,
       totalActions: 0,
       completedActions: 0,
+      okCount: 0,
+      errorCount: 0,
+      skippedCount: 0,
       latestResult: null,
+      latestError: null,
     })
 
     try {
@@ -221,12 +235,25 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
         }
 
         if (event.type === 'progress') {
-          setRunProgress((prev) => prev ? {
-            ...prev,
-            completedActions: event.completedActions,
-            totalActions: event.totalActions,
-            latestResult: event.result,
-          } : prev)
+          setRunProgress((prev) => {
+            if (!prev) return prev
+
+            const next = {
+              ...prev,
+              completedActions: event.completedActions,
+              totalActions: event.totalActions,
+              latestResult: event.result,
+            }
+
+            if (event.result.status === 'ok') next.okCount += 1
+            if (event.result.status === 'error') {
+              next.errorCount += 1
+              next.latestError = event.result
+            }
+            if (event.result.status === 'skipped') next.skippedCount += 1
+
+            return next
+          })
           appendRunLog(formatProgressLog(event.result))
           return
         }
@@ -237,6 +264,9 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
             ...prev,
             completedActions: event.payload.processedActions,
             totalActions: event.payload.totalActions,
+            okCount: event.payload.summary.ok,
+            errorCount: event.payload.summary.error,
+            skippedCount: event.payload.summary.skipped,
           } : prev)
           setSummaryFromPayload(event.payload, startedAtMs)
           appendRunLog('Daily market cycle completed')
@@ -289,6 +319,9 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
   const progressPercent = runProgress && runProgress.totalActions > 0
     ? Math.min(100, Math.round((runProgress.completedActions / runProgress.totalActions) * 100))
     : 0
+  const pendingActions = runProgress
+    ? Math.max(0, (runProgress.totalActions || 0) - runProgress.completedActions)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -320,6 +353,28 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
                 ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
                 : 'Initializing run'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {elapsedSeconds}s elapsed
             </p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Completed</p>
+                <p className="text-sm font-semibold text-[#1a1a1a]">{runProgress.completedActions}</p>
+              </div>
+              <div className="rounded border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#2f6f24]">Worked</p>
+                <p className="text-sm font-semibold text-[#2f6f24]">{runProgress.okCount}</p>
+              </div>
+              <div className="rounded border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8d2c22]">Failed</p>
+                <p className="text-sm font-semibold text-[#8d2c22]">{runProgress.errorCount}</p>
+              </div>
+              <div className="rounded border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Skipped</p>
+                <p className="text-sm font-semibold text-[#6f665b]">{runProgress.skippedCount}</p>
+              </div>
+              <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Remaining</p>
+                <p className="text-sm font-semibold text-[#1a1a1a]">{pendingActions}</p>
+              </div>
+            </div>
             <div className="h-2 rounded bg-[#e8ddd0] overflow-hidden">
               <div
                 className="h-full bg-[#1a1a1a] transition-all duration-300"
@@ -328,8 +383,14 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
             </div>
             {runProgress.latestResult && (
               <p className="text-xs text-[#5f564c]">
-                Latest: {formatProgressLog(runProgress.latestResult)}
+                Latest ({statusLabel(runProgress.latestResult.status)}): {formatProgressLog(runProgress.latestResult)}
               </p>
+            )}
+            {runProgress.errorCount > 0 && runProgress.latestError && (
+              <div className="rounded border border-[#c43a2b]/35 bg-[#c43a2b]/10 px-2 py-1.5">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Latest Failure</p>
+                <p className="mt-1 text-xs text-[#8d2c22]">{formatProgressLog(runProgress.latestError)}</p>
+              </div>
             )}
           </div>
         )}
