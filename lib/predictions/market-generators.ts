@@ -46,6 +46,26 @@ function extractResponseText(response: any): string {
   return parts.join('\n').trim()
 }
 
+function extractOpenAIIncompleteReason(response: any): string {
+  const details = response?.incomplete_details
+  if (!details) return ''
+
+  if (typeof details?.reason === 'string' && details.reason.trim().length > 0) {
+    return details.reason.trim()
+  }
+
+  if (typeof details === 'string' && details.trim().length > 0) {
+    return details.trim()
+  }
+
+  try {
+    const serialized = JSON.stringify(details)
+    return serialized === '{}' ? '' : serialized
+  } catch {
+    return ''
+  }
+}
+
 async function generateClaudeMarketDecision(input: MarketDecisionInput): Promise<MarketDecisionResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prompt = buildMarketDecisionPrompt(input)
@@ -72,7 +92,7 @@ async function generateGptMarketDecision(input: MarketDecisionInput): Promise<Ma
   const response = await client.responses.create({
     model: 'gpt-5.2',
     input: prompt,
-    max_output_tokens: 4000,
+    max_output_tokens: 8000,
     tools: [{ type: 'web_search' }],
     reasoning: { effort: 'medium' },
   } as any)
@@ -80,7 +100,9 @@ async function generateGptMarketDecision(input: MarketDecisionInput): Promise<Ma
   const content = extractResponseText(response as any)
   if (!content) {
     const status = (response as any)?.status || 'unknown'
-    throw new Error(`No content in GPT-5.2 response (status: ${status})`)
+    const incompleteReason = extractOpenAIIncompleteReason(response as any)
+    const reasonSuffix = incompleteReason ? `, reason: ${incompleteReason}` : ''
+    throw new Error(`No content in GPT-5.2 response (status: ${status}${reasonSuffix})`)
   }
 
   return parseMarketDecisionResponse(content, input.accountCash)

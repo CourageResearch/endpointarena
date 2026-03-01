@@ -20,6 +20,16 @@ interface Props {
   events: AdminMarketEvent[]
 }
 
+interface LastRunSummaryState {
+  runDateLabel: string
+  durationSeconds: number
+  ok: number
+  error: number
+  skipped: number
+  openMarkets: number
+  nonOkModels: string[]
+}
+
 interface DailyRunProgressState {
   startedAtMs: number
   runDate: string | null
@@ -31,6 +41,12 @@ interface DailyRunProgressState {
   skippedCount: number
   latestResult: DailyRunResult | null
   latestError: DailyRunResult | null
+}
+
+interface ErrorConsoleEntry {
+  id: string
+  utcTime: string
+  message: string
 }
 
 function formatMoney(value: number): string {
@@ -55,9 +71,9 @@ function summarizeCounts(results: DailyRunResult[]): DailyRunSummary {
   }, { ok: 0, error: 0, skipped: 0 })
 }
 
-function summarizeNonOkModels(results: DailyRunResult[]): string {
+function summarizeNonOkModels(results: DailyRunResult[]): string[] {
   const entries = results.filter((result) => result.status !== 'ok')
-  if (entries.length === 0) return ''
+  if (entries.length === 0) return []
 
   const grouped = new Map<string, { modelId: ModelId; status: DailyRunStatus; count: number }>()
   for (const result of entries) {
@@ -74,14 +90,12 @@ function summarizeNonOkModels(results: DailyRunResult[]): string {
     })
   }
 
-  const labels = Array.from(grouped.values()).map((entry) => {
+  return Array.from(grouped.values()).map((entry) => {
     const modelName = MODEL_INFO[entry.modelId].fullName
-    const statusLabel = entry.status.toUpperCase()
+    const statusText = entry.status === 'error' ? 'failed' : 'skipped'
     const suffix = entry.count > 1 ? ` x${entry.count}` : ''
-    return `${modelName} (${statusLabel}${suffix})`
+    return `${modelName} ${statusText}${suffix}`
   })
-
-  return ` — ${labels.join(', ')}`
 }
 
 function formatProgressLog(result: DailyRunResult): string {
@@ -111,10 +125,11 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
   const [search, setSearch] = useState('')
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null)
   const [runningDaily, setRunningDaily] = useState(false)
-  const [lastRunSummary, setLastRunSummary] = useState<string>('')
+  const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(null)
   const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [runLog, setRunLog] = useState<string[]>([])
+  const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>([])
   const [uiError, setUiError] = useState<string | null>(null)
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
@@ -174,15 +189,27 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
     setRunLog((prev) => [`${prefix} UTC  ${line}`, ...prev].slice(0, 10))
   }
 
+  const appendErrorConsole = (message: string) => {
+    const utcTime = formatUtcLogPrefix()
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setErrorConsole((prev) => [{ id, utcTime, message }, ...prev].slice(0, 25))
+  }
+
   const setSummaryFromPayload = (payload: DailyRunPayload, startedAtMs: number) => {
     const counts = payload.summary ?? summarizeCounts(payload.results)
     const durationSeconds = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000))
     const runDateLabel = new Date(payload.runDate).toLocaleString('en-US', { timeZone: 'UTC' })
-    const nonOkSummary = summarizeNonOkModels(payload.results)
+    const nonOkModels = summarizeNonOkModels(payload.results)
 
-    setLastRunSummary(
-      `Run ${runDateLabel} UTC (${durationSeconds}s): ${counts.ok} ok, ${counts.error} errors, ${counts.skipped} skipped across ${payload.openMarkets} open markets${nonOkSummary}`
-    )
+    setLastRunSummary({
+      runDateLabel,
+      durationSeconds,
+      ok: counts.ok,
+      error: counts.error,
+      skipped: counts.skipped,
+      openMarkets: payload.openMarkets,
+      nonOkModels,
+    })
   }
 
   const runDailyCycle = async () => {
@@ -190,9 +217,10 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
 
     setUiError(null)
     setRunningDaily(true)
-    setLastRunSummary('')
+    setLastRunSummary(null)
     setElapsedSeconds(0)
     setRunLog([`${formatUtcLogPrefix(new Date(startedAtMs))} UTC  Starting daily market cycle...`])
+    setErrorConsole([])
     setRunProgress({
       startedAtMs,
       runDate: null,
@@ -249,6 +277,7 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
             if (event.result.status === 'error') {
               next.errorCount += 1
               next.latestError = event.result
+              appendErrorConsole(formatProgressLog(event.result))
             }
             if (event.result.status === 'skipped') next.skippedCount += 1
 
@@ -309,7 +338,9 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
         throw new Error('Daily run ended before completion status was received')
       }
     } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed daily run')
+      const message = error instanceof Error ? error.message : 'Failed daily run'
+      setUiError(message)
+      appendErrorConsole(`RUN FAILED - ${message}`)
     } finally {
       setRunningDaily(false)
       setRunProgress(null)
@@ -407,7 +438,40 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
           </div>
         )}
         {lastRunSummary && (
-          <p className="text-xs text-[#8a8075] mt-3">{lastRunSummary}</p>
+          <div className={`mt-3 rounded-lg border px-3 py-2 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
+            <p className={`text-xs ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
+              Run {lastRunSummary.runDateLabel} UTC ({lastRunSummary.durationSeconds}s) •
+              {' '}Worked {lastRunSummary.ok} •
+              {' '}Failed {lastRunSummary.error} •
+              {' '}Skipped {lastRunSummary.skipped} •
+              {' '}Open Markets {lastRunSummary.openMarkets}
+            </p>
+            {lastRunSummary.nonOkModels.length > 0 && (
+              <p className="mt-1 text-xs text-[#8d2c22]">
+                Issues: {lastRunSummary.nonOkModels.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+
+        {errorConsole.length > 0 && (
+          <div className="mt-3 rounded-lg border border-[#c43a2b]/40 bg-[#2a1311] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#f5b5ae]">
+                {runningDaily ? 'Error Console (Live)' : 'Error Console (Last Run)'}
+              </p>
+              <p className="text-[11px] text-[#f5b5ae]/80">
+                {errorConsole.length} issue{errorConsole.length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="mt-2 max-h-44 overflow-y-auto space-y-1">
+              {errorConsole.map((entry) => (
+                <p key={entry.id} className="text-xs text-[#ffd1cb]">
+                  {entry.utcTime} UTC {entry.message}
+                </p>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
