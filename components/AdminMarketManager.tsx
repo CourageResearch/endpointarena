@@ -287,6 +287,16 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
           return
         }
 
+        if (event.type === 'activity') {
+          setRunProgress((prev) => prev ? {
+            ...prev,
+            completedActions: event.completedActions,
+            totalActions: event.totalActions,
+          } : prev)
+          appendRunLog(event.message)
+          return
+        }
+
         if (event.type === 'done') {
           donePayload = event.payload
           setRunProgress((prev) => prev ? {

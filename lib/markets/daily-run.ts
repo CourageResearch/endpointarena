@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { db, fdaCalendarEvents, marketAccounts, marketActions, marketPositions, marketRuns, predictionMarkets } from '@/lib/db'
-import { type ModelId } from '@/lib/constants'
+import { MODEL_INFO, type ModelId } from '@/lib/constants'
 import { MARKET_DECISION_GENERATORS } from '@/lib/predictions/market-generators'
 import { normalizeRunDate, recordMarketActionError, rotateModelOrder, runBuyAction, runHoldAction, runSellAction, upsertDailySnapshots } from '@/lib/markets/engine'
 import { ConflictError } from '@/lib/errors'
@@ -354,6 +354,14 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
         }
 
         try {
+          const modelName = MODEL_INFO[modelId].fullName
+          const marketOrdinal = marketIndex + 1
+          hooks?.onActivity?.({
+            completedActions: processedActions,
+            totalActions,
+            message: `Running ${modelName} on ${event.drugName} (${marketOrdinal}/${orderedOpenMarkets.length} markets)`,
+          })
+
           const latestMarket = await db.query.predictionMarkets.findFirst({
             where: eq(predictionMarkets.id, market.id),
           })
@@ -376,6 +384,16 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             .sort((a, b) => a.pdufaDate.localeCompare(b.pdufaDate))
           const marketsRemainingThisRun = Math.max(0, orderedOpenMarkets.length - (marketIndex + 1))
 
+          const waitStartedAtMs = Date.now()
+          const waitHeartbeat = setInterval(() => {
+            const waitSeconds = Math.max(1, Math.round((Date.now() - waitStartedAtMs) / 1000))
+            hooks?.onActivity?.({
+              completedActions: processedActions,
+              totalActions,
+              message: `Waiting for ${modelName} response... ${waitSeconds}s`,
+            })
+          }, 15000)
+
           const decision = await generator.generator({
             runDateIso,
             modelId,
@@ -394,6 +412,8 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             totalOpenMarkets: orderedOpenMarkets.length,
             marketsRemainingThisRun,
             otherOpenMarkets,
+          }).finally(() => {
+            clearInterval(waitHeartbeat)
           })
 
           if (!latestMarket.openedAt) {

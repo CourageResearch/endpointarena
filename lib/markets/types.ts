@@ -39,6 +39,12 @@ export type DailyRunStreamEvent =
       totalActions: number
     }
   | {
+      type: 'activity'
+      completedActions: number
+      totalActions: number
+      message: string
+    }
+  | {
       type: 'progress'
       completedActions: number
       totalActions: number
@@ -60,10 +66,14 @@ export type DailyRunHooks = {
     openMarkets: number
     totalActions: number
   }) => void
+  onActivity?: (input: {
+    completedActions: number
+    totalActions: number
+    message: string
+  }) => void
   onProgress?: (input: {
     completedActions: number
     totalActions: number
     result: DailyRunResult
   }) => void
 }
-

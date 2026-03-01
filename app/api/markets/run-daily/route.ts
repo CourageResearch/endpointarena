@@ -40,6 +40,14 @@ export async function POST(request: NextRequest) {
           try {
             const payload = await executeDailyRun(runDate, {
               onStart: (start) => writeEvent({ type: 'start', ...start }),
+              onActivity: ({ completedActions, totalActions, message }) => {
+                writeEvent({
+                  type: 'activity',
+                  completedActions,
+                  totalActions,
+                  message,
+                })
+              },
               onProgress: ({ completedActions, totalActions, result }) => {
                 writeEvent({
                   type: 'progress',
