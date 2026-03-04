@@ -1,15 +1,28 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
-import { MODEL_NAMES, MODEL_DISPLAY_NAMES, findPredictionByVariant, abbreviateType, STATUS_COLORS, type ModelVariant, type ModelId } from '@/lib/constants'
+import {
+  MODEL_DISPLAY_NAMES,
+  MODEL_IDS,
+  MODEL_NAMES,
+  abbreviateType,
+  findPredictionByModelId,
+  STATUS_COLORS,
+  type ModelId,
+} from '@/lib/constants'
 import type { Prediction, FDAEvent } from '@/lib/types'
 import { ModelIcon } from '@/components/ModelIcon'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 
-const PREDICTION_ORDER: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
+const PREDICTION_ORDER: ModelId[] = [...MODEL_IDS]
+const DETAIL_TABLE_FIXED_COLUMNS = 5
+const DETAIL_TABLE_COLSPAN = DETAIL_TABLE_FIXED_COLUMNS + MODEL_IDS.length
+const MOBILE_MODEL_GRID_STYLE: CSSProperties = {
+  gridTemplateColumns: `repeat(${MODEL_IDS.length}, minmax(4.25rem, 1fr))`,
+}
 const DOUBLE_ESCAPE_WINDOW_MS = 1200
 const COPY_STATUS_RESET_MS = 2200
 
@@ -19,7 +32,7 @@ function getPredictionTag(prediction: string): 'APPROVE' | 'REJECT' {
   return prediction === 'approved' ? 'APPROVE' : 'REJECT'
 }
 
-function formatPredictionForClipboard(modelId: ModelVariant, prediction?: Prediction): string {
+function formatPredictionForClipboard(modelId: ModelId, prediction?: Prediction): string {
   if (!prediction) {
     return `${MODEL_DISPLAY_NAMES[modelId]}
 Tag: —
@@ -60,7 +73,7 @@ function buildClipboardTextForEvent(event: FDAEvent): string {
   ]
 
   const modelBlocks = PREDICTION_ORDER
-    .map((modelId) => formatPredictionForClipboard(modelId, findPredictionByVariant(event.predictions, modelId)))
+    .map((modelId) => formatPredictionForClipboard(modelId, findPredictionByModelId(event.predictions, modelId)))
     .join('\n\n---\n\n')
 
   return `${header.join('\n')}\n\n${modelBlocks}`
@@ -409,10 +422,10 @@ function PredictionDetail({
   const isPredictionCorrect = prediction.correct
   const copyButtonLabel =
     copyStatus === 'copied'
-      ? 'Copied all 4'
+      ? `Copied all ${MODEL_IDS.length}`
       : copyStatus === 'error'
         ? 'Copy failed'
-        : 'Copy all 4'
+        : `Copy all ${MODEL_IDS.length}`
 
   return (
     <div className="space-y-3 rounded-lg border border-black/[0.06] bg-black/[0.03] p-4">
@@ -467,19 +480,20 @@ function PredictionDetail({
 }
 
 export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
+  const rowDescription = event.eventDescription?.trim() || null
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelId) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions,expandedPrediction) : null
   const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
 
   return (
     <>
-      <tr className="hover:bg-black/[0.015] border-b border-black/[0.06] transition-colors align-top">
+      <tr className={`hover:bg-black/[0.015] transition-colors align-top ${rowDescription ? '' : 'border-b border-black/[0.06]'}`}>
         <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
@@ -489,9 +503,6 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
             {event.source && <SourceIndicator source={event.source} />}
             {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
           </span>
-        </td>
-        <td className="px-4 py-5 text-sm leading-relaxed text-black/35">
-          <div className="truncate-wrap">{event.eventDescription || event.therapeuticArea || '—'}</div>
         </td>
         <td className="px-4 py-5 text-sm text-black/35 whitespace-nowrap">
           <Link
@@ -522,7 +533,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
           <StatusBadge status="Pending" />
         </td>
         {PREDICTION_ORDER.map((modelId) => {
-          const pred = findPredictionByVariant(event.predictions,modelId)
+          const pred = findPredictionByModelId(event.predictions,modelId)
           const isExpanded = expandedPrediction === modelId
           return (
             <td key={modelId} className="text-center px-3 py-5">
@@ -542,9 +553,16 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
           )
         })}
       </tr>
+      {rowDescription ? (
+        <tr className="border-b border-black/[0.06]">
+          <td colSpan={DETAIL_TABLE_COLSPAN} className="px-4 pb-4 pt-0 text-sm leading-relaxed text-black/35">
+            <div className="truncate-wrap">{rowDescription}</div>
+          </td>
+        </tr>
+      ) : null}
       {expandedPred && (
         <tr className="border-b border-black/[0.08]">
-          <td colSpan={10} className="px-4 py-3">
+          <td colSpan={DETAIL_TABLE_COLSPAN} className="px-4 py-3">
             <PredictionDetail
               prediction={expandedPred}
               outcome={event.outcome}
@@ -560,19 +578,20 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
 }
 
 export function BW2PastRow({ event }: { event: FDAEvent }) {
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
+  const rowDescription = event.eventDescription?.trim() || null
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelId) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions,expandedPrediction) : null
   const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
 
   return (
     <>
-      <tr className="hover:bg-black/[0.015] border-b border-black/[0.06] transition-colors align-top">
+      <tr className={`hover:bg-black/[0.015] transition-colors align-top ${rowDescription ? '' : 'border-b border-black/[0.06]'}`}>
         <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
           {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
         </td>
@@ -582,9 +601,6 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
             {event.source && <SourceIndicator source={event.source} />}
             {event.nctId && <ClinicalTrialLink nctId={event.nctId} />}
           </span>
-        </td>
-        <td className="px-4 py-5 text-sm leading-relaxed text-black/35">
-          <div className="truncate-wrap">{event.eventDescription || event.therapeuticArea || '—'}</div>
         </td>
         <td className="px-4 py-5 text-sm text-black/35 whitespace-nowrap">
           <Link
@@ -615,7 +631,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
           <StatusBadge status={event.outcome as 'Approved' | 'Rejected'} />
         </td>
         {PREDICTION_ORDER.map((modelId) => {
-          const pred = findPredictionByVariant(event.predictions,modelId)
+          const pred = findPredictionByModelId(event.predictions,modelId)
           if (!pred) return <td key={modelId} className="text-center px-3 py-5 text-black/15">—</td>
           const isCorrect = pred.correct
           const isExpanded = expandedPrediction === modelId
@@ -634,9 +650,16 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
           )
         })}
       </tr>
+      {rowDescription ? (
+        <tr className="border-b border-black/[0.06]">
+          <td colSpan={DETAIL_TABLE_COLSPAN} className="px-4 pb-4 pt-0 text-sm leading-relaxed text-black/35">
+            <div className="truncate-wrap">{rowDescription}</div>
+          </td>
+        </tr>
+      ) : null}
       {expandedPred && (
         <tr className="border-b border-black/[0.08]">
-          <td colSpan={10} className="px-4 py-3">
+          <td colSpan={DETAIL_TABLE_COLSPAN} className="px-4 py-3">
             <PredictionDetail
               prediction={expandedPred}
               outcome={event.outcome}
@@ -656,13 +679,13 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
 // =============================================================================
 
 export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
 
-  const handlePredictionClick = (modelId: ModelVariant) => {
+  const handlePredictionClick = (modelId: ModelId) => {
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions,expandedPrediction) : null
   const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
   const ticker = event.symbols?.split(',')[0].trim()
 
@@ -705,27 +728,29 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
       </div>
 
       {/* Predictions */}
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        {PREDICTION_ORDER.map((modelId) => {
-          const pred = findPredictionByVariant(event.predictions,modelId)
-          const isExpanded = expandedPrediction === modelId
-          return (
-            <button
-              key={modelId}
-              onClick={() => pred && handlePredictionClick(modelId)}
-              title={MODEL_DISPLAY_NAMES[modelId]}
-              aria-label={MODEL_DISPLAY_NAMES[modelId]}
-              className={`min-w-0 rounded-md border border-transparent px-1 py-2 text-xs transition-all flex items-center justify-center gap-1.5 ${
-                isExpanded ? 'ring-2 ring-neutral-300' : ''
-              } ${!pred ? 'bg-neutral-50 text-neutral-300' : ''}`}
-            >
-              <div className="w-3.5 h-3.5">
-                <ModelIcon id={modelId} />
-              </div>
-              {pred ? <UpcomingDirectionMark prediction={pred.prediction as 'approved' | 'rejected'} className="h-3.5 w-3.5" /> : '—'}
-            </button>
-          )
-        })}
+      <div className="mt-3 overflow-x-auto">
+        <div className="grid gap-2 min-w-[38rem]" style={MOBILE_MODEL_GRID_STYLE}>
+          {PREDICTION_ORDER.map((modelId) => {
+            const pred = findPredictionByModelId(event.predictions,modelId)
+            const isExpanded = expandedPrediction === modelId
+            return (
+              <button
+                key={modelId}
+                onClick={() => pred && handlePredictionClick(modelId)}
+                title={MODEL_DISPLAY_NAMES[modelId]}
+                aria-label={MODEL_DISPLAY_NAMES[modelId]}
+                className={`min-w-0 rounded-md border border-transparent px-1 py-2 text-xs transition-all flex items-center justify-center gap-1.5 ${
+                  isExpanded ? 'ring-2 ring-neutral-300' : ''
+                } ${!pred ? 'bg-neutral-50 text-neutral-300' : ''}`}
+              >
+                <div className="w-3.5 h-3.5">
+                  <ModelIcon id={modelId} />
+                </div>
+                {pred ? <UpcomingDirectionMark prediction={pred.prediction as 'approved' | 'rejected'} className="h-3.5 w-3.5" /> : '—'}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {expandedPred && (
@@ -744,13 +769,13 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
 }
 
 export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
 
-  const handlePredictionClick = (modelId: ModelVariant) => {
+  const handlePredictionClick = (modelId: ModelId) => {
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPredictionByVariant(event.predictions,expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions,expandedPrediction) : null
   const { isSecretCopyUnlocked, copyStatus, handleCopyAllPredictions } = useSecretCopyForRow(event)
   const ticker = event.symbols?.split(',')[0].trim()
 
@@ -793,40 +818,42 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
       </div>
 
       {/* Predictions */}
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        {PREDICTION_ORDER.map((modelId) => {
-          const pred = findPredictionByVariant(event.predictions,modelId)
-          if (!pred) {
+      <div className="mt-3 overflow-x-auto">
+        <div className="grid gap-2 min-w-[38rem]" style={MOBILE_MODEL_GRID_STYLE}>
+          {PREDICTION_ORDER.map((modelId) => {
+            const pred = findPredictionByModelId(event.predictions,modelId)
+            if (!pred) {
+              return (
+                <div
+                  key={modelId}
+                  title={MODEL_DISPLAY_NAMES[modelId]}
+                  aria-label={MODEL_DISPLAY_NAMES[modelId]}
+                  className="flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent bg-neutral-50 px-1 py-2 text-xs text-neutral-300"
+                >
+                  <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
+                  —
+                </div>
+              )
+            }
+            const isCorrect = pred.correct
+            const isExpanded = expandedPrediction === modelId
             return (
-              <div
+              <button
                 key={modelId}
+                onClick={() => handlePredictionClick(modelId)}
                 title={MODEL_DISPLAY_NAMES[modelId]}
                 aria-label={MODEL_DISPLAY_NAMES[modelId]}
-                className="flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent bg-neutral-50 px-1 py-2 text-xs text-neutral-300"
+                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-1 py-2 text-xs transition-all ${
+                  isExpanded ? 'ring-2 ring-neutral-300' : ''
+                }`}
+                style={getPastPredictionCellStyle(isCorrect)}
               >
                 <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
-                —
-              </div>
+                {isCorrect == null ? '—' : <DecisionMark isCorrect={isCorrect} sizeClass="h-3.5 w-3.5" />}
+              </button>
             )
-          }
-          const isCorrect = pred.correct
-          const isExpanded = expandedPrediction === modelId
-          return (
-            <button
-              key={modelId}
-              onClick={() => handlePredictionClick(modelId)}
-              title={MODEL_DISPLAY_NAMES[modelId]}
-              aria-label={MODEL_DISPLAY_NAMES[modelId]}
-              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-1 py-2 text-xs transition-all ${
-                isExpanded ? 'ring-2 ring-neutral-300' : ''
-              }`}
-              style={getPastPredictionCellStyle(isCorrect)}
-            >
-              <div className="w-3.5 h-3.5"><ModelIcon id={modelId} /></div>
-              {isCorrect == null ? '—' : <DecisionMark isCorrect={isCorrect} sizeClass="h-3.5 w-3.5" />}
-            </button>
-          )
-        })}
+          })}
+        </div>
       </div>
 
       {expandedPred && (

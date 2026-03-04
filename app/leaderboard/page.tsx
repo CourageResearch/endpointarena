@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
 import { desc, eq, inArray, or } from 'drizzle-orm'
-import { MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
+import { MODEL_DISPLAY_NAMES, MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
 import { FDAIcon, ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { BW2MobilePastCard, BW2PastRow } from '@/app/rows'
@@ -21,6 +21,10 @@ interface ModelStats {
 }
 
 const RANK_ORDER_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
+const PAST_TABLE_FIXED_COLUMNS = 5
+const PAST_MODEL_COLUMN_WIDTH = 50
+const PAST_TABLE_MIN_WIDTH = 405 + (MODEL_IDS.length * PAST_MODEL_COLUMN_WIDTH)
+const PAST_TABLE_EMPTY_COLSPAN = PAST_TABLE_FIXED_COLUMNS + MODEL_IDS.length
 
 function PageFrame({ children }: { children: ReactNode }) {
   return <div className="min-h-screen bg-[#F5F2ED] text-[#1a1a1a]">{children}</div>
@@ -71,6 +75,41 @@ function formatMoney(value: number): string {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value)
+}
+
+const MODEL_VERSION_PATTERN = /([A-Za-z]?\d+(?:\.\d+)*(?:\s+[A-Za-z][A-Za-z0-9.-]*)*)$/
+const COMPARISON_COMPANY_LABELS: Record<ModelId, string> = {
+  'claude-opus': 'Anthropic',
+  'gpt-5.2': 'OpenAI',
+  'grok-4': 'xAI',
+  'gemini-2.5': 'Google',
+  'gemini-3-pro': 'Google',
+  'deepseek-v3.2': 'DeepSeek',
+  'llama-4': 'Meta',
+  'kimi-k2': 'Moonshot',
+  'minimax-m2.5': 'MiniMax',
+}
+
+function splitModelNameAndVersion(fullName: string): { model: string; version: string } {
+  const normalized = fullName.trim()
+  const match = normalized.match(MODEL_VERSION_PATTERN)
+  if (!match || match.index == null) {
+    return {
+      model: normalized,
+      version: '—',
+    }
+  }
+
+  const version = match[1].trim()
+  const model = normalized
+    .slice(0, match.index)
+    .replace(/[-\s]+$/, '')
+    .trim()
+
+  return {
+    model: model || normalized,
+    version,
+  }
 }
 
 async function getData() {
@@ -330,13 +369,19 @@ export default async function LeaderboardPage() {
           </p>
 
           <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-            <div className="bg-white/95 rounded-sm overflow-x-auto">
-              <table className="w-full min-w-[480px]">
+            <div className="bg-white/95 rounded-sm overflow-x-auto sm:overflow-x-visible">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col style={{ width: '12rem' }} />
+                  {comparisonModels.map((model) => (
+                    <col key={`comparison-col-${model.id}`} />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr className="border-b border-[#e8ddd0] text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em]">
-                    <th className="text-left px-4 sm:px-8 py-3 font-medium">Metric</th>
+                    <th className="text-left px-3 sm:px-4 py-2.5 font-medium">Metric</th>
                     {comparisonModels.map((model) => (
-                      <th key={model.id} className="text-center px-3 py-3 font-medium">
+                      <th key={model.id} className="text-center px-1.5 py-2.5 font-medium">
                         <div className="w-4 h-4 mx-auto mb-1 text-[#8a8075]" title={MODEL_NAMES[model.id]}>
                           <ModelIcon id={model.id} />
                         </div>
@@ -346,35 +391,51 @@ export default async function LeaderboardPage() {
                 </thead>
                 <tbody>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Model</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Company</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 text-[#8a8075] text-sm sm:text-base whitespace-nowrap">
-                        {MODEL_NAMES[model.id]}
+                      <td key={model.id} className="text-center px-1.5 py-3 text-[#8a8075] text-[13px] sm:text-sm leading-snug break-words">
+                        {COMPARISON_COMPANY_LABELS[model.id]}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Accuracy</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Model</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono text-[#8a8075]">
+                      <td key={model.id} className="text-center px-1.5 py-3 text-[#8a8075] text-[13px] sm:text-sm leading-snug break-words">
+                        {splitModelNameAndVersion(MODEL_NAMES[model.id]).model}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Version</td>
+                    {comparisonModels.map((model) => (
+                      <td key={model.id} className="text-center px-1.5 py-3 text-[#8a8075] text-[13px] sm:text-sm leading-snug break-words">
+                        {splitModelNameAndVersion(MODEL_NAMES[model.id]).version}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Accuracy</td>
+                    {comparisonModels.map((model) => (
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[#8a8075] text-[13px] sm:text-sm">
                         {model.decided > 0 ? `${model.accuracy.toFixed(0)}%` : '—'}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Total equity</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Total equity</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono text-[#8a8075]">
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[#8a8075] text-[13px] sm:text-sm">
                         {model.totalEquity != null ? formatMoney(model.totalEquity) : '—'}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">P/L</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">P/L</td>
                     {comparisonModels.map((model) => (
                       <td
                         key={model.id}
-                        className="text-center px-3 py-4 font-mono"
+                        className="text-center px-1.5 py-3 font-mono text-[13px] sm:text-sm"
                         style={{ color: model.pnl == null ? '#8a8075' : model.pnl >= 0 ? '#3a8a2e' : '#c43a2b' }}
                       >
                         {model.pnl == null ? '—' : `${model.pnl >= 0 ? '+' : '-'}${formatMoney(Math.abs(model.pnl))}`}
@@ -382,57 +443,57 @@ export default async function LeaderboardPage() {
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Correct</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Correct</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#3a8a2e' }}>
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[13px] sm:text-sm" style={{ color: '#3a8a2e' }}>
                         {model.correct}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Wrong</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Wrong</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#c43a2b' }}>
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[13px] sm:text-sm" style={{ color: '#c43a2b' }}>
                         {model.wrong}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Pending</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Pending</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono text-[#b5aa9e]">
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[#b5aa9e] text-[13px] sm:text-sm">
                         {model.pending}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Avg confidence</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Avg confidence</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono text-[#8a8075]">
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[#8a8075] text-[13px] sm:text-sm">
                         {model.total > 0 ? `${model.avgConfidence.toFixed(0)}%` : '—'}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Confidence when correct</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Confidence when correct</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#3a8a2e' }}>
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[13px] sm:text-sm" style={{ color: '#3a8a2e' }}>
                         {model.correct > 0 ? `${model.avgConfidenceCorrect.toFixed(0)}%` : '—'}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Confidence when wrong</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Confidence when wrong</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono" style={{ color: '#c43a2b' }}>
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[13px] sm:text-sm" style={{ color: '#c43a2b' }}>
                         {model.wrong > 0 ? `${model.avgConfidenceWrong.toFixed(0)}%` : '—'}
                       </td>
                     ))}
                   </tr>
                   <tr className="hover:bg-[#f3ebe0]/30 transition-colors">
-                    <td className="px-4 sm:px-8 py-4 text-[#8a8075]">Total predictions</td>
+                    <td className="px-3 sm:px-4 py-3 text-[#8a8075]">Total predictions</td>
                     {comparisonModels.map((model) => (
-                      <td key={model.id} className="text-center px-3 py-4 font-mono text-[#8a8075]">
+                      <td key={model.id} className="text-center px-1.5 py-3 font-mono text-[#8a8075] text-[13px] sm:text-sm">
                         {model.total}
                       </td>
                     ))}
@@ -468,31 +529,31 @@ export default async function LeaderboardPage() {
               </div>
 
               <div className="hidden sm:block overflow-x-auto overscroll-x-contain [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
-                <table className="w-full table-fixed min-w-[640px]">
+                <table className="w-full table-fixed" style={{ minWidth: `${PAST_TABLE_MIN_WIDTH}px` }}>
                   <colgroup>
                     <col style={{width: '60px'}} />
                     <col style={{width: '130px'}} />
-                    <col style={{width: '250px'}} />
                     <col style={{width: '60px'}} />
                     <col style={{width: '65px'}} />
                     <col style={{width: '90px'}} />
-                    <col style={{width: '50px'}} />
-                    <col style={{width: '50px'}} />
-                    <col style={{width: '50px'}} />
-                    <col style={{width: '50px'}} />
+                    {MODEL_IDS.map((modelId) => (
+                      <col key={`leaderboard-past-col-${modelId}`} style={{ width: `${PAST_MODEL_COLUMN_WIDTH}px` }} />
+                    ))}
                   </colgroup>
                   <thead>
                     <tr className="border-b border-[#e8ddd0] text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em]">
                       <th className="text-left px-3 py-3 font-medium">PDUFA</th>
                       <th className="text-left px-3 py-3 font-medium">Drug</th>
-                      <th className="text-left px-3 py-3 font-medium">Event</th>
                       <th className="text-left px-3 py-3 font-medium">Type</th>
                       <th className="text-left px-3 py-3 font-medium">Ticker</th>
                       <th className="text-center px-2 py-3"><div className="w-6 h-6 mx-auto text-[#8a8075]" title="FDA"><FDAIcon /></div></th>
-                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.6"><ModelIcon id="claude" /></div></th>
-                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="GPT-5.2"><ModelIcon id="gpt" /></div></th>
-                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Grok 4.1"><ModelIcon id="grok" /></div></th>
-                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Gemini 2.5 Pro"><ModelIcon id="gemini" /></div></th>
+                      {MODEL_IDS.map((modelId) => (
+                        <th key={`leaderboard-past-head-${modelId}`} className="text-center px-2 py-3">
+                          <div className="w-4 h-4 mx-auto text-[#8a8075]" title={MODEL_DISPLAY_NAMES[modelId]}>
+                            <ModelIcon id={modelId} />
+                          </div>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -500,7 +561,7 @@ export default async function LeaderboardPage() {
                       <BW2PastRow key={event.id} event={event as any} />
                     ))}
                     {recentFdaDecisions.length === 0 && (
-                      <tr><td colSpan={10} className="px-4 py-8 text-center text-[#b5aa9e]">No decisions yet</td></tr>
+                      <tr><td colSpan={PAST_TABLE_EMPTY_COLSPAN} className="px-4 py-8 text-center text-[#b5aa9e]">No decisions yet</td></tr>
                     )}
                   </tbody>
                 </table>

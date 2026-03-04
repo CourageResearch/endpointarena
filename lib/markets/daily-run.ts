@@ -2,7 +2,17 @@ import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db, fdaCalendarEvents, marketAccounts, marketActions, marketPositions, marketRuns, predictionMarkets } from '@/lib/db'
 import { MODEL_INFO, type ModelId } from '@/lib/constants'
 import { MARKET_DECISION_GENERATORS } from '@/lib/predictions/market-generators'
-import { normalizeRunDate, recordMarketActionError, rotateModelOrder, runBuyAction, runHoldAction, runSellAction, upsertDailySnapshots } from '@/lib/markets/engine'
+import {
+  ensureMarketAccounts,
+  ensureMarketPositions,
+  normalizeRunDate,
+  recordMarketActionError,
+  rotateModelOrder,
+  runBuyAction,
+  runHoldAction,
+  runSellAction,
+  upsertDailySnapshots,
+} from '@/lib/markets/engine'
 import { ConflictError } from '@/lib/errors'
 import type { DailyRunHooks, DailyRunPayload, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
 import { getMarketRuntimeConfig, type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
@@ -237,6 +247,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
       marketPriceYes: market.priceYes,
     })
   }
+
+  // Ensure newly-added models always have account + position state for existing open markets.
+  await ensureMarketAccounts()
+  await Promise.all(orderedOpenMarkets.map((market) => ensureMarketPositions(market.id)))
 
   const totalActions = orderedOpenMarkets.length * modelOrder.length
   const runRecord = await startRunRecord({

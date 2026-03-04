@@ -292,6 +292,8 @@ export default async function ProfilePage() {
               </div>
             </div>
 
+            {!isVerified ? <ProfileVerificationPanel /> : null}
+
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
@@ -442,8 +444,6 @@ export default async function ProfilePage() {
                 </div>
               )}
             </section>
-
-            {!isVerified ? <ProfileVerificationPanel /> : null}
 
             <div className="mt-6 flex flex-wrap gap-2">
               <Link

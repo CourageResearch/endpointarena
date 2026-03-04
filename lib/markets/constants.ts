@@ -15,4 +15,14 @@ export type MarketActionType = (typeof MARKET_ACTIONS)[number]
 export const MARKET_OUTCOMES = ['Approved', 'Rejected'] as const
 export type MarketOutcome = (typeof MARKET_OUTCOMES)[number]
 
-export const MARKET_MODELS = ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5'] as const
+export const MARKET_MODELS = [
+  'claude-opus',
+  'gpt-5.2',
+  'grok-4',
+  'gemini-2.5',
+  'gemini-3-pro',
+  'deepseek-v3.2',
+  'llama-4',
+  'kimi-k2',
+  'minimax-m2.5',
+] as const

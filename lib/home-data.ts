@@ -1,6 +1,6 @@
 import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
 import { eq, or, desc, asc, inArray } from 'drizzle-orm'
-import { findPredictionByVariant, getModelVariant, type ModelVariant, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, findPredictionByModelId, isModelId, type ModelId } from '@/lib/constants'
 
 function describeDataError(error: unknown): string {
   if (error instanceof AggregateError) {
@@ -69,51 +69,33 @@ export async function getHomeData() {
       : []
 
     const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
-    const positionsValueByVariant = new Map<ModelVariant, number>()
+    const positionsValueByModelId = new Map<ModelId, number>()
 
     for (const position of positions) {
       const market = openMarketById.get(position.marketId)
-      if (!market) continue
-
-      let variant: ModelVariant
-      try {
-        variant = getModelVariant(position.modelId as ModelId)
-      } catch {
-        continue
-      }
+      if (!market || !isModelId(position.modelId)) continue
 
       const markedValue = (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
-      positionsValueByVariant.set(
-        variant,
-        (positionsValueByVariant.get(variant) ?? 0) + markedValue
+      positionsValueByModelId.set(
+        position.modelId,
+        (positionsValueByModelId.get(position.modelId) ?? 0) + markedValue
       )
     }
 
-    const accountByVariant = new Map<ModelVariant, { cashBalance: number }>()
+    const accountByModelId = new Map<ModelId, { cashBalance: number }>()
     for (const account of accounts) {
-      let variant: ModelVariant
-      try {
-        variant = getModelVariant(account.modelId as ModelId)
-      } catch {
-        continue
-      }
-      accountByVariant.set(variant, { cashBalance: account.cashBalance })
+      if (!isModelId(account.modelId)) continue
+      accountByModelId.set(account.modelId, { cashBalance: account.cashBalance })
     }
 
-    const modelStats = new Map<ModelVariant, { correct: number; total: number; pending: number; confidenceSum: number }>()
-    const modelVariants: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
-    for (const id of modelVariants) {
+    const modelStats = new Map<ModelId, { correct: number; total: number; pending: number; confidenceSum: number }>()
+    for (const id of MODEL_IDS) {
       modelStats.set(id, { correct: 0, total: 0, pending: 0, confidenceSum: 0 })
     }
 
     for (const pred of allFdaPredictions) {
-      let canonicalId: ModelVariant
-      try {
-        canonicalId = getModelVariant(pred.predictorId as ModelId)
-      } catch {
-        continue
-      }
-      const stats = modelStats.get(canonicalId)
+      if (!isModelId(pred.predictorId)) continue
+      const stats = modelStats.get(pred.predictorId)
       if (!stats) continue
       stats.confidenceSum += pred.confidence
 
@@ -134,10 +116,10 @@ export async function getHomeData() {
     const leaderboard = Array.from(modelStats.entries())
       .map(([id, stats]) => {
         const totalPreds = stats.total + stats.pending
-        const account = accountByVariant.get(id)
-        const positionsValue = positionsValueByVariant.get(id) ?? 0
+        const account = accountByModelId.get(id)
+        const positionsValue = positionsValueByModelId.get(id) ?? 0
         return {
-          id: id as ModelVariant,
+          id,
           correct: stats.correct,
           total: stats.total,
           pending: stats.pending,
@@ -158,15 +140,15 @@ export async function getHomeData() {
 
     const nextFdaEvent = upcomingFdaEvents[0] || null
 
-    const gridScatterData = recentFdaDecisions.map(event => ({
+    const gridScatterData = recentFdaDecisions.map((event) => ({
       id: event.id,
       drugName: event.drugName,
       outcome: event.outcome as 'Approved' | 'Rejected',
-      predictions: (['claude', 'gpt', 'grok', 'gemini'] as const).map(variant => {
-        const pred = findPredictionByVariant(event.predictions, variant)
-        if (!pred) return { model: variant, predicted: null, correct: null }
+      predictions: MODEL_IDS.map((modelId) => {
+        const pred = findPredictionByModelId(event.predictions, modelId)
+        if (!pred) return { model: modelId, predicted: null, correct: null }
         return {
-          model: variant,
+          model: modelId,
           predicted: pred.prediction as 'approved' | 'rejected',
           correct: pred.correct,
         }
@@ -183,7 +165,7 @@ export async function getHomeData() {
       stats: {
         fdaEventsTracked: allFdaEvents.length,
         predictions: allFdaPredictions.length,
-        modelsCompared: modelVariants.length,
+        modelsCompared: MODEL_IDS.length,
       },
     }
   } catch (error) {

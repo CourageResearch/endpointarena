@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ModelIcon } from '@/components/ModelIcon'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
-import { abbreviateType, findPredictionByVariant, MODEL_DISPLAY_NAMES, type ModelVariant } from '@/lib/constants'
+import { abbreviateType, findPredictionByModelId, MODEL_DISPLAY_NAMES, MODEL_IDS, type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 
 type PredictionRow = {
@@ -40,7 +40,11 @@ interface FDACalendarTableWithPredictionsProps {
 
 type SortField = 'pdufaDate' | 'companyName' | 'drugName' | 'applicationType' | 'outcome'
 type SortDirection = 'asc' | 'desc'
-const MODEL_ORDER: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
+const MODEL_ORDER: ModelId[] = [...MODEL_IDS]
+const TABLE_FIXED_COLUMNS = 6
+const TABLE_MODEL_COLUMN_WIDTH = 46
+const TABLE_MIN_WIDTH = 824 + (MODEL_ORDER.length * TABLE_MODEL_COLUMN_WIDTH)
+const TABLE_EXPANDED_COLSPAN = TABLE_FIXED_COLUMNS + MODEL_ORDER.length
 
 function PredictionDirectionIcon({ prediction }: { prediction: string }) {
   return (
@@ -55,7 +59,7 @@ function PredictionPanel({
   modelId,
   prediction,
 }: {
-  modelId: ModelVariant
+  modelId: ModelId
   prediction: PredictionRow
 }) {
   const tag = prediction.prediction === 'approved' ? 'APPROVE' : 'REJECT'
@@ -84,7 +88,7 @@ function PredictionPanel({
 export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACalendarTableWithPredictionsProps) {
   const [sortField, setSortField] = useState<SortField>('pdufaDate')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [expanded, setExpanded] = useState<{ eventId: string; modelId: ModelVariant } | null>(null)
+  const [expanded, setExpanded] = useState<{ eventId: string; modelId: ModelId } | null>(null)
   const [filters, setFilters] = useState({
     applicationType: '',
     therapeuticArea: '',
@@ -283,7 +287,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
           const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
           const symbol = event.symbols?.split(', ')[0]
           const isOpen = expanded?.eventId === event.id
-          const expandedPrediction = isOpen && expanded ? findPredictionByVariant(event.predictions, expanded.modelId) : null
+          const expandedPrediction = isOpen && expanded ? findPredictionByModelId(event.predictions, expanded.modelId) : null
           return (
             <div key={event.id} className="rounded-sm bg-white/95 p-4">
               <div className="mb-2 flex items-start justify-between">
@@ -328,31 +332,36 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                 ) : null}
               </div>
 
-              <div className="mt-3 grid grid-cols-4 gap-2">
-                {MODEL_ORDER.map((modelId) => {
-                  const pred = findPredictionByVariant(event.predictions, modelId)
-                  const selected = expanded?.eventId === event.id && expanded.modelId === modelId
-                  if (!pred) {
+              <div className="mt-3 overflow-x-auto">
+                <div
+                  className="grid min-w-[38rem] gap-2"
+                  style={{ gridTemplateColumns: `repeat(${MODEL_ORDER.length}, minmax(4.25rem, 1fr))` }}
+                >
+                  {MODEL_ORDER.map((modelId) => {
+                    const pred = findPredictionByModelId(event.predictions, modelId)
+                    const selected = expanded?.eventId === event.id && expanded.modelId === modelId
+                    if (!pred) {
+                      return (
+                        <div key={modelId} className="flex items-center justify-center rounded-md bg-[#f8f5f1] px-2 py-2 text-xs text-[#cfc3b5]">
+                          —
+                        </div>
+                      )
+                    }
                     return (
-                      <div key={modelId} className="flex items-center justify-center rounded-md bg-[#f8f5f1] px-2 py-2 text-xs text-[#cfc3b5]">
-                        —
-                      </div>
+                      <button
+                        key={modelId}
+                        type="button"
+                        onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
+                        className={`rounded-md px-2 py-2 transition-all ${selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'}`}
+                        aria-label={`Show ${MODEL_DISPLAY_NAMES[modelId]} prediction`}
+                      >
+                        <div className="mx-auto w-4 h-4">
+                          <PredictionDirectionIcon prediction={pred.prediction} />
+                        </div>
+                      </button>
                     )
-                  }
-                  return (
-                    <button
-                      key={modelId}
-                      type="button"
-                      onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
-                      className={`rounded-md px-2 py-2 transition-all ${selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'}`}
-                      aria-label={`Show ${MODEL_DISPLAY_NAMES[modelId]} prediction`}
-                    >
-                      <div className="mx-auto w-4 h-4">
-                        <PredictionDirectionIcon prediction={pred.prediction} />
-                      </div>
-                    </button>
-                  )
-                })}
+                  })}
+                </div>
               </div>
 
               {expandedPrediction && expanded && (
@@ -368,7 +377,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
       <div className="hidden sm:block rounded-sm p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
         <div className="overflow-hidden rounded-sm bg-white/95">
           <div className="overflow-x-auto overscroll-x-contain">
-            <table className="w-full min-w-[980px] table-fixed text-sm">
+            <table className="w-full table-fixed text-sm" style={{ minWidth: `${TABLE_MIN_WIDTH}px` }}>
               <colgroup>
                 <col style={{ width: '92px' }} />
                 <col style={{ width: '120px' }} />
@@ -376,10 +385,9 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                 <col style={{ width: '70px' }} />
                 <col style={{ width: '190px' }} />
                 <col style={{ width: '90px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '46px' }} />
+                {MODEL_ORDER.map((modelId) => (
+                  <col key={`calendar2-col-${modelId}`} style={{ width: `${TABLE_MODEL_COLUMN_WIDTH}px` }} />
+                ))}
               </colgroup>
               <thead>
                 <tr className="border-b border-[#e8ddd0] text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">
@@ -412,7 +420,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                 {filteredAndSortedEvents.map((event) => {
                   const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
                   const symbol = event.symbols?.split(', ')[0]
-                  const expandedPrediction = expanded?.eventId === event.id ? findPredictionByVariant(event.predictions, expanded.modelId) : null
+                  const expandedPrediction = expanded?.eventId === event.id ? findPredictionByModelId(event.predictions, expanded.modelId) : null
 
                   return (
                     <Fragment key={event.id}>
@@ -459,7 +467,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                           </span>
                         </td>
                         {MODEL_ORDER.map((modelId) => {
-                          const pred = findPredictionByVariant(event.predictions, modelId)
+                          const pred = findPredictionByModelId(event.predictions, modelId)
                           const selected = expanded?.eventId === event.id && expanded.modelId === modelId
                           return (
                             <td key={modelId} className="px-2 py-3 text-center">
@@ -483,7 +491,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                       </tr>
                       {expandedPrediction && expanded?.eventId === event.id ? (
                         <tr className="border-b border-[#e8ddd0]">
-                          <td colSpan={10} className="px-3 py-5 first:pl-5 last:pr-7">
+                          <td colSpan={TABLE_EXPANDED_COLSPAN} className="px-3 py-5 first:pl-5 last:pr-7">
                             <PredictionPanel modelId={expanded.modelId} prediction={expandedPrediction} />
                           </td>
                         </tr>

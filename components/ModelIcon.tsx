@@ -1,18 +1,55 @@
-// Shared model icon component - consolidates SVG icons for Claude, GPT, and Grok
-// Supports both short IDs ('claude', 'gpt', 'grok') and full model IDs ('claude-opus', 'gpt-5.2', 'grok-4')
+// Shared model icon component with support for all model families.
+// Accepts canonical IDs (for example "claude-opus") and legacy short IDs (for example "claude").
 
 interface ModelIconProps {
   id: string
   className?: string
 }
 
+function RasterLogoIcon({ src, className }: { src: string; className: string }) {
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      className={`${className} object-contain grayscale contrast-50 brightness-110`}
+      loading="lazy"
+      decoding="async"
+    />
+  )
+}
+
+function MonogramIcon({ text, className }: { text: string; className: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="2.5" y="2.5" width="19" height="19" rx="4" />
+      <text
+        x="12"
+        y="15.2"
+        textAnchor="middle"
+        fontSize="8.25"
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+        fontWeight="700"
+        fill="currentColor"
+        stroke="none"
+      >
+        {text}
+      </text>
+    </svg>
+  )
+}
+
 export function ModelIcon({ id, className = 'w-full h-full' }: ModelIconProps) {
-  // Normalize to short ID
+  // Normalize known aliases and canonical IDs into icon families.
   const normalizedId = id.startsWith('claude') ? 'claude'
     : id.startsWith('gpt') ? 'gpt'
-    : id.startsWith('grok') ? 'grok'
-    : id.startsWith('gemini') ? 'gemini'
-    : id
+      : id.startsWith('grok') ? 'grok'
+        : id.startsWith('gemini') ? 'gemini'
+          : id.startsWith('deepseek') ? 'deepseek'
+            : id.startsWith('llama') ? 'llama'
+              : id.startsWith('kimi') ? 'kimi'
+                : id.startsWith('minimax') ? 'minimax'
+                  : id
 
   if (normalizedId === 'claude') {
     return (
@@ -46,7 +83,28 @@ export function ModelIcon({ id, className = 'w-full h-full' }: ModelIconProps) {
     )
   }
 
-  return null
+  if (normalizedId === 'deepseek') {
+    return <RasterLogoIcon src="/logos/models/deepseek.png" className={className} />
+  }
+
+  if (normalizedId === 'llama') {
+    return <RasterLogoIcon src="/logos/models/llama.png" className={className} />
+  }
+
+  if (normalizedId === 'kimi') {
+    return <RasterLogoIcon src="/logos/models/kimi.png" className={className} />
+  }
+
+  if (normalizedId === 'minimax') {
+    return <RasterLogoIcon src="/logos/models/minimax.png" className={className} />
+  }
+
+  // Deterministic fallback for unknown IDs.
+  const fallbackText = (id || '?')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 2)
+    .toUpperCase() || '?'
+  return <MonogramIcon text={fallbackText} className={className} />
 }
 
 // FDA icon component for consistency

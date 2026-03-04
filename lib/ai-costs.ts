@@ -18,6 +18,11 @@ export type AICostEstimationProfile =
   | 'gpt-deep-research'
   | 'grok-deep-research'
   | 'gemini-deep-research'
+  | 'gemini3-deep-research'
+  | 'deepseek-reasoning'
+  | 'llama4-reasoning'
+  | 'kimi-thinking'
+  | 'minimax-reasoning'
 
 const TOKENS_PER_MILLION = 1_000_000
 const CLAUDE_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD = 200_000
@@ -40,6 +45,11 @@ const CLAUDE_DEEP_RESEARCH_ESTIMATED_INPUT_TOKENS_PER_SEARCH = 1_500
 const GPT_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS = 1
 const GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS = 1
 const GEMINI_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS = 1
+const GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS = 1
+const DEEPSEEK_ESTIMATED_SEARCH_REQUESTS = 0
+const LLAMA4_ESTIMATED_SEARCH_REQUESTS = 0
+const KIMI_ESTIMATED_SEARCH_REQUESTS = 0
+const MINIMAX_ESTIMATED_SEARCH_REQUESTS = 0
 
 // Approximate public model pricing in USD per 1M tokens.
 // Keep this updated if provider pricing changes.
@@ -74,6 +84,30 @@ export const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPri
     longContextInputUsdPer1MTokens: 2.5,
     longContextOutputUsdPer1MTokens: 15,
     webSearchUsdPerRequest: GEMINI_GROUNDING_WEB_SEARCH_USD_PER_REQUEST,
+  },
+  'gemini-3-pro': {
+    inputUsdPer1MTokens: 2,
+    outputUsdPer1MTokens: 15,
+    longContextInputTokenThreshold: GEMINI_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
+    longContextInputUsdPer1MTokens: 3,
+    longContextOutputUsdPer1MTokens: 18,
+    webSearchUsdPerRequest: GEMINI_GROUNDING_WEB_SEARCH_USD_PER_REQUEST,
+  },
+  'deepseek-v3.2': {
+    inputUsdPer1MTokens: 0.55,
+    outputUsdPer1MTokens: 1.68,
+  },
+  'llama-4': {
+    inputUsdPer1MTokens: 0.59,
+    outputUsdPer1MTokens: 0.79,
+  },
+  'kimi-k2': {
+    inputUsdPer1MTokens: 2,
+    outputUsdPer1MTokens: 8,
+  },
+  'minimax-m2.5': {
+    inputUsdPer1MTokens: 1,
+    outputUsdPer1MTokens: 4,
   },
 }
 
@@ -119,6 +153,21 @@ export function getCostEstimationProfileForModel(modelId: ModelId): AICostEstima
   }
   if (modelId === 'gemini-2.5') {
     return 'gemini-deep-research'
+  }
+  if (modelId === 'gemini-3-pro') {
+    return 'gemini3-deep-research'
+  }
+  if (modelId === 'deepseek-v3.2') {
+    return 'deepseek-reasoning'
+  }
+  if (modelId === 'llama-4') {
+    return 'llama4-reasoning'
+  }
+  if (modelId === 'kimi-k2') {
+    return 'kimi-thinking'
+  }
+  if (modelId === 'minimax-m2.5') {
+    return 'minimax-reasoning'
   }
   return 'default'
 }
@@ -224,6 +273,16 @@ export function estimateTextGenerationCost(args: {
     webSearchRequests = GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'gemini-deep-research' && args.modelId === 'gemini-2.5') {
     webSearchRequests = GEMINI_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS
+  } else if (args.profile === 'gemini3-deep-research' && args.modelId === 'gemini-3-pro') {
+    webSearchRequests = GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS
+  } else if (args.profile === 'deepseek-reasoning' && args.modelId === 'deepseek-v3.2') {
+    webSearchRequests = DEEPSEEK_ESTIMATED_SEARCH_REQUESTS
+  } else if (args.profile === 'llama4-reasoning' && args.modelId === 'llama-4') {
+    webSearchRequests = LLAMA4_ESTIMATED_SEARCH_REQUESTS
+  } else if (args.profile === 'kimi-thinking' && args.modelId === 'kimi-k2') {
+    webSearchRequests = KIMI_ESTIMATED_SEARCH_REQUESTS
+  } else if (args.profile === 'minimax-reasoning' && args.modelId === 'minimax-m2.5') {
+    webSearchRequests = MINIMAX_ESTIMATED_SEARCH_REQUESTS
   }
 
   return {

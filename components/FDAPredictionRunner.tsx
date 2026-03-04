@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import {
   MODEL_IDS,
   MODEL_INFO,
@@ -53,6 +53,12 @@ interface StreamProgress {
 
 interface Props {
   events: FDAEvent[]
+}
+
+const MODEL_CARD_MIN_WIDTH_PX = 290
+const MODEL_CARD_GRID_STYLE: CSSProperties = {
+  gridTemplateColumns: `repeat(${MODEL_IDS.length}, minmax(${MODEL_CARD_MIN_WIDTH_PX}px, 1fr))`,
+  minWidth: `${MODEL_IDS.length * MODEL_CARD_MIN_WIDTH_PX}px`,
 }
 
 // =============================================================================
@@ -574,23 +580,25 @@ function EventCard({
       </div>
 
       {/* Model Predictions */}
-      <div className="grid md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[#e8ddd0]">
-        {MODEL_IDS.map(modelId => (
-          <ModelPredictionCard
-            key={modelId}
-            modelId={modelId}
-            eventId={event.id}
-            prediction={getPrediction(event, modelId)}
-            loading={loading[`${event.id}-${modelId}`]}
-            timing={timings[`${event.id}-${modelId}`]}
-            progress={progress[`${event.id}-${modelId}`]}
-            expandedReasoning={expandedReasoning}
-            setExpandedReasoning={setExpandedReasoning}
-            getPredictionStyle={getPredictionStyle}
-            runStreamingPrediction={runStreamingPrediction}
-            deletePrediction={deletePrediction}
-          />
-        ))}
+      <div className="overflow-x-auto overscroll-x-contain">
+        <div className="grid divide-x divide-[#e8ddd0]" style={MODEL_CARD_GRID_STYLE}>
+          {MODEL_IDS.map(modelId => (
+            <ModelPredictionCard
+              key={modelId}
+              modelId={modelId}
+              eventId={event.id}
+              prediction={getPrediction(event, modelId)}
+              loading={loading[`${event.id}-${modelId}`]}
+              timing={timings[`${event.id}-${modelId}`]}
+              progress={progress[`${event.id}-${modelId}`]}
+              expandedReasoning={expandedReasoning}
+              setExpandedReasoning={setExpandedReasoning}
+              getPredictionStyle={getPredictionStyle}
+              runStreamingPrediction={runStreamingPrediction}
+              deletePrediction={deletePrediction}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )

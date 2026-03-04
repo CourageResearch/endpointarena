@@ -1,6 +1,6 @@
 import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
 import { eq, sql } from 'drizzle-orm'
-import { MODEL_IDS } from '@/lib/constants'
+import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
@@ -24,56 +24,96 @@ async function getData() {
 export default async function MethodPage() {
   const { fdaEventCount, predictionCount } = await getData()
 
-  const models = [
-    {
-      id: 'claude',
-      name: 'Claude Opus 4.6',
+  const MODEL_BINDINGS: Record<ModelId, {
+    version: string
+    internetDetail: string
+    reasoning: string
+    reasoningDetail: string
+    maxTokens: string
+  }> = {
+    'claude-opus': {
       version: 'claude-opus-4-6',
-      features: {
-        internet: true,
-        internetDetail: 'Anthropic web_search_20250305',
-        reasoning: 'Extended Thinking',
-        reasoningDetail: 'thinking.budget_tokens: 10,000',
-        maxTokens: '16,000 output',
-      }
+      internetDetail: 'Anthropic web_search_20250305',
+      reasoning: 'Extended Thinking',
+      reasoningDetail: 'Web-search tool + long-form reasoning flow',
+      maxTokens: '4,096 output (stream) / 16,000 (batch)',
     },
-    {
-      id: 'gpt',
-      name: 'GPT-5.2',
+    'gpt-5.2': {
       version: 'gpt-5.2',
-      features: {
-        internet: true,
-        internetDetail: 'web_search_preview (high context)',
-        reasoning: 'High Effort',
-        reasoningDetail: 'reasoning.effort: high',
-        maxTokens: '16,000 output',
-      }
+      internetDetail: 'OpenAI web_search tool',
+      reasoning: 'High Effort',
+      reasoningDetail: 'reasoning.effort = high',
+      maxTokens: '16,000 output',
     },
-    {
-      id: 'grok',
-      name: 'Grok 4.1',
+    'grok-4': {
       version: 'grok-4-1-fast-reasoning',
-      features: {
-        internet: true,
-        internetDetail: 'search_mode: auto (live search)',
-        reasoning: 'Fast Reasoning',
-        reasoningDetail: 'Built-in fast reasoning mode',
-        maxTokens: '16,000 output',
-      }
+      internetDetail: 'search_mode: auto',
+      reasoning: 'Fast Reasoning',
+      reasoningDetail: 'Native fast reasoning mode',
+      maxTokens: '16,000 output',
     },
-    {
-      id: 'gemini',
-      name: 'Gemini 2.5 Pro',
+    'gemini-2.5': {
       version: 'gemini-2.5-pro',
+      internetDetail: 'Google Search grounding',
+      reasoning: 'Thinking',
+      reasoningDetail: 'thinkingConfig.thinkingBudget = -1',
+      maxTokens: '65,536 output',
+    },
+    'gemini-3-pro': {
+      version: 'gemini-3-pro-preview',
+      internetDetail: 'Google Search grounding',
+      reasoning: 'Thinking',
+      reasoningDetail: 'thinkingConfig.thinkingBudget = -1',
+      maxTokens: '65,536 output',
+    },
+    'deepseek-v3.2': {
+      version: 'deepseek-ai/DeepSeek-V3.1',
+      internetDetail: 'Baseten OpenAI-compatible endpoint',
+      reasoning: 'Reasoning mode',
+      reasoningDetail: 'extra_body.reasoning_effort enabled',
+      maxTokens: '16,000 output',
+    },
+    'llama-4': {
+      version: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+      internetDetail: 'Groq OpenAI-compatible endpoint',
+      reasoning: 'Fast Inference',
+      reasoningDetail: 'Low-latency reasoning on Groq',
+      maxTokens: '8,192 output',
+    },
+    'kimi-k2': {
+      version: 'moonshotai/Kimi-K2-Thinking',
+      internetDetail: 'Baseten OpenAI-compatible endpoint',
+      reasoning: 'Thinking',
+      reasoningDetail: 'extra_body.reasoning_effort enabled',
+      maxTokens: '16,000 output',
+    },
+    'minimax-m2.5': {
+      version: 'MiniMax-M2.5',
+      internetDetail: 'MiniMax OpenAI-compatible endpoint',
+      reasoning: 'Reasoning',
+      reasoningDetail: 'Provider reasoning defaults',
+      maxTokens: '16,000 output',
+    },
+  }
+
+  const models = MODEL_IDS.map((modelId) => {
+    const binding = MODEL_BINDINGS[modelId]
+    const info = MODEL_INFO[modelId]
+
+    return {
+      id: modelId,
+      name: info.fullName,
+      provider: info.provider,
+      version: binding.version,
       features: {
         internet: true,
-        internetDetail: 'Google Search grounding',
-        reasoning: 'Thinking',
-        reasoningDetail: 'thinkingConfig.thinkingBudget: auto (-1)',
-        maxTokens: '65,536 output',
-      }
+        internetDetail: binding.internetDetail,
+        reasoning: binding.reasoning,
+        reasoningDetail: binding.reasoningDetail,
+        maxTokens: binding.maxTokens,
+      },
     }
-  ]
+  })
 
   const processSteps = [
     {
@@ -181,7 +221,7 @@ export default async function MethodPage() {
               <HeaderDots />
             </div>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
             {models.map((model) => (
               <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
                 <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
@@ -191,6 +231,7 @@ export default async function MethodPage() {
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-semibold text-[#8a8075]">{model.name}</h3>
+                      <p className="text-xs text-[#b5aa9e]">{model.provider}</p>
                       <p
                         className="text-xs text-[#b5aa9e] font-mono whitespace-nowrap truncate cursor-help"
                         title={model.version}

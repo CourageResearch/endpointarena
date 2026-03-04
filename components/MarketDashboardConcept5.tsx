@@ -668,7 +668,8 @@ export function MarketDashboardConcept5({
   const scrubbedChartDayLabel = chartScrubSnapshotDate ? formatShortDateUtc(chartScrubSnapshotDate) : null
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
-  const showTradeSidebar = useStackedLayout && sessionStatus === 'authenticated' && Boolean(verificationStatus?.verified)
+  const isTradeVerified = Boolean(verificationStatus?.verified)
+  const showTradeSidebar = useStackedLayout && sessionStatus === 'authenticated'
   const pdufaDateText = formatDateUtc(selectedMarket.event?.pdufaDate)
   const pdufaCountdownText = pdufaDays == null
     ? 'No date'
@@ -695,7 +696,8 @@ export function MarketDashboardConcept5({
     : Math.max(0, estimatedSellCapacityUsd)
   const parsedTradeAmount = Number.parseFloat(tradeAmountUsd)
   const tradeAmountValue = Number.isFinite(parsedTradeAmount) ? Math.max(0, parsedTradeAmount) : 0
-  const canSubmitTrade = !tradeSubmitting
+  const canSubmitTrade = isTradeVerified
+    && !tradeSubmitting
     && tradeAmountValue > 0
     && (tradeDirection === 'buy' ? availableTradeUsd > 0.0001 : heldSharesForSelectedOutcome > 0.0001)
   const positionRows = selectedMarket.modelStates.map((state, index) => {
@@ -851,9 +853,18 @@ export function MarketDashboardConcept5({
 
           <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
             <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>PDUFA Clock</dt>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Countdown</dt>
               <dd className="mt-2 space-y-1">
                 <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS)}>{pdufaCountdownText}</div>
+              </dd>
+            </div>
+          </div>
+
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Decision Date</dt>
+              <dd className={cn('mt-2 tabular-nums', DETAILS_TOP_VALUE_CLASS)}>
+                {pdufaDateText}
               </dd>
             </div>
           </div>
@@ -909,14 +920,6 @@ export function MarketDashboardConcept5({
             </div>
           </div>
 
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Decision Date</dt>
-              <dd className={cn('mt-2 tabular-nums', DETAILS_TOP_VALUE_CLASS)}>
-                {pdufaDateText}
-              </dd>
-            </div>
-          </div>
         </dl>
 
         <dl className="grid grid-cols-1 gap-2">
@@ -942,15 +945,33 @@ export function MarketDashboardConcept5({
         </div>
       </div>
 
+      {sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified ? (
+        <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
+          <p className="font-medium text-[#1a1a1a]">Complete one-time X verification to trade.</p>
+          <p className="mt-1">
+            {verificationStatus.connected
+              ? 'Post one verification tweet to unlock trading.'
+              : 'Connect your X account and post one verification tweet to unlock trading.'}
+          </p>
+          <Link
+            href={`/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
+            className="mt-2 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
+          >
+            Complete verification
+          </Link>
+        </div>
+      ) : null}
+
       <div className="rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
         <div className="rounded-md bg-white/95 p-4">
           <div className="-mx-4 -mt-4 mb-4 border-b border-[#e8ddd0] bg-[#f8f3ec]/45 px-4">
             <div className="flex items-center gap-6">
               <button
                 type="button"
+                disabled={!isTradeVerified}
                 onClick={() => setTradeDirection('buy')}
                 className={cn(
-                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none',
+                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:border-transparent disabled:text-[#b5aa9e]',
                   tradeDirection === 'buy'
                     ? 'border-[#1a1a1a] text-[#1a1a1a]'
                     : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
@@ -960,9 +981,10 @@ export function MarketDashboardConcept5({
               </button>
               <button
                 type="button"
+                disabled={!isTradeVerified}
                 onClick={() => setTradeDirection('sell')}
                 className={cn(
-                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none',
+                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:border-transparent disabled:text-[#b5aa9e]',
                   tradeDirection === 'sell'
                     ? 'border-[#1a1a1a] text-[#1a1a1a]'
                     : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
@@ -976,9 +998,10 @@ export function MarketDashboardConcept5({
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
+              disabled={!isTradeVerified}
               onClick={() => setTradeOutcome('yes')}
               className={cn(
-                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors',
+                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-65',
                 tradeOutcome === 'yes'
                   ? tradeDirection === 'buy'
                     ? 'border-[#5DBB63] bg-[#5DBB63]/15 text-[#2f7b40]'
@@ -990,9 +1013,10 @@ export function MarketDashboardConcept5({
             </button>
             <button
               type="button"
+              disabled={!isTradeVerified}
               onClick={() => setTradeOutcome('no')}
               className={cn(
-                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors',
+                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-65',
                 tradeOutcome === 'no'
                   ? 'border-[#EF6F67] bg-[#EF6F67]/15 text-[#9b3028]'
                   : 'border-[#e8ddd0] bg-[#f7f2eb] text-[#8a8075] hover:bg-[#f3ebe0]',
@@ -1004,12 +1028,18 @@ export function MarketDashboardConcept5({
 
           <form className="mt-3 space-y-3" onSubmit={handleTradeSubmit}>
             <label className="block">
-              <span className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-[#8a8075]">Amount (USD)</span>
+              <span className={cn(
+                'mb-1 block text-[11px] uppercase tracking-[0.16em]',
+                isTradeVerified ? 'text-[#8a8075]' : 'text-[#b5aa9e]',
+              )}>
+                Amount (USD)
+              </span>
               <input
                 value={tradeAmountUsd}
                 onChange={(event) => setTradeAmountUsd(event.target.value.replace(/[^0-9.]/g, ''))}
                 inputMode="decimal"
-                className="h-10 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891]"
+                disabled={!isTradeVerified}
+                className="h-10 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e] disabled:placeholder:text-[#cfc4b7]"
                 placeholder="1"
               />
             </label>
@@ -1037,22 +1067,26 @@ export function MarketDashboardConcept5({
         </div>
       </div>
 
-      <dl className="px-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#7c7267]">
-        <div className="inline-flex items-baseline gap-1.5">
-          <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">Cash</dt>
-          <dd className="text-[13px] font-normal text-[#6d645a]">{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
-        </div>
-        <div className="inline-flex items-baseline gap-1.5">
-          <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">YES Shares</dt>
-          <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
-        </div>
-        <div className="inline-flex items-baseline gap-1.5">
-          <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">NO Shares</dt>
-          <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.noShares ?? 0)}</dd>
-        </div>
-      </dl>
-      {traderSnapshotLoading ? (
-        <p className="px-1 text-[11px] text-[#8a8075]">Refreshing balances...</p>
+      {isTradeVerified ? (
+        <>
+          <dl className="px-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#7c7267]">
+            <div className="inline-flex items-baseline gap-1.5">
+              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">Cash</dt>
+              <dd className="text-[13px] font-normal text-[#6d645a]">{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
+            </div>
+            <div className="inline-flex items-baseline gap-1.5">
+              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">YES Shares</dt>
+              <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
+            </div>
+            <div className="inline-flex items-baseline gap-1.5">
+              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">NO Shares</dt>
+              <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.noShares ?? 0)}</dd>
+            </div>
+          </dl>
+          {traderSnapshotLoading ? (
+            <p className="px-1 text-[11px] text-[#8a8075]">Refreshing balances...</p>
+          ) : null}
+        </>
       ) : null}
     </section>
   )
@@ -1210,23 +1244,6 @@ export function MarketDashboardConcept5({
       {sessionStatus === 'authenticated' && verificationError ? (
         <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-4 text-sm text-[#b94e47]">
           {verificationError}
-        </div>
-      ) : null}
-
-      {sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified ? (
-        <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
-          <p className="font-medium text-[#1a1a1a]">Trading is locked until one-time X verification is complete.</p>
-          <p className="mt-1">
-            {verificationStatus.connected
-              ? 'Post one verification tweet to unlock.'
-              : 'Connect your X account and post one verification tweet to unlock.'}
-          </p>
-          <Link
-            href={`/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
-            className="mt-3 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
-          >
-            Complete verification
-          </Link>
         </div>
       ) : null}
 
@@ -1493,7 +1510,7 @@ export function MarketDashboardConcept5({
                                                 className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
                                                 aria-hidden="true"
                                               >
-                                                <ModelIcon id={state.modelId} className="h-4 w-4" />
+                                                <ModelIcon id={state.modelId} className="h-4 w-4 grayscale" />
                                               </span>
                                             ) : null}
                                             <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
@@ -1634,7 +1651,7 @@ export function MarketDashboardConcept5({
 	                                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
 	                                      aria-hidden="true"
 	                                    >
-	                                      <ModelIcon id={state.modelId} className="h-4 w-4" />
+	                                      <ModelIcon id={state.modelId} className="h-4 w-4 grayscale" />
 	                                    </span>
 	                                    <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
 	                                      {getPositionModelLabel(state.modelId, model.fullName)}

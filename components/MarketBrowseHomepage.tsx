@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useMemo } from 'react'
 import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
-import { ModelIcon } from '@/components/ModelIcon'
 import {
   daysUntilUtc,
   formatCompactMoney,
@@ -156,6 +155,8 @@ function MarketCard({
   const drugName = entry.market.event?.drugName || entry.question
   const daysBadge = getDaysBadge(entry.daysUntil)
   const modelStances = getModelStanceMap(entry)
+  const approveModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') === 'YES')
+  const rejectModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') !== 'YES')
 
   return (
     <Link
@@ -176,37 +177,52 @@ function MarketCard({
           {entry.description}
         </p>
 
-        <div className="mt-auto grid grid-cols-2 gap-2">
-          <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-3 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">Yes</div>
-            <div className="mt-1.5 text-2xl font-semibold tabular-nums text-[#3a8a2e]">{formatPercent(entry.yesPrice, 0)}</div>
-          </div>
-          <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-3 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">No</div>
-            <div className="mt-1.5 text-2xl font-semibold tabular-nums text-[#c43a2b]">{formatPercent(entry.noPrice, 0)}</div>
+        <div className="mt-auto">
+          <div className="mb-1 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Market Odds</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-3 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">Yes</div>
+              <div className="mt-1.5 text-2xl font-semibold tabular-nums text-[#3a8a2e]">{formatPercent(entry.yesPrice, 0)}</div>
+            </div>
+            <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-3 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">No</div>
+              <div className="mt-1.5 text-2xl font-semibold tabular-nums text-[#c43a2b]">{formatPercent(entry.noPrice, 0)}</div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-4 place-items-center px-2 py-1 text-[#8a8075]">
-          {MODEL_IDS.map((modelId) => {
-            const stance = modelStances.get(modelId) || 'HOLD'
-            const logoClass = stance === 'YES'
-              ? 'text-[#3a8a2e]'
-              : stance === 'NO'
-                ? 'text-[#c43a2b]'
-                : 'text-[#8a8075]'
-
-            return (
-              <div
-                key={`${entry.market.marketId}-${modelId}-icon`}
-                className={`flex h-8 w-8 items-center justify-center ${logoClass}`}
-                title={MODEL_INFO[modelId].fullName}
-                aria-label={MODEL_INFO[modelId].fullName}
-              >
-                <ModelIcon id={modelId} className="h-6 w-6" />
-              </div>
-            )
-          })}
+        <div className="mt-3">
+          <div className="mb-1 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Model Calls</div>
+          <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[#2f7b40]">Approve</div>
+            <ul className="mt-2 space-y-1.5">
+              {approveModelIds.length > 0 ? (
+                approveModelIds.map((modelId) => (
+                  <li key={`${entry.market.marketId}-approve-${modelId}`} className="text-[11px] leading-[1.35] text-[#6f665b]">
+                    {MODEL_INFO[modelId].fullName}
+                  </li>
+                ))
+              ) : (
+                <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">-</li>
+              )}
+            </ul>
+          </div>
+          <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[#9b3028]">Reject</div>
+            <ul className="mt-2 space-y-1.5">
+              {rejectModelIds.length > 0 ? (
+                rejectModelIds.map((modelId) => (
+                  <li key={`${entry.market.marketId}-reject-${modelId}`} className="text-[11px] leading-[1.35] text-[#6f665b]">
+                    {MODEL_INFO[modelId].fullName}
+                  </li>
+                ))
+              ) : (
+                <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">-</li>
+              )}
+            </ul>
+          </div>
+          </div>
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t border-[#e8ddd0] pt-3 text-xs text-[#8a8075] transition-colors duration-150 group-hover:border-[#dfd1bf] group-focus-visible:border-[#dfd1bf]">

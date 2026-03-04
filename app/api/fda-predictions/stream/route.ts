@@ -19,7 +19,13 @@ import { ConfigurationError, NotFoundError, ValidationError } from '@/lib/errors
 const CLAUDE_MODEL = 'claude-opus-4-6'
 const GPT_MODEL = 'gpt-5.2'
 const GROK_MODEL = 'grok-4-1-fast-reasoning'
-const GEMINI_MODEL = 'gemini-2.5-pro'
+const GEMINI_25_MODEL = 'gemini-2.5-pro'
+const GEMINI_3_MODEL = 'gemini-3-pro-preview'
+const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
+const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
+const LLAMA_4_MODEL = 'meta-llama/llama-4-maverick-17b-128e-instruct'
+const KIMI_MODEL = 'moonshotai/Kimi-K2-Thinking'
+const MINIMAX_MODEL = 'MiniMax-M2.5'
 const CLAUDE_MAX_OUTPUT_TOKENS = 4_096
 const CLAUDE_WEB_SEARCH_MAX_USES = 7
 
@@ -201,6 +207,119 @@ function assertProviderConfigured(modelId: ModelId): void {
   if (modelId === 'gemini-2.5' && !process.env.GOOGLE_API_KEY) {
     throw new ConfigurationError('GOOGLE_API_KEY is not configured')
   }
+  if (modelId === 'gemini-3-pro' && !process.env.GOOGLE_API_KEY) {
+    throw new ConfigurationError('GOOGLE_API_KEY is not configured')
+  }
+  if (modelId === 'deepseek-v3.2' && !process.env.BASETEN_DEEPSEEK_API_KEY) {
+    throw new ConfigurationError('BASETEN_DEEPSEEK_API_KEY is not configured')
+  }
+  if (modelId === 'llama-4' && !process.env.GROQ_API_KEY) {
+    throw new ConfigurationError('GROQ_API_KEY is not configured')
+  }
+  if (modelId === 'kimi-k2' && !process.env.BASETEN_KIMI_API_KEY) {
+    throw new ConfigurationError('BASETEN_KIMI_API_KEY is not configured')
+  }
+  if (modelId === 'minimax-m2.5' && !process.env.MINIMAX_API_KEY) {
+    throw new ConfigurationError('MINIMAX_API_KEY is not configured')
+  }
+}
+
+type StreamRunnerArgs = {
+  prompt: string
+  send: (data: Record<string, unknown>) => void
+  setFinalText: (text: string) => void
+  setUsage: (usage: ProviderTokenUsage | null) => void
+  useReasoning: boolean
+}
+
+type StreamRunner = (args: StreamRunnerArgs) => Promise<void>
+
+const MODEL_STREAM_RUNNERS: Record<ModelId, StreamRunner> = {
+  'claude-opus': async (args) => streamClaude(
+    args.prompt,
+    args.send,
+    args.setFinalText,
+    args.setUsage,
+    args.useReasoning,
+  ),
+  'gpt-5.2': async (args) => streamGPT(
+    args.prompt,
+    args.send,
+    args.setFinalText,
+    args.setUsage,
+    args.useReasoning,
+  ),
+  'grok-4': async (args) => streamGrok(
+    args.prompt,
+    args.send,
+    args.setFinalText,
+    args.setUsage,
+    args.useReasoning,
+  ),
+  'gemini-2.5': async (args) => streamGemini(
+    args.prompt,
+    args.send,
+    args.setFinalText,
+    args.setUsage,
+    args.useReasoning,
+    GEMINI_25_MODEL,
+    'Gemini 2.5 Pro',
+  ),
+  'gemini-3-pro': async (args) => streamGemini(
+    args.prompt,
+    args.send,
+    args.setFinalText,
+    args.setUsage,
+    args.useReasoning,
+    GEMINI_3_MODEL,
+    'Gemini 3 Pro',
+  ),
+  'deepseek-v3.2': async (args) => streamOpenAICompatibleChat({
+    prompt: args.prompt,
+    send: args.send,
+    setFinalText: args.setFinalText,
+    setUsage: args.setUsage,
+    useReasoning: args.useReasoning,
+    apiKey: process.env.BASETEN_DEEPSEEK_API_KEY,
+    baseURL: BASETEN_BASE_URL,
+    model: DEEPSEEK_MODEL,
+    displayName: 'DeepSeek V3.1',
+    extraBody: { reasoning_effort: args.useReasoning ? 'high' : 'low' },
+  }),
+  'llama-4': async (args) => streamOpenAICompatibleChat({
+    prompt: args.prompt,
+    send: args.send,
+    setFinalText: args.setFinalText,
+    setUsage: args.setUsage,
+    useReasoning: args.useReasoning,
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: 'https://api.groq.com/openai/v1',
+    model: LLAMA_4_MODEL,
+    displayName: 'Llama 4 Maverick',
+  }),
+  'kimi-k2': async (args) => streamOpenAICompatibleChat({
+    prompt: args.prompt,
+    send: args.send,
+    setFinalText: args.setFinalText,
+    setUsage: args.setUsage,
+    useReasoning: args.useReasoning,
+    apiKey: process.env.BASETEN_KIMI_API_KEY,
+    baseURL: BASETEN_BASE_URL,
+    model: KIMI_MODEL,
+    displayName: 'Kimi K2 Thinking',
+    extraBody: { reasoning_effort: args.useReasoning ? 'high' : 'low' },
+  }),
+  'minimax-m2.5': async (args) => streamOpenAICompatibleChat({
+    prompt: args.prompt,
+    send: args.send,
+    setFinalText: args.setFinalText,
+    setUsage: args.setUsage,
+    useReasoning: args.useReasoning,
+    apiKey: process.env.MINIMAX_API_KEY,
+    baseURL: 'https://api.minimax.io/v1',
+    model: MINIMAX_MODEL,
+    displayName: 'MiniMax M2.5',
+  }),
 }
 
 export async function POST(request: NextRequest) {
@@ -273,39 +392,14 @@ export async function POST(request: NextRequest) {
         let providerUsage: ProviderTokenUsage | null = null
 
         try {
-          if (modelId === 'claude-opus') {
-            await streamClaude(
-              prompt,
-              send,
-              (text) => { fullResponse = text },
-              (usage) => { providerUsage = usage },
-              useReasoning
-            )
-          } else if (modelId === 'gpt-5.2') {
-            await streamGPT(
-              prompt,
-              send,
-              (text) => { fullResponse = text },
-              (usage) => { providerUsage = usage },
-              useReasoning
-            )
-          } else if (modelId === 'grok-4') {
-            await streamGrok(
-              prompt,
-              send,
-              (text) => { fullResponse = text },
-              (usage) => { providerUsage = usage },
-              useReasoning
-            )
-          } else {
-            await streamGemini(
-              prompt,
-              send,
-              (text) => { fullResponse = text },
-              (usage) => { providerUsage = usage },
-              useReasoning
-            )
-          }
+          const runner = MODEL_STREAM_RUNNERS[modelId]
+          await runner({
+            prompt,
+            send,
+            setFinalText: (text) => { fullResponse = text },
+            setUsage: (usage) => { providerUsage = usage },
+            useReasoning,
+          })
 
           const parsed = parseFDAPredictionResponse(fullResponse)
           const durationMs = Date.now() - startedAt
@@ -656,21 +750,107 @@ async function streamGrok(
   setFinalText(responseText)
 }
 
+async function streamOpenAICompatibleChat(args: {
+  prompt: string
+  send: (data: Record<string, unknown>) => void
+  setFinalText: (text: string) => void
+  setUsage: (usage: ProviderTokenUsage | null) => void
+  useReasoning: boolean
+  apiKey: string | undefined
+  baseURL: string
+  model: string
+  displayName: string
+  extraBody?: Record<string, unknown>
+}) {
+  const client = new OpenAI({
+    apiKey: args.apiKey,
+    baseURL: args.baseURL,
+  })
+
+  args.send({
+    type: 'status',
+    status: args.useReasoning
+      ? `Starting ${args.displayName} with reasoning...`
+      : `Starting ${args.displayName}...`,
+  })
+
+  const requestOptions: any = {
+    model: args.model,
+    messages: [{ role: 'user', content: args.prompt }],
+    max_tokens: args.useReasoning ? 16_000 : 4_096,
+    stream: true,
+    stream_options: { include_usage: true },
+  }
+
+  if (args.extraBody && Object.keys(args.extraBody).length > 0) {
+    requestOptions.extra_body = args.extraBody
+  }
+
+  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+  try {
+    stream = await client.chat.completions.create(requestOptions as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+  } catch {
+    // Some OpenAI-compatible providers may not support include_usage on streamed chunks.
+    delete requestOptions.stream_options
+    stream = await client.chat.completions.create(requestOptions as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+  }
+
+  let responseText = ''
+  let finalUsage: any = null
+
+  for await (const chunk of stream) {
+    if ((chunk as any).usage) {
+      finalUsage = (chunk as any).usage
+    }
+
+    const delta = chunk.choices[0]?.delta?.content
+    if (delta) {
+      responseText += delta
+      if (responseText.length % 50 === 0 || delta.includes('.')) {
+        args.send({ type: 'text', text: responseText.slice(-100) })
+      }
+    }
+  }
+
+  args.send({ type: 'text', text: responseText.slice(-100) })
+
+  if (!responseText) {
+    throw new Error(`${args.displayName} returned empty response`)
+  }
+
+  args.setUsage({
+    inputTokens: toNonNegativeInt(finalUsage?.prompt_tokens ?? finalUsage?.input_tokens),
+    outputTokens: toNonNegativeInt(finalUsage?.completion_tokens ?? finalUsage?.output_tokens),
+    totalTokens: toNonNegativeInt(finalUsage?.total_tokens),
+    reasoningTokens: toNonNegativeInt(finalUsage?.completion_tokens_details?.reasoning_tokens),
+    cacheCreationInputTokens5m: null,
+    cacheCreationInputTokens1h: null,
+    cacheReadInputTokens: toNonNegativeInt(
+      finalUsage?.prompt_tokens_details?.cached_tokens ?? finalUsage?.input_tokens_details?.cached_tokens
+    ),
+    webSearchRequests: extractWebSearchRequestCount(finalUsage),
+    inferenceGeo: null,
+  })
+  args.setFinalText(responseText)
+}
+
 async function streamGemini(
   prompt: string,
   send: (data: Record<string, unknown>) => void,
   setFinalText: (text: string) => void,
   setUsage: (usage: ProviderTokenUsage | null) => void,
-  useReasoning: boolean
+  useReasoning: boolean,
+  model: string,
+  displayName: string
 ) {
   const ai = new GoogleGenAI({
     apiKey: process.env.GOOGLE_API_KEY,
   })
 
-  send({ type: 'status', status: useReasoning ? 'Starting Gemini 2.5 Pro with search grounding...' : 'Starting Gemini 2.5 Pro...' })
+  send({ type: 'status', status: useReasoning ? `Starting ${displayName} with search grounding...` : `Starting ${displayName}...` })
 
   const response = await ai.models.generateContentStream({
-    model: GEMINI_MODEL,
+    model,
     contents: prompt,
     config: {
       maxOutputTokens: useReasoning ? 65_536 : 8_192,
@@ -706,7 +886,7 @@ async function streamGemini(
   send({ type: 'text', text: responseText.slice(-100) })
 
   if (!responseText) {
-    throw new Error('Gemini 2.5 Pro returned empty response')
+    throw new Error(`${displayName} returned empty response`)
   }
 
   const hasUsage = latestUsageMetadata != null

@@ -1,10 +1,10 @@
 import { revalidatePath } from 'next/cache'
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { db, users } from '@/lib/db'
+import { accounts, db, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 
 export const dynamic = 'force-dynamic'
@@ -52,6 +52,66 @@ async function getUsersData() {
   }
 }
 
+async function fetchTwitterUsername(accessToken: string): Promise<string | null> {
+  try {
+    const response = await fetch('https://api.twitter.com/2/users/me?user.fields=username', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      cache: 'no-store',
+    })
+
+    if (!response.ok) return null
+
+    const payload = await response.json() as {
+      data?: { username?: string }
+    }
+    const username = payload?.data?.username
+    if (typeof username !== 'string') return null
+    const trimmed = username.trim()
+    return trimmed.length > 0 ? trimmed : null
+  } catch {
+    return null
+  }
+}
+
+async function backfillMissingXUsernames(userRows: Array<typeof users.$inferSelect>) {
+  const userIds = userRows.map((user) => user.id)
+  if (userIds.length === 0) return
+
+  const twitterAccounts = await db.query.accounts.findMany({
+    where: and(
+      eq(accounts.provider, 'twitter'),
+      inArray(accounts.userId, userIds),
+    ),
+  })
+  const accountByUserId = new Map(twitterAccounts.map((account) => [account.userId, account]))
+
+  const candidates = userRows
+    .filter((user) => {
+      const hasStoredUsername = Boolean(user.xUsername?.trim())
+      const connected = Boolean(user.xUserId || accountByUserId.get(user.id)?.providerAccountId)
+      const hasAccessToken = Boolean(accountByUserId.get(user.id)?.access_token)
+      return connected && !hasStoredUsername && hasAccessToken
+    })
+    .slice(0, 10)
+
+  await Promise.all(candidates.map(async (user) => {
+    const account = accountByUserId.get(user.id)
+    const accessToken = account?.access_token?.trim()
+    if (!accessToken) return
+
+    const username = await fetchTwitterUsername(accessToken)
+    if (!username) return
+
+    await db.update(users)
+      .set({ xUsername: username })
+      .where(eq(users.id, user.id))
+
+    user.xUsername = username
+  }))
+}
+
 export default async function AdminUsersPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
@@ -59,6 +119,7 @@ export default async function AdminUsersPage() {
   }
 
   const { users: userRows, total } = await getUsersData()
+  await backfillMissingXUsernames(userRows)
   const currentAdminEmail = session.user.email.trim().toLowerCase()
   const protectedAdminEmail = ADMIN_EMAIL.toLowerCase()
 

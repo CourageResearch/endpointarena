@@ -11,8 +11,24 @@ export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
 export const STARTER_POINTS = 5
 
 // Model IDs used throughout the application
-export const MODEL_IDS = ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5'] as const
+export const MODEL_IDS = [
+  'claude-opus',
+  'gpt-5.2',
+  'grok-4',
+  'gemini-2.5',
+  'gemini-3-pro',
+  'deepseek-v3.2',
+  'llama-4',
+  'kimi-k2',
+  'minimax-m2.5',
+] as const
 export type ModelId = (typeof MODEL_IDS)[number]
+
+export const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
+
+export function isModelId(value: unknown): value is ModelId {
+  return typeof value === 'string' && MODEL_ID_SET.has(value as ModelId)
+}
 
 // Model display information
 export const MODEL_INFO: Record<ModelId, {
@@ -49,6 +65,41 @@ export const MODEL_INFO: Record<ModelId, {
     color: '#8E24AA',
     provider: 'Google',
     features: ['Google Search Grounding', 'Thinking'],
+  },
+  'gemini-3-pro': {
+    name: 'Gemini 3',
+    fullName: 'Gemini 3 Pro',
+    color: '#6A5AE0',
+    provider: 'Google',
+    features: ['Google Search Grounding', 'Thinking'],
+  },
+  'deepseek-v3.2': {
+    name: 'DeepSeek',
+    fullName: 'DeepSeek V3.1',
+    color: '#3A86FF',
+    provider: 'Baseten',
+    features: ['Reasoning', 'High Throughput'],
+  },
+  'llama-4': {
+    name: 'Llama 4',
+    fullName: 'Llama 4 Maverick',
+    color: '#2E7D32',
+    provider: 'Groq (Meta)',
+    features: ['Fast Inference', 'Reasoning'],
+  },
+  'kimi-k2': {
+    name: 'Kimi',
+    fullName: 'Kimi K2 Thinking',
+    color: '#F28C28',
+    provider: 'Baseten',
+    features: ['Thinking', 'Tool Use'],
+  },
+  'minimax-m2.5': {
+    name: 'MiniMax',
+    fullName: 'MiniMax M2.5',
+    color: '#0F766E',
+    provider: 'MiniMax',
+    features: ['Reasoning', 'Large Context'],
   },
 }
 
@@ -106,50 +157,59 @@ export function getDaysUntil(date: Date | string): number {
   return getDaysUntilUtc(date) ?? Number.NaN
 }
 
-// Model variant types for display purposes
-export type ModelVariant = 'claude' | 'gpt' | 'grok' | 'gemini'
+// Model variant type (kept for compatibility with legacy components)
+export type ModelVariant = ModelId
 
-// Map full model ID to short variant for display
+// Map full model ID to variant for display grouping
 export function getModelVariant(modelId: ModelId): ModelVariant {
-  if (modelId === 'claude-opus') return 'claude'
-  if (modelId === 'gpt-5.2') return 'gpt'
-  if (modelId === 'grok-4') return 'grok'
-  if (modelId === 'gemini-2.5') return 'gemini'
-  throw new Error(`Unknown model ID: ${modelId}`)
+  return modelId
 }
 
-// Map short variant back to full model ID
+// Map variant back to full model ID
 export function getModelIdFromVariant(variant: ModelVariant): ModelId {
-  if (variant === 'claude') return 'claude-opus'
-  if (variant === 'gpt') return 'gpt-5.2'
-  if (variant === 'grok') return 'grok-4'
-  if (variant === 'gemini') return 'gemini-2.5'
-  throw new Error(`Unknown model variant: ${variant}`)
+  return variant
 }
 
-// ID mapping for predictions lookup (short variant -> full model IDs that match)
+// ID mapping for predictions lookup (variant -> full model IDs that match)
 export const MODEL_ID_VARIANTS: Record<ModelVariant, string[]> = {
-  'claude': ['claude-opus'],
-  'gpt': ['gpt-5.2'],
-  'grok': ['grok-4'],
-  'gemini': ['gemini-2.5'],
+  'claude-opus': ['claude-opus'],
+  'gpt-5.2': ['gpt-5.2'],
+  'grok-4': ['grok-4'],
+  'gemini-2.5': ['gemini-2.5'],
+  'gemini-3-pro': ['gemini-3-pro'],
+  'deepseek-v3.2': ['deepseek-v3.2'],
+  'llama-4': ['llama-4'],
+  'kimi-k2': ['kimi-k2'],
+  'minimax-m2.5': ['minimax-m2.5'],
 }
 
-// Helper to find prediction by canonical model ID
+// Helper to find prediction by canonical model ID/variant
 export function findPredictionByVariant<T extends { predictorId: string }>(
   predictions: T[],
   variant: ModelVariant
 ): T | undefined {
   const variants = MODEL_ID_VARIANTS[variant]
-  return predictions.find(p => variants.includes(p.predictorId))
+  return predictions.find((p) => variants.includes(p.predictorId))
 }
 
-// Model display names for short variants
+export function findPredictionByModelId<T extends { predictorId: string }>(
+  predictions: T[],
+  modelId: ModelId
+): T | undefined {
+  return predictions.find((p) => p.predictorId === modelId)
+}
+
+// Model display names for variants
 export const MODEL_DISPLAY_NAMES: Record<ModelVariant, string> = {
-  'claude': 'Claude Opus 4.6',
-  'gpt': 'GPT-5.2',
-  'grok': 'Grok 4.1',
-  'gemini': 'Gemini 2.5 Pro',
+  'claude-opus': 'Claude Opus 4.6',
+  'gpt-5.2': 'GPT-5.2',
+  'grok-4': 'Grok 4.1',
+  'gemini-2.5': 'Gemini 2.5 Pro',
+  'gemini-3-pro': 'Gemini 3 Pro',
+  'deepseek-v3.2': 'DeepSeek V3.1',
+  'llama-4': 'Llama 4 Maverick',
+  'kimi-k2': 'Kimi K2 Thinking',
+  'minimax-m2.5': 'MiniMax M2.5',
 }
 
 // Model names by full ID
@@ -158,22 +218,37 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   'gpt-5.2': 'GPT-5.2',
   'grok-4': 'Grok 4.1',
   'gemini-2.5': 'Gemini 2.5 Pro',
+  'gemini-3-pro': 'Gemini 3 Pro',
+  'deepseek-v3.2': 'DeepSeek V3.1',
+  'llama-4': 'Llama 4 Maverick',
+  'kimi-k2': 'Kimi K2 Thinking',
+  'minimax-m2.5': 'MiniMax M2.5',
 }
 
-// Model colors by short variant
+// Model colors by variant
 export const MODEL_VARIANT_COLORS: Record<ModelVariant, string> = {
-  claude: '#D4604A',
-  gpt: '#C9A227',
-  grok: '#2D7CF6',
-  gemini: '#8E24AA',
+  'claude-opus': '#D4604A',
+  'gpt-5.2': '#C9A227',
+  'grok-4': '#2D7CF6',
+  'gemini-2.5': '#8E24AA',
+  'gemini-3-pro': '#6A5AE0',
+  'deepseek-v3.2': '#3A86FF',
+  'llama-4': '#2E7D32',
+  'kimi-k2': '#F28C28',
+  'minimax-m2.5': '#0F766E',
 }
 
 // Short display names by variant
 export const MODEL_SHORT_NAMES: Record<ModelVariant, string> = {
-  claude: 'Claude',
-  gpt: 'GPT',
-  grok: 'Grok',
-  gemini: 'Gemini',
+  'claude-opus': 'Claude',
+  'gpt-5.2': 'GPT',
+  'grok-4': 'Grok',
+  'gemini-2.5': 'Gemini 2.5',
+  'gemini-3-pro': 'Gemini 3',
+  'deepseek-v3.2': 'DeepSeek',
+  'llama-4': 'Llama 4',
+  'kimi-k2': 'Kimi',
+  'minimax-m2.5': 'MiniMax',
 }
 
 // Status colors for FDA outcomes (hex values)

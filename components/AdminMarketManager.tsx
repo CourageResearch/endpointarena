@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { formatDate, MODEL_INFO, type ModelId } from '@/lib/constants'
+import { formatDate, MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import type { DailyRunPayload, DailyRunResult, DailyRunStatus, DailyRunSummary, DailyRunStreamEvent } from '@/lib/markets/types'
 import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
@@ -813,7 +813,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
       <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
         <h3 className="text-sm font-semibold text-[#1a1a1a] mb-2">Model Starting Bankroll</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-          {(['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5'] as ModelId[]).map((modelId) => (
+          {MODEL_IDS.map((modelId) => (
             <div key={modelId} className="flex items-center justify-between border border-[#e8ddd0] rounded p-2 bg-white/70">
               <span className="text-[#8a8075]">{MODEL_INFO[modelId].fullName}</span>
               <span className="font-medium text-[#1a1a1a]">{formatMoney(100000)}</span>

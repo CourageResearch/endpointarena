@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { BW2UpcomingRow, BW2MobileUpcomingCard } from '@/app/rows'
 import { ModelIcon, FDAIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
-import { MODEL_DISPLAY_NAMES, type ModelVariant } from '@/lib/constants'
+import { MODEL_DISPLAY_NAMES, MODEL_IDS, type ModelId } from '@/lib/constants'
 import type { HomeData } from '@/lib/home-data'
 import { FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
@@ -10,6 +10,10 @@ import { HomeMarketsClient } from '@/components/HomeMarketsClient'
 import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
 
 const HOMEPAGE_RANK_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
+const UPCOMING_TABLE_FIXED_COLUMNS = 5
+const UPCOMING_MODEL_COLUMN_WIDTH = 50
+const UPCOMING_TABLE_MIN_WIDTH = 405 + (MODEL_IDS.length * UPCOMING_MODEL_COLUMN_WIDTH)
+const UPCOMING_TABLE_EMPTY_COLSPAN = UPCOMING_TABLE_FIXED_COLUMNS + MODEL_IDS.length
 
 function UpcomingLegend() {
   return (
@@ -28,9 +32,9 @@ export function HomePageContent({ data, initialMarketOverview }: { data: HomeDat
   const { moneyLeaderboard, upcomingFdaEvents } = data
   const homeLeaderboard = moneyLeaderboard.map((entry, index) => {
     return {
-      id: entry.id as ModelVariant,
+      id: entry.id as ModelId,
       rank: index + 1,
-      rankColor: HOMEPAGE_RANK_COLORS[index],
+      rankColor: HOMEPAGE_RANK_COLORS[index % HOMEPAGE_RANK_COLORS.length],
       money: entry.totalEquity,
       accuracy: entry.total > 0 ? entry.accuracy : null,
     }
@@ -194,31 +198,31 @@ export function HomePageContent({ data, initialMarketOverview }: { data: HomeDat
 
             {/* Desktop table */}
             <div className="hidden sm:block overflow-x-auto overscroll-x-contain [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
-              <table className="w-full table-fixed min-w-[640px]">
+              <table className="w-full table-fixed" style={{ minWidth: `${UPCOMING_TABLE_MIN_WIDTH}px` }}>
                 <colgroup>
                   <col style={{width: '60px'}} />
                   <col style={{width: '130px'}} />
-                  <col style={{width: '250px'}} />
                   <col style={{width: '60px'}} />
                   <col style={{width: '65px'}} />
                   <col style={{width: '90px'}} />
-                  <col style={{width: '50px'}} />
-                  <col style={{width: '50px'}} />
-                  <col style={{width: '50px'}} />
-                  <col style={{width: '50px'}} />
+                  {MODEL_IDS.map((modelId) => (
+                    <col key={`home-upcoming-col-${modelId}`} style={{ width: `${UPCOMING_MODEL_COLUMN_WIDTH}px` }} />
+                  ))}
                 </colgroup>
                 <thead>
                   <tr className="border-b border-[#e8ddd0] text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em]">
                     <th className="text-left px-3 py-3 font-medium">PDUFA</th>
                     <th className="text-left px-3 py-3 font-medium">Drug</th>
-                    <th className="text-left px-3 py-3 font-medium">Event</th>
                     <th className="text-left px-3 py-3 font-medium">Type</th>
                     <th className="text-left px-3 py-3 font-medium">Ticker</th>
                     <th className="text-center px-2 py-3"><div className="w-6 h-6 mx-auto text-[#8a8075]" title="FDA"><FDAIcon /></div></th>
-                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.6"><ModelIcon id="claude" /></div></th>
-                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="GPT-5.2"><ModelIcon id="gpt" /></div></th>
-                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Grok 4.1"><ModelIcon id="grok" /></div></th>
-                    <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Gemini 2.5 Pro"><ModelIcon id="gemini" /></div></th>
+                    {MODEL_IDS.map((modelId) => (
+                      <th key={`home-upcoming-head-${modelId}`} className="text-center px-2 py-3">
+                        <div className="w-4 h-4 mx-auto text-[#8a8075]" title={MODEL_DISPLAY_NAMES[modelId]}>
+                          <ModelIcon id={modelId} />
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -226,7 +230,7 @@ export function HomePageContent({ data, initialMarketOverview }: { data: HomeDat
                     <BW2UpcomingRow key={event.id} event={event as any} />
                   ))}
                   {upcomingFdaEvents.length === 0 && (
-                    <tr><td colSpan={10} className="px-4 py-8 text-center text-[#b5aa9e]">No upcoming decisions</td></tr>
+                    <tr><td colSpan={UPCOMING_TABLE_EMPTY_COLSPAN} className="px-4 py-8 text-center text-[#b5aa9e]">No upcoming decisions</td></tr>
                   )}
                 </tbody>
               </table>

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Endpoint Arena is a Next.js application that tests AI models' ability to predict FDA drug approval decisions. It compares Claude Opus 4.6, GPT-5.2, Grok 4.1, and Gemini 2.5 Pro by having them make predictions before actual FDA decisions are announced.
+Endpoint Arena is a Next.js application that tests AI models' ability to predict FDA drug approval decisions. It compares nine frontier models by having them make predictions before actual FDA decisions are announced.
 
 ## Tech Stack
 
@@ -10,7 +10,7 @@ Endpoint Arena is a Next.js application that tests AI models' ability to predict
 - **Database:** PostgreSQL + Drizzle ORM
 - **Auth:** NextAuth.js
 - **Styling:** Tailwind CSS
-- **AI APIs:** Anthropic, OpenAI, xAI, Google
+- **AI APIs:** Anthropic, OpenAI, xAI, Google, DeepSeek, Groq, Moonshot, MiniMax
 
 ## Project Structure
 
@@ -49,7 +49,7 @@ lib/
 All model configuration is in `lib/constants.ts`:
 
 ```typescript
-MODEL_IDS           // ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5']
+MODEL_IDS           // ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5', 'gemini-3-pro', 'deepseek-v3.2', 'llama-4', 'kimi-k2', 'minimax-m2.5']
 MODEL_INFO          // { name, fullName, color, provider }
 OUTCOME_COLORS      // Pending, Approved, Rejected colors
 PREDICTION_COLORS   // approved, rejected colors
@@ -89,7 +89,7 @@ import { MODEL_IDS, MODEL_INFO, getAllModelIds } from '@/lib/constants'
 ### 3. Type Safety
 
 Use the exported types:
-- `ModelId` - 'claude-opus' | 'gpt-5.2' | 'grok-4' | 'gemini-2.5'
+- `ModelId` - 'claude-opus' | 'gpt-5.2' | 'grok-4' | 'gemini-2.5' | 'gemini-3-pro' | 'deepseek-v3.2' | 'llama-4' | 'kimi-k2' | 'minimax-m2.5'
 - `FDAOutcome` - 'Pending' | 'Approved' | 'Rejected'
 - `PredictionOutcome` - 'approved' | 'rejected'
 
@@ -99,6 +99,11 @@ Use the exported types:
 - `gpt-5.2` - GPT-5.2 (OpenAI)
 - `grok-4` - Grok 4.1 (xAI)
 - `gemini-2.5` - Gemini 2.5 Pro (Google)
+- `gemini-3-pro` - Gemini 3 Pro (`gemini-3-pro-preview`, Google)
+- `deepseek-v3.2` - DeepSeek V3.1 (`deepseek-ai/DeepSeek-V3.1`, Baseten)
+- `llama-4` - Llama 4 Maverick (`meta-llama/llama-4-maverick-17b-128e-instruct`, Groq)
+- `kimi-k2` - Kimi K2 Thinking (`moonshotai/Kimi-K2-Thinking`, Baseten)
+- `minimax-m2.5` - MiniMax M2.5 (`MiniMax-M2.5`, MiniMax)
 
 ## Analytics
 
@@ -131,7 +136,11 @@ Required:
 - `ANTHROPIC_API_KEY` - For Claude
 - `OPENAI_API_KEY` - For GPT
 - `XAI_API_KEY` - For Grok
-- `GOOGLE_API_KEY` - For Gemini
+- `GOOGLE_API_KEY` - For Gemini models
+- `BASETEN_DEEPSEEK_API_KEY` - For DeepSeek V3.1 on Baseten
+- `GROQ_API_KEY` - For Llama 4 (Groq)
+- `BASETEN_KIMI_API_KEY` - For Kimi K2 Thinking on Baseten
+- `MINIMAX_API_KEY` - For MiniMax
 
 Optional:
 - `NEXTAUTH_SECRET` - Auth secret

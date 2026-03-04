@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AcronymTooltip } from './AcronymTooltip'
-import { MODEL_NAMES, MODEL_DISPLAY_NAMES, MODEL_ID_VARIANTS, type ModelVariant, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, MODEL_NAMES, MODEL_DISPLAY_NAMES, findPredictionByModelId, type ModelId } from '@/lib/constants'
 
 interface Prediction {
   predictorId: string
@@ -26,11 +26,8 @@ interface FDAEvent {
   predictions: Prediction[]
 }
 
-// Helper to find prediction by canonical model ID
-function findPrediction(predictions: Prediction[], variant: ModelVariant) {
-  const variants = MODEL_ID_VARIANTS[variant]
-  return predictions.find(p => variants.includes(p.predictorId))
-}
+const TABLE_FIXED_COLUMNS = 5
+const TABLE_COLSPAN = TABLE_FIXED_COLUMNS + MODEL_IDS.length
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
@@ -94,14 +91,14 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
 
 export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelId) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPrediction(event.predictions, expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions, expandedPrediction) : null
 
   return (
     <>
@@ -125,8 +122,8 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
             PENDING
           </span>
         </td>
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
-          const pred = findPrediction(event.predictions, modelId)
+        {MODEL_IDS.map((modelId) => {
+          const pred = findPredictionByModelId(event.predictions, modelId)
           const isExpanded = expandedPrediction === modelId
           return (
             <td key={modelId} className="text-center px-4 py-3">
@@ -152,7 +149,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
       </tr>
       {expanded && event.eventDescription && (
         <tr className="bg-zinc-800/20">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={TABLE_COLSPAN} className="px-4 py-3">
             <div className="text-sm text-zinc-400 leading-relaxed">
               {event.eventDescription}
             </div>
@@ -161,7 +158,7 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
       )}
       {expandedPred && (
         <tr className="bg-zinc-850/50">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={TABLE_COLSPAN} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
         </tr>
@@ -172,14 +169,14 @@ export function UpcomingFDAEventRow({ event }: { event: FDAEvent }) {
 
 export function PastFDAEventRow({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelId) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPrediction(event.predictions, expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions, expandedPrediction) : null
 
   return (
     <>
@@ -205,8 +202,8 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
             {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
           </span>
         </td>
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
-          const pred = findPrediction(event.predictions, modelId)
+        {MODEL_IDS.map((modelId) => {
+          const pred = findPredictionByModelId(event.predictions, modelId)
           if (!pred) return <td key={modelId} className="text-center px-4 py-3 text-zinc-600">—</td>
           const isCorrect = pred.correct
           const isExpanded = expandedPrediction === modelId
@@ -230,7 +227,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
       </tr>
       {expanded && event.eventDescription && (
         <tr className="bg-zinc-800/20">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={TABLE_COLSPAN} className="px-4 py-3">
             <div className="text-sm text-zinc-400 leading-relaxed">
               {event.eventDescription}
             </div>
@@ -239,7 +236,7 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
       )}
       {expandedPred && (
         <tr className="bg-zinc-850/50">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={TABLE_COLSPAN} className="px-4 py-3">
             <PredictionDetail prediction={expandedPred} outcome={event.outcome} />
           </td>
         </tr>
@@ -251,14 +248,14 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
 // Mobile Card Components for Home Page
 export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelId) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPrediction(event.predictions, expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions, expandedPrediction) : null
 
   return (
     <div
@@ -287,9 +284,10 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
           {event.eventDescription}
         </div>
       )}
-      <div className={`grid grid-cols-4 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
-          const pred = findPrediction(event.predictions, modelId)
+      <div className={`overflow-x-auto ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
+        <div className="grid min-w-[38rem] gap-2" style={{ gridTemplateColumns: `repeat(${MODEL_IDS.length}, minmax(4.25rem, 1fr))` }}>
+        {MODEL_IDS.map((modelId) => {
+          const pred = findPredictionByModelId(event.predictions, modelId)
           const label = MODEL_DISPLAY_NAMES[modelId]
           const isExpanded = expandedPrediction === modelId
           return (
@@ -314,6 +312,7 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
             </div>
           )
         })}
+        </div>
       </div>
       {expandedPred && (
         <div className="mt-3 pt-3 border-t border-zinc-800" onClick={(e) => e.stopPropagation()}>
@@ -331,14 +330,14 @@ export function MobileUpcomingFDAEventCard({ event }: { event: FDAEvent }) {
 
 export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedPrediction, setExpandedPrediction] = useState<ModelVariant | null>(null)
+  const [expandedPrediction, setExpandedPrediction] = useState<ModelId | null>(null)
 
-  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelVariant) => {
+  const handlePredictionClick = (e: React.MouseEvent, modelId: ModelId) => {
     e.stopPropagation()
     setExpandedPrediction(expandedPrediction === modelId ? null : modelId)
   }
 
-  const expandedPred = expandedPrediction ? findPrediction(event.predictions, expandedPrediction) : null
+  const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions, expandedPrediction) : null
 
   return (
     <div
@@ -369,9 +368,10 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
           {event.eventDescription}
         </div>
       )}
-      <div className={`grid grid-cols-4 gap-2 ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
-        {(['claude', 'gpt', 'grok', 'gemini'] as const).map((modelId) => {
-          const pred = findPrediction(event.predictions, modelId)
+      <div className={`overflow-x-auto ${!expanded ? 'pt-3 border-t border-zinc-800' : ''}`}>
+        <div className="grid min-w-[38rem] gap-2" style={{ gridTemplateColumns: `repeat(${MODEL_IDS.length}, minmax(4.25rem, 1fr))` }}>
+        {MODEL_IDS.map((modelId) => {
+          const pred = findPredictionByModelId(event.predictions, modelId)
           const label = MODEL_DISPLAY_NAMES[modelId]
           if (!pred) {
             return (
@@ -401,6 +401,7 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
             </div>
           )
         })}
+        </div>
       </div>
       {expandedPred && (
         <div className="mt-3 pt-3 border-t border-zinc-800" onClick={(e) => e.stopPropagation()}>

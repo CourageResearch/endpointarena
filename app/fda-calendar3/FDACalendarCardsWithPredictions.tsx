@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ModelIcon } from '@/components/ModelIcon'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
-import { abbreviateType, findPredictionByVariant, MODEL_DISPLAY_NAMES, type ModelVariant } from '@/lib/constants'
+import { abbreviateType, findPredictionByModelId, MODEL_DISPLAY_NAMES, MODEL_IDS, type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 
 type PredictionRow = {
@@ -38,7 +38,7 @@ interface FDACalendarCardsWithPredictionsProps {
 }
 
 type SortMode = 'dateAsc' | 'dateDesc'
-const MODEL_ORDER: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
+const MODEL_ORDER: ModelId[] = [...MODEL_IDS]
 
 function PredictionDirectionIcon({ prediction }: { prediction: string }) {
   return (
@@ -49,7 +49,7 @@ function PredictionDirectionIcon({ prediction }: { prediction: string }) {
   )
 }
 
-function PredictionPanel({ modelId, prediction }: { modelId: ModelVariant; prediction: PredictionRow }) {
+function PredictionPanel({ modelId, prediction }: { modelId: ModelId; prediction: PredictionRow }) {
   const tag = prediction.prediction === 'approved' ? 'APPROVE' : 'REJECT'
   const tagColor = prediction.prediction === 'approved' ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral
   const reasoningText = prediction.reasoning?.trim() || 'No reasoning provided.'
@@ -74,7 +74,7 @@ function PredictionPanel({ modelId, prediction }: { modelId: ModelVariant; predi
 }
 
 export function FDACalendarCardsWithPredictions({ events, filterOptions }: FDACalendarCardsWithPredictionsProps) {
-  const [expanded, setExpanded] = useState<{ eventId: string; modelId: ModelVariant } | null>(null)
+  const [expanded, setExpanded] = useState<{ eventId: string; modelId: ModelId } | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('dateAsc')
   const [filters, setFilters] = useState({
     applicationType: '',
@@ -254,7 +254,7 @@ export function FDACalendarCardsWithPredictions({ events, filterOptions }: FDACa
             const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
             const symbol = event.symbols?.split(', ')[0]
             const isOpen = expanded?.eventId === event.id
-            const expandedPrediction = isOpen && expanded ? findPredictionByVariant(event.predictions, expanded.modelId) : null
+            const expandedPrediction = isOpen && expanded ? findPredictionByModelId(event.predictions, expanded.modelId) : null
             const outcomeColor = event.outcome === 'Approved'
               ? '#4f8d49'
               : event.outcome === 'Rejected'
@@ -305,36 +305,41 @@ export function FDACalendarCardsWithPredictions({ events, filterOptions }: FDACa
                     {event.eventDescription || '—'}
                   </p>
 
-                  <div className="grid grid-cols-4 gap-2">
-                    {MODEL_ORDER.map((modelId) => {
-                      const pred = findPredictionByVariant(event.predictions, modelId)
-                      const selected = expanded?.eventId === event.id && expanded.modelId === modelId
-                      if (!pred) {
+                  <div className="overflow-x-auto">
+                    <div
+                      className="grid min-w-[38rem] gap-2"
+                      style={{ gridTemplateColumns: `repeat(${MODEL_ORDER.length}, minmax(4.25rem, 1fr))` }}
+                    >
+                      {MODEL_ORDER.map((modelId) => {
+                        const pred = findPredictionByModelId(event.predictions, modelId)
+                        const selected = expanded?.eventId === event.id && expanded.modelId === modelId
+                        if (!pred) {
+                          return (
+                            <div key={modelId} className="flex items-center justify-center rounded-md bg-[#f8f5f1] px-2 py-2 text-xs text-[#cfc3b5]">
+                              —
+                            </div>
+                          )
+                        }
                         return (
-                          <div key={modelId} className="flex items-center justify-center rounded-md bg-[#f8f5f1] px-2 py-2 text-xs text-[#cfc3b5]">
-                            —
-                          </div>
+                          <button
+                            key={modelId}
+                            type="button"
+                            onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
+                            title={MODEL_DISPLAY_NAMES[modelId]}
+                            className={`rounded-md px-2 py-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
+                              selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
+                            }`}
+                          >
+                            <div className="mx-auto mb-1 h-4 w-4 text-[#8a8075]">
+                              <ModelIcon id={modelId} />
+                            </div>
+                            <div className="mx-auto w-4 h-4">
+                              <PredictionDirectionIcon prediction={pred.prediction} />
+                            </div>
+                          </button>
                         )
-                      }
-                      return (
-                        <button
-                          key={modelId}
-                          type="button"
-                          onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
-                          title={MODEL_DISPLAY_NAMES[modelId]}
-                          className={`rounded-md px-2 py-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
-                            selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
-                          }`}
-                        >
-                          <div className="mx-auto mb-1 h-4 w-4 text-[#8a8075]">
-                            <ModelIcon id={modelId} />
-                          </div>
-                          <div className="mx-auto w-4 h-4">
-                            <PredictionDirectionIcon prediction={pred.prediction} />
-                          </div>
-                        </button>
-                      )
-                    })}
+                      })}
+                    </div>
                   </div>
 
                   {expandedPrediction && expanded ? (
