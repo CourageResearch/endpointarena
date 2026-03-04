@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
+import { ModelIcon } from '@/components/ModelIcon'
 
 type VerificationStatus = {
   authenticated: boolean
@@ -227,7 +228,10 @@ export function ProfileVerificationPanel() {
             disabled={twitterAvailable === false}
             className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {twitterAvailable === false ? 'X login unavailable' : 'Connect X account'}
+            <span aria-hidden="true" className="mr-2 inline-flex h-4 w-4 items-center justify-center">
+              <ModelIcon id="grok" className="h-4 w-4" />
+            </span>
+            {twitterAvailable === false ? 'Login unavailable' : 'Connect X account'}
           </button>
         </div>
       ) : null}

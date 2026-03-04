@@ -8,7 +8,7 @@ import { ValidationError } from '@/lib/errors'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CONTACT_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
-const CONTACT_ADMIN_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || ''
+const CONTACT_ADMIN_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || 'mfischer1000@gmail.com'
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
