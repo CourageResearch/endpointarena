@@ -191,19 +191,6 @@ export function ProfileVerificationPanel() {
     return (
       <div className="mt-6 rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
         <p className="font-medium text-[#2f7b40]">Trading unlocked.</p>
-        {statusData.mustStayUntil ? (
-          <p className="mt-1">
-            Keep your verification tweet live until{' '}
-            {new Date(statusData.mustStayUntil).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-            .
-          </p>
-        ) : null}
       </div>
     )
   }

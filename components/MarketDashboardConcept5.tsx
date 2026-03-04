@@ -64,6 +64,54 @@ type TweetVerificationStatus = {
   } | null
 }
 
+type HumanTradeSide = 'BUY_YES' | 'BUY_NO' | 'SELL_YES' | 'SELL_NO'
+type HumanTradeDirection = 'buy' | 'sell'
+type HumanTradeOutcome = 'yes' | 'no'
+
+type TraderSnapshot = {
+  cashBalance: number
+  yesShares: number
+  noShares: number
+}
+
+type TradeExecutionResponse = {
+  success: boolean
+  marketId: string
+  actorId: string
+  side: HumanTradeSide
+  requestedUsd: number
+  executedUsd: number
+  sharesDelta: number
+  priceBefore: number
+  priceAfter: number
+  trader: TraderSnapshot
+}
+
+function humanTradeSideLabel(side: HumanTradeSide): string {
+  if (side === 'BUY_YES') return 'Buy Yes'
+  if (side === 'BUY_NO') return 'Buy No'
+  if (side === 'SELL_YES') return 'Sell Yes'
+  return 'Sell No'
+}
+
+function toHumanTradeSide(direction: HumanTradeDirection, outcome: HumanTradeOutcome): HumanTradeSide {
+  if (direction === 'buy') {
+    return outcome === 'yes' ? 'BUY_YES' : 'BUY_NO'
+  }
+  return outcome === 'yes' ? 'SELL_YES' : 'SELL_NO'
+}
+
+function formatTradeAmountInput(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0'
+  if (value >= 1000) {
+    return Math.round(value).toString()
+  }
+  if (value >= 100) {
+    return value.toFixed(1).replace(/\.0$/, '')
+  }
+  return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+}
+
 function getInitialPositionSortDirection(key: PositionSortKey): PositionSortDirection {
   if (key === 'model' || key === 'netStance') return 'asc'
   return 'desc'
@@ -357,7 +405,7 @@ export function MarketDashboardConcept5({
 }: MarketDashboardConcept5Props = {}) {
   const pathname = usePathname()
   const { status: sessionStatus } = useSession()
-  const { data, error, loading } = useMarketOverview()
+  const { data, error, loading, reload } = useMarketOverview()
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialMarketId)
   const [marketSearch, setMarketSearch] = useState('')
   const [commentModelFilter, setCommentModelFilter] = useState<CommentModelFilter>('all')
@@ -367,6 +415,14 @@ export function MarketDashboardConcept5({
   const [showAllActivity, setShowAllActivity] = useState(false)
   const [verificationStatus, setVerificationStatus] = useState<TweetVerificationStatus | null>(null)
   const [verificationError, setVerificationError] = useState<string | null>(null)
+  const [tradeDirection, setTradeDirection] = useState<HumanTradeDirection>('buy')
+  const [tradeOutcome, setTradeOutcome] = useState<HumanTradeOutcome>('yes')
+  const [tradeAmountUsd, setTradeAmountUsd] = useState('1')
+  const [tradeSubmitting, setTradeSubmitting] = useState(false)
+  const [tradeError, setTradeError] = useState<string | null>(null)
+  const [tradeNotice, setTradeNotice] = useState<string | null>(null)
+  const [traderSnapshot, setTraderSnapshot] = useState<TraderSnapshot | null>(null)
+  const [traderSnapshotLoading, setTraderSnapshotLoading] = useState(false)
 
   const deferredMarketSearch = useDeferredValue(marketSearch.trim().toLowerCase())
   const safeCallbackUrl = pathname || '/markets'
@@ -465,6 +521,57 @@ export function MarketDashboardConcept5({
     setShowAllActivity(false)
   }, [selectedEntry?.market.marketId, commentModelFilter, commentSort, chartScrubSnapshotDate])
 
+  useEffect(() => {
+    setTradeError(null)
+    setTradeNotice(null)
+  }, [selectedEntry?.market.marketId])
+
+  useEffect(() => {
+    const marketId = selectedEntry?.market.marketId ?? null
+    if (sessionStatus !== 'authenticated' || !verificationStatus?.verified || !marketId) {
+      setTraderSnapshot(null)
+      setTraderSnapshotLoading(false)
+      return
+    }
+    const currentMarketId = marketId
+
+    let cancelled = false
+
+    async function loadTraderSnapshot() {
+      setTraderSnapshotLoading(true)
+      try {
+        const response = await fetch(`/api/markets/trade?marketId=${encodeURIComponent(currentMarketId)}`, {
+          cache: 'no-store',
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(payload, 'Failed to load trader state'))
+        }
+        if (!cancelled) {
+          setTraderSnapshot({
+            cashBalance: typeof payload.cashBalance === 'number' ? payload.cashBalance : 0,
+            yesShares: typeof payload.yesShares === 'number' ? payload.yesShares : 0,
+            noShares: typeof payload.noShares === 'number' ? payload.noShares : 0,
+          })
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setTraderSnapshot(null)
+          setTradeError(err instanceof Error ? err.message : 'Failed to load trader state')
+        }
+      } finally {
+        if (!cancelled) {
+          setTraderSnapshotLoading(false)
+        }
+      }
+    }
+
+    void loadTraderSnapshot()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedEntry?.market.marketId, sessionStatus, verificationStatus?.verified])
+
   const selectedMarketActions = useMemo(() => {
     if (!selectedEntry) return []
 
@@ -561,14 +668,8 @@ export function MarketDashboardConcept5({
   const scrubbedChartDayLabel = chartScrubSnapshotDate ? formatShortDateUtc(chartScrubSnapshotDate) : null
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
-  const pdufaDateText = selectedMarket.event?.pdufaDate
-    ? new Date(selectedMarket.event.pdufaDate).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit',
-      timeZone: 'UTC',
-    })
-    : '-'
+  const showTradeSidebar = useStackedLayout && sessionStatus === 'authenticated' && Boolean(verificationStatus?.verified)
+  const pdufaDateText = formatDateUtc(selectedMarket.event?.pdufaDate)
   const pdufaCountdownText = pdufaDays == null
     ? 'No date'
     : pdufaDays < 0
@@ -581,6 +682,22 @@ export function MarketDashboardConcept5({
     : null
   const drugDescriptionText = selectedMarket.event?.eventDescription?.trim() || '-'
   const companyNameText = selectedMarket.event?.companyName || selectedEntry.subtitle
+  const selectedTradeSide = toHumanTradeSide(tradeDirection, tradeOutcome)
+  const yesPriceCents = Math.round(selectedMarket.priceYes * 100)
+  const noPriceCents = Math.round((1 - selectedMarket.priceYes) * 100)
+  const selectedOutcomePrice = tradeOutcome === 'yes' ? selectedMarket.priceYes : (1 - selectedMarket.priceYes)
+  const heldSharesForSelectedOutcome = tradeOutcome === 'yes'
+    ? Math.max(0, traderSnapshot?.yesShares ?? 0)
+    : Math.max(0, traderSnapshot?.noShares ?? 0)
+  const estimatedSellCapacityUsd = heldSharesForSelectedOutcome * selectedOutcomePrice
+  const availableTradeUsd = tradeDirection === 'buy'
+    ? Math.max(0, traderSnapshot?.cashBalance ?? 0)
+    : Math.max(0, estimatedSellCapacityUsd)
+  const parsedTradeAmount = Number.parseFloat(tradeAmountUsd)
+  const tradeAmountValue = Number.isFinite(parsedTradeAmount) ? Math.max(0, parsedTradeAmount) : 0
+  const canSubmitTrade = !tradeSubmitting
+    && tradeAmountValue > 0
+    && (tradeDirection === 'buy' ? availableTradeUsd > 0.0001 : heldSharesForSelectedOutcome > 0.0001)
   const positionRows = selectedMarket.modelStates.map((state, index) => {
     const model = MODEL_INFO[state.modelId]
     const yesShares = Math.max(0, state.yesShares)
@@ -667,6 +784,278 @@ export function MarketDashboardConcept5({
       })
     })
   }
+
+  const handleTradeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!selectedMarket?.marketId) {
+      setTradeError('No market selected')
+      return
+    }
+
+    if (!verificationStatus?.verified) {
+      setTradeError('Complete X verification before trading')
+      return
+    }
+
+    if (!Number.isFinite(parsedTradeAmount) || tradeAmountValue <= 0) {
+      setTradeError('Enter a valid positive amount')
+      return
+    }
+
+    setTradeSubmitting(true)
+    setTradeError(null)
+    setTradeNotice(null)
+
+    try {
+      const response = await fetch('/api/markets/trade', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          marketId: selectedMarket.marketId,
+          side: selectedTradeSide,
+          amountUsd: tradeAmountValue,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Failed to execute trade'))
+      }
+
+      const result = payload as TradeExecutionResponse
+      setTraderSnapshot(result.trader)
+      setTradeNotice(
+        `${humanTradeSideLabel(result.side)} executed: ${formatCompactMoney(result.executedUsd)} at ${formatPercent(result.priceAfter, 1)}`
+      )
+      await reload()
+    } catch (err) {
+      setTradeError(err instanceof Error ? err.message : 'Failed to execute trade')
+    } finally {
+      setTradeSubmitting(false)
+    }
+  }
+
+  const renderDetailsPanel = ({ className }: { className?: string } = {}) => (
+    <section className={cn('space-y-3', className)}>
+      <div className="px-1">
+        <div className="flex items-center gap-3">
+          <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#aa9d8d]">Details</div>
+          <HeaderDots />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>PDUFA Clock</dt>
+              <dd className="mt-2 space-y-1">
+                <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS)}>{pdufaCountdownText}</div>
+              </dd>
+            </div>
+          </div>
+
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Volume</dt>
+              <dd className="mt-2 space-y-1">
+                <div className={cn('tabular-nums whitespace-nowrap', DETAILS_TOP_VALUE_CLASS)}>
+                  {formatCompactMoney(selectedStats.totalVolumeUsd)}
+                </div>
+              </dd>
+            </div>
+          </div>
+
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Type</dt>
+              <dd className="mt-2 space-y-1">
+                <div className={DETAILS_BODY_TEXT_CLASS}>
+                  {applicationTypeMeta
+                    ? (
+                      <Link
+                        href={`/glossary#term-${applicationTypeMeta.anchor}`}
+                        className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                      >
+                        {applicationTypeMeta.display}
+                      </Link>
+                    )
+                    : '-'}
+                </div>
+              </dd>
+            </div>
+          </div>
+
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Ticker</dt>
+              <dd className="mt-2 space-y-1">
+                <div className={DETAILS_BODY_TEXT_CLASS}>
+                  {primaryTicker ? (
+                    <a
+                      href={`https://finance.yahoo.com/quote/${encodeURIComponent(primaryTicker)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                    >
+                      ${primaryTicker}
+                    </a>
+                  ) : '-'}
+                </div>
+              </dd>
+            </div>
+          </div>
+
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Decision Date</dt>
+              <dd className={cn('mt-2 tabular-nums', DETAILS_TOP_VALUE_CLASS)}>
+                {pdufaDateText}
+              </dd>
+            </div>
+          </div>
+        </dl>
+
+        <dl className="grid grid-cols-1 gap-2">
+          <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex h-full flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Drug Description</dt>
+              <dd className={cn('mt-2', DETAILS_BODY_TEXT_CLASS)}>
+                {drugDescriptionText}
+              </dd>
+            </div>
+          </div>
+        </dl>
+      </div>
+    </section>
+  )
+
+  const renderTradePanel = ({ className }: { className?: string } = {}) => (
+    <section className={cn('space-y-3', className)}>
+      <div className="px-1">
+        <div className="flex items-center gap-3">
+          <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#aa9d8d]">Trade</div>
+          <HeaderDots />
+        </div>
+      </div>
+
+      <div className="rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
+        <div className="rounded-md bg-white/95 p-4">
+          <div className="-mx-4 -mt-4 mb-4 border-b border-[#e8ddd0] bg-[#f8f3ec]/45 px-4">
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={() => setTradeDirection('buy')}
+                className={cn(
+                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none',
+                  tradeDirection === 'buy'
+                    ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                    : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
+                )}
+              >
+                Buy
+              </button>
+              <button
+                type="button"
+                onClick={() => setTradeDirection('sell')}
+                className={cn(
+                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none',
+                  tradeDirection === 'sell'
+                    ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                    : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
+                )}
+              >
+                Sell
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setTradeOutcome('yes')}
+              className={cn(
+                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors',
+                tradeOutcome === 'yes'
+                  ? tradeDirection === 'buy'
+                    ? 'border-[#5DBB63] bg-[#5DBB63]/15 text-[#2f7b40]'
+                    : 'border-[#EF6F67] bg-[#EF6F67]/15 text-[#9b3028]'
+                  : 'border-[#e8ddd0] bg-[#f7f2eb] text-[#8a8075] hover:bg-[#f3ebe0]',
+              )}
+            >
+              Yes {yesPriceCents}¢
+            </button>
+            <button
+              type="button"
+              onClick={() => setTradeOutcome('no')}
+              className={cn(
+                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors',
+                tradeOutcome === 'no'
+                  ? 'border-[#EF6F67] bg-[#EF6F67]/15 text-[#9b3028]'
+                  : 'border-[#e8ddd0] bg-[#f7f2eb] text-[#8a8075] hover:bg-[#f3ebe0]',
+              )}
+            >
+              No {noPriceCents}¢
+            </button>
+          </div>
+
+          <form className="mt-3 space-y-3" onSubmit={handleTradeSubmit}>
+            <label className="block">
+              <span className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-[#8a8075]">Amount (USD)</span>
+              <input
+                value={tradeAmountUsd}
+                onChange={(event) => setTradeAmountUsd(event.target.value.replace(/[^0-9.]/g, ''))}
+                inputMode="decimal"
+                className="h-10 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891]"
+                placeholder="1"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={!canSubmitTrade}
+              className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[#d9ccbc] bg-[#f7f2eb] px-4 text-sm font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e]"
+            >
+              {tradeSubmitting ? 'Submitting...' : `Trade ${tradeDirection === 'buy' ? 'Buy' : 'Sell'}`}
+            </button>
+          </form>
+
+          {tradeError ? (
+            <p className="mt-3 rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
+              {tradeError}
+            </p>
+          ) : null}
+
+          {tradeNotice ? (
+            <p className="mt-3 rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 px-3 py-2 text-sm text-[#2f7b40]">
+              {tradeNotice}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <dl className="px-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#7c7267]">
+        <div className="inline-flex items-baseline gap-1.5">
+          <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">Cash</dt>
+          <dd className="text-[13px] font-normal text-[#6d645a]">{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
+        </div>
+        <div className="inline-flex items-baseline gap-1.5">
+          <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">YES Shares</dt>
+          <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
+        </div>
+        <div className="inline-flex items-baseline gap-1.5">
+          <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">NO Shares</dt>
+          <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.noShares ?? 0)}</dd>
+        </div>
+      </dl>
+      {traderSnapshotLoading ? (
+        <p className="px-1 text-[11px] text-[#8a8075]">Refreshing balances...</p>
+      ) : null}
+    </section>
+  )
 
 	  const renderReasoningPanel = ({
 	    className,
@@ -847,19 +1236,6 @@ export function MarketDashboardConcept5({
             Humans vs AI unlocked
             {verificationStatus.profile ? ` • ${verificationStatus.profile.pointsBalance.toLocaleString()} points • Rank #${verificationStatus.profile.rank}` : ''}
           </p>
-          {verificationStatus.mustStayUntil ? (
-            <p className="mt-1">
-              Keep your verification tweet live until{' '}
-              {new Date(verificationStatus.mustStayUntil).toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-              .
-            </p>
-          ) : null}
         </div>
       ) : null}
 
@@ -956,15 +1332,17 @@ export function MarketDashboardConcept5({
 	                  !useMarkets2Layout && !useStackedLayout && 'lg:items-start lg:grid-cols-12',
 	                )}
 	              >
-              <div
-                className={cn(
-                  useMarkets2Layout
-                    ? 'min-w-0 px-1 xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,24rem)] xl:items-start xl:gap-4'
-                    : useStackedLayout
-                      ? 'min-w-0 px-1 lg:grid lg:grid-cols-[minmax(0,2.25fr)_minmax(16rem,0.75fr)] lg:items-start lg:gap-4'
-                    : 'contents',
-                )}
-              >
+	              <div
+	                className={cn(
+	                  useMarkets2Layout
+	                    ? 'min-w-0 px-1 xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,24rem)] xl:items-start xl:gap-4'
+	                    : useStackedLayout
+	                      ? showTradeSidebar
+	                        ? 'min-w-0 px-1 lg:grid lg:grid-cols-[minmax(0,2.25fr)_minmax(18rem,0.85fr)] lg:items-start lg:gap-4'
+	                        : 'min-w-0 px-1'
+	                      : 'contents',
+	                )}
+	              >
 	                  <div className={cn(
                       'min-w-0',
                       !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
@@ -988,134 +1366,33 @@ export function MarketDashboardConcept5({
                     </div>
                   </div>
 
-                  <MarketDetailChart
-                    history={selectedMarket.priceHistory}
-                    currentPrice={selectedMarket.priceYes}
-                    className="rounded-none border-0 bg-transparent p-0"
-                    showDateRangeFooter={false}
-                    scrubSnapshotDate={chartScrubSnapshotDate}
-                    onScrubSnapshotDateChange={setChartScrubSnapshotDate}
-	                  />
+	                  <MarketDetailChart
+	                    history={selectedMarket.priceHistory}
+	                    currentPrice={selectedMarket.priceYes}
+	                    className="rounded-none border-0 bg-transparent p-0"
+	                    showDateRangeFooter={false}
+	                    scrubSnapshotDate={chartScrubSnapshotDate}
+	                    onScrubSnapshotDateChange={setChartScrubSnapshotDate}
+		                  />
 
-	                  <div className={cn(useMarkets2Layout ? 'py-3' : 'py-1')} aria-hidden="true" />
-	                  {useMarkets2Layout ? renderReasoningPanel({ compactHeight: true }) : null}
-	                  </div>
+		                  <div className={cn(useMarkets2Layout ? 'py-3' : 'py-1')} aria-hidden="true" />
+		                  {useStackedLayout ? renderDetailsPanel() : null}
+		                  {useStackedLayout ? <div className="py-2" aria-hidden="true" /> : null}
+		                  {useMarkets2Layout ? renderReasoningPanel({ compactHeight: true }) : null}
+		                  </div>
 
-			                  <div className={cn(
-			                    'min-w-0',
-			                    !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
-			                    useStackedLayout && 'px-1',
-			                    useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
-			                  )}>
-		                  <div className="space-y-3">
-	                    <div className="px-1">
-	                      <div className="flex items-center gap-3">
-	                        <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#aa9d8d]">Details</div>
-                        <HeaderDots />
-                      </div>
-                    </div>
+				                  {(!useStackedLayout || showTradeSidebar) ? (
+				                    <div className={cn(
+				                      'min-w-0',
+				                      !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
+				                      useStackedLayout && 'px-1',
+				                      useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
+				                    )}>
+				                    {useStackedLayout ? renderTradePanel({ className: 'lg:sticky lg:top-20' }) : renderDetailsPanel()}
 
-                    <div className="space-y-2">
-                      <dl className="grid grid-cols-2 gap-2">
-                        <div className={DETAILS_CARD_SHELL_CLASS} style={{ background: '#5DBB63' }}>
-                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className={DETAILS_TOP_LABEL_CLASS}>Yes</dt>
-                            <dd className="mt-2 space-y-1">
-                              <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS, 'text-[#1f5f31]')}>
-                                {formatPercent(selectedStats.yesPrice, 0)}
-                              </div>
-                            </dd>
-                          </div>
-                        </div>
-
-                        <div className={DETAILS_CARD_SHELL_CLASS} style={{ background: '#EF6F67' }}>
-                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className={DETAILS_TOP_LABEL_CLASS}>No</dt>
-                            <dd className="mt-2 space-y-1">
-                              <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS, 'text-[#7f1d2d]')}>
-                                {formatPercent(selectedStats.noPrice, 0)}
-                              </div>
-                            </dd>
-                          </div>
-                        </div>
-
-                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className={DETAILS_TOP_LABEL_CLASS}>PDUFA Clock</dt>
-                            <dd className="mt-2 space-y-1">
-                              <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS)}>{pdufaCountdownText}</div>
-                            </dd>
-                          </div>
-                        </div>
-
-                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className={DETAILS_TOP_LABEL_CLASS}>Volume</dt>
-                            <dd className="mt-2 space-y-1">
-                              <div className={cn('tabular-nums whitespace-nowrap', DETAILS_TOP_VALUE_CLASS)}>
-                                {formatCompactMoney(selectedStats.totalVolumeUsd)}
-                              </div>
-                            </dd>
-                          </div>
-                        </div>
-
-                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className={DETAILS_TOP_LABEL_CLASS}>Type</dt>
-                            <dd className="mt-2 space-y-1">
-                              <div className={DETAILS_BODY_TEXT_CLASS}>
-                                {applicationTypeMeta
-                                  ? (
-                                    <Link
-                                      href={`/glossary#term-${applicationTypeMeta.anchor}`}
-                                      className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                                    >
-                                      {applicationTypeMeta.display}
-                                    </Link>
-                                  )
-                                  : '-'}
-                              </div>
-                            </dd>
-                          </div>
-                        </div>
-
-                        <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-                          <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className={DETAILS_TOP_LABEL_CLASS}>Ticker</dt>
-                            <dd className="mt-2 space-y-1">
-                              <div className={DETAILS_BODY_TEXT_CLASS}>
-                                {primaryTicker ? (
-                                  <a
-                                    href={`https://finance.yahoo.com/quote/${encodeURIComponent(primaryTicker)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                                  >
-                                    ${primaryTicker}
-                                  </a>
-                                ) : '-'}
-                              </div>
-                            </dd>
-                          </div>
-                        </div>
-                      </dl>
-
-                      <dl className="grid grid-cols-1 gap-2">
-                        <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
-                          <div className={cn('flex h-full flex-col', DETAILS_CARD_INNER_CLASS)}>
-                            <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Drug Description</dt>
-                            <dd className={cn('mt-2', DETAILS_BODY_TEXT_CLASS)}>
-                              {drugDescriptionText}
-                            </dd>
-                          </div>
-                        </div>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {useMarkets2Layout ? (
-                    <>
-                      <div className="py-6" aria-hidden="true" />
+	                  {useMarkets2Layout ? (
+	                    <>
+	                      <div className="py-6" aria-hidden="true" />
                       <div>
                         <div className="mb-2 px-1">
                           <div className="flex items-center gap-3">
@@ -1256,10 +1533,11 @@ export function MarketDashboardConcept5({
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </>
-                  ) : null}
-              </div>
+	                      </div>
+	                    </>
+	                  ) : null}
+	                  </div>
+				                  ) : null}
 
 	              </div>
 	            </div>
