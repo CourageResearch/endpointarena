@@ -6,9 +6,9 @@ import { normalizeRunDate, recordMarketActionError, rotateModelOrder, runBuyActi
 import { ConflictError } from '@/lib/errors'
 import type { DailyRunHooks, DailyRunPayload, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
 import { getMarketRuntimeConfig, type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
+import { MARKET_RUN_STALE_TIMEOUT_MS } from '@/lib/markets/run-health'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const STALE_RUNNING_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000
 
 function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
   return results.reduce<DailyRunSummary>((acc, result) => {
@@ -116,7 +116,7 @@ async function startRunRecord({
     const heartbeatAt = activeRun.updatedAt ?? activeRun.createdAt ?? activeRun.runDate
     const heartbeatAgeMs = now.getTime() - heartbeatAt.getTime()
 
-    if (heartbeatAgeMs < STALE_RUNNING_RUN_TIMEOUT_MS) {
+    if (heartbeatAgeMs < MARKET_RUN_STALE_TIMEOUT_MS) {
       const activeRunDate = activeRun.runDate.toISOString()
       throw new ConflictError(`A daily market cycle is already running (runDate ${activeRunDate}). Wait for it to finish before starting another run.`)
     }

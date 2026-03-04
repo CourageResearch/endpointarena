@@ -1,6 +1,7 @@
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { db, marketRunLogs, marketRuns } from '@/lib/db'
 import type { DailyRunStatus } from '@/lib/markets/types'
+import { MARKET_RUN_STALE_TIMEOUT_MS } from '@/lib/markets/run-health'
 
 type LogType = 'system' | 'activity' | 'progress' | 'error'
 
@@ -45,6 +46,45 @@ declare global {
 
 function toIsoString(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
+}
+
+function getRunHeartbeatAt(run: {
+  runDate: Date
+  createdAt: Date | null
+  updatedAt: Date | null
+}): Date {
+  return run.updatedAt ?? run.createdAt ?? run.runDate
+}
+
+async function failStaleRunningRunIfNeeded(run: {
+  id: string
+  runDate: Date
+  createdAt: Date | null
+  updatedAt: Date | null
+  failureReason: string | null
+}): Promise<boolean> {
+  const heartbeatAt = getRunHeartbeatAt(run)
+  const heartbeatAgeMs = Date.now() - heartbeatAt.getTime()
+  if (heartbeatAgeMs < MARKET_RUN_STALE_TIMEOUT_MS) return false
+
+  const now = new Date()
+  const autoFailureReason = run.failureReason && run.failureReason.trim().length > 0
+    ? run.failureReason
+    : `Auto-failed stale run after ${Math.round(heartbeatAgeMs / 60000)}m without heartbeat updates.`
+
+  await db.update(marketRuns)
+    .set({
+      status: 'failed',
+      failureReason: autoFailureReason,
+      completedAt: now,
+      updatedAt: now,
+    })
+    .where(and(
+      eq(marketRuns.id, run.id),
+      eq(marketRuns.status, 'running'),
+    ))
+
+  return true
 }
 
 export async function ensureMarketRunLogSchema(): Promise<void> {
@@ -259,16 +299,27 @@ export async function getRunningMarketRunId(): Promise<string | null> {
     where: eq(marketRuns.status, 'running'),
     orderBy: [desc(marketRuns.updatedAt)],
   })
-  return activeRun?.id ?? null
+
+  if (!activeRun) return null
+  const staleFailed = await failStaleRunningRunIfNeeded(activeRun)
+  return staleFailed ? null : activeRun.id
 }
 
 export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapshot | null> {
   await ensureMarketRunLogSchema()
 
-  const running = await db.query.marketRuns.findFirst({
+  let running = await db.query.marketRuns.findFirst({
     where: eq(marketRuns.status, 'running'),
     orderBy: [desc(marketRuns.updatedAt)],
   })
+
+  if (running) {
+    const staleFailed = await failStaleRunningRunIfNeeded(running)
+    if (staleFailed) {
+      running = undefined
+    }
+  }
+
   const latest = running ?? await db.query.marketRuns.findFirst({
     orderBy: [desc(marketRuns.runDate)],
   })
