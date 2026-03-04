@@ -246,7 +246,7 @@ function buildRunSummaryFromSnapshot(snapshot: AdminMarketRunSnapshot | null): L
 }
 
 function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): DailyRunProgressState | null {
-  if (!snapshot || snapshot.status !== 'running') return null
+  if (!snapshot) return null
 
   const counts = getSnapshotCounts(snapshot)
   const latestResultLog = snapshot.logs.find((entry) => {
@@ -288,6 +288,11 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
     : null
 
   const activityLog = snapshot.logs.find((entry) => entry.logType !== 'error')
+  const defaultActivity = snapshot.status === 'running'
+    ? 'Daily run is in progress...'
+    : snapshot.status === 'completed'
+      ? 'Daily market cycle completed'
+      : 'Daily market cycle failed'
 
   return {
     startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
@@ -300,7 +305,7 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
     skippedCount: counts.skippedCount,
     latestResult,
     latestError,
-    currentActivity: activityLog?.message ?? 'Daily run is in progress...',
+    currentActivity: activityLog?.message ?? defaultActivity,
   }
 }
 
@@ -311,7 +316,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const [runningDaily, setRunningDaily] = useState(initialRunSnapshot?.status === 'running')
   const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(() => buildRunSummaryFromSnapshot(initialRunSnapshot))
   const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(() => buildRunProgressFromSnapshot(initialRunSnapshot))
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => buildRunSummaryFromSnapshot(initialRunSnapshot)?.durationSeconds ?? 0)
   const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
   const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
   const [uiError, setUiError] = useState<string | null>(null)
@@ -333,19 +338,22 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const applyRunSnapshot = (snapshot: AdminMarketRunSnapshot | null) => {
     if (!snapshot) return
 
+    const nextProgress = buildRunProgressFromSnapshot(snapshot)
+    const nextSummary = buildRunSummaryFromSnapshot(snapshot)
+
     setRunLog(buildRunLogFromSnapshot(snapshot))
     setErrorConsole(buildErrorConsoleFromSnapshot(snapshot))
+    setRunProgress(nextProgress)
 
     if (snapshot.status === 'running') {
       setRunningDaily(true)
-      setRunProgress(buildRunProgressFromSnapshot(snapshot))
       setLastRunSummary(null)
       return
     }
 
     setRunningDaily(false)
-    setRunProgress(null)
-    setLastRunSummary(buildRunSummaryFromSnapshot(snapshot))
+    setLastRunSummary(nextSummary)
+    setElapsedSeconds(nextSummary?.durationSeconds ?? 0)
   }
 
   useEffect(() => {
@@ -587,6 +595,10 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed daily run'
       setUiError(message)
+      setRunProgress((prev) => prev ? {
+        ...prev,
+        currentActivity: `Daily market cycle failed: ${message}`,
+      } : prev)
       appendErrorConsole(`RUN FAILED - ${message}`)
 
       if (message.toLowerCase().includes('already running')) {
@@ -598,18 +610,15 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             keepPersistedRunningState = payload?.snapshot?.status === 'running'
           } else {
             setRunningDaily(false)
-            setRunProgress(null)
           }
         } catch {
           setRunningDaily(false)
-          setRunProgress(null)
         }
       }
     } finally {
       setIsStreamingRun(false)
       if (!keepPersistedRunningState) {
         setRunningDaily(false)
-        setRunProgress(null)
       }
     }
   }
@@ -620,6 +629,9 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const pendingActions = runProgress
     ? Math.max(0, (runProgress.totalActions || 0) - runProgress.completedActions)
     : 0
+  const displayElapsedSeconds = runningDaily
+    ? elapsedSeconds
+    : (lastRunSummary?.durationSeconds ?? elapsedSeconds)
 
   return (
     <div className="space-y-6">
@@ -644,12 +656,12 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
               : 'Run Daily Cycle Now'}
           </button>
         </div>
-        {runningDaily && runProgress && (
+        {runProgress && (
           <div className="mt-3 rounded-lg border border-[#e8ddd0] bg-white/70 p-3 space-y-2">
             <p className="text-xs text-[#8a8075]">
               {runProgress.runDate
                 ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
-                : 'Initializing run'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {elapsedSeconds}s elapsed
+                : 'Initializing run'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
             </p>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1">
