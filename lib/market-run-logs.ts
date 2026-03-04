@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db, marketRunLogs, marketRuns } from '@/lib/db'
 import type { DailyRunStatus } from '@/lib/markets/types'
-import { MARKET_RUN_STALE_TIMEOUT_MS } from '@/lib/markets/run-health'
+import { MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
 
 type LogType = 'system' | 'activity' | 'progress' | 'error'
 
@@ -48,31 +48,16 @@ function toIsoString(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
 }
 
-function getRunHeartbeatAt(run: {
-  runDate: Date
-  createdAt: Date | null
-  updatedAt: Date | null
-}): Date {
-  return run.updatedAt ?? run.createdAt ?? run.runDate
-}
-
 async function failStaleRunningRunIfNeeded(run: {
   id: string
-  runDate: Date
-  createdAt: Date | null
-  updatedAt: Date | null
   failureReason: string | null
 }): Promise<boolean> {
-  const heartbeatAt = getRunHeartbeatAt(run)
-  const heartbeatAgeMs = Date.now() - heartbeatAt.getTime()
-  if (heartbeatAgeMs < MARKET_RUN_STALE_TIMEOUT_MS) return false
-
   const now = new Date()
   const autoFailureReason = run.failureReason && run.failureReason.trim().length > 0
     ? run.failureReason
-    : `Auto-failed stale run after ${Math.round(heartbeatAgeMs / 60000)}m without heartbeat updates.`
+    : `Auto-failed stale run after ${MARKET_RUN_STALE_TIMEOUT_MINUTES}m without heartbeat updates.`
 
-  await db.update(marketRuns)
+  const updated = await db.update(marketRuns)
     .set({
       status: 'failed',
       failureReason: autoFailureReason,
@@ -82,9 +67,11 @@ async function failStaleRunningRunIfNeeded(run: {
     .where(and(
       eq(marketRuns.id, run.id),
       eq(marketRuns.status, 'running'),
+      sql`COALESCE(${marketRuns.updatedAt}, ${marketRuns.createdAt}, ${marketRuns.runDate}) < NOW() - (${MARKET_RUN_STALE_TIMEOUT_SECONDS} * INTERVAL '1 second')`,
     ))
+    .returning({ id: marketRuns.id })
 
-  return true
+  return updated.length > 0
 }
 
 export async function ensureMarketRunLogSchema(): Promise<void> {

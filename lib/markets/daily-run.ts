@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db, fdaCalendarEvents, marketAccounts, marketActions, marketPositions, marketRuns, predictionMarkets } from '@/lib/db'
 import { MODEL_INFO, type ModelId } from '@/lib/constants'
 import { MARKET_DECISION_GENERATORS } from '@/lib/predictions/market-generators'
@@ -6,7 +6,7 @@ import { normalizeRunDate, recordMarketActionError, rotateModelOrder, runBuyActi
 import { ConflictError } from '@/lib/errors'
 import type { DailyRunHooks, DailyRunPayload, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
 import { getMarketRuntimeConfig, type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
-import { MARKET_MODEL_RESPONSE_TIMEOUT_MS, MARKET_RUN_STALE_TIMEOUT_MS } from '@/lib/markets/run-health'
+import { MARKET_MODEL_RESPONSE_TIMEOUT_MS, MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -129,22 +129,25 @@ async function startRunRecord({
   })
 
   if (activeRun) {
-    const heartbeatAt = activeRun.updatedAt ?? activeRun.createdAt ?? activeRun.runDate
-    const heartbeatAgeMs = now.getTime() - heartbeatAt.getTime()
-
-    if (heartbeatAgeMs < MARKET_RUN_STALE_TIMEOUT_MS) {
-      const activeRunDate = activeRun.runDate.toISOString()
-      throw new ConflictError(`A daily market cycle is already running (runDate ${activeRunDate}). Wait for it to finish before starting another run.`)
-    }
-
-    await db.update(marketRuns)
+    const staleFailureReason = `Auto-failed stale run after ${MARKET_RUN_STALE_TIMEOUT_MINUTES}m without heartbeat updates.`
+    const staleRunUpdate = await db.update(marketRuns)
       .set({
         status: 'failed',
-        failureReason: `Auto-failed stale run after ${Math.round(heartbeatAgeMs / 60000)}m without heartbeat updates.`,
+        failureReason: staleFailureReason,
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(marketRuns.id, activeRun.id))
+      .where(and(
+        eq(marketRuns.id, activeRun.id),
+        eq(marketRuns.status, 'running'),
+        sql`COALESCE(${marketRuns.updatedAt}, ${marketRuns.createdAt}, ${marketRuns.runDate}) < NOW() - (${MARKET_RUN_STALE_TIMEOUT_SECONDS} * INTERVAL '1 second')`,
+      ))
+      .returning({ id: marketRuns.id })
+
+    if (staleRunUpdate.length === 0) {
+      const activeRunDate = activeRun.runDate.toISOString()
+      throw new ConflictError(`A daily market cycle is already running (runDate ${activeRunDate}). Wait for it to finish before starting another run.`)
+    }
   }
 
   const [runRecord] = await db.insert(marketRuns)
