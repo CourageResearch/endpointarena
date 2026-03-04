@@ -89,11 +89,11 @@ export default function WaitlistPage() {
           </div>
         </section>
 
-        <SquareDivider className="my-10 sm:my-14" />
-
+        <div className="mt-10 space-y-10 sm:mt-14 sm:space-y-14">
+          <SquareDivider />
+          <FooterGradientRule />
+        </div>
       </main>
-
-      <FooterGradientRule />
     </PageFrame>
   )
 }

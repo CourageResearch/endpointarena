@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react'
-import { db, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
-import { eq, inArray } from 'drizzle-orm'
+import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
+import { desc, eq, inArray, or } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
-import { ModelIcon } from '@/components/ModelIcon'
+import { FDAIcon, ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { BW2MobilePastCard, BW2PastRow } from '@/app/rows'
+import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
+import { FooterGradientRule } from '@/components/site/chrome'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,8 +52,17 @@ function SquareDivider({ className = '' }: { className?: string }) {
   )
 }
 
-function FooterGradientRule() {
-  return <div className="h-px w-full bg-[linear-gradient(90deg,rgba(239,111,103,0.15),rgba(91,165,237,0.45),rgba(93,187,99,0.15))]" />
+function PastLegend() {
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-1 px-1 text-[11px] text-[#8a8075]">
+      <span className="flex items-center gap-1.5">
+        <BrandDecisionMark variant="correct" className="h-3.5 w-3.5" /> Correct Prediction
+      </span>
+      <span className="flex items-center gap-1.5">
+        <BrandDecisionMark variant="incorrect" className="h-3.5 w-3.5" /> Incorrect Prediction
+      </span>
+    </div>
+  )
 }
 
 function formatMoney(value: number): string {
@@ -62,7 +74,7 @@ function formatMoney(value: number): string {
 }
 
 async function getData() {
-  const [allPredictions, accounts, openMarkets] = await Promise.all([
+  const [allPredictions, accounts, openMarkets, recentFdaDecisions] = await Promise.all([
     db.query.fdaPredictions.findMany({
       where: eq(fdaPredictions.predictorType, 'model'),
       with: { fdaEvent: true },
@@ -70,6 +82,15 @@ async function getData() {
     db.query.marketAccounts.findMany(),
     db.query.predictionMarkets.findMany({
       where: eq(predictionMarkets.status, 'OPEN'),
+    }),
+    db.query.fdaCalendarEvents.findMany({
+      where: or(
+        eq(fdaCalendarEvents.outcome, 'Approved'),
+        eq(fdaCalendarEvents.outcome, 'Rejected')
+      ),
+      with: { predictions: true },
+      orderBy: [desc(fdaCalendarEvents.outcomeDate)],
+      limit: 10,
     }),
   ])
 
@@ -170,11 +191,12 @@ async function getData() {
   return {
     leaderboard,
     moneyLeaderboard,
+    recentFdaDecisions,
   }
 }
 
 export default async function LeaderboardPage() {
-  const { leaderboard, moneyLeaderboard } = await getData()
+  const { leaderboard, moneyLeaderboard, recentFdaDecisions } = await getData()
   const comparisonModels = moneyLeaderboard
 
   return (
@@ -295,6 +317,73 @@ export default async function LeaderboardPage() {
         </div>
 
         {/* Divider */}
+        <SquareDivider className="mb-12 sm:mb-16" />
+
+        {/* ── PAST DECISIONS ── */}
+        <div className="mb-12 sm:mb-16">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Past Decisions</h2>
+              <HeaderDots />
+            </div>
+          </div>
+
+          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+            <div className="bg-white/95 rounded-sm">
+              <div className="sm:hidden divide-y divide-[#e8ddd0]">
+                {recentFdaDecisions.map((event) => (
+                  <div key={event.id} className="p-4">
+                    <BW2MobilePastCard event={event as any} />
+                  </div>
+                ))}
+                {recentFdaDecisions.length === 0 && (
+                  <div className="py-8 text-center text-[#b5aa9e]">No decisions yet</div>
+                )}
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto overscroll-x-contain [&_tr]:border-[#e8ddd0] [&_td]:text-[#8a8075] [&_td]:py-5 [&_tr:hover]:bg-[#f3ebe0]/30">
+                <table className="w-full table-fixed min-w-[640px]">
+                  <colgroup>
+                    <col style={{width: '60px'}} />
+                    <col style={{width: '130px'}} />
+                    <col style={{width: '250px'}} />
+                    <col style={{width: '60px'}} />
+                    <col style={{width: '65px'}} />
+                    <col style={{width: '90px'}} />
+                    <col style={{width: '50px'}} />
+                    <col style={{width: '50px'}} />
+                    <col style={{width: '50px'}} />
+                    <col style={{width: '50px'}} />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-[#e8ddd0] text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em]">
+                      <th className="text-left px-3 py-3 font-medium">PDUFA</th>
+                      <th className="text-left px-3 py-3 font-medium">Drug</th>
+                      <th className="text-left px-3 py-3 font-medium">Event</th>
+                      <th className="text-left px-3 py-3 font-medium">Type</th>
+                      <th className="text-left px-3 py-3 font-medium">Ticker</th>
+                      <th className="text-center px-2 py-3"><div className="w-6 h-6 mx-auto text-[#8a8075]" title="FDA"><FDAIcon /></div></th>
+                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Claude Opus 4.6"><ModelIcon id="claude" /></div></th>
+                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="GPT-5.2"><ModelIcon id="gpt" /></div></th>
+                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Grok 4.1"><ModelIcon id="grok" /></div></th>
+                      <th className="text-center px-2 py-3"><div className="w-4 h-4 mx-auto text-[#8a8075]" title="Gemini 2.5 Pro"><ModelIcon id="gemini" /></div></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentFdaDecisions.map((event) => (
+                      <BW2PastRow key={event.id} event={event as any} />
+                    ))}
+                    {recentFdaDecisions.length === 0 && (
+                      <tr><td colSpan={10} className="px-4 py-8 text-center text-[#b5aa9e]">No decisions yet</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <PastLegend />
+        </div>
+
         <SquareDivider className="mb-12 sm:mb-16" />
 
         {/* ── COMPARISON TABLE ── */}

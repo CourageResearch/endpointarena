@@ -215,14 +215,6 @@ export default async function AdminCostsPage() {
       title="AI Cost Estimates"
       description="Provider usage where available, with heuristic fallback for older runs."
       activeTab="costs"
-      topActions={(
-        <a
-          href="/admin"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Prediction Ops
-        </a>
-      )}
     >
       <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-lg border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">

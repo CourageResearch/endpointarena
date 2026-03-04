@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 export const SITE_BG_CLASS = 'bg-[#F5F2ED]'
@@ -20,6 +21,21 @@ const DOTS = [
 ]
 
 const DIVIDER_SQUARES = [BRAND_DOT_COLORS.coral, BRAND_DOT_COLORS.green, BRAND_DOT_COLORS.gold, BRAND_DOT_COLORS.blue]
+const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
+  [
+    { href: '/markets', label: 'markets' },
+    { href: '/fda-calendar', label: 'calendar' },
+    { href: '/leaderboard', label: 'leaderboard' },
+  ],
+  [
+    { href: '/waitlist', label: 'waitlist' },
+    { href: '/contact', label: 'contact' },
+  ],
+  [
+    { href: '/method', label: 'methodology' },
+    { href: '/glossary', label: 'glossary' },
+  ],
+]
 
 export function PageFrame({
   children,
@@ -68,11 +84,37 @@ export function SquareDivider({ className }: { className?: string }) {
 
 export function FooterGradientRule({ className }: { className?: string }) {
   return (
-    <div
-      className={cn('h-px w-full', className)}
-      style={{ background: BRAND_GRADIENT_HORIZONTAL }}
-      aria-hidden="true"
-    />
+    <footer className={cn('w-full', className)}>
+      <div className="w-full">
+        <div
+          className="h-px w-full"
+          style={{ background: BRAND_GRADIENT_HORIZONTAL }}
+          aria-hidden="true"
+        />
+        <div className="py-5 sm:py-6">
+          <nav className="ml-auto flex w-full max-w-[620px] flex-wrap justify-end gap-x-12 gap-y-4">
+            {FOOTER_COLUMNS.map((column, index) => (
+              <div key={`footer-col-${index}`} className="flex min-w-[140px] flex-col items-end gap-2">
+                {column.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="text-right text-sm text-[#8a8075] underline-offset-4 decoration-[#d7cab8] transition-colors hover:text-[#1a1a1a] hover:underline"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </div>
+        <div
+          className="h-px w-full"
+          style={{ background: BRAND_GRADIENT_HORIZONTAL }}
+          aria-hidden="true"
+        />
+      </div>
+    </footer>
   )
 }
 

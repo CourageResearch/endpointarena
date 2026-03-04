@@ -58,14 +58,6 @@ export default async function AdminWaitlistPage() {
       title="Waitlist"
       description="Track signups, monitor recent growth, and reach out to members."
       activeTab="waitlist"
-      topActions={(
-        <a
-          href="/waitlist"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Public Waitlist
-        </a>
-      )}
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">
         <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">

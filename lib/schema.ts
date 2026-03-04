@@ -402,12 +402,29 @@ export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name'),
   email: text('email').unique(),
+  passwordHash: text('password_hash'),
   emailVerified: timestamp('email_verified'),
   image: text('image'),
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
   predictions: integer('predictions').default(0),
   correctPreds: integer('correct_preds').default(0),
-})
+  xUserId: text('x_user_id'),
+  xUsername: text('x_username'),
+  xConnectedAt: timestamp('x_connected_at'),
+  tweetChallengeTokenHash: text('tweet_challenge_token_hash'),
+  tweetChallengeExpiresAt: timestamp('tweet_challenge_expires_at'),
+  tweetVerifiedAt: timestamp('tweet_verified_at'),
+  tweetVerifiedTweetId: text('tweet_verified_tweet_id'),
+  tweetMustStayUntil: timestamp('tweet_must_stay_until'),
+  pointsBalance: integer('points_balance').notNull().default(5),
+  lastPointsRefillAt: timestamp('last_points_refill_at'),
+}, (table) => ({
+  xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
+  pointsBalanceCheck: check(
+    'users_points_balance_check',
+    sql`${table.pointsBalance} >= 0`
+  ),
+}))
 
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
@@ -421,13 +438,13 @@ export const accounts = pgTable('accounts', {
   type: text('type').notNull(),
   provider: text('provider').notNull(),
   providerAccountId: text('provider_account_id').notNull(),
-  refreshToken: text('refresh_token'),
-  accessToken: text('access_token'),
-  expiresAt: integer('expires_at'),
-  tokenType: text('token_type'),
+  refresh_token: text('refresh_token'),
+  access_token: text('access_token'),
+  expires_at: integer('expires_at'),
+  token_type: text('token_type'),
   scope: text('scope'),
-  idToken: text('id_token'),
-  sessionState: text('session_state'),
+  id_token: text('id_token'),
+  session_state: text('session_state'),
 })
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -484,6 +501,17 @@ export const waitlistEntries = pgTable('waitlist_entries', {
   emailUniqueIdx: uniqueIndex('waitlist_entries_email_unique_idx').on(table.email),
 }))
 
+// Contact form submissions
+export const contactMessages = pgTable('contact_messages', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  message: text('message').notNull(),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+}, (table) => ({
+  createdAtIdx: index('contact_messages_created_at_idx').on(table.createdAt),
+}))
+
 // Type exports
 export type FDACalendarEvent = typeof fdaCalendarEvents.$inferSelect
 export type NewFDACalendarEvent = typeof fdaCalendarEvents.$inferInsert
@@ -494,6 +522,8 @@ export type AnalyticsEvent = typeof analyticsEvents.$inferSelect
 export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert
 export type WaitlistEntry = typeof waitlistEntries.$inferSelect
 export type NewWaitlistEntry = typeof waitlistEntries.$inferInsert
+export type ContactMessage = typeof contactMessages.$inferSelect
+export type NewContactMessage = typeof contactMessages.$inferInsert
 export type PredictionMarket = typeof predictionMarkets.$inferSelect
 export type NewPredictionMarket = typeof predictionMarkets.$inferInsert
 export type MarketAccount = typeof marketAccounts.$inferSelect

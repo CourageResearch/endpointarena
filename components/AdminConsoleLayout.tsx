@@ -3,11 +3,10 @@ import type { ReactNode } from 'react'
 import { gte, sql } from 'drizzle-orm'
 import { db, waitlistEntries } from '@/lib/db'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
-import { LogoutButton } from '@/components/LogoutButton'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
-type AdminTab = 'predictions' | 'waitlist' | 'markets' | 'settings' | 'resources' | 'analytics' | 'costs'
+type AdminTab = 'predictions' | 'waitlist' | 'users' | 'markets' | 'settings' | 'resources' | 'analytics' | 'costs'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -20,12 +19,21 @@ interface AdminConsoleLayoutProps {
 const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'predictions', href: '/admin', label: 'Predictions' },
   { id: 'markets', href: '/admin/markets', label: 'Markets' },
+  { id: 'users', href: '/admin/users', label: 'Users' },
+  { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
   { id: 'resources', href: '/admin/resources', label: 'Resources' },
-  { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
   { id: 'costs', href: '/admin/costs', label: 'Costs' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
 ]
+
+const ADMIN_TAB_ROWS: AdminTab[][] = [
+  ['predictions', 'markets'],
+  ['users', 'analytics'],
+  ['settings', 'waitlist'],
+  ['resources', 'costs'],
+]
+
 
 async function getWaitlistBadgeData() {
   try {
@@ -60,6 +68,39 @@ export async function AdminConsoleLayout({
   children,
 }: AdminConsoleLayoutProps) {
   const waitlistBadge = await getWaitlistBadgeData()
+  const tabsById = new Map(ADMIN_TABS.map((tab) => [tab.id, tab]))
+
+  const renderTabLink = (tabId: AdminTab) => {
+    const tab = tabsById.get(tabId)
+    if (!tab) return null
+    const isActive = tab.id === activeTab
+
+    return (
+      <Link
+        key={tab.id}
+        href={tab.href}
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+          isActive
+            ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+            : 'bg-white/80 text-[#8a8075] border-[#e8ddd0] hover:text-[#1a1a1a] hover:bg-white'
+        }`}
+      >
+        {tab.label}
+        {tab.id === 'waitlist' ? (
+          <span
+            title="New in last 7 days and total signups"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isActive
+                ? 'bg-white/20 text-white'
+                : 'bg-[#f3ebe0] text-[#8a8075]'
+            }`}
+          >
+            {waitlistBadge.newLast7d} new / {waitlistBadge.total}
+          </span>
+        ) : null}
+      </Link>
+    )
+  }
 
   return (
     <PageFrame>
@@ -67,7 +108,7 @@ export async function AdminConsoleLayout({
 
       <main className={`${SITE_CONTAINER_CLASS} py-8`}>
         <header className="mb-7 rounded-xl border border-[#e8ddd0] bg-white/70 backdrop-blur-sm overflow-hidden">
-          <div className="px-4 sm:px-5 py-4 sm:py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="px-4 sm:px-5 py-4 sm:py-5">
             <div>
               <div className="flex items-center gap-2">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#b5aa9e]">Admin Console</p>
@@ -76,49 +117,17 @@ export async function AdminConsoleLayout({
               <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
               <p className="text-sm text-[#8a8075] mt-1">{description}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/"
-                className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-              >
-                Public Site
-              </Link>
-              <LogoutButton />
-            </div>
           </div>
-          <div className="border-t border-[#e8ddd0] px-3 py-2 flex flex-col sm:flex-row sm:items-center gap-2">
-            <nav className="flex flex-wrap gap-2">
-              {ADMIN_TABS.map((tab) => {
-                const isActive = tab.id === activeTab
-                return (
-                  <Link
-                    key={tab.id}
-                    href={tab.href}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                      isActive
-                        ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
-                        : 'bg-white/80 text-[#8a8075] border-[#e8ddd0] hover:text-[#1a1a1a] hover:bg-white'
-                    }`}
-                  >
-                    {tab.label}
-                    {tab.id === 'waitlist' ? (
-                      <span
-                        title="New in last 7 days and total signups"
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          isActive
-                            ? 'bg-white/20 text-white'
-                            : 'bg-[#f3ebe0] text-[#8a8075]'
-                        }`}
-                      >
-                        {waitlistBadge.newLast7d} new / {waitlistBadge.total}
-                      </span>
-                    ) : null}
-                  </Link>
-                )
-              })}
-            </nav>
+          <div className="border-t border-[#e8ddd0] px-3 py-2">
+            <div className="flex flex-col gap-2">
+              {ADMIN_TAB_ROWS.map((row, rowIndex) => (
+                <nav key={`tab-row-${rowIndex}`} className="flex flex-wrap gap-2">
+                  {row.map((tabId) => renderTabLink(tabId))}
+                </nav>
+              ))}
+            </div>
             {topActions ? (
-              <div className="flex flex-wrap gap-2 sm:ml-auto">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {topActions}
               </div>
             ) : null}
@@ -128,7 +137,9 @@ export async function AdminConsoleLayout({
         {children}
       </main>
 
-      <FooterGradientRule />
+      <div className={SITE_CONTAINER_CLASS}>
+        <FooterGradientRule />
+      </div>
     </PageFrame>
   )
 }

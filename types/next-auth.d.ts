@@ -7,6 +7,10 @@ declare module 'next-auth' {
       name?: string | null
       email?: string | null
       image?: string | null
+      xConnected?: boolean
+      xUsername?: string | null
+      tweetVerified?: boolean
+      tweetMustStayUntil?: string | null
     }
   }
 }

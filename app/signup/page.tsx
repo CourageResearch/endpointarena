@@ -23,10 +23,11 @@ function resolveDestination(url: string | null | undefined, fallback: string): s
   }
 }
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
@@ -34,32 +35,19 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
-    const oauthError = params.get('error')
-    if (oauthError === 'TwitterAccountAlreadyLinked') {
-      setError('That X account is already linked to another Endpoint Arena account.')
-    } else if (oauthError === 'TwitterConnectionFailed') {
-      setError('Failed to connect your X account. Please try again.')
-    } else if (oauthError === 'Callback' || oauthError === 'OAuthCallback') {
-      setError('X login reached consent but failed on callback. This usually means OAuth client secret or redirect settings are incorrect in X Developer Portal.')
-    } else if (oauthError === 'OAuthSignin') {
-      setError('Could not start X login. Check OAuth app configuration and try again.')
-    } else if (oauthError === 'AccessDenied') {
-      setError('X authorization was denied. Please authorize the app to continue.')
-    } else if (oauthError) {
-      setError(`Authentication error: ${oauthError}`)
-    }
-
-    if (oauthError) {
-      params.delete('error')
-      const nextQuery = params.toString()
-      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
-      window.history.replaceState(null, '', nextUrl)
-    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    if (!email || !password || !confirmPassword) return
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
 
     setIsLoading(true)
     setError('')
@@ -68,23 +56,28 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         email,
         password,
-        intent: 'signin',
+        intent: 'signup',
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })
 
       if (result?.ok) {
-        router.push(resolveDestination(result.url, `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`))
+        // Trigger first-account points celebration on profile load.
+        sessionStorage.setItem('ea-points-award', '5')
+        localStorage.setItem('ea-points-award-pending', '5')
+        const destination = resolveDestination(result.url, `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+        const [pathname, queryString = ''] = destination.split('?')
+        const params = new URLSearchParams(queryString)
+        params.set('signupAward', '5')
+        router.push(`${pathname}?${params.toString()}`)
         router.refresh()
+      } else if (result?.error === 'CredentialsSignin') {
+        setError('An account with that email already exists. Please sign in instead.')
       } else {
-        if (result?.error === 'CredentialsSignin') {
-          setError('Invalid email or password.')
-        } else {
-          setError(result?.error || 'Failed to sign in')
-        }
+        setError(result?.error || 'Failed to create account')
       }
     } catch {
-      setError('Failed to sign in')
+      setError('Failed to create account')
     } finally {
       setIsLoading(false)
     }
@@ -100,9 +93,9 @@ export default function LoginPage() {
             <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-5 sm:p-7">
               <div className="space-y-5">
                 <div>
-                  <h1 className="text-xl font-semibold text-[#1a1a1a]">Sign in</h1>
+                  <h1 className="text-xl font-semibold text-[#1a1a1a]">Create account</h1>
                   <p className="mt-1 text-sm text-[#7f7469]">
-                    Sign in with your email and password.
+                    Create your account with email and password.
                   </p>
                 </div>
 
@@ -119,10 +112,7 @@ export default function LoginPage() {
                       type="email"
                       placeholder="you@example.com"
                       value={email}
-                      onChange={(e) => {
-                        if (error) setError('')
-                        setEmail(e.target.value)
-                      }}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                       required
                     />
@@ -140,10 +130,26 @@ export default function LoginPage() {
                       type="password"
                       placeholder="At least 8 characters"
                       value={password}
-                      onChange={(e) => {
-                        if (error) setError('')
-                        setPassword(e.target.value)
-                      }}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="confirm-password"
+                      className="mb-2 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#b5aa9e]"
+                    >
+                      Confirm Password
+                    </label>
+                    <input
+                      id="confirm-password"
+                      type="password"
+                      placeholder="Repeat password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                       minLength={8}
                       required
@@ -155,14 +161,14 @@ export default function LoginPage() {
                     disabled={isLoading}
                     className="w-full rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isLoading ? 'Signing in...' : 'Sign in'}
+                    {isLoading ? 'Creating account...' : 'Create account'}
                   </button>
                 </form>
 
                 <p className="text-sm text-[#7f7469]">
-                  New to Endpoint Arena?{' '}
-                  <a href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-[#1a1a1a] underline">
-                    Create an account
+                  Already have an account?{' '}
+                  <a href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-[#1a1a1a] underline">
+                    Sign in
                   </a>
                 </p>
 

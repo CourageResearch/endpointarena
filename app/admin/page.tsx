@@ -76,16 +76,6 @@ export default async function AdminPage() {
       title="Prediction Operations"
       description="Run model predictions, fill missing metadata, and record FDA outcomes in one workflow."
       activeTab="predictions"
-      topActions={(
-        <a
-          href="https://railway.app/dashboard"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Railway DB
-        </a>
-      )}
     >
       <section className="mb-6">
         <div className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">

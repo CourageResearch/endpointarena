@@ -2,6 +2,8 @@
 
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { ModelIcon } from '@/components/ModelIcon'
 import { HeaderDots } from '@/components/site/chrome'
 import {
@@ -20,6 +22,7 @@ import {
   type OpenMarketRow,
   type RecentMarketActionRow,
 } from '@/components/markets/marketOverviewShared'
+import { getApiErrorMessage } from '@/lib/client-api'
 import { MODEL_IDS, MODEL_INFO, abbreviateType, type ModelId } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +50,18 @@ type MarketEntry = {
   actionCount: number
   moveDelta: number
   absMove: number
+}
+
+type TweetVerificationStatus = {
+  authenticated: boolean
+  connected: boolean
+  verified: boolean
+  username: string | null
+  mustStayUntil: string | null
+  profile: {
+    pointsBalance: number
+    rank: number
+  } | null
 }
 
 function getInitialPositionSortDirection(key: PositionSortKey): PositionSortDirection {
@@ -340,6 +355,8 @@ export function MarketDashboardConcept5({
   showMarketList = true,
   detailLayout = 'default',
 }: MarketDashboardConcept5Props = {}) {
+  const pathname = usePathname()
+  const { status: sessionStatus } = useSession()
   const { data, error, loading } = useMarketOverview()
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialMarketId)
   const [marketSearch, setMarketSearch] = useState('')
@@ -348,8 +365,44 @@ export function MarketDashboardConcept5({
   const [chartScrubSnapshotDate, setChartScrubSnapshotDate] = useState<string | null>(null)
   const [positionSort, setPositionSort] = useState<PositionSortState | null>(null)
   const [showAllActivity, setShowAllActivity] = useState(false)
+  const [verificationStatus, setVerificationStatus] = useState<TweetVerificationStatus | null>(null)
+  const [verificationError, setVerificationError] = useState<string | null>(null)
 
   const deferredMarketSearch = useDeferredValue(marketSearch.trim().toLowerCase())
+  const safeCallbackUrl = pathname || '/markets'
+
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') {
+      setVerificationStatus(null)
+      setVerificationError(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadVerificationStatus() {
+      try {
+        const response = await fetch('/api/twitter-verification/status', { cache: 'no-store' })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(payload, 'Failed to load verification status'))
+        }
+        if (!cancelled) {
+          setVerificationStatus(payload as TweetVerificationStatus)
+          setVerificationError(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setVerificationError(err instanceof Error ? err.message : 'Failed to load verification status')
+        }
+      }
+    }
+
+    loadVerificationStatus()
+    return () => {
+      cancelled = true
+    }
+  }, [sessionStatus])
 
   const marketEntries = useMemo(() => {
     return buildMarketEntries(data?.openMarkets || [], data?.recentActions || [])
@@ -752,6 +805,64 @@ export function MarketDashboardConcept5({
 
   return (
     <div className="space-y-5">
+      {sessionStatus === 'unauthenticated' ? (
+        <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
+          <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
+          <p className="mt-1">Browsing is open, but trading and personal points unlock after one-time X verification.</p>
+          <Link
+            href={`/login?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
+            className="mt-3 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
+          >
+            Sign in
+          </Link>
+        </div>
+      ) : null}
+
+      {sessionStatus === 'authenticated' && verificationError ? (
+        <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-4 text-sm text-[#b94e47]">
+          {verificationError}
+        </div>
+      ) : null}
+
+      {sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified ? (
+        <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
+          <p className="font-medium text-[#1a1a1a]">Trading is locked until one-time X verification is complete.</p>
+          <p className="mt-1">
+            {verificationStatus.connected
+              ? 'Post one verification tweet to unlock.'
+              : 'Connect your X account and post one verification tweet to unlock.'}
+          </p>
+          <Link
+            href={`/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
+            className="mt-3 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
+          >
+            Complete verification
+          </Link>
+        </div>
+      ) : null}
+
+      {sessionStatus === 'authenticated' && verificationStatus?.verified ? (
+        <div className="rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
+          <p className="font-medium text-[#2f7b40]">
+            Humans vs AI unlocked
+            {verificationStatus.profile ? ` • ${verificationStatus.profile.pointsBalance.toLocaleString()} points • Rank #${verificationStatus.profile.rank}` : ''}
+          </p>
+          {verificationStatus.mustStayUntil ? (
+            <p className="mt-1">
+              Keep your verification tweet live until{' '}
+              {new Date(verificationStatus.mustStayUntil).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+              .
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className={cn('grid grid-cols-1 gap-5', showMarketList && 'xl:grid-cols-[20rem_minmax(0,1fr)]')}>
         {showMarketList ? (
           <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">

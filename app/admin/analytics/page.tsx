@@ -10,12 +10,21 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 async function getAnalyticsData(days: number) {
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  const today = new Date()
+  const todayUtcMidnight = new Date(Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate(),
+  ))
+  const startUtcMidnight = new Date(todayUtcMidnight)
+  startUtcMidnight.setUTCDate(startUtcMidnight.getUTCDate() - (days - 1))
+  const endExclusiveUtc = new Date(todayUtcMidnight)
+  endExclusiveUtc.setUTCDate(endExclusiveUtc.getUTCDate() + 1)
 
   const allEvents = await db
     .select()
     .from(analyticsEvents)
-    .where(gte(analyticsEvents.createdAt, since))
+    .where(gte(analyticsEvents.createdAt, startUtcMidnight))
 
   const pageviews = allEvents.filter(e => e.type === 'pageview')
   const clicks = allEvents.filter(e => e.type === 'click')
@@ -29,13 +38,16 @@ async function getAnalyticsData(days: number) {
   // Views per day
   const viewsByDay = new Map<string, number>()
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+    const d = new Date(todayUtcMidnight)
+    d.setUTCDate(d.getUTCDate() - i)
     viewsByDay.set(d.toISOString().slice(0, 10), 0)
   }
   for (const pv of pageviews) {
-    if (pv.createdAt) {
+    if (pv.createdAt && pv.createdAt >= startUtcMidnight && pv.createdAt < endExclusiveUtc) {
       const day = pv.createdAt.toISOString().slice(0, 10)
-      viewsByDay.set(day, (viewsByDay.get(day) || 0) + 1)
+      if (viewsByDay.has(day)) {
+        viewsByDay.set(day, (viewsByDay.get(day) || 0) + 1)
+      }
     }
   }
   const dailyViews = Array.from(viewsByDay.entries()).map(([date, count]) => ({ date, count }))
@@ -141,30 +153,6 @@ export default async function AnalyticsPage({
       title="Traffic Analytics"
       description="Track page activity, click behavior, referrers, and geo distribution."
       activeTab="analytics"
-      topActions={(
-        <>
-          <a
-            href="/admin/analytics?days=7"
-            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-              days === 7
-                ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
-                : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
-            }`}
-          >
-            7 days
-          </a>
-          <a
-            href="/admin/analytics?days=30"
-            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-              days === 30
-                ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
-                : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
-            }`}
-          >
-            30 days
-          </a>
-        </>
-      )}
     >
 
         {/* Summary Cards */}
@@ -192,7 +180,31 @@ export default async function AnalyticsPage({
 
         {/* Views Over Time */}
         <section className="mb-8">
-          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Views Over Time</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Views Over Time</h2>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="/admin/analytics?days=7"
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                  days === 7
+                    ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+                    : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
+                }`}
+              >
+                7 days
+              </a>
+              <a
+                href="/admin/analytics?days=30"
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                  days === 30
+                    ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+                    : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
+                }`}
+              >
+                30 days
+              </a>
+            </div>
+          </div>
           <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
             <div className="flex items-end gap-1" style={{ height: '160px' }}>
               {data.dailyViews.map(d => (

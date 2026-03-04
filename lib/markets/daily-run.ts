@@ -385,6 +385,11 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           const marketsRemainingThisRun = Math.max(0, orderedOpenMarkets.length - (marketIndex + 1))
 
           const waitStartedAtMs = Date.now()
+          hooks?.onActivity?.({
+            completedActions: processedActions,
+            totalActions,
+            message: `Waiting for ${modelName} response... 0s`,
+          })
           const waitHeartbeat = setInterval(() => {
             const waitSeconds = Math.max(1, Math.round((Date.now() - waitStartedAtMs) / 1000))
             hooks?.onActivity?.({
@@ -392,7 +397,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
               totalActions,
               message: `Waiting for ${modelName} response... ${waitSeconds}s`,
             })
-          }, 15000)
+          }, 5000)
 
           const decision = await generator.generator({
             runDateIso,

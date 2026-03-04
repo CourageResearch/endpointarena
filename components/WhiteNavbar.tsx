@@ -3,24 +3,29 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { BrandLink } from '@/components/site/Brand'
 import { cn } from '@/lib/utils'
+import { ADMIN_EMAIL } from '@/lib/constants'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home' },
   { href: '/markets', label: 'Markets' },
   { href: '/leaderboard', label: 'Leaderboard' },
-  { href: '/fda-calendar', label: 'Calendar' },
-  { href: '/method', label: 'Method' },
-  { href: '/glossary', label: 'Glossary' },
-  { href: '/waitlist', label: 'Waitlist' },
+  { href: '/method', label: 'Methodology' },
 ]
 
 export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neutral-200' }: { bgClass?: string; borderClass?: string } = {}) {
   const pathname = usePathname()
+  const { data: session, status: sessionStatus } = useSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const isAdmin = pathname.startsWith('/admin')
+  const isAdminRoute = pathname.startsWith('/admin')
+  const isAdminUser = Boolean(session?.user?.email && session.user.email === ADMIN_EMAIL)
+  const safeCallback = encodeURIComponent(pathname || '/markets')
+  const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
+  const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Join Humans vs AI'
+  const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null
 
   const handleNavClick = () => {
     setMobileMenuOpen(false)
@@ -37,16 +42,19 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
         <div className="flex h-14 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <BrandLink onClick={handleNavClick} />
-            {isAdmin ? (
-              <span className="hidden sm:inline-flex rounded-full border border-[#e8ddd0] bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a8075]">
+            {isAdminUser ? (
+              <Link
+                href="/admin"
+                className="hidden sm:inline-flex rounded-full border border-[#e8ddd0] bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a8075] transition-colors hover:bg-white hover:text-[#1a1a1a]"
+              >
                 Admin
-              </span>
+              </Link>
             ) : null}
           </div>
 
           {/* Mobile Hamburger Button */}
           <button
-            className="touch-target -mr-2 rounded-md p-1.5 text-[#8a8075] transition-colors hover:bg-white/70 hover:text-[#1a1a1a] md:hidden"
+            className="touch-target -mr-2 rounded-md p-1.5 text-[#8a8075] transition-colors hover:bg-white/70 hover:text-[#1a1a1a] xl:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
             aria-expanded={mobileMenuOpen}
@@ -64,7 +72,7 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
           </button>
 
           {/* Desktop Navigation */}
-          <div className="hidden items-center gap-0.5 md:flex">
+          <div className="hidden items-center gap-0.5 xl:flex">
             {NAV_ITEMS.map((item) => {
               const isActive = isItemActive(item.href)
               return (
@@ -88,12 +96,38 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
                 </Link>
               )
             })}
+            {!isAdminRoute && sessionStatus !== 'authenticated' ? (
+              <Link
+                href={ctaHref}
+                className="ml-2 rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+              >
+                {ctaLabel}
+              </Link>
+            ) : null}
+            {sessionStatus === 'authenticated' ? (
+              <Link
+                href="/profile"
+                className="ml-2 rounded-sm border border-[#e8ddd0] bg-white/80 px-3 py-1.5 text-xs font-medium text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
+                title={profileLabel ?? undefined}
+              >
+                Profile
+              </Link>
+            ) : null}
           </div>
         </div>
 
         {/* Mobile Navigation Menu */}
         {mobileMenuOpen && (
-          <div id="site-mobile-nav" className="mobile-menu-slide border-t border-[#e8ddd0] pb-2 pt-1.5 md:hidden">
+          <div id="site-mobile-nav" className="mobile-menu-slide border-t border-[#e8ddd0] pb-2 pt-1.5 xl:hidden">
+            {!isAdminRoute && sessionStatus !== 'authenticated' ? (
+              <Link
+                href={ctaHref}
+                onClick={handleNavClick}
+                className="touch-target mb-1 block rounded-md border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-3 text-base font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+              >
+                {ctaLabel}
+              </Link>
+            ) : null}
             {NAV_ITEMS.map((item) => {
               const isActive = isItemActive(item.href)
               return (
@@ -112,6 +146,16 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
                 </Link>
               )
             })}
+            {sessionStatus === 'authenticated' ? (
+              <Link
+                href="/profile"
+                onClick={handleNavClick}
+                className="touch-target mt-1 block rounded-md border border-[#e8ddd0] bg-white px-4 py-3 text-base text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
+                title={profileLabel ?? undefined}
+              >
+                Profile
+              </Link>
+            ) : null}
           </div>
         )}
       </div>

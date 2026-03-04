@@ -41,6 +41,7 @@ interface DailyRunProgressState {
   skippedCount: number
   latestResult: DailyRunResult | null
   latestError: DailyRunResult | null
+  currentActivity: string | null
 }
 
 interface ErrorConsoleEntry {
@@ -232,6 +233,7 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
       skippedCount: 0,
       latestResult: null,
       latestError: null,
+      currentActivity: 'Initializing daily run...',
     })
 
     try {
@@ -257,6 +259,7 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
             runDate: event.runDate,
             openMarkets: event.openMarkets,
             totalActions: event.totalActions,
+            currentActivity: `Discovered ${event.openMarkets} open markets (${event.totalActions} actions)`,
           } : prev)
           appendRunLog(`Found ${event.openMarkets} open markets (${event.totalActions} model actions)`)
           return
@@ -271,6 +274,7 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
               completedActions: event.completedActions,
               totalActions: event.totalActions,
               latestResult: event.result,
+              currentActivity: `Completed ${MODEL_INFO[event.result.modelId].fullName}: ${event.result.action} (${statusLabel(event.result.status)})`,
             }
 
             if (event.result.status === 'ok') next.okCount += 1
@@ -292,6 +296,7 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
             ...prev,
             completedActions: event.completedActions,
             totalActions: event.totalActions,
+            currentActivity: event.message,
           } : prev)
           appendRunLog(event.message)
           return
@@ -306,6 +311,7 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
             okCount: event.payload.summary.ok,
             errorCount: event.payload.summary.error,
             skippedCount: event.payload.summary.skipped,
+            currentActivity: 'Daily market cycle completed',
           } : prev)
           setSummaryFromPayload(event.payload, startedAtMs)
           appendRunLog('Daily market cycle completed')
@@ -422,6 +428,12 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
+            {runProgress.currentActivity && (
+              <div className="rounded border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#265f8f]">Current Step</p>
+                <p className="mt-1 text-xs text-[#2e5a7a]">{runProgress.currentActivity}</p>
+              </div>
+            )}
             {runProgress.latestResult && (
               <p className="text-xs text-[#5f564c]">
                 Latest ({statusLabel(runProgress.latestResult.status)}): {formatProgressLog(runProgress.latestResult)}

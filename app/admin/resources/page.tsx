@@ -35,14 +35,6 @@ export default async function AdminResourcesPage() {
       title="Research Links"
       description="Keep external sources and internal reference pages in one place for fast admin workflows."
       activeTab="resources"
-      topActions={(
-        <a
-          href="/admin"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Prediction Ops
-        </a>
-      )}
     >
       <section className="mb-4">
         <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Reference Hub</h2>

@@ -32,14 +32,6 @@ export default async function AdminSettingsPage() {
       title="Market Settings"
       description="Tune cold-start controls and opening liquidity without redeploying."
       activeTab="settings"
-      topActions={(
-        <a
-          href="/admin/markets"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Market Ops
-        </a>
-      )}
     >
       <section className="mb-4">
         <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Runtime Controls</h2>

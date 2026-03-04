@@ -55,14 +55,6 @@ export default async function AdminMarketsPage() {
       title="Market Operations"
       description="Open event markets, run the daily cycle, and monitor which events are missing market coverage."
       activeTab="markets"
-      topActions={(
-        <a
-          href="/markets"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Public Markets
-        </a>
-      )}
     >
       <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-lg border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">

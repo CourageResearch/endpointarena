@@ -2,10 +2,13 @@
 
 import Link from 'next/link'
 import { useMemo } from 'react'
+import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
+import { ModelIcon } from '@/components/ModelIcon'
 import {
   daysUntilUtc,
   formatCompactMoney,
   formatPercent,
+  getModelStance,
   getMarketQuestion,
   getMarketSubtitle,
   getPriceMoveFromHistory,
@@ -132,6 +135,15 @@ function getDaysBadge(daysUntil: number | null): { label: string } {
   return { label: `${daysUntil}d left` }
 }
 
+function getModelStanceMap(entry: MarketCardEntry): Map<string, 'YES' | 'NO' | 'HOLD' | 'ERROR'> {
+  const stances = new Map<string, 'YES' | 'NO' | 'HOLD' | 'ERROR'>()
+  for (const state of entry.market.modelStates) {
+    const stance = getModelStance(state)
+    stances.set(state.modelId, stance)
+  }
+  return stances
+}
+
 function MarketCard({
   entry,
   detailBasePath,
@@ -142,6 +154,7 @@ function MarketCard({
   const marketHref = `${detailBasePath}/${encodeURIComponent(entry.market.marketId)}`
   const drugName = entry.market.event?.drugName || entry.question
   const daysBadge = getDaysBadge(entry.daysUntil)
+  const modelStances = getModelStanceMap(entry)
 
   return (
     <Link
@@ -173,6 +186,28 @@ function MarketCard({
           </div>
         </div>
 
+        <div className="mt-3 grid grid-cols-4 place-items-center px-2 py-1 text-[#8a8075]">
+          {MODEL_IDS.map((modelId) => {
+            const stance = modelStances.get(modelId) || 'HOLD'
+            const logoClass = stance === 'YES'
+              ? 'text-[#3a8a2e]'
+              : stance === 'NO'
+                ? 'text-[#c43a2b]'
+                : 'text-[#8a8075]'
+
+            return (
+              <div
+                key={`${entry.market.marketId}-${modelId}-icon`}
+                className={`flex h-8 w-8 items-center justify-center ${logoClass}`}
+                title={MODEL_INFO[modelId].fullName}
+                aria-label={MODEL_INFO[modelId].fullName}
+              >
+                <ModelIcon id={modelId} className="h-6 w-6" />
+              </div>
+            )
+          })}
+        </div>
+
         <div className="mt-4 flex items-center justify-between border-t border-[#e8ddd0] pt-3 text-xs text-[#8a8075] transition-colors duration-150 group-hover:border-[#dfd1bf] group-focus-visible:border-[#dfd1bf]">
           <span>Volume {formatCompactMoney(entry.volumeUsd)}</span>
           <span>{entry.commentsCount} comments</span>
@@ -184,8 +219,12 @@ function MarketCard({
 
 export function MarketBrowseHomepage({
   detailBasePath = '/markets',
+  headerLinkHref,
+  headerLinkLabel = 'View all →',
 }: {
   detailBasePath?: string
+  headerLinkHref?: string
+  headerLinkLabel?: string
 } = {}) {
   const { data, error, loading } = useMarketOverview()
 
@@ -226,11 +265,16 @@ export function MarketBrowseHomepage({
   return (
     <div className="space-y-8">
       <section>
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Open Markets</h2>
             <HeaderDots />
           </div>
+          {headerLinkHref ? (
+            <Link href={headerLinkHref} className="text-xs text-[#b5aa9e] hover:text-[#1a1a1a] transition-colors">
+              {headerLinkLabel}
+            </Link>
+          ) : null}
         </div>
 
         {visibleEntries.length === 0 ? (
