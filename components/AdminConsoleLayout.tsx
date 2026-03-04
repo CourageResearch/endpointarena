@@ -6,7 +6,7 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
-type AdminTab = 'predictions' | 'waitlist' | 'users' | 'markets' | 'settings' | 'resources' | 'analytics' | 'costs'
+type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'markets' | 'settings' | 'resources' | 'analytics' | 'costs'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -20,6 +20,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'predictions', href: '/admin', label: 'Predictions' },
   { id: 'markets', href: '/admin/markets', label: 'Markets' },
   { id: 'users', href: '/admin/users', label: 'Users' },
+  { id: 'contact', href: '/admin/contact', label: 'Contact' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
   { id: 'resources', href: '/admin/resources', label: 'Resources' },
@@ -29,9 +30,10 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
 
 const ADMIN_TAB_ROWS: AdminTab[][] = [
   ['predictions', 'markets'],
-  ['users', 'analytics'],
-  ['settings', 'waitlist'],
-  ['resources', 'costs'],
+  ['users', 'contact'],
+  ['analytics', 'settings'],
+  ['waitlist', 'resources'],
+  ['costs'],
 ]
 
 
