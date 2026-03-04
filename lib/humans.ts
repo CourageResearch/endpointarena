@@ -1,7 +1,7 @@
 import { and, eq, gt, isNotNull, sql } from 'drizzle-orm'
 import { db, users } from '@/lib/db'
+import { STARTER_POINTS } from '@/lib/constants'
 
-export const STARTER_POINTS = 5
 export const DAILY_REFILL_POINTS = 5
 export const DAILY_REFILL_BALANCE_CAP = 12000
 

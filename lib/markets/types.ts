@@ -33,6 +33,7 @@ export type DailyRunPayload = {
 export type DailyRunStreamEvent =
   | {
       type: 'start'
+      runId: string
       runDate: string
       modelOrder: ModelId[]
       openMarkets: number
@@ -61,6 +62,7 @@ export type DailyRunStreamEvent =
 
 export type DailyRunHooks = {
   onStart?: (input: {
+    runId: string
     runDate: string
     modelOrder: ModelId[]
     openMarkets: number

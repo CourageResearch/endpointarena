@@ -36,7 +36,12 @@ export async function GET() {
       correctPredictions: stats.correct,
       accuracy: stats.total > 0 ? (stats.correct / stats.total) * 100 : 0,
     }))
-    .sort((a, b) => b.accuracy - a.accuracy)
+    .sort((a, b) =>
+      b.accuracy - a.accuracy ||
+      b.correctPredictions - a.correctPredictions ||
+      b.totalPredictions - a.totalPredictions ||
+      a.predictorId.localeCompare(b.predictorId)
+    )
     .map((entry, i) => ({ ...entry, rank: i + 1 }))
 
   return NextResponse.json(entries)

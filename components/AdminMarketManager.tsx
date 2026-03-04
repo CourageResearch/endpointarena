@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { formatDate, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import type { DailyRunPayload, DailyRunResult, DailyRunStatus, DailyRunSummary, DailyRunStreamEvent } from '@/lib/markets/types'
+import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
 
 interface AdminMarketEvent {
   id: string
@@ -18,6 +19,7 @@ interface AdminMarketEvent {
 
 interface Props {
   events: AdminMarketEvent[]
+  initialRunSnapshot: AdminMarketRunSnapshot | null
 }
 
 interface LastRunSummaryState {
@@ -121,17 +123,199 @@ function formatUtcLogPrefix(now: Date = new Date()): string {
   })
 }
 
-export function AdminMarketManager({ events: initialEvents }: Props) {
+function formatUtcLogPrefixFromIso(value: string | null | undefined): string {
+  if (!value) return formatUtcLogPrefix()
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return formatUtcLogPrefix()
+  return formatUtcLogPrefix(parsed)
+}
+
+function toModelId(value: string | null | undefined): ModelId | null {
+  if (!value) return null
+  return Object.prototype.hasOwnProperty.call(MODEL_INFO, value) ? value as ModelId : null
+}
+
+function getSnapshotCounts(snapshot: AdminMarketRunSnapshot): {
+  completedActions: number
+  totalActions: number
+  okCount: number
+  errorCount: number
+  skippedCount: number
+} {
+  for (const log of snapshot.logs) {
+    if (
+      log.completedActions != null ||
+      log.totalActions != null ||
+      log.okCount != null ||
+      log.errorCount != null ||
+      log.skippedCount != null
+    ) {
+      return {
+        completedActions: log.completedActions ?? snapshot.processedActions,
+        totalActions: log.totalActions ?? snapshot.totalActions,
+        okCount: log.okCount ?? snapshot.okCount,
+        errorCount: log.errorCount ?? snapshot.errorCount,
+        skippedCount: log.skippedCount ?? snapshot.skippedCount,
+      }
+    }
+  }
+
+  return {
+    completedActions: snapshot.processedActions,
+    totalActions: snapshot.totalActions,
+    okCount: snapshot.okCount,
+    errorCount: snapshot.errorCount,
+    skippedCount: snapshot.skippedCount,
+  }
+}
+
+function buildRunLogFromSnapshot(snapshot: AdminMarketRunSnapshot | null): string[] {
+  if (!snapshot) return []
+  return snapshot.logs
+    .map((entry) => `${formatUtcLogPrefixFromIso(entry.createdAt)} UTC  ${entry.message}`)
+    .slice(0, 30)
+}
+
+function buildErrorConsoleFromSnapshot(snapshot: AdminMarketRunSnapshot | null): ErrorConsoleEntry[] {
+  if (!snapshot) return []
+
+  const errors = snapshot.logs
+    .filter((entry) => entry.logType === 'error' || entry.actionStatus === 'error')
+    .map((entry) => ({
+      id: entry.id,
+      utcTime: formatUtcLogPrefixFromIso(entry.createdAt),
+      message: entry.message,
+    }))
+
+  if (snapshot.failureReason) {
+    const exists = errors.some((entry) => entry.message.includes(snapshot.failureReason ?? ''))
+    if (!exists) {
+      errors.unshift({
+        id: `${snapshot.runId}-failure`,
+        utcTime: formatUtcLogPrefixFromIso(snapshot.updatedAt || snapshot.completedAt || snapshot.createdAt),
+        message: `RUN FAILED - ${snapshot.failureReason}`,
+      })
+    }
+  }
+
+  return errors.slice(0, 25)
+}
+
+function buildRunSummaryFromSnapshot(snapshot: AdminMarketRunSnapshot | null): LastRunSummaryState | null {
+  if (!snapshot || snapshot.status === 'running') return null
+
+  const counts = getSnapshotCounts(snapshot)
+  const startedAt = snapshot.createdAt ? new Date(snapshot.createdAt) : null
+  const endedAt = snapshot.completedAt
+    ? new Date(snapshot.completedAt)
+    : snapshot.updatedAt
+      ? new Date(snapshot.updatedAt)
+      : null
+  const durationSeconds = startedAt && endedAt
+    ? Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000))
+    : 1
+
+  const syntheticResults: DailyRunResult[] = snapshot.logs
+    .map((entry) => {
+      const modelId = toModelId(entry.modelId)
+      if (!modelId || !entry.action || !entry.actionStatus) return null
+
+      return {
+        marketId: '',
+        fdaEventId: '',
+        modelId,
+        action: entry.action,
+        amountUsd: entry.amountUsd ?? 0,
+        status: entry.actionStatus,
+        detail: entry.message,
+      } satisfies DailyRunResult
+    })
+    .filter((entry): entry is DailyRunResult => entry !== null)
+
+  const nonOkModels = summarizeNonOkModels(syntheticResults)
+
+  return {
+    runDateLabel: new Date(snapshot.runDate).toLocaleString('en-US', { timeZone: 'UTC' }),
+    durationSeconds,
+    ok: counts.okCount,
+    error: counts.errorCount,
+    skipped: counts.skippedCount,
+    openMarkets: snapshot.openMarkets,
+    nonOkModels,
+  }
+}
+
+function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): DailyRunProgressState | null {
+  if (!snapshot || snapshot.status !== 'running') return null
+
+  const counts = getSnapshotCounts(snapshot)
+  const latestResultLog = snapshot.logs.find((entry) => {
+    const modelId = toModelId(entry.modelId)
+    return modelId != null && entry.action != null && entry.actionStatus != null
+  })
+  const latestErrorLog = snapshot.logs.find((entry) => entry.logType === 'error' || entry.actionStatus === 'error')
+
+  const latestResult = latestResultLog
+    ? (() => {
+        const modelId = toModelId(latestResultLog.modelId)
+        if (!modelId || !latestResultLog.action || !latestResultLog.actionStatus) return null
+        return {
+          marketId: '',
+          fdaEventId: '',
+          modelId,
+          action: latestResultLog.action,
+          amountUsd: latestResultLog.amountUsd ?? 0,
+          status: latestResultLog.actionStatus,
+          detail: latestResultLog.message,
+        } satisfies DailyRunResult
+      })()
+    : null
+
+  const latestError = latestErrorLog
+    ? (() => {
+        const modelId = toModelId(latestErrorLog.modelId)
+        if (!modelId || !latestErrorLog.action || !latestErrorLog.actionStatus) return null
+        return {
+          marketId: '',
+          fdaEventId: '',
+          modelId,
+          action: latestErrorLog.action,
+          amountUsd: latestErrorLog.amountUsd ?? 0,
+          status: latestErrorLog.actionStatus,
+          detail: latestErrorLog.message,
+        } satisfies DailyRunResult
+      })()
+    : null
+
+  const activityLog = snapshot.logs.find((entry) => entry.logType !== 'error')
+
+  return {
+    startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
+    runDate: snapshot.runDate,
+    openMarkets: snapshot.openMarkets,
+    totalActions: counts.totalActions,
+    completedActions: counts.completedActions,
+    okCount: counts.okCount,
+    errorCount: counts.errorCount,
+    skippedCount: counts.skippedCount,
+    latestResult,
+    latestError,
+    currentActivity: activityLog?.message ?? 'Daily run is in progress...',
+  }
+}
+
+export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }: Props) {
   const [events, setEvents] = useState(initialEvents)
   const [search, setSearch] = useState('')
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null)
-  const [runningDaily, setRunningDaily] = useState(false)
-  const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(null)
-  const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(null)
+  const [runningDaily, setRunningDaily] = useState(initialRunSnapshot?.status === 'running')
+  const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(() => buildRunSummaryFromSnapshot(initialRunSnapshot))
+  const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(() => buildRunProgressFromSnapshot(initialRunSnapshot))
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [runLog, setRunLog] = useState<string[]>([])
-  const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>([])
+  const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
+  const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
   const [uiError, setUiError] = useState<string | null>(null)
+  const [isStreamingRun, setIsStreamingRun] = useState(false)
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
 
@@ -145,6 +329,51 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
 
     return () => window.clearInterval(timer)
   }, [runningDaily, runStartedAtMs])
+
+  const applyRunSnapshot = (snapshot: AdminMarketRunSnapshot | null) => {
+    if (!snapshot) return
+
+    setRunLog(buildRunLogFromSnapshot(snapshot))
+    setErrorConsole(buildErrorConsoleFromSnapshot(snapshot))
+
+    if (snapshot.status === 'running') {
+      setRunningDaily(true)
+      setRunProgress(buildRunProgressFromSnapshot(snapshot))
+      setLastRunSummary(null)
+      return
+    }
+
+    setRunningDaily(false)
+    setRunProgress(null)
+    setLastRunSummary(buildRunSummaryFromSnapshot(snapshot))
+  }
+
+  useEffect(() => {
+    if (!runningDaily || isStreamingRun) return
+
+    let cancelled = false
+
+    const pollState = async () => {
+      try {
+        const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok || cancelled) return
+        applyRunSnapshot(payload?.snapshot ?? null)
+      } catch {
+        // Keep existing client state if polling fails.
+      }
+    }
+
+    void pollState()
+    const timer = window.setInterval(() => {
+      void pollState()
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [isStreamingRun, runningDaily])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -215,8 +444,10 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
 
   const runDailyCycle = async () => {
     const startedAtMs = Date.now()
+    let keepPersistedRunningState = false
 
     setUiError(null)
+    setIsStreamingRun(true)
     setRunningDaily(true)
     setLastRunSummary(null)
     setElapsedSeconds(0)
@@ -357,9 +588,29 @@ export function AdminMarketManager({ events: initialEvents }: Props) {
       const message = error instanceof Error ? error.message : 'Failed daily run'
       setUiError(message)
       appendErrorConsole(`RUN FAILED - ${message}`)
+
+      if (message.toLowerCase().includes('already running')) {
+        try {
+          const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+          const payload = await response.json().catch(() => ({}))
+          if (response.ok) {
+            applyRunSnapshot(payload?.snapshot ?? null)
+            keepPersistedRunningState = payload?.snapshot?.status === 'running'
+          } else {
+            setRunningDaily(false)
+            setRunProgress(null)
+          }
+        } catch {
+          setRunningDaily(false)
+          setRunProgress(null)
+        }
+      }
     } finally {
-      setRunningDaily(false)
-      setRunProgress(null)
+      setIsStreamingRun(false)
+      if (!keepPersistedRunningState) {
+        setRunningDaily(false)
+        setRunProgress(null)
+      }
     }
   }
 

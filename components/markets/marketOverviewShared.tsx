@@ -152,12 +152,29 @@ export function formatMoney(value: number): string {
 }
 
 export function formatCompactMoney(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
+  const safeValue = Number.isFinite(value) ? value : 0
+  const absolute = Math.abs(safeValue)
+  const sign = safeValue < 0 ? '-' : ''
+
+  if (absolute < 1000) {
+    return `${sign}$${Math.round(absolute).toLocaleString('en-US')}`
+  }
+
+  const units: Array<{ value: number; suffix: string }> = [
+    { value: 1_000_000_000_000, suffix: 'T' },
+    { value: 1_000_000_000, suffix: 'B' },
+    { value: 1_000_000, suffix: 'M' },
+    { value: 1_000, suffix: 'K' },
+  ]
+
+  for (const unit of units) {
+    if (absolute < unit.value) continue
+    const scaled = absolute / unit.value
+    const formatted = (scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1)).replace(/\.0$/, '')
+    return `${sign}$${formatted}${unit.suffix}`
+  }
+
+  return `${sign}$${Math.round(absolute).toLocaleString('en-US')}`
 }
 
 export function formatPercent(value: number, digits = 0): string {
@@ -637,9 +654,9 @@ async function requestMarketOverview(): Promise<OverviewResponse> {
   return payload as OverviewResponse
 }
 
-export function useMarketOverview() {
-  const [data, setData] = useState<OverviewResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+export function useMarketOverview(initialData: OverviewResponse | null = null) {
+  const [data, setData] = useState<OverviewResponse | null>(initialData)
+  const [loading, setLoading] = useState(initialData == null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -665,7 +682,9 @@ export function useMarketOverview() {
       }
     }
 
-    void run(true)
+    // If server data was provided, refresh in the background without showing
+    // the initial loading state.
+    void run(initialData == null)
     const timer = window.setInterval(() => {
       void run(false)
     }, 60_000)
@@ -674,7 +693,7 @@ export function useMarketOverview() {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [])
+  }, [initialData])
 
   const reload = async () => {
     setRefreshing(true)

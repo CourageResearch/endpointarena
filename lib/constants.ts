@@ -7,6 +7,9 @@ import { getDaysUntilUtc } from './date'
 // Admin email for access control
 export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
 
+// Points economy defaults
+export const STARTER_POINTS = 5
+
 // Model IDs used throughout the application
 export const MODEL_IDS = ['claude-opus', 'gpt-5.2', 'grok-4', 'gemini-2.5'] as const
 export type ModelId = (typeof MODEL_IDS)[number]

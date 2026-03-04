@@ -6,6 +6,7 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 import { db, fdaCalendarEvents, predictionMarkets } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminMarketManager } from '@/components/AdminMarketManager'
+import { getLatestMarketRunSnapshot } from '@/lib/market-run-logs'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +45,10 @@ export default async function AdminMarketsPage() {
     redirect('/login')
   }
 
-  const events = await getMarketAdminData()
+  const [events, initialRunSnapshot] = await Promise.all([
+    getMarketAdminData(),
+    getLatestMarketRunSnapshot(),
+  ])
   const openMarkets = events.filter((event) => event.marketStatus === 'OPEN').length
   const resolvedMarkets = events.filter((event) => event.marketStatus === 'RESOLVED').length
   const pendingWithoutMarket = events.filter((event) => event.outcome === 'Pending' && event.marketStatus === null).length
@@ -80,7 +84,7 @@ export default async function AdminMarketsPage() {
         <p className="text-sm text-[#8a8075] mt-1">Run the cycle first, then open missing markets for pending events.</p>
       </section>
 
-      <AdminMarketManager events={events} />
+      <AdminMarketManager events={events} initialRunSnapshot={initialRunSnapshot} />
     </AdminConsoleLayout>
   )
 }

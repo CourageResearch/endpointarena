@@ -7,6 +7,7 @@ import type { HomeData } from '@/lib/home-data'
 import { FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { HomeMarketsClient } from '@/components/HomeMarketsClient'
+import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
 
 const HOMEPAGE_RANK_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
 
@@ -23,7 +24,7 @@ function UpcomingLegend() {
   )
 }
 
-export function HomePageContent({ data }: { data: HomeData }) {
+export function HomePageContent({ data, initialMarketOverview }: { data: HomeData; initialMarketOverview: OverviewResponse | null }) {
   const { moneyLeaderboard, upcomingFdaEvents } = data
   const homeLeaderboard = moneyLeaderboard.map((entry, index) => {
     return {
@@ -92,7 +93,7 @@ export function HomePageContent({ data }: { data: HomeData }) {
             <div className="bg-white/95 rounded-sm">
               <div className="hidden sm:grid grid-cols-[1fr_190px_130px] px-6 py-2.5 text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e] border-b border-[#e8ddd0]">
                 <div>Model</div>
-                <div className="text-right">Net Return</div>
+                <div className="text-right">Total Equity</div>
                 <div className="text-right">% Correct</div>
               </div>
               <div className="divide-y divide-[#e8ddd0] border-t border-[#e8ddd0] sm:border-t-0">
@@ -157,7 +158,12 @@ export function HomePageContent({ data }: { data: HomeData }) {
 
         {/* ── 3. OPEN MARKETS ── */}
         <section className="mb-16">
-          <HomeMarketsClient detailBasePath="/markets" headerLinkHref="/markets" headerLinkLabel="View all →" />
+          <HomeMarketsClient
+            detailBasePath="/markets"
+            headerLinkHref="/markets"
+            headerLinkLabel="View all →"
+            initialOverview={initialMarketOverview}
+          />
         </section>
 
         <SquareDivider className="mb-16" />

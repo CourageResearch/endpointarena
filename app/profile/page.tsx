@@ -10,7 +10,7 @@ import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { authOptions } from '@/lib/auth'
 import { db, users } from '@/lib/db'
-import { STARTER_POINTS } from '@/lib/humans'
+import { STARTER_POINTS } from '@/lib/constants'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
 
 export const dynamic = 'force-dynamic'

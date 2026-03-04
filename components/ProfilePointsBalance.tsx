@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { ProfileRefillCelebration } from '@/components/ProfileRefillCelebration'
+import { STARTER_POINTS } from '@/lib/constants'
 
 type ProfilePointsBalanceProps = {
   pointsBalance: number
@@ -62,8 +63,8 @@ export function ProfilePointsBalance({
     const hasSeenSignupCelebration = localStorage.getItem(seenSignupCelebrationKey) === '1'
     const createdAtMs = userCreatedAtIso ? Date.parse(userCreatedAtIso) : Number.NaN
     const isRecentSignup = Number.isFinite(createdAtMs) && (Date.now() - createdAtMs) <= (30 * 60 * 1000)
-    if (!hasSeenSignupCelebration && isRecentSignup && pointsBalance >= 5 && awarded < 5) {
-      awarded = 5
+    if (!hasSeenSignupCelebration && isRecentSignup && pointsBalance >= STARTER_POINTS && awarded < STARTER_POINTS) {
+      awarded = STARTER_POINTS
       start = Math.max(0, pointsBalance - awarded)
       shouldMarkSignupCelebrationSeen = true
     }
@@ -79,7 +80,7 @@ export function ProfilePointsBalance({
 
     localStorage.setItem('ea-last-points-balance', String(pointsBalance))
 
-    if (awarded >= 5) {
+    if (awarded >= STARTER_POINTS) {
       setCelebrationAwarded(awarded)
     } else {
       setCelebrationAwarded(0)

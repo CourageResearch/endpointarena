@@ -230,6 +230,54 @@ export const marketRuns = pgTable('market_runs', {
   ),
 }))
 
+export const marketRunLogs = pgTable('market_run_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  runId: text('run_id').notNull().references(() => marketRuns.id, { onDelete: 'cascade' }),
+  logType: text('log_type').notNull().default('activity'), // system | activity | progress | error
+  message: text('message').notNull(),
+  completedActions: integer('completed_actions'),
+  totalActions: integer('total_actions'),
+  okCount: integer('ok_count'),
+  errorCount: integer('error_count'),
+  skippedCount: integer('skipped_count'),
+  modelId: text('model_id'),
+  action: text('action'),
+  actionStatus: text('action_status'), // ok | error | skipped
+  amountUsd: real('amount_usd'),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+}, (table) => ({
+  runCreatedIdx: index('market_run_logs_run_created_idx').on(table.runId, table.createdAt),
+  createdAtIdx: index('market_run_logs_created_at_idx').on(table.createdAt),
+  logTypeCheck: check(
+    'market_run_logs_log_type_check',
+    sql`${table.logType} IN ('system', 'activity', 'progress', 'error')`
+  ),
+  actionStatusCheck: check(
+    'market_run_logs_action_status_check',
+    sql`${table.actionStatus} IS NULL OR ${table.actionStatus} IN ('ok', 'error', 'skipped')`
+  ),
+  completedActionsCheck: check(
+    'market_run_logs_completed_actions_check',
+    sql`${table.completedActions} IS NULL OR ${table.completedActions} >= 0`
+  ),
+  totalActionsCheck: check(
+    'market_run_logs_total_actions_check',
+    sql`${table.totalActions} IS NULL OR ${table.totalActions} >= 0`
+  ),
+  okCountCheck: check(
+    'market_run_logs_ok_count_check',
+    sql`${table.okCount} IS NULL OR ${table.okCount} >= 0`
+  ),
+  errorCountCheck: check(
+    'market_run_logs_error_count_check',
+    sql`${table.errorCount} IS NULL OR ${table.errorCount} >= 0`
+  ),
+  skippedCountCheck: check(
+    'market_run_logs_skipped_count_check',
+    sql`${table.skippedCount} IS NULL OR ${table.skippedCount} >= 0`
+  ),
+}))
+
 export const marketActions = pgTable('market_actions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   runId: text('run_id').references(() => marketRuns.id, { onDelete: 'set null' }),
@@ -366,6 +414,14 @@ export const predictionMarketsRelations = relations(predictionMarkets, ({ one, m
 
 export const marketRunsRelations = relations(marketRuns, ({ many }) => ({
   actions: many(marketActions),
+  logs: many(marketRunLogs),
+}))
+
+export const marketRunLogsRelations = relations(marketRunLogs, ({ one }) => ({
+  run: one(marketRuns, {
+    fields: [marketRunLogs.runId],
+    references: [marketRuns.id],
+  }),
 }))
 
 export const marketPositionsRelations = relations(marketPositions, ({ one }) => ({
@@ -534,6 +590,8 @@ export type MarketAction = typeof marketActions.$inferSelect
 export type NewMarketAction = typeof marketActions.$inferInsert
 export type MarketRun = typeof marketRuns.$inferSelect
 export type NewMarketRun = typeof marketRuns.$inferInsert
+export type MarketRunLog = typeof marketRunLogs.$inferSelect
+export type NewMarketRunLog = typeof marketRunLogs.$inferInsert
 export type MarketPriceSnapshot = typeof marketPriceSnapshots.$inferSelect
 export type NewMarketPriceSnapshot = typeof marketPriceSnapshots.$inferInsert
 export type MarketDailySnapshot = typeof marketDailySnapshots.$inferSelect

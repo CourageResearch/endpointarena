@@ -13,6 +13,7 @@ import {
   getMarketSubtitle,
   getPriceMoveFromHistory,
   useMarketOverview,
+  type OverviewResponse,
   type OpenMarketRow,
   type RecentMarketActionRow,
 } from '@/components/markets/marketOverviewShared'
@@ -221,12 +222,14 @@ export function MarketBrowseHomepage({
   detailBasePath = '/markets',
   headerLinkHref,
   headerLinkLabel = 'View all →',
+  initialOverview = null,
 }: {
   detailBasePath?: string
   headerLinkHref?: string
   headerLinkLabel?: string
+  initialOverview?: OverviewResponse | null
 } = {}) {
-  const { data, error, loading } = useMarketOverview()
+  const { data, error, loading } = useMarketOverview(initialOverview)
 
   const entries = useMemo(() => {
     return buildMarketCardEntries(data?.openMarkets || [], data?.recentActions || [])

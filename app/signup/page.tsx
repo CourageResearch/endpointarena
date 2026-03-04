@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
+import { STARTER_POINTS } from '@/lib/constants'
 
 function normalizeCallbackUrl(raw: string | null): string {
   if (!raw) return '/markets'
@@ -63,12 +64,12 @@ export default function SignupPage() {
 
       if (result?.ok) {
         // Trigger first-account points celebration on profile load.
-        sessionStorage.setItem('ea-points-award', '5')
-        localStorage.setItem('ea-points-award-pending', '5')
+        sessionStorage.setItem('ea-points-award', String(STARTER_POINTS))
+        localStorage.setItem('ea-points-award-pending', String(STARTER_POINTS))
         const destination = resolveDestination(result.url, `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`)
         const [pathname, queryString = ''] = destination.split('?')
         const params = new URLSearchParams(queryString)
-        params.set('signupAward', '5')
+        params.set('signupAward', String(STARTER_POINTS))
         router.push(`${pathname}?${params.toString()}`)
         router.refresh()
       } else if (result?.error === 'CredentialsSignin') {

@@ -85,14 +85,6 @@ export default async function AdminContactPage() {
       title="Contact Messages"
       description="Review inbound contact requests and remove handled items."
       activeTab="contact"
-      topActions={(
-        <a
-          href="/contact"
-          className="px-3 py-1.5 rounded-lg text-sm border border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:text-[#1a1a1a] hover:bg-white transition-colors"
-        >
-          Public Contact Page
-        </a>
-      )}
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">
         <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">

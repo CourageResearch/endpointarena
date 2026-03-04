@@ -226,6 +226,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   })
 
   hooks?.onStart?.({
+    runId: runRecord.id,
     runDate: runDateIso,
     modelOrder,
     openMarkets: orderedOpenMarkets.length,
