@@ -2,18 +2,48 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
-import { eq } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, or } from 'drizzle-orm'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { LogoutButton } from '@/components/LogoutButton'
 import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { authOptions } from '@/lib/auth'
-import { db, users } from '@/lib/db'
+import { db, fdaCalendarEvents, marketActions, marketPositions, predictionMarkets, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
 
 export const dynamic = 'force-dynamic'
+
+const PROFILE_TRADE_ACTIONS = ['BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO'] as const
+type ProfileTradeAction = (typeof PROFILE_TRADE_ACTIONS)[number]
+
+type ProfileHoldingRow = {
+  marketId: string
+  drugName: string
+  companyName: string
+  ticker: string
+  yesShares: number
+  noShares: number
+  priceYes: number
+  priceNo: number
+  markValueUsd: number
+  pdufaDate: Date | null
+}
+
+type ProfileTradeRow = {
+  id: string
+  timestamp: Date
+  marketId: string
+  drugName: string
+  companyName: string
+  ticker: string
+  action: ProfileTradeAction
+  usdAmount: number
+  shares: number
+  priceAfter: number
+  status: string
+}
 
 function formatDate(value: Date | null | undefined): string {
   if (!value) return '—'
@@ -24,6 +54,166 @@ function formatDate(value: Date | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function formatShortDate(value: Date | null | undefined): string {
+  if (!value) return '—'
+  return value.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function formatUsd(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(safe)
+}
+
+function formatShares(value: number): string {
+  const safe = Number.isFinite(value) ? Math.max(0, value) : 0
+  return safe.toFixed(4).replace(/\.?0+$/, '') || '0'
+}
+
+function formatPricePercent(value: number): string {
+  const safe = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
+  return `${(safe * 100).toFixed(1).replace(/\.0$/, '')}%`
+}
+
+function toTradeActionLabel(action: ProfileTradeAction): string {
+  switch (action) {
+    case 'BUY_YES':
+      return 'Buy Yes'
+    case 'BUY_NO':
+      return 'Buy No'
+    case 'SELL_YES':
+      return 'Sell Yes'
+    case 'SELL_NO':
+      return 'Sell No'
+  }
+}
+
+function getHumanActorId(userId: string): string {
+  return `human:${userId}`
+}
+
+function toTicker(symbols: string | null | undefined): string {
+  if (!symbols) return '—'
+  const first = symbols.split(',')[0]?.trim()
+  return first || '—'
+}
+
+async function getProfileTradingData(userId: string): Promise<{
+  holdings: ProfileHoldingRow[]
+  trades: ProfileTradeRow[]
+}> {
+  const actorId = getHumanActorId(userId)
+
+  const [rawPositions, rawActions] = await Promise.all([
+    db.query.marketPositions.findMany({
+      where: and(
+        eq(marketPositions.modelId, actorId),
+        or(gt(marketPositions.yesShares, 0), gt(marketPositions.noShares, 0)),
+      ),
+    }),
+    db.query.marketActions.findMany({
+      where: and(
+        eq(marketActions.modelId, actorId),
+        eq(marketActions.status, 'ok'),
+        inArray(marketActions.action, [...PROFILE_TRADE_ACTIONS]),
+      ),
+      orderBy: [desc(marketActions.createdAt)],
+      limit: 50,
+    }),
+  ])
+
+  const referencedMarketIds = new Set<string>()
+  for (const position of rawPositions) {
+    referencedMarketIds.add(position.marketId)
+  }
+  for (const action of rawActions) {
+    referencedMarketIds.add(action.marketId)
+  }
+
+  const marketIds = Array.from(referencedMarketIds)
+  const markets = marketIds.length > 0
+    ? await db.query.predictionMarkets.findMany({
+        where: inArray(predictionMarkets.id, marketIds),
+      })
+    : []
+
+  const eventIds = Array.from(new Set(markets.map((market) => market.fdaEventId)))
+  const events = eventIds.length > 0
+    ? await db.query.fdaCalendarEvents.findMany({
+        where: inArray(fdaCalendarEvents.id, eventIds),
+      })
+    : []
+
+  const marketById = new Map(markets.map((market) => [market.id, market]))
+  const openMarketById = new Map(markets.filter((market) => market.status === 'OPEN').map((market) => [market.id, market]))
+  const eventById = new Map(events.map((event) => [event.id, event]))
+
+  const holdings = rawPositions
+    .flatMap<ProfileHoldingRow>((position) => {
+      const market = openMarketById.get(position.marketId)
+      if (!market) return []
+
+      const yesShares = Math.max(0, position.yesShares)
+      const noShares = Math.max(0, position.noShares)
+      if (yesShares <= 0 && noShares <= 0) return []
+
+      const event = eventById.get(market.fdaEventId)
+      const drugName = event?.drugName?.trim() || 'Unknown market'
+      const companyName = event?.companyName?.trim() || '—'
+      const ticker = toTicker(event?.symbols)
+      const priceYes = market.priceYes
+      const priceNo = 1 - market.priceYes
+      const markValueUsd = (yesShares * priceYes) + (noShares * priceNo)
+
+      return [{
+        marketId: market.id,
+        drugName,
+        companyName,
+        ticker,
+        yesShares,
+        noShares,
+        priceYes,
+        priceNo,
+        markValueUsd,
+        pdufaDate: event?.pdufaDate ?? null,
+      }]
+    })
+    .sort((a, b) => b.markValueUsd - a.markValueUsd)
+
+  const trades = rawActions
+    .flatMap<ProfileTradeRow>((action) => {
+      if (!PROFILE_TRADE_ACTIONS.includes(action.action as ProfileTradeAction)) return []
+
+      const market = marketById.get(action.marketId)
+      const event = market ? eventById.get(market.fdaEventId) : null
+      const timestamp = action.createdAt ?? action.runDate
+
+      return [{
+        id: action.id,
+        timestamp,
+        marketId: action.marketId,
+        drugName: event?.drugName?.trim() || 'Unknown market',
+        companyName: event?.companyName?.trim() || '—',
+        ticker: toTicker(event?.symbols),
+        action: action.action as ProfileTradeAction,
+        usdAmount: Math.max(0, action.usdAmount),
+        shares: Math.abs(action.sharesDelta),
+        priceAfter: action.priceAfter,
+        status: action.status,
+      }]
+    })
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+
+  return { holdings, trades }
 }
 
 async function updateProfileName(formData: FormData) {
@@ -59,7 +249,10 @@ export default async function ProfilePage() {
     redirect('/login?callbackUrl=/profile')
   }
 
-  const verificationStatus = await getTwitterVerificationStatusForUser(user.id)
+  const [{ holdings, trades }, verificationStatus] = await Promise.all([
+    getProfileTradingData(user.id),
+    getTwitterVerificationStatusForUser(user.id),
+  ])
   const isVerified = Boolean(verificationStatus?.verified)
   const pointsState = isVerified
     ? {
@@ -156,6 +349,99 @@ export default async function ProfilePage() {
                 </p>
               </div>
             </div>
+
+            <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-[#1a1a1a]">Current Holdings</h2>
+                <p className="text-xs text-[#8a8075]">Open markets only</p>
+              </div>
+
+              {holdings.length === 0 ? (
+                <p className="mt-4 text-sm text-[#8a8075]">No open holdings yet.</p>
+              ) : (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[860px] text-sm">
+                    <thead>
+                      <tr className="border-b border-[#e8ddd0]">
+                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Price</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Price</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Mark Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holdings.map((holding) => (
+                        <tr key={`${holding.marketId}-${holding.ticker}`} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                          <td className="px-3 py-2 text-[#1a1a1a]">
+                            <p className="font-medium">{holding.drugName}</p>
+                            <p className="mt-0.5 text-xs text-[#8a8075]">
+                              {holding.companyName}
+                              {holding.ticker !== '—' ? ` • $${holding.ticker}` : ''}
+                              {' '}• PDUFA {formatShortDate(holding.pdufaDate)}
+                            </p>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.yesShares)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.noShares)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatPricePercent(holding.priceYes)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatPricePercent(holding.priceNo)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium text-[#1a1a1a]">{formatUsd(holding.markValueUsd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-[#1a1a1a]">Transaction History</h2>
+                <p className="text-xs text-[#8a8075]">Newest first</p>
+              </div>
+
+              {trades.length === 0 ? (
+                <p className="mt-4 text-sm text-[#8a8075]">No transactions yet.</p>
+              ) : (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[860px] text-sm">
+                    <thead>
+                      <tr className="border-b border-[#e8ddd0]">
+                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Time</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
+                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trades.map((trade) => {
+                        const actionTone = trade.action.startsWith('BUY') ? 'text-[#2f7b63]' : 'text-[#b3566b]'
+
+                        return (
+                          <tr key={trade.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                            <td className="px-3 py-2 whitespace-nowrap text-[#8a8075]">{formatDate(trade.timestamp)}</td>
+                            <td className="px-3 py-2 text-[#1a1a1a]">
+                              <p className="font-medium">{trade.drugName}</p>
+                              <p className="mt-0.5 text-xs text-[#8a8075]">
+                                {trade.companyName}
+                                {trade.ticker !== '—' ? ` • $${trade.ticker}` : ''}
+                              </p>
+                            </td>
+                            <td className={`px-3 py-2 font-medium ${actionTone}`}>{toTradeActionLabel(trade.action)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatUsd(trade.usdAmount)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(trade.shares)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatPricePercent(trade.priceAfter)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
 
             {!isVerified ? <ProfileVerificationPanel /> : null}
 
