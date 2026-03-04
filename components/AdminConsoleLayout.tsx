@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { gte, sql } from 'drizzle-orm'
-import { db, waitlistEntries } from '@/lib/db'
+import { db, users, waitlistEntries } from '@/lib/db'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
@@ -62,6 +62,16 @@ async function getWaitlistBadgeData() {
   }
 }
 
+async function getUsersCount() {
+  try {
+    const rows = await db.select({ count: sql<number>`count(*)` }).from(users)
+    return rows[0]?.count ?? 0
+  } catch (error) {
+    console.error('Failed to load users count:', error)
+    return 0
+  }
+}
+
 export async function AdminConsoleLayout({
   title,
   description,
@@ -69,7 +79,10 @@ export async function AdminConsoleLayout({
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
-  const waitlistBadge = await getWaitlistBadgeData()
+  const [waitlistBadge, usersCount] = await Promise.all([
+    getWaitlistBadgeData(),
+    getUsersCount(),
+  ])
   const tabsById = new Map(ADMIN_TABS.map((tab) => [tab.id, tab]))
 
   const renderTabLink = (tabId: AdminTab) => {
@@ -98,6 +111,18 @@ export async function AdminConsoleLayout({
             }`}
           >
             {waitlistBadge.newLast7d} new / {waitlistBadge.total}
+          </span>
+        ) : null}
+        {tab.id === 'users' ? (
+          <span
+            title="Total users"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isActive
+                ? 'bg-white/20 text-white'
+                : 'bg-[#f3ebe0] text-[#8a8075]'
+            }`}
+          >
+            {usersCount}
           </span>
         ) : null}
       </Link>
