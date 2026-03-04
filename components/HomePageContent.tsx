@@ -8,14 +8,6 @@ import { FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/comp
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { HomeMarketsClient } from '@/components/HomeMarketsClient'
 
-const HOMEPAGE_MONEY_BY_MODEL: Record<ModelVariant, number> = {
-  gpt: 115262,
-  gemini: 110112,
-  grok: 109802,
-  claude: 109314,
-}
-
-const HOMEPAGE_RANK_ORDER: ModelVariant[] = ['gpt', 'gemini', 'grok', 'claude']
 const HOMEPAGE_RANK_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
 
 function UpcomingLegend() {
@@ -32,16 +24,14 @@ function UpcomingLegend() {
 }
 
 export function HomePageContent({ data }: { data: HomeData }) {
-  const { leaderboard, upcomingFdaEvents } = data
-  const leaderboardById = new Map(leaderboard.map((entry) => [entry.id, entry]))
-  const homeLeaderboard = HOMEPAGE_RANK_ORDER.map((id, index) => {
-    const stats = leaderboardById.get(id)
+  const { moneyLeaderboard, upcomingFdaEvents } = data
+  const homeLeaderboard = moneyLeaderboard.map((entry, index) => {
     return {
-      id,
+      id: entry.id as ModelVariant,
       rank: index + 1,
       rankColor: HOMEPAGE_RANK_COLORS[index],
-      money: HOMEPAGE_MONEY_BY_MODEL[id],
-      accuracy: stats && stats.total > 0 ? stats.accuracy : null,
+      money: entry.totalEquity,
+      accuracy: entry.total > 0 ? entry.accuracy : null,
     }
   })
 
@@ -135,11 +125,13 @@ export function HomePageContent({ data }: { data: HomeData }) {
 
                         <div className="ml-auto sm:ml-0 text-right shrink-0 transition-transform duration-150 group-hover:-translate-y-[1px]">
                           <div className="text-xl sm:text-2xl font-mono tracking-tight text-[#8a8075]">
-                            {new Intl.NumberFormat('en-US', {
-                              style: 'currency',
-                              currency: 'USD',
-                              maximumFractionDigits: 0,
-                            }).format(model.money)}
+                            {model.money == null
+                              ? '—'
+                              : new Intl.NumberFormat('en-US', {
+                                  style: 'currency',
+                                  currency: 'USD',
+                                  maximumFractionDigits: 0,
+                                }).format(model.money)}
                           </div>
                         </div>
 

@@ -1,5 +1,5 @@
-import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
-import { eq, or, desc, asc } from 'drizzle-orm'
+import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
+import { eq, or, desc, asc, inArray } from 'drizzle-orm'
 import { findPredictionByVariant, getModelVariant, type ModelVariant, type ModelId } from '@/lib/constants'
 
 function describeDataError(error: unknown): string {
@@ -49,12 +49,56 @@ export async function getHomeData() {
       limit: 10,
     })
 
-    const allFdaEvents = await db.query.fdaCalendarEvents.findMany()
+    const [allFdaEvents, allFdaPredictions, accounts, openMarkets] = await Promise.all([
+      db.query.fdaCalendarEvents.findMany(),
+      db.query.fdaPredictions.findMany({
+        where: eq(fdaPredictions.predictorType, 'model'),
+        with: { fdaEvent: true },
+      }),
+      db.query.marketAccounts.findMany(),
+      db.query.predictionMarkets.findMany({
+        where: eq(predictionMarkets.status, 'OPEN'),
+      }),
+    ])
 
-    const allFdaPredictions = await db.query.fdaPredictions.findMany({
-      where: eq(fdaPredictions.predictorType, 'model'),
-      with: { fdaEvent: true },
-    })
+    const openMarketIds = openMarkets.map((market) => market.id)
+    const positions = openMarketIds.length > 0
+      ? await db.query.marketPositions.findMany({
+          where: inArray(marketPositions.marketId, openMarketIds),
+        })
+      : []
+
+    const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
+    const positionsValueByVariant = new Map<ModelVariant, number>()
+
+    for (const position of positions) {
+      const market = openMarketById.get(position.marketId)
+      if (!market) continue
+
+      let variant: ModelVariant
+      try {
+        variant = getModelVariant(position.modelId as ModelId)
+      } catch {
+        continue
+      }
+
+      const markedValue = (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
+      positionsValueByVariant.set(
+        variant,
+        (positionsValueByVariant.get(variant) ?? 0) + markedValue
+      )
+    }
+
+    const accountByVariant = new Map<ModelVariant, { cashBalance: number }>()
+    for (const account of accounts) {
+      let variant: ModelVariant
+      try {
+        variant = getModelVariant(account.modelId as ModelId)
+      } catch {
+        continue
+      }
+      accountByVariant.set(variant, { cashBalance: account.cashBalance })
+    }
 
     const modelStats = new Map<ModelVariant, { correct: number; total: number; pending: number; confidenceSum: number }>()
     const modelVariants: ModelVariant[] = ['claude', 'gpt', 'grok', 'gemini']
@@ -90,6 +134,8 @@ export async function getHomeData() {
     const leaderboard = Array.from(modelStats.entries())
       .map(([id, stats]) => {
         const totalPreds = stats.total + stats.pending
+        const account = accountByVariant.get(id)
+        const positionsValue = positionsValueByVariant.get(id) ?? 0
         return {
           id: id as ModelVariant,
           correct: stats.correct,
@@ -97,9 +143,18 @@ export async function getHomeData() {
           pending: stats.pending,
           accuracy: stats.total > 0 ? (stats.correct / stats.total) * 100 : 0,
           avgConfidence: totalPreds > 0 ? stats.confidenceSum / totalPreds : 0,
+          totalEquity: account ? account.cashBalance + positionsValue : null,
         }
       })
       .sort((a, b) => b.accuracy - a.accuracy || b.correct - a.correct)
+
+    const moneyLeaderboard = [...leaderboard].sort((a, b) => {
+      const aEquity = a.totalEquity ?? Number.NEGATIVE_INFINITY
+      const bEquity = b.totalEquity ?? Number.NEGATIVE_INFINITY
+      if (aEquity !== bEquity) return bEquity - aEquity
+      if (a.accuracy !== b.accuracy) return b.accuracy - a.accuracy
+      return b.correct - a.correct
+    })
 
     const nextFdaEvent = upcomingFdaEvents[0] || null
 
@@ -120,6 +175,7 @@ export async function getHomeData() {
 
     return {
       leaderboard,
+      moneyLeaderboard,
       upcomingFdaEvents,
       recentFdaDecisions,
       nextFdaEvent,
