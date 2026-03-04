@@ -26,6 +26,7 @@ export default async function MethodPage() {
 
   const MODEL_BINDINGS: Record<ModelId, {
     version: string
+    internet: boolean
     internetDetail: string
     reasoning: string
     reasoningDetail: string
@@ -33,13 +34,15 @@ export default async function MethodPage() {
   }> = {
     'claude-opus': {
       version: 'claude-opus-4-6',
-      internetDetail: 'Anthropic web_search_20250305',
+      internet: true,
+      internetDetail: 'Anthropic web_search_20250305 (max_uses: 7)',
       reasoning: 'Extended Thinking',
-      reasoningDetail: 'Web-search tool + long-form reasoning flow',
-      maxTokens: '4,096 output (stream) / 16,000 (batch)',
+      reasoningDetail: 'Native thinking blocks + tool-assisted synthesis',
+      maxTokens: '4,096 output',
     },
     'gpt-5.2': {
       version: 'gpt-5.2',
+      internet: true,
       internetDetail: 'OpenAI web_search tool',
       reasoning: 'High Effort',
       reasoningDetail: 'reasoning.effort = high',
@@ -47,6 +50,7 @@ export default async function MethodPage() {
     },
     'grok-4': {
       version: 'grok-4-1-fast-reasoning',
+      internet: true,
       internetDetail: 'search_mode: auto',
       reasoning: 'Fast Reasoning',
       reasoningDetail: 'Native fast reasoning mode',
@@ -54,6 +58,7 @@ export default async function MethodPage() {
     },
     'gemini-2.5': {
       version: 'gemini-2.5-pro',
+      internet: true,
       internetDetail: 'Google Search grounding',
       reasoning: 'Thinking',
       reasoningDetail: 'thinkingConfig.thinkingBudget = -1',
@@ -61,6 +66,7 @@ export default async function MethodPage() {
     },
     'gemini-3-pro': {
       version: 'gemini-3-pro-preview',
+      internet: true,
       internetDetail: 'Google Search grounding',
       reasoning: 'Thinking',
       reasoningDetail: 'thinkingConfig.thinkingBudget = -1',
@@ -68,30 +74,34 @@ export default async function MethodPage() {
     },
     'deepseek-v3.2': {
       version: 'deepseek-ai/DeepSeek-V3.1',
-      internetDetail: 'Baseten OpenAI-compatible endpoint',
+      internet: false,
+      internetDetail: 'No web-search tool configured in FDA generator',
       reasoning: 'Reasoning mode',
-      reasoningDetail: 'extra_body.reasoning_effort enabled',
+      reasoningDetail: 'extra_body.reasoning_effort = high',
       maxTokens: '16,000 output',
     },
     'llama-4': {
       version: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-      internetDetail: 'Groq OpenAI-compatible endpoint',
-      reasoning: 'Fast Inference',
-      reasoningDetail: 'Low-latency reasoning on Groq',
+      internet: false,
+      internetDetail: 'No web-search tool configured in FDA generator',
+      reasoning: 'Provider default',
+      reasoningDetail: 'No explicit reasoning parameter configured',
       maxTokens: '8,192 output',
     },
     'kimi-k2': {
       version: 'moonshotai/Kimi-K2-Thinking',
-      internetDetail: 'Baseten OpenAI-compatible endpoint',
+      internet: false,
+      internetDetail: 'No web-search tool configured in FDA generator',
       reasoning: 'Thinking',
-      reasoningDetail: 'extra_body.reasoning_effort enabled',
+      reasoningDetail: 'extra_body.reasoning_effort = high',
       maxTokens: '16,000 output',
     },
     'minimax-m2.5': {
       version: 'MiniMax-M2.5',
-      internetDetail: 'MiniMax OpenAI-compatible endpoint',
-      reasoning: 'Reasoning',
-      reasoningDetail: 'Provider reasoning defaults',
+      internet: false,
+      internetDetail: 'No web-search tool configured in FDA generator',
+      reasoning: 'Provider default',
+      reasoningDetail: 'No explicit reasoning parameter configured',
       maxTokens: '16,000 output',
     },
   }
@@ -106,7 +116,7 @@ export default async function MethodPage() {
       provider: info.provider,
       version: binding.version,
       features: {
-        internet: true,
+        internet: binding.internet,
         internetDetail: binding.internetDetail,
         reasoning: binding.reasoning,
         reasoningDetail: binding.reasoningDetail,
@@ -264,7 +274,7 @@ export default async function MethodPage() {
                     </div>
 
                     <div className="rounded-sm border border-[#e8ddd0] bg-[#f7f4ef]/55 px-3 py-2">
-                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Max Output</dt>
+                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Max Output (FDA)</dt>
                       <dd className="mt-1 text-sm leading-snug text-[#b5aa9e]">
                         {model.features.maxTokens}
                       </dd>
