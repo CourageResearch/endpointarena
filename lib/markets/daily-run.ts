@@ -6,7 +6,7 @@ import { normalizeRunDate, recordMarketActionError, rotateModelOrder, runBuyActi
 import { ConflictError } from '@/lib/errors'
 import type { DailyRunHooks, DailyRunPayload, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
 import { getMarketRuntimeConfig, type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
-import { MARKET_RUN_STALE_TIMEOUT_MS } from '@/lib/markets/run-health'
+import { MARKET_MODEL_RESPONSE_TIMEOUT_MS, MARKET_RUN_STALE_TIMEOUT_MS } from '@/lib/markets/run-health'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -26,6 +26,22 @@ function inferErrorCode(message: string): string {
   if (normalized.includes('timeout') || normalized.includes('timed out')) return 'TIMEOUT'
   if (normalized.includes('json') || normalized.includes('parse')) return 'PARSE_ERROR'
   return 'UNHANDLED_ERROR'
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, context: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout | null = null
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${context} timed out after ${Math.round(timeoutMs / 1000)}s`))
+      }, timeoutMs)
+    })
+
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 function getMarketAgeInRuns(openedAt: Date, runDate: Date): number {
@@ -148,6 +164,7 @@ async function startRunRecord({
     .onConflictDoUpdate({
       target: marketRuns.runDate,
       set: {
+        createdAt: now,
         status: 'running',
         openMarkets,
         totalActions,
@@ -400,25 +417,29 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             })
           }, 5000)
 
-          const decision = await generator.generator({
-            runDateIso,
-            modelId,
-            drugName: event.drugName,
-            companyName: event.companyName,
-            symbols: event.symbols,
-            applicationType: event.applicationType,
-            pdufaDate: event.pdufaDate.toISOString(),
-            eventDescription: event.eventDescription,
-            therapeuticArea: event.therapeuticArea,
-            marketPriceYes: latestMarket.priceYes,
-            marketPriceNo: 1 - latestMarket.priceYes,
-            accountCash: account.cashBalance,
-            positionYesShares: position.yesShares,
-            positionNoShares: position.noShares,
-            totalOpenMarkets: orderedOpenMarkets.length,
-            marketsRemainingThisRun,
-            otherOpenMarkets,
-          }).finally(() => {
+          const decision = await withTimeout(
+            generator.generator({
+              runDateIso,
+              modelId,
+              drugName: event.drugName,
+              companyName: event.companyName,
+              symbols: event.symbols,
+              applicationType: event.applicationType,
+              pdufaDate: event.pdufaDate.toISOString(),
+              eventDescription: event.eventDescription,
+              therapeuticArea: event.therapeuticArea,
+              marketPriceYes: latestMarket.priceYes,
+              marketPriceNo: 1 - latestMarket.priceYes,
+              accountCash: account.cashBalance,
+              positionYesShares: position.yesShares,
+              positionNoShares: position.noShares,
+              totalOpenMarkets: orderedOpenMarkets.length,
+              marketsRemainingThisRun,
+              otherOpenMarkets,
+            }),
+            MARKET_MODEL_RESPONSE_TIMEOUT_MS,
+            `${modelName} response`
+          ).finally(() => {
             clearInterval(waitHeartbeat)
           })
 
