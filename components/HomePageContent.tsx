@@ -54,7 +54,7 @@ export function HomePageContent({ data, initialMarketOverview }: { data: HomeDat
           }}
         />
 
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-10 sm:pt-20 pb-10 sm:pb-16">
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-10 sm:pt-20 pb-6 sm:pb-10">
           <div className="flex gap-6 sm:gap-8">
             {/* Left vertical accent rule */}
             <div className="hidden sm:block w-[2px] shrink-0 rounded-full self-stretch" style={{ background: 'linear-gradient(180deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }} />
@@ -82,7 +82,7 @@ export function HomePageContent({ data, initialMarketOverview }: { data: HomeDat
 
       </section>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-8 pb-10 sm:pb-16">
 
         {/* ── 2. LEADERBOARD ── */}
         <section className="mb-16">
