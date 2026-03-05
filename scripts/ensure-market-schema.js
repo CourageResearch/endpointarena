@@ -212,6 +212,7 @@ const TABLE_STATEMENTS = [
     steady_buy_cash_fraction real NOT NULL DEFAULT 0.02,
     max_position_per_side_shares real NOT NULL DEFAULT 10000,
     opening_lmsr_b real NOT NULL DEFAULT 100000,
+    signup_user_limit integer NOT NULL DEFAULT 56,
     created_at timestamp DEFAULT NOW(),
     updated_at timestamp DEFAULT NOW(),
     CONSTRAINT market_runtime_configs_warmup_run_count_check CHECK (warmup_run_count >= 0 AND warmup_run_count <= 365),
@@ -220,13 +221,69 @@ const TABLE_STATEMENTS = [
     CONSTRAINT market_runtime_configs_steady_max_trade_usd_check CHECK (steady_max_trade_usd >= 0 AND steady_max_trade_usd <= 10000000),
     CONSTRAINT market_runtime_configs_steady_buy_cash_fraction_check CHECK (steady_buy_cash_fraction >= 0 AND steady_buy_cash_fraction <= 1),
     CONSTRAINT market_runtime_configs_max_position_per_side_shares_check CHECK (max_position_per_side_shares >= 0 AND max_position_per_side_shares <= 10000000),
-    CONSTRAINT market_runtime_configs_opening_lmsr_b_check CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000)
+    CONSTRAINT market_runtime_configs_opening_lmsr_b_check CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000),
+    CONSTRAINT market_runtime_configs_signup_user_limit_check CHECK (signup_user_limit >= 0 AND signup_user_limit <= 10000000)
   )`,
   `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_max_trade_usd real NOT NULL DEFAULT 1000`,
   `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_buy_cash_fraction real NOT NULL DEFAULT 0.02`,
   `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS max_position_per_side_shares real NOT NULL DEFAULT 10000`,
   `ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`,
+  `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS signup_user_limit integer NOT NULL DEFAULT 56`,
+  `ALTER TABLE market_runtime_configs ALTER COLUMN signup_user_limit SET DEFAULT 56`,
   `INSERT INTO market_runtime_configs (id) VALUES ('default') ON CONFLICT (id) DO NOTHING`,
+  `UPDATE market_runtime_configs SET signup_user_limit = 56 WHERE id = 'default' AND signup_user_limit IS NULL`,
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'market_runtime_configs_steady_max_trade_usd_check'
+    ) THEN
+      ALTER TABLE market_runtime_configs
+      ADD CONSTRAINT market_runtime_configs_steady_max_trade_usd_check
+      CHECK (steady_max_trade_usd >= 0 AND steady_max_trade_usd <= 10000000);
+    END IF;
+  END
+  $$`,
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'market_runtime_configs_steady_buy_cash_fraction_check'
+    ) THEN
+      ALTER TABLE market_runtime_configs
+      ADD CONSTRAINT market_runtime_configs_steady_buy_cash_fraction_check
+      CHECK (steady_buy_cash_fraction >= 0 AND steady_buy_cash_fraction <= 1);
+    END IF;
+  END
+  $$`,
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'market_runtime_configs_max_position_per_side_shares_check'
+    ) THEN
+      ALTER TABLE market_runtime_configs
+      ADD CONSTRAINT market_runtime_configs_max_position_per_side_shares_check
+      CHECK (max_position_per_side_shares >= 0 AND max_position_per_side_shares <= 10000000);
+    END IF;
+  END
+  $$`,
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'market_runtime_configs_signup_user_limit_check'
+    ) THEN
+      ALTER TABLE market_runtime_configs
+      ADD CONSTRAINT market_runtime_configs_signup_user_limit_check
+      CHECK (signup_user_limit >= 0 AND signup_user_limit <= 10000000);
+    END IF;
+  END
+  $$`,
 ]
 
 const EXPECTED_TABLES = [

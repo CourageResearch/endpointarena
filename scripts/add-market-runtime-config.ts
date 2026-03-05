@@ -25,6 +25,7 @@ async function migrate() {
       steady_buy_cash_fraction REAL NOT NULL DEFAULT 0.02,
       max_position_per_side_shares REAL NOT NULL DEFAULT 10000,
       opening_lmsr_b REAL NOT NULL DEFAULT 100000,
+      signup_user_limit INTEGER NOT NULL DEFAULT 56,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW(),
       CONSTRAINT market_runtime_configs_warmup_run_count_check
@@ -40,7 +41,9 @@ async function migrate() {
       CONSTRAINT market_runtime_configs_max_position_per_side_shares_check
         CHECK (max_position_per_side_shares >= 0 AND max_position_per_side_shares <= 10000000),
       CONSTRAINT market_runtime_configs_opening_lmsr_b_check
-        CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000)
+        CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000),
+      CONSTRAINT market_runtime_configs_signup_user_limit_check
+        CHECK (signup_user_limit >= 0 AND signup_user_limit <= 10000000)
     )
   `
 
@@ -48,6 +51,8 @@ async function migrate() {
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_buy_cash_fraction REAL NOT NULL DEFAULT 0.02`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS max_position_per_side_shares REAL NOT NULL DEFAULT 10000`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`
+  await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS signup_user_limit INTEGER NOT NULL DEFAULT 56`
+  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN signup_user_limit SET DEFAULT 56`
 
   await sql`
     INSERT INTO market_runtime_configs (
@@ -59,6 +64,7 @@ async function migrate() {
       steady_buy_cash_fraction,
       max_position_per_side_shares,
       opening_lmsr_b,
+      signup_user_limit,
       created_at,
       updated_at
     )
@@ -71,10 +77,78 @@ async function migrate() {
       0.02,
       10000,
       100000,
+      56,
       NOW(),
       NOW()
     )
     ON CONFLICT (id) DO NOTHING
+  `
+
+  await sql`
+    UPDATE market_runtime_configs
+    SET signup_user_limit = 56
+    WHERE id = 'default'
+      AND signup_user_limit IS NULL
+  `
+
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'market_runtime_configs_steady_max_trade_usd_check'
+      ) THEN
+        ALTER TABLE market_runtime_configs
+        ADD CONSTRAINT market_runtime_configs_steady_max_trade_usd_check
+        CHECK (steady_max_trade_usd >= 0 AND steady_max_trade_usd <= 10000000);
+      END IF;
+    END $$;
+  `
+
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'market_runtime_configs_steady_buy_cash_fraction_check'
+      ) THEN
+        ALTER TABLE market_runtime_configs
+        ADD CONSTRAINT market_runtime_configs_steady_buy_cash_fraction_check
+        CHECK (steady_buy_cash_fraction >= 0 AND steady_buy_cash_fraction <= 1);
+      END IF;
+    END $$;
+  `
+
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'market_runtime_configs_max_position_per_side_shares_check'
+      ) THEN
+        ALTER TABLE market_runtime_configs
+        ADD CONSTRAINT market_runtime_configs_max_position_per_side_shares_check
+        CHECK (max_position_per_side_shares >= 0 AND max_position_per_side_shares <= 10000000);
+      END IF;
+    END $$;
+  `
+
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'market_runtime_configs_signup_user_limit_check'
+      ) THEN
+        ALTER TABLE market_runtime_configs
+        ADD CONSTRAINT market_runtime_configs_signup_user_limit_check
+        CHECK (signup_user_limit >= 0 AND signup_user_limit <= 10000000);
+      END IF;
+    END $$;
   `
 
   console.log('Done. market_runtime_configs is ready.')

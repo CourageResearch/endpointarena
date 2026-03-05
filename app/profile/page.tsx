@@ -331,7 +331,12 @@ export default async function ProfilePage() {
                 </form>
               </div>
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash Balance</p>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash Balance</p>
+                  <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
+                    Paper Trading
+                  </div>
+                </div>
                 <ProfilePointsBalance
                   pointsBalance={pointsState.pointsBalance}
                   pointsAwarded={refillAwarded}

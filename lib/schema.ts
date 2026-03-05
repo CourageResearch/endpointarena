@@ -384,6 +384,7 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   steadyBuyCashFraction: real('steady_buy_cash_fraction').notNull().default(0.02),
   maxPositionPerSideShares: real('max_position_per_side_shares').notNull().default(10000),
   openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
+  signupUserLimit: integer('signup_user_limit').notNull().default(56),
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
   updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
 }, (table) => ({
@@ -414,6 +415,10 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   openingLmsrBCheck: check(
     'market_runtime_configs_opening_lmsr_b_check',
     sql`${table.openingLmsrB} > 0 AND ${table.openingLmsrB} <= 10000000`
+  ),
+  signupUserLimitCheck: check(
+    'market_runtime_configs_signup_user_limit_check',
+    sql`${table.signupUserLimit} >= 0 AND ${table.signupUserLimit} <= 10000000`
   ),
 }))
 

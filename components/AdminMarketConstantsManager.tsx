@@ -11,12 +11,14 @@ export interface MarketRuntimeConfigDto {
   steadyBuyCashFraction: number
   maxPositionPerSideShares: number
   openingLmsrB: number
+  signupUserLimit: number
   createdAt: string
   updatedAt: string
 }
 
 interface Props {
   initialConfig: MarketRuntimeConfigDto
+  currentUsersCount: number
 }
 
 type FormState = {
@@ -27,6 +29,7 @@ type FormState = {
   steadyBuyCashFraction: string
   maxPositionPerSideShares: string
   openingLmsrB: string
+  signupUserLimit: string
 }
 
 function formatMoney(value: number): string {
@@ -54,10 +57,11 @@ function toFormState(config: MarketRuntimeConfigDto): FormState {
     steadyBuyCashFraction: String(config.steadyBuyCashFraction),
     maxPositionPerSideShares: String(config.maxPositionPerSideShares),
     openingLmsrB: String(config.openingLmsrB),
+    signupUserLimit: String(config.signupUserLimit),
   }
 }
 
-export function AdminMarketConstantsManager({ initialConfig }: Props) {
+export function AdminMarketConstantsManager({ initialConfig, currentUsersCount }: Props) {
   const [config, setConfig] = useState(initialConfig)
   const [form, setForm] = useState<FormState>(() => toFormState(initialConfig))
   const [isSaving, setIsSaving] = useState(false)
@@ -117,6 +121,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
         steadyBuyCashFraction: parseField(form.steadyBuyCashFraction, 'Steady-state buy cash fraction'),
         maxPositionPerSideShares: parseField(form.maxPositionPerSideShares, 'Max position per side shares'),
         openingLmsrB: parseField(form.openingLmsrB, 'Opening LMSR b'),
+        signupUserLimit: parseField(form.signupUserLimit, 'Signup user limit'),
       }
 
       const response = await fetch('/api/admin/market-config', {
@@ -129,7 +134,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
 
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(data, 'Failed to update market settings'))
+        throw new Error(getApiErrorMessage(data, 'Failed to update runtime settings'))
       }
 
       const nextConfig = data.config as MarketRuntimeConfigDto
@@ -253,6 +258,21 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Liquidity applied when a new market is opened.</p>
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Signup User Limit</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={form.signupUserLimit}
+              onChange={(e) => updateField('signupUserLimit', e.target.value)}
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+            />
+            <p className="text-xs text-[#8a8075]">
+              Blocks new account creation once total users reach this count. Current total: {currentUsersCount}. Set to 0 to close signups.
+            </p>
           </label>
         </div>
 

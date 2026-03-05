@@ -21,7 +21,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    return errorResponse(error, requestId, 'Failed to load market runtime config')
+    return errorResponse(error, requestId, 'Failed to load runtime settings')
   }
 }
 
@@ -42,6 +42,6 @@ export async function PATCH(request: NextRequest) {
       },
     })
   } catch (error) {
-    return errorResponse(error, requestId, 'Failed to update market runtime config')
+    return errorResponse(error, requestId, 'Failed to update runtime settings')
   }
 }

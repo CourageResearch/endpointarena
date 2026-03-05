@@ -22,6 +22,16 @@ function parseStoredNumber(value: string | null): number | null {
   return Math.floor(parsed)
 }
 
+function formatUsd(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(safe) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(safe)
+}
+
 export function ProfilePointsBalance({
   pointsBalance,
   pointsAwarded = 0,
@@ -31,7 +41,7 @@ export function ProfilePointsBalance({
   const [displayPoints, setDisplayPoints] = useState(pointsBalance)
   const [celebrationAwarded, setCelebrationAwarded] = useState(0)
 
-  const label = useMemo(() => displayPoints.toLocaleString(), [displayPoints])
+  const label = useMemo(() => formatUsd(displayPoints), [displayPoints])
 
   useEffect(() => {
     let start = pointsBalance
@@ -118,11 +128,8 @@ export function ProfilePointsBalance({
   return (
     <>
       <ProfileRefillCelebration pointsAwarded={celebrationAwarded} />
-      <div className="mt-2 inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
-        Paper Trading
-      </div>
-      <p className="mt-2 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{label}</p>
-      <p className="mt-1 text-xs text-[#8a8075]">Daily refill auto-applies when eligible.</p>
+      <p className="mt-4 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{label}</p>
+      <p className="mt-1 text-xs text-[#8a8075]">Daily cash refill auto-applies when eligible.</p>
     </>
   )
 }

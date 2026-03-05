@@ -8,6 +8,16 @@ type ProfileRefillCelebrationProps = {
 
 const COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
 
+function formatUsd(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(safe) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(safe)
+}
+
 export function ProfileRefillCelebration({ pointsAwarded }: ProfileRefillCelebrationProps) {
   const [visible, setVisible] = useState(pointsAwarded >= 5)
 
@@ -37,7 +47,7 @@ export function ProfileRefillCelebration({ pointsAwarded }: ProfileRefillCelebra
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <div className="absolute left-3 top-3 rounded-sm border border-[#b8d9b8] bg-[#eef8ee] px-2 py-1 text-[11px] font-semibold text-[#2f7b40]">
-        +{pointsAwarded.toLocaleString()} points
+        +{formatUsd(pointsAwarded)} cash
       </div>
       {pieces.map((piece) => (
         <span

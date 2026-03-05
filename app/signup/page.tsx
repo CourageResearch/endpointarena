@@ -32,6 +32,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [errorCode, setErrorCode] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
   const [geo, setGeo] = useState({ country: '', state: '' })
 
@@ -39,6 +40,11 @@ export default function SignupPage() {
     let cancelled = false
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
+    const authError = params.get('error')
+    if (authError === 'SIGNUPS_CLOSED') {
+      setError('Signups are full. Endpoint Arena is currently full.')
+      setErrorCode('SIGNUPS_CLOSED')
+    }
 
     detectGeoFromClient().then((detectedGeo) => {
       if (!cancelled && (detectedGeo.country || detectedGeo.state)) {
@@ -56,15 +62,18 @@ export default function SignupPage() {
     if (!email || !password || !confirmPassword) return
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
+      setErrorCode('')
       return
     }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
+      setErrorCode('')
       return
     }
 
     setIsLoading(true)
     setError('')
+    setErrorCode('')
 
     try {
       const detectedGeo = geo.country || geo.state ? geo : await detectGeoFromClient()
@@ -94,16 +103,21 @@ export default function SignupPage() {
         router.push(`${pathname}?${params.toString()}`)
         router.refresh()
       } else if (result?.error === 'SIGNUPS_CLOSED') {
-        setError('Signups are full. Endpoint Arena is currently limited to the first 56 accounts.')
+        setError('Signups are full. Endpoint Arena is currently full.')
+        setErrorCode('SIGNUPS_CLOSED')
       } else if (result?.error === 'CredentialsSignin') {
         setError('An account with that email already exists. Please sign in instead.')
+        setErrorCode('')
       } else if (result?.error === 'AUTH_UNAVAILABLE') {
         setError('Account creation is temporarily unavailable. Please try again shortly.')
+        setErrorCode('')
       } else {
         setError('Failed to create account. Please try again.')
+        setErrorCode('')
       }
     } catch {
       setError('Failed to create account')
+      setErrorCode('')
     } finally {
       setIsLoading(false)
     }
@@ -138,7 +152,11 @@ export default function SignupPage() {
                       type="email"
                       placeholder="you@example.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        if (error) setError('')
+                        if (errorCode) setErrorCode('')
+                        setEmail(e.target.value)
+                      }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                       required
                     />
@@ -156,7 +174,11 @@ export default function SignupPage() {
                       type="password"
                       placeholder="At least 8 characters"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        if (error) setError('')
+                        if (errorCode) setErrorCode('')
+                        setPassword(e.target.value)
+                      }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                       minLength={8}
                       required
@@ -175,7 +197,11 @@ export default function SignupPage() {
                       type="password"
                       placeholder="Repeat password"
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={(e) => {
+                        if (error) setError('')
+                        if (errorCode) setErrorCode('')
+                        setConfirmPassword(e.target.value)
+                      }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                       minLength={8}
                       required
@@ -199,9 +225,23 @@ export default function SignupPage() {
                 </p>
 
                 {error ? (
-                  <p className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
-                    {error}
-                  </p>
+                  <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
+                    <p>{error}</p>
+                    {errorCode === 'SIGNUPS_CLOSED' ? (
+                      <p className="mt-2">
+                        Join the waitlist at{' '}
+                        <a
+                          href="/waitlist"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium underline"
+                        >
+                          endpointarena.com/waitlist
+                        </a>
+                        {' '}or check back later.
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </GradientBorder>

@@ -5,17 +5,18 @@ import { getServerSession } from 'next-auth'
 import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import TwitterProvider from 'next-auth/providers/twitter'
-import { accounts, db, sessions, users, verificationTokens } from '@/lib/db'
+import { accounts, db, marketRuntimeConfigs, sessions, users, verificationTokens } from '@/lib/db'
 import { and, eq, sql } from 'drizzle-orm'
 import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
 import { getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
+import { DEFAULT_SIGNUP_USER_LIMIT } from '@/lib/markets/runtime-config'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
-const MAX_SIGNUPS = 56
+const MARKET_RUNTIME_CONFIG_ID = 'default'
 const SIGNUPS_CLOSED_ERROR = 'SIGNUPS_CLOSED'
 const SIGNUP_LIMIT_LOCK_ID = 20501
 
@@ -156,15 +157,37 @@ function isSignupsClosedError(error: unknown): boolean {
   return error instanceof Error && error.message === SIGNUPS_CLOSED_ERROR
 }
 
+async function getSignupUserLimit(tx: any): Promise<number> {
+  try {
+    const rows = await tx
+      .select({
+        signupUserLimit: marketRuntimeConfigs.signupUserLimit,
+      })
+      .from(marketRuntimeConfigs)
+      .where(eq(marketRuntimeConfigs.id, MARKET_RUNTIME_CONFIG_ID))
+      .limit(1)
+
+    return rows[0]?.signupUserLimit ?? DEFAULT_SIGNUP_USER_LIMIT
+  } catch (error) {
+    if (isMissingColumnError(error, 'signup_user_limit')) {
+      return DEFAULT_SIGNUP_USER_LIMIT
+    }
+    throw error
+  }
+}
+
 async function assertSignupCapacity(tx: any): Promise<void> {
-  const rows = await tx
-    .select({
-      count: sql<number>`count(*)::int`,
-    })
-    .from(users)
+  const [rows, signupUserLimit] = await Promise.all([
+    tx
+      .select({
+        count: sql<number>`count(*)::int`,
+      })
+      .from(users),
+    getSignupUserLimit(tx),
+  ])
 
   const totalUsers = rows[0]?.count ?? 0
-  if (totalUsers >= MAX_SIGNUPS) {
+  if (totalUsers >= signupUserLimit) {
     throw new Error(SIGNUPS_CLOSED_ERROR)
   }
 }

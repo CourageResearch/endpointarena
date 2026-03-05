@@ -4,6 +4,7 @@ import { ConfigurationError, ValidationError } from '@/lib/errors'
 
 const MARKET_RUNTIME_CONFIG_ID = 'default'
 const MAX_CONFIG_NUMBER = 10_000_000
+export const DEFAULT_SIGNUP_USER_LIMIT = 56
 
 export type MarketRuntimeConfig = {
   warmupRunCount: number
@@ -13,6 +14,7 @@ export type MarketRuntimeConfig = {
   steadyBuyCashFraction: number
   maxPositionPerSideShares: number
   openingLmsrB: number
+  signupUserLimit: number
   createdAt: Date
   updatedAt: Date
 }
@@ -25,6 +27,7 @@ export type MarketRuntimeConfigPatchInput = Partial<{
   steadyBuyCashFraction: unknown
   maxPositionPerSideShares: unknown
   openingLmsrB: unknown
+  signupUserLimit: unknown
 }>
 
 type MarketRuntimeConfigPatch = Partial<{
@@ -35,6 +38,7 @@ type MarketRuntimeConfigPatch = Partial<{
   steadyBuyCashFraction: number
   maxPositionPerSideShares: number
   openingLmsrB: number
+  signupUserLimit: number
 }>
 
 function coerceNumber(value: unknown, fieldName: string): number {
@@ -104,6 +108,14 @@ function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPa
     patch.openingLmsrB = parsed
   }
 
+  if (input.signupUserLimit !== undefined) {
+    const parsed = Math.round(coerceNumber(input.signupUserLimit, 'signupUserLimit'))
+    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
+      throw new ValidationError(`signupUserLimit must be between 0 and ${MAX_CONFIG_NUMBER}`)
+    }
+    patch.signupUserLimit = parsed
+  }
+
   return patch
 }
 
@@ -120,6 +132,7 @@ function mapRow(row: typeof marketRuntimeConfigs.$inferSelect): MarketRuntimeCon
     steadyBuyCashFraction: row.steadyBuyCashFraction,
     maxPositionPerSideShares: row.maxPositionPerSideShares,
     openingLmsrB: row.openingLmsrB,
+    signupUserLimit: row.signupUserLimit ?? DEFAULT_SIGNUP_USER_LIMIT,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
