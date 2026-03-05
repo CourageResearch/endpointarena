@@ -369,6 +369,13 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const isEventDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
+    if (isEventDecided) {
+      throw new ValidationError(
+        `Forward-only policy: cannot create a new prediction for a resolved event (${event.outcome}).`
+      )
+    }
+
     const prompt = buildFDAPredictionPrompt({
       drugName: event.drugName,
       companyName: event.companyName,

@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     })
 
     const models = modelId ? [modelId] : [...MODEL_IDS]
+    const isEventDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
     const results = await Promise.all(models.map(async (model) => {
       const existing = await db.query.fdaPredictions.findFirst({
         where: and(
@@ -68,6 +69,15 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         return { model, status: 'exists' as const, prediction: existing, durationMs: 0 }
+      }
+
+      if (isEventDecided) {
+        return {
+          model,
+          status: 'error' as const,
+          reason: `Forward-only policy: cannot create a new prediction for a resolved event (${event.outcome}).`,
+          durationMs: 0,
+        }
       }
 
       const modelConfig = FDA_GENERATORS[model]
