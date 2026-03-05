@@ -71,10 +71,59 @@ export interface FDAPredictionResult {
   reasoning: string
 }
 
+function extractBalancedJsonObject(raw: string, startIndex: number): string | null {
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = startIndex; i < raw.length; i++) {
+    const ch = raw[i]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (ch === '\\') {
+        escaped = true
+        continue
+      }
+
+      if (ch === '"') {
+        inString = false
+      }
+
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+
+    if (ch === '{') {
+      depth++
+      continue
+    }
+
+    if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        return raw.slice(startIndex, i + 1)
+      }
+    }
+  }
+
+  return null
+}
+
 export function parseFDAPredictionResponse(response: string): FDAPredictionResult {
   if (!response || response.trim().length === 0) {
     throw new Error('Empty response received from model')
   }
+
+  let lastParseError: unknown
 
   // Try multiple parsing strategies
 
@@ -84,31 +133,22 @@ export function parseFDAPredictionResponse(response: string): FDAPredictionResul
     try {
       return parseJsonResponse(codeBlockMatch[1])
     } catch (e) {
-      // Continue to other strategies
+      lastParseError = e
     }
   }
 
   // Strategy 2: Find the outermost JSON object containing "prediction"
-  // This handles nested braces in the reasoning field
+  // This handles braces inside quoted strings in the reasoning field.
   const predictionIndex = response.indexOf('"prediction"')
   if (predictionIndex !== -1) {
-    // Find the opening brace before "prediction"
-    let startIndex = response.lastIndexOf('{', predictionIndex)
+    const startIndex = response.lastIndexOf('{', predictionIndex)
     if (startIndex !== -1) {
-      // Find matching closing brace by counting braces
-      let braceCount = 1
-      let endIndex = startIndex + 1
-      while (endIndex < response.length && braceCount > 0) {
-        if (response[endIndex] === '{') braceCount++
-        else if (response[endIndex] === '}') braceCount--
-        endIndex++
-      }
-      if (braceCount === 0) {
-        const jsonStr = response.substring(startIndex, endIndex)
+      const jsonStr = extractBalancedJsonObject(response, startIndex)
+      if (jsonStr) {
         try {
           return parseJsonResponse(jsonStr)
         } catch (e) {
-          // Continue to other strategies
+          lastParseError = e
         }
       }
     }
@@ -117,58 +157,59 @@ export function parseFDAPredictionResponse(response: string): FDAPredictionResul
   // Strategy 3: Find any complete JSON-like object (matching braces)
   const firstBrace = response.indexOf('{')
   if (firstBrace !== -1) {
-    let braceCount = 1
-    let endIndex = firstBrace + 1
-    while (endIndex < response.length && braceCount > 0) {
-      if (response[endIndex] === '{') braceCount++
-      else if (response[endIndex] === '}') braceCount--
-      endIndex++
-    }
-    if (braceCount === 0) {
-      const jsonStr = response.substring(firstBrace, endIndex)
+    const jsonStr = extractBalancedJsonObject(response, firstBrace)
+    if (jsonStr) {
       try {
         return parseJsonResponse(jsonStr)
       } catch (e) {
-        // Continue to fallback
+        lastParseError = e
       }
     }
   }
 
+  const parseHint = lastParseError instanceof Error
+    ? ` Last parse error: ${lastParseError.message}`
+    : ''
+
   throw new Error(
-    `Model response did not contain a valid JSON prediction payload. Preview: ${response.slice(0, 240)}`
+    `Model response did not contain a valid JSON prediction payload. Preview: ${response.slice(0, 240)}${parseHint}`
   )
 }
 
 function parseJsonResponse(jsonStr: string): FDAPredictionResult {
-  // Clean up the JSON string - remove control characters that break parsing
-  // but preserve the structure for proper JSON parsing
-  const cleanedJson = jsonStr
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove most control chars but keep \n, \r, \t
-    .replace(/\r\n/g, '\\n')           // Convert Windows newlines to escaped
-    .replace(/\n/g, '\\n')             // Convert newlines to escaped
-    .replace(/\r/g, '\\n')             // Convert carriage returns to escaped
-    .replace(/\t/g, ' ')               // Replace tabs with spaces
+  const normalizedJson = jsonStr.trim()
+  let parsed: Record<string, unknown>
 
-  let parsed
   try {
-    parsed = JSON.parse(cleanedJson)
-  } catch (e) {
-    // Try more aggressive cleaning if initial parse fails
-    const aggressiveCleaned = jsonStr
-      .replace(/[\x00-\x1F\x7F]/g, ' ')
+    parsed = JSON.parse(normalizedJson)
+  } catch {
+    // Fall back if models include problematic control chars.
+    const repairedJson = normalizedJson
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
       .replace(/\s+/g, ' ')
-    parsed = JSON.parse(aggressiveCleaned)
+    parsed = JSON.parse(repairedJson)
   }
 
-  if (!['approved', 'rejected'].includes(parsed.prediction)) {
+  const predictionValue =
+    typeof parsed.prediction === 'string'
+      ? parsed.prediction.trim().toLowerCase()
+      : String(parsed.prediction || '').toLowerCase()
+
+  if (!['approved', 'rejected'].includes(predictionValue)) {
     throw new Error(`Invalid prediction value: ${JSON.stringify(parsed.prediction)}. Expected 'approved' or 'rejected'.`)
   }
 
-  // Validate confidence - must be a number
-  if (typeof parsed.confidence !== 'number') {
-    throw new Error(`Invalid confidence value: ${JSON.stringify(parsed.confidence)}. Expected a number.`)
+  let rawConfidence = parsed.confidence
+  if (typeof rawConfidence === 'string') {
+    const normalizedConfidence = rawConfidence.replace('%', '').trim()
+    rawConfidence = Number(normalizedConfidence)
   }
-  const confidence = Math.max(50, Math.min(100, Math.round(parsed.confidence)))
+
+  if (typeof rawConfidence !== 'number' || !Number.isFinite(rawConfidence)) {
+    throw new Error(`Invalid confidence value: ${JSON.stringify(parsed.confidence)}. Expected a number or numeric string.`)
+  }
+
+  const confidence = Math.max(50, Math.min(100, Math.round(rawConfidence)))
 
   // Validate reasoning - must be a non-empty string
   if (typeof parsed.reasoning !== 'string') {
@@ -180,7 +221,7 @@ function parseJsonResponse(jsonStr: string): FDAPredictionResult {
   const reasoning = parsed.reasoning
 
   return {
-    prediction: parsed.prediction,
+    prediction: predictionValue as 'approved' | 'rejected',
     confidence,
     reasoning,
   }
