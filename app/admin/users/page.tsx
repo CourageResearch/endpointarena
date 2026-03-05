@@ -7,6 +7,7 @@ import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { accounts, db, marketAccounts, marketActions, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
 
 export const dynamic = 'force-dynamic'
@@ -391,17 +392,14 @@ export default async function AdminUsersPage({
               </thead>
               <tbody>
                 {sortedRows.map(({ user, email, country, region, xLabel, money, trades, isProtectedUser }) => {
-                  const createdAt = user.createdAt
-                    ? user.createdAt.toLocaleString('en-US', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    })
-                    : 'Unknown'
-
                   return (
                     <tr key={user.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
                       <td className="px-1.5 py-2 text-[#8a8075] whitespace-nowrap text-xs">
-                        <span className="block truncate" title={createdAt}>{createdAt}</span>
+                        <LocalDateTime
+                          value={user.createdAt ? user.createdAt.toISOString() : null}
+                          emptyLabel="Unknown"
+                          className="block truncate"
+                        />
                       </td>
                       <td className="px-1.5 py-2 text-[#1a1a1a]">
                         <span className="block truncate" title={user.name || '—'}>{user.name || '—'}</span>

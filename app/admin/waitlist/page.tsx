@@ -6,6 +6,7 @@ import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { db, waitlistEntries } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,16 +92,11 @@ export default async function AdminWaitlistPage() {
               </thead>
               <tbody>
                 {entries.map((entry) => {
-                  const joinedAt = entry.createdAt
-                    ? entry.createdAt.toLocaleString('en-US', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })
-                    : 'Unknown'
-
                   return (
                     <tr key={entry.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
-                      <td className="px-3 py-2 text-[#8a8075]">{joinedAt}</td>
+                      <td className="px-3 py-2 text-[#8a8075] whitespace-nowrap">
+                        <LocalDateTime value={entry.createdAt ? entry.createdAt.toISOString() : null} emptyLabel="Unknown" />
+                      </td>
                       <td className="px-3 py-2 text-[#1a1a1a]">{entry.name || '—'}</td>
                       <td className="px-3 py-2">
                         <a

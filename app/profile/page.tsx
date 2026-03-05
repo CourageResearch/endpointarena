@@ -8,6 +8,7 @@ import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/com
 import { LogoutButton } from '@/components/LogoutButton'
 import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 import { authOptions } from '@/lib/auth'
 import { db, fdaCalendarEvents, marketActions, marketPositions, predictionMarkets, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
@@ -44,17 +45,6 @@ type ProfileTradeRow = {
   shares: number
   priceAfter: number
   status: string
-}
-
-function formatDate(value: Date | null | undefined): string {
-  if (!value) return '—'
-  return value.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
 }
 
 function formatShortDate(value: Date | null | undefined): string {
@@ -360,13 +350,25 @@ export default async function ProfilePage() {
                   Tweet verification: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.verified ? 'Verified' : 'Not verified'}</span>
                 </p>
                 <p>
-                  Last daily refill: <span className="font-medium text-[#1a1a1a]">{formatDate(pointsState.lastPointsRefillAt)}</span>
+                  Last daily refill:{' '}
+                  <LocalDateTime
+                    value={pointsState.lastPointsRefillAt ? pointsState.lastPointsRefillAt.toISOString() : null}
+                    className="font-medium text-[#1a1a1a]"
+                  />
                 </p>
                 <p>
-                  Verified at: <span className="font-medium text-[#1a1a1a]">{formatDate(verificationStatus?.verifiedAt ? new Date(verificationStatus.verifiedAt) : null)}</span>
+                  Verified at:{' '}
+                  <LocalDateTime
+                    value={verificationStatus?.verifiedAt ?? null}
+                    className="font-medium text-[#1a1a1a]"
+                  />
                 </p>
                 <p className="sm:col-span-2">
-                  Must keep tweet live until: <span className="font-medium text-[#1a1a1a]">{formatDate(verificationStatus?.mustStayUntil ? new Date(verificationStatus.mustStayUntil) : null)}</span>
+                  Must keep tweet live until:{' '}
+                  <LocalDateTime
+                    value={verificationStatus?.mustStayUntil ?? null}
+                    className="font-medium text-[#1a1a1a]"
+                  />
                 </p>
               </div>
             </div>
@@ -443,7 +445,9 @@ export default async function ProfilePage() {
 
                         return (
                           <tr key={trade.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
-                            <td className="px-3 py-2 whitespace-nowrap text-[#8a8075]">{formatDate(trade.timestamp)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-[#8a8075]">
+                              <LocalDateTime value={trade.timestamp.toISOString()} />
+                            </td>
                             <td className="px-3 py-2 text-[#1a1a1a]">
                               <p className="font-medium">{trade.drugName}</p>
                               <p className="mt-0.5 text-xs text-[#8a8075]">

@@ -6,6 +6,7 @@ import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { db, contactMessages } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,16 +116,11 @@ export default async function AdminContactPage() {
               </thead>
               <tbody>
                 {messages.map((message) => {
-                  const receivedAt = message.createdAt
-                    ? message.createdAt.toLocaleString('en-US', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })
-                    : 'Unknown'
-
                   return (
                     <tr key={message.id} className="border-b border-[#e8ddd0] align-top hover:bg-[#f3ebe0]/30">
-                      <td className="px-3 py-2 text-[#8a8075] whitespace-nowrap">{receivedAt}</td>
+                      <td className="px-3 py-2 text-[#8a8075] whitespace-nowrap">
+                        <LocalDateTime value={message.createdAt ? message.createdAt.toISOString() : null} emptyLabel="Unknown" />
+                      </td>
                       <td className="px-3 py-2 text-[#1a1a1a] whitespace-nowrap">{message.name}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <a

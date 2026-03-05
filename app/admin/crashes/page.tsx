@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { authOptions } from '@/lib/auth'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 import { getRecentCrashEvents } from '@/lib/crash-events'
 
 export const dynamic = 'force-dynamic'
@@ -25,14 +26,6 @@ function parseDays(value: string): number {
 
 function normalizeSearch(value: string): string {
   return value.trim().slice(0, 120)
-}
-
-function formatDate(value: Date | null | undefined): string {
-  if (!value) return '—'
-  return value.toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
 }
 
 function truncate(value: string | null | undefined, maxLength: number): string {
@@ -270,7 +263,9 @@ export default async function AdminCrashesPage({
               <tbody>
                 {groups.map((group) => (
                   <tr key={group.fingerprint} className="border-b border-[#e8ddd0] align-top hover:bg-[#f3ebe0]/25">
-                    <td className="px-2 py-2 text-[#8a8075] whitespace-nowrap">{formatDate(group.lastSeenAt)}</td>
+                    <td className="px-2 py-2 text-[#8a8075] whitespace-nowrap">
+                      <LocalDateTime value={group.lastSeenAt ? group.lastSeenAt.toISOString() : null} />
+                    </td>
                     <td className="px-2 py-2 text-right tabular-nums text-[#1a1a1a]">{group.count.toLocaleString()}</td>
                     <td className="px-2 py-2 text-[#1a1a1a] font-mono text-xs">{truncate(group.digest, 14)}</td>
                     <td className="px-2 py-2 text-[#8a8075] font-mono text-xs">{truncate(group.path, 36)}</td>
@@ -307,7 +302,10 @@ export default async function AdminCrashesPage({
                 <summary className="cursor-pointer list-none">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium text-[#1a1a1a]">{truncate(row.message, 120)}</p>
-                    <p className="text-xs text-[#8a8075]">{formatDate(row.createdAt)}</p>
+                    <LocalDateTime
+                      value={row.createdAt ? row.createdAt.toISOString() : null}
+                      className="text-xs text-[#8a8075]"
+                    />
                   </div>
                   <p className="mt-1 text-xs text-[#8a8075] font-mono">
                     {truncate(row.path, 80)} • digest {truncate(row.digest, 16)} • req {truncate(row.requestId, 20)}
