@@ -9,6 +9,20 @@ const sql = postgres(process.env.DATABASE_URL, {
 })
 
 const TABLE_STATEMENTS = [
+  `DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'users'
+    ) THEN
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_location TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_state TEXT;
+    END IF;
+  END
+  $$`,
+
   `CREATE TABLE IF NOT EXISTS prediction_markets (
     id text PRIMARY KEY,
     fda_event_id text NOT NULL REFERENCES fda_calendar_events(id) ON DELETE CASCADE,
