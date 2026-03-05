@@ -14,6 +14,19 @@ function toNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function getObjectString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = toNonEmptyString(record[key])
+    if (value) return value
+  }
+  return null
+}
+
 export function normalizeCountryName(value: unknown): string | null {
   const raw = toNonEmptyString(value)
   if (!raw) return null
@@ -35,6 +48,64 @@ export function normalizeStateName(value: unknown): string | null {
   const raw = toNonEmptyString(value)
   if (!raw) return null
   return raw
+}
+
+function parseStructuredGeoHeader(rawHeader: string | null): InferredGeo {
+  const raw = toNonEmptyString(rawHeader)
+  if (!raw) return { country: null, state: null }
+
+  try {
+    const payload = toRecord(JSON.parse(raw))
+    if (!payload) return { country: null, state: null }
+
+    const countryObject = toRecord(payload.country)
+    const country = normalizeCountryName(
+      getObjectString(payload, ['country', 'countryName', 'country_code', 'countryCode']) ||
+      (countryObject
+        ? getObjectString(countryObject, ['name', 'code', 'iso_code', 'isoCode'])
+        : null)
+    )
+
+    const regionObject = toRecord(payload.region)
+    const subdivisionObject = toRecord(payload.subdivision)
+    const stateObject = toRecord(payload.state)
+    const state = normalizeStateName(
+      getObjectString(payload, [
+        'region',
+        'regionName',
+        'region_name',
+        'subdivision',
+        'subdivisionName',
+        'subdivision_name',
+        'state',
+        'stateName',
+        'state_name',
+      ]) ||
+      (regionObject ? getObjectString(regionObject, ['name', 'code']) : null) ||
+      (subdivisionObject ? getObjectString(subdivisionObject, ['name', 'code']) : null) ||
+      (stateObject ? getObjectString(stateObject, ['name', 'code']) : null)
+    )
+
+    return { country, state }
+  } catch {
+    return { country: null, state: null }
+  }
+}
+
+function getStructuredGeoFromHeaders(headers: HeaderCollection): InferredGeo {
+  const candidates = [
+    getHeader(headers, 'x-nf-geo'),
+    getHeader(headers, 'x-geo'),
+  ]
+
+  for (const candidate of candidates) {
+    const parsed = parseStructuredGeoHeader(candidate)
+    if (parsed.country || parsed.state) {
+      return parsed
+    }
+  }
+
+  return { country: null, state: null }
 }
 
 function getHeader(headers: HeaderCollection, name: string): string | null {
@@ -200,15 +271,26 @@ export async function inferGeoFromHeaders(
   headers: HeaderCollection,
   options?: InferGeoOptions,
 ): Promise<InferredGeo> {
+  const structuredGeo = getStructuredGeoFromHeaders(headers)
+
   const countryFromHeaders = normalizeCountryName(
     getHeader(headers, 'x-vercel-ip-country') ||
     getHeader(headers, 'x-geo-country') ||
-    getHeader(headers, 'cf-ipcountry')
+    getHeader(headers, 'x-country-code') ||
+    getHeader(headers, 'fly-client-country') ||
+    getHeader(headers, 'x-appengine-country') ||
+    getHeader(headers, 'cf-ipcountry') ||
+    structuredGeo.country
   )
   const stateFromHeaders = normalizeStateName(
     getHeader(headers, 'x-vercel-ip-country-region') ||
+    getHeader(headers, 'x-vercel-ip-region') ||
     getHeader(headers, 'x-geo-region') ||
-    getHeader(headers, 'cf-region')
+    getHeader(headers, 'x-country-region') ||
+    getHeader(headers, 'x-appengine-region') ||
+    getHeader(headers, 'cf-region') ||
+    getHeader(headers, 'cf-region-code') ||
+    structuredGeo.state
   )
 
   const fallbackCountry = normalizeCountryName(options?.fallbackCountry)
@@ -276,7 +358,11 @@ export function formatStoredCountry(rawLocation: string | null | undefined): str
   return normalizeCountryName(raw) ?? 'Unknown'
 }
 
-export function formatStoredState(rawState: string | null | undefined): string {
+export function formatStoredRegion(rawState: string | null | undefined): string {
   const normalized = normalizeStateName(rawState)
   return normalized ?? 'Unknown'
+}
+
+export function formatStoredState(rawState: string | null | undefined): string {
+  return formatStoredRegion(rawState)
 }

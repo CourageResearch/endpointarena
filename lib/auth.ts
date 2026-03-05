@@ -151,6 +151,7 @@ function getProviders() {
         intent: { label: 'Intent', type: 'text' },
         country: { label: 'Country', type: 'text' },
         state: { label: 'State', type: 'text' },
+        region: { label: 'Region', type: 'text' },
       },
       async authorize(credentials, req) {
         try {
@@ -158,7 +159,10 @@ function getProviders() {
           const password = typeof credentials?.password === 'string' ? credentials.password : ''
           const intent = credentials?.intent === 'signup' ? 'signup' : 'signin'
           const signupGeo = intent === 'signup'
-            ? await inferSignupGeo(req, { country: credentials?.country, state: credentials?.state })
+            ? await inferSignupGeo(req, {
+              country: credentials?.country,
+              state: credentials?.state ?? credentials?.region,
+            })
             : {}
           if (!email || password.length < MIN_PASSWORD_LENGTH) return null
 
@@ -299,7 +303,7 @@ function getProviders() {
             if (!user.signupLocation || !user.signupState) {
               const signinGeo = await inferSignupGeo(req, {
                 country: credentials?.country,
-                state: credentials?.state,
+                state: credentials?.state ?? credentials?.region,
               })
               const backfillValues: SignupGeoValues = {}
               if (!user.signupLocation && signinGeo.signupLocation) {

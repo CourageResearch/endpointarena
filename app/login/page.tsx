@@ -89,6 +89,7 @@ export default function LoginPage() {
         intent: 'signin',
         country: detectedGeo.country,
         state: detectedGeo.state,
+        region: detectedGeo.state,
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })

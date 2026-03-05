@@ -6,7 +6,7 @@ import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { accounts, db, marketAccounts, marketActions, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { formatStoredCountry, formatStoredState } from '@/lib/geo-country'
+import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
 
 export const dynamic = 'force-dynamic'
 
@@ -206,7 +206,7 @@ export default async function AdminUsersPage() {
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Country</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">State</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Region</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">X Account</th>
                   <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Money</th>
                   <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Trades</th>
@@ -224,7 +224,7 @@ export default async function AdminUsersPage() {
 
                   const email = user.email ?? '—'
                   const country = formatStoredCountry(user.signupLocation)
-                  const state = formatStoredState(user.signupState)
+                  const region = formatStoredRegion(user.signupState)
                   const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : 'Not connected')
                   const actorId = getHumanActorId(user.id)
                   const money = cashBalanceByActorId.get(actorId) ?? user.pointsBalance ?? 0
@@ -238,7 +238,7 @@ export default async function AdminUsersPage() {
                       <td className="px-3 py-2 text-[#1a1a1a]">{user.name || '—'}</td>
                       <td className="px-3 py-2 text-[#1a1a1a]">{email}</td>
                       <td className="px-3 py-2 text-[#8a8075]">{country}</td>
-                      <td className="px-3 py-2 text-[#8a8075]">{state}</td>
+                      <td className="px-3 py-2 text-[#8a8075]">{region}</td>
                       <td className="px-3 py-2 text-[#8a8075]">{xLabel}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatMoney(money)}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-[#8a8075]">{trades.toLocaleString()}</td>

@@ -78,6 +78,7 @@ export default function SignupPage() {
         intent: 'signup',
         country: detectedGeo.country,
         state: detectedGeo.state,
+        region: detectedGeo.state,
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })
