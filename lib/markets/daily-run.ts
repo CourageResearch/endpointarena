@@ -269,21 +269,24 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
 
   try {
     for (const [marketIndex, market] of orderedOpenMarkets.entries()) {
-      const event = eventById.get(market.fdaEventId)
+      const marketEvent = eventById.get(market.fdaEventId)
 
-      if (!event) {
-        for (const modelId of modelOrder) {
-          pushResult({
-            marketId: market.id,
-            fdaEventId: market.fdaEventId,
-            modelId,
-            action: 'HOLD',
-            amountUsd: 0,
-            status: 'error',
-            detail: 'FDA event no longer exists for this market',
-          })
+      if (!marketEvent) {
+        const modelId = modelOrder[0]
+        if (!modelId) {
+          throw new Error(`Halting daily run: FDA event is missing for market ${market.id} and no models are configured`)
         }
-        continue
+        const message = 'FDA event no longer exists for this market'
+        pushResult({
+          marketId: market.id,
+          fdaEventId: market.fdaEventId,
+          modelId,
+          action: 'HOLD',
+          amountUsd: 0,
+          status: 'error',
+          detail: message,
+        })
+        throw new Error(`Halting daily run: ${message} (market ${market.id})`)
       }
 
       for (const modelId of modelOrder) {
@@ -337,6 +340,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             code: 'MISSING_MARKET_STATE',
           })
 
+          const modelName = MODEL_INFO[modelId].fullName
           pushResult({
             marketId: market.id,
             fdaEventId: market.fdaEventId,
@@ -346,7 +350,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             status: 'error',
             detail: message,
           })
-          continue
+          throw new Error(`Halting daily run after ${modelName} failed on ${marketEvent.drugName}: ${message}`)
         }
 
         const generator = MARKET_DECISION_GENERATORS[modelId]
@@ -363,6 +367,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             code: 'API_KEY_MISSING',
           })
 
+          const modelName = MODEL_INFO[modelId].fullName
           pushResult({
             marketId: market.id,
             fdaEventId: market.fdaEventId,
@@ -372,7 +377,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             status: 'error',
             detail: message,
           })
-          continue
+          throw new Error(`Halting daily run after ${modelName} failed on ${marketEvent.drugName}: ${message}`)
         }
 
         try {
@@ -381,7 +386,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           hooks?.onActivity?.({
             completedActions: processedActions,
             totalActions,
-            message: `Running ${modelName} on ${event.drugName} (${marketOrdinal}/${orderedOpenMarkets.length} markets)`,
+            message: `Running ${modelName} on ${marketEvent.drugName} (${marketOrdinal}/${orderedOpenMarkets.length} markets)`,
           })
 
           const latestMarket = await db.query.predictionMarkets.findFirst({
@@ -425,13 +430,13 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             generator.generator({
               runDateIso,
               modelId,
-              drugName: event.drugName,
-              companyName: event.companyName,
-              symbols: event.symbols,
-              applicationType: event.applicationType,
-              pdufaDate: event.pdufaDate.toISOString(),
-              eventDescription: event.eventDescription,
-              therapeuticArea: event.therapeuticArea,
+              drugName: marketEvent.drugName,
+              companyName: marketEvent.companyName,
+              symbols: marketEvent.symbols,
+              applicationType: marketEvent.applicationType,
+              pdufaDate: marketEvent.pdufaDate.toISOString(),
+              eventDescription: marketEvent.eventDescription,
+              therapeuticArea: marketEvent.therapeuticArea,
               marketPriceYes: latestMarket.priceYes,
               marketPriceNo: 1 - latestMarket.priceYes,
               accountCash: account.cashBalance,
@@ -560,6 +565,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             code: errorCode,
           })
 
+          const modelName = MODEL_INFO[modelId].fullName
           pushResult({
             marketId: market.id,
             fdaEventId: market.fdaEventId,
@@ -569,12 +575,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             status: 'error',
             detail: message,
           })
-
-          // Parse failures are recorded on the action row and surfaced in run
-          // results, but should not halt the entire cycle for other models/markets.
-          if (errorCode === 'PARSE_ERROR') {
-            continue
-          }
+          throw new Error(`Halting daily run after ${modelName} failed on ${marketEvent.drugName}: ${message}`)
         }
       }
     }
@@ -610,10 +611,14 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
     return payload
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Daily run failed'
+    const summary = summarizeResults(results)
     await db.update(marketRuns)
       .set({
         status: 'failed',
         processedActions,
+        okCount: summary.ok,
+        errorCount: summary.error,
+        skippedCount: summary.skipped,
         failureReason: message,
         completedAt: new Date(),
         updatedAt: new Date(),
