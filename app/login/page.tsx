@@ -79,8 +79,10 @@ export default function LoginPage() {
       } else {
         if (result?.error === 'CredentialsSignin') {
           setError('Invalid email or password.')
+        } else if (result?.error === 'AUTH_UNAVAILABLE') {
+          setError('Sign in is temporarily unavailable. Please try again shortly.')
         } else {
-          setError(result?.error || 'Failed to sign in')
+          setError('Failed to sign in. Please try again.')
         }
       }
     } catch {

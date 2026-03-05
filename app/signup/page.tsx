@@ -77,8 +77,10 @@ export default function SignupPage() {
         router.refresh()
       } else if (result?.error === 'CredentialsSignin') {
         setError('An account with that email already exists. Please sign in instead.')
+      } else if (result?.error === 'AUTH_UNAVAILABLE') {
+        setError('Account creation is temporarily unavailable. Please try again shortly.')
       } else {
-        setError(result?.error || 'Failed to create account')
+        setError('Failed to create account. Please try again.')
       }
     } catch {
       setError('Failed to create account')

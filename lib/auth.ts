@@ -109,47 +109,52 @@ function getProviders() {
         timezone: { label: 'Timezone', type: 'text' },
       },
       async authorize(credentials, req) {
-        const email = normalizeEmail(credentials?.email)
-        const password = typeof credentials?.password === 'string' ? credentials.password : ''
-        const intent = credentials?.intent === 'signup' ? 'signup' : 'signin'
-        const signupLocation = inferSignupLocation(req, credentials?.timezone)
-        if (!email || password.length < MIN_PASSWORD_LENGTH) return null
+        try {
+          const email = normalizeEmail(credentials?.email)
+          const password = typeof credentials?.password === 'string' ? credentials.password : ''
+          const intent = credentials?.intent === 'signup' ? 'signup' : 'signin'
+          const signupLocation = inferSignupLocation(req, credentials?.timezone)
+          if (!email || password.length < MIN_PASSWORD_LENGTH) return null
 
-        let user = await db.query.users.findFirst({
-          where: eq(users.email, email),
-        })
+          let user = await db.query.users.findFirst({
+            where: eq(users.email, email),
+          })
 
-        if (intent === 'signup') {
-          if (!user) {
-            const [newUser] = await db.insert(users).values({
-              email,
-              passwordHash: hashPassword(password),
-              signupLocation,
-              pointsBalance: STARTER_POINTS,
-            }).returning()
-            user = newUser
-          } else if (!user.passwordHash) {
-            const updateValues: Partial<typeof users.$inferInsert> = {
-              passwordHash: hashPassword(password),
+          if (intent === 'signup') {
+            if (!user) {
+              const [newUser] = await db.insert(users).values({
+                email,
+                passwordHash: hashPassword(password),
+                signupLocation,
+                pointsBalance: STARTER_POINTS,
+              }).returning()
+              user = newUser
+            } else if (!user.passwordHash) {
+              const updateValues: Partial<typeof users.$inferInsert> = {
+                passwordHash: hashPassword(password),
+              }
+              if (!user.signupLocation && signupLocation) {
+                updateValues.signupLocation = signupLocation
+              }
+
+              const [updatedUser] = await db.update(users)
+                .set(updateValues)
+                .where(eq(users.id, user.id))
+                .returning()
+              user = updatedUser ?? user
+            } else {
+              return null
             }
-            if (!user.signupLocation && signupLocation) {
-              updateValues.signupLocation = signupLocation
-            }
-
-            const [updatedUser] = await db.update(users)
-              .set(updateValues)
-              .where(eq(users.id, user.id))
-              .returning()
-            user = updatedUser ?? user
           } else {
-            return null
+            if (!user?.passwordHash) return null
+            if (!verifyPassword(password, user.passwordHash)) return null
           }
-        } else {
-          if (!user?.passwordHash) return null
-          if (!verifyPassword(password, user.passwordHash)) return null
-        }
 
-        return { id: user.id, email: user.email, name: user.name }
+          return { id: user.id, email: user.email, name: user.name }
+        } catch (error) {
+          console.error('Credentials authorize failed', error)
+          throw new Error('AUTH_UNAVAILABLE')
+        }
       },
     })
   )
