@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
+import { detectCountryFromClient } from '@/lib/client-country'
 
 function normalizeCallbackUrl(raw: string | null): string {
   if (!raw) return '/markets'
@@ -30,8 +31,10 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
+  const [country, setCountry] = useState('')
 
   useEffect(() => {
+    let cancelled = false
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
     const oauthError = params.get('error')
@@ -55,6 +58,16 @@ export default function LoginPage() {
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
       window.history.replaceState(null, '', nextUrl)
     }
+
+    detectCountryFromClient().then((value) => {
+      if (!cancelled && value) {
+        setCountry(value)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,10 +78,16 @@ export default function LoginPage() {
     setError('')
 
     try {
+      const detectedCountry = country || await detectCountryFromClient()
+      if (!country && detectedCountry) {
+        setCountry(detectedCountry)
+      }
+
       const result = await signIn('credentials', {
         email,
         password,
         intent: 'signin',
+        country: detectedCountry,
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })

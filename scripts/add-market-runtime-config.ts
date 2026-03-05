@@ -47,6 +47,7 @@ async function migrate() {
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_max_trade_usd REAL NOT NULL DEFAULT 1000`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_buy_cash_fraction REAL NOT NULL DEFAULT 0.02`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS max_position_per_side_shares REAL NOT NULL DEFAULT 10000`
+  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`
 
   await sql`
     INSERT INTO market_runtime_configs (

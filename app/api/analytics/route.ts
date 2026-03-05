@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
+import { extractClientIp, isPrivateIp } from '@/lib/geo-country'
 
 const BOT_PATTERN = /bot|crawler|spider|headless|phantom|selenium/i
-const PRIVATE_IP_PATTERN = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1|localhost|0\.0\.0\.0)/
 
 async function computeSessionHash(userAgent: string): Promise<string> {
   const date = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
@@ -13,17 +13,8 @@ async function computeSessionHash(userAgent: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }
 
-function getClientIp(request: Request): string | null {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) {
-    // x-forwarded-for can be comma-separated; first is the real client
-    return forwarded.split(',')[0].trim()
-  }
-  return null
-}
-
 async function geolocateIp(ip: string): Promise<{ country: string; city: string } | null> {
-  if (!ip || PRIVATE_IP_PATTERN.test(ip)) {
+  if (!ip || isPrivateIp(ip)) {
     return null
   }
 
@@ -69,7 +60,7 @@ export async function POST(request: Request) {
     const sessionHash = await computeSessionHash(userAgent)
 
     // Extract IP and geolocate once per batch
-    const clientIp = getClientIp(request)
+    const clientIp = extractClientIp(request.headers)
     const geo = clientIp ? await geolocateIp(clientIp) : null
 
     // Cap at 50 events, filter valid types

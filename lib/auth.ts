@@ -5,10 +5,11 @@ import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import TwitterProvider from 'next-auth/providers/twitter'
 import { accounts, db, sessions, users, verificationTokens } from '@/lib/db'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
+import { inferCountryFromHeaders, type HeaderCollection } from '@/lib/geo-country'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
@@ -46,53 +47,11 @@ function extractTwitterUsername(profile: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-type HeaderCollection = Headers | Record<string, string | string[] | undefined> | null | undefined
-
-function toNonEmptyString(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-function getHeader(headers: HeaderCollection, name: string): string | null {
-  if (!headers) return null
-
-  if (headers instanceof Headers) {
-    return toNonEmptyString(headers.get(name) ?? headers.get(name.toLowerCase()))
-  }
-
-  const direct = headers[name] ?? headers[name.toLowerCase()]
-  const value = Array.isArray(direct) ? direct[0] : direct
-  return toNonEmptyString(value)
-}
-
-function inferSignupLocation(
+async function inferSignupCountry(
   req: { headers?: HeaderCollection } | undefined,
-  fallbackTimezone: unknown,
-): string | null {
-  const headers = req?.headers
-
-  const city =
-    getHeader(headers, 'x-vercel-ip-city') ||
-    getHeader(headers, 'x-geo-city') ||
-    getHeader(headers, 'cf-ipcity')
-  const region =
-    getHeader(headers, 'x-vercel-ip-country-region') ||
-    getHeader(headers, 'x-geo-region')
-  const country =
-    getHeader(headers, 'x-vercel-ip-country') ||
-    getHeader(headers, 'x-geo-country') ||
-    getHeader(headers, 'cf-ipcountry')
-  const timezone =
-    getHeader(headers, 'x-vercel-ip-timezone') ||
-    getHeader(headers, 'x-geo-timezone') ||
-    toNonEmptyString(fallbackTimezone)
-
-  const geoParts = [city, region, country].filter((part): part is string => Boolean(part))
-  if (geoParts.length > 0) return geoParts.join(', ')
-  if (country && timezone) return `${country} (${timezone})`
-  if (country) return country
-  return timezone ? `Timezone: ${timezone}` : null
+  fallbackCountry: unknown,
+): Promise<string | null> {
+  return inferCountryFromHeaders(req?.headers, { fallbackCountry })
 }
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
@@ -108,6 +67,7 @@ async function findUserForCredentials(email: string): Promise<{
   email: string | null
   name: string | null
   passwordHash: string | null
+  signupLocation: string | null
 } | null> {
   const rows = await db
     .select({
@@ -115,6 +75,7 @@ async function findUserForCredentials(email: string): Promise<{
       email: users.email,
       name: users.name,
       passwordHash: users.passwordHash,
+      signupLocation: users.signupLocation,
     })
     .from(users)
     .where(eq(users.email, email))
@@ -134,14 +95,14 @@ function getProviders() {
         email: { label: 'Email', type: 'email', placeholder: 'demo@example.com' },
         password: { label: 'Password', type: 'password' },
         intent: { label: 'Intent', type: 'text' },
-        timezone: { label: 'Timezone', type: 'text' },
+        country: { label: 'Country', type: 'text' },
       },
       async authorize(credentials, req) {
         try {
           const email = normalizeEmail(credentials?.email)
           const password = typeof credentials?.password === 'string' ? credentials.password : ''
           const intent = credentials?.intent === 'signup' ? 'signup' : 'signin'
-          const signupLocation = inferSignupLocation(req, credentials?.timezone)
+          const signupLocation = intent === 'signup' ? await inferSignupCountry(req, credentials?.country) : null
           if (!email || password.length < MIN_PASSWORD_LENGTH) return null
 
           let user = await findUserForCredentials(email)
@@ -154,6 +115,7 @@ function getProviders() {
                 email: string | null
                 name: string | null
                 passwordHash: string | null
+                signupLocation: string | null
               } | null = null
 
               if (signupLocation) {
@@ -168,6 +130,7 @@ function getProviders() {
                     email: users.email,
                     name: users.name,
                     passwordHash: users.passwordHash,
+                    signupLocation: users.signupLocation,
                   })
                   newUser = withLocation ?? null
                 } catch (error) {
@@ -187,6 +150,7 @@ function getProviders() {
                   email: users.email,
                   name: users.name,
                   passwordHash: users.passwordHash,
+                  signupLocation: users.signupLocation,
                 })
                 newUser = withoutLocation ?? null
               }
@@ -196,7 +160,7 @@ function getProviders() {
               const updateValues: Partial<typeof users.$inferInsert> = {
                 passwordHash: hashPassword(password),
               }
-              if (signupLocation) {
+              if (!user.signupLocation && signupLocation) {
                 updateValues.signupLocation = signupLocation
               }
 
@@ -205,6 +169,7 @@ function getProviders() {
                 email: string | null
                 name: string | null
                 passwordHash: string | null
+                signupLocation: string | null
               } | null = null
 
               try {
@@ -216,6 +181,7 @@ function getProviders() {
                     email: users.email,
                     name: users.name,
                     passwordHash: users.passwordHash,
+                    signupLocation: users.signupLocation,
                   })
                 updatedUser = updatedWithLocation ?? null
               } catch (error) {
@@ -230,6 +196,7 @@ function getProviders() {
                     email: users.email,
                     name: users.name,
                     passwordHash: users.passwordHash,
+                    signupLocation: users.signupLocation,
                   })
                 updatedUser = updatedWithoutLocation ?? null
               }
@@ -241,6 +208,24 @@ function getProviders() {
           } else {
             if (!user?.passwordHash) return null
             if (!verifyPassword(password, user.passwordHash)) return null
+
+            if (!user.signupLocation) {
+              const signinCountry = await inferSignupCountry(req, credentials?.country)
+              if (signinCountry) {
+                try {
+                  await db.update(users)
+                    .set({ signupLocation: signinCountry })
+                    .where(and(
+                      eq(users.id, user.id),
+                      isNull(users.signupLocation),
+                    ))
+                } catch (error) {
+                  if (!isMissingColumnError(error, 'signup_location')) {
+                    throw error
+                  }
+                }
+              }
+            }
           }
 
           return { id: user.id, email: user.email, name: user.name }

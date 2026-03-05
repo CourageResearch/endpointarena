@@ -6,6 +6,7 @@ import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { accounts, db, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { formatStoredCountry } from '@/lib/geo-country'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,7 +153,7 @@ export default async function AdminUsersPage() {
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Created</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Location</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Country</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">X Account</th>
                   <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Actions</th>
                 </tr>
@@ -167,7 +168,7 @@ export default async function AdminUsersPage() {
                     : 'Unknown'
 
                   const email = user.email ?? '—'
-                  const location = user.signupLocation?.trim() || 'Unknown'
+                  const country = formatStoredCountry(user.signupLocation)
                   const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : 'Not connected')
                   const emailLower = user.email?.trim().toLowerCase() ?? null
                   const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
@@ -177,7 +178,7 @@ export default async function AdminUsersPage() {
                       <td className="px-3 py-2 text-[#8a8075]">{createdAt}</td>
                       <td className="px-3 py-2 text-[#1a1a1a]">{user.name || '—'}</td>
                       <td className="px-3 py-2 text-[#1a1a1a]">{email}</td>
-                      <td className="px-3 py-2 text-[#8a8075]">{location}</td>
+                      <td className="px-3 py-2 text-[#8a8075]">{country}</td>
                       <td className="px-3 py-2 text-[#8a8075]">{xLabel}</td>
                       <td className="px-3 py-2 text-right">
                         {isProtectedUser ? (

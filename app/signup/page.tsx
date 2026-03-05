@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
 import { STARTER_POINTS } from '@/lib/constants'
+import { detectCountryFromClient } from '@/lib/client-country'
 
 function normalizeCallbackUrl(raw: string | null): string {
   if (!raw) return '/markets'
@@ -32,12 +33,22 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
-  const [timezone, setTimezone] = useState('')
+  const [country, setCountry] = useState('')
 
   useEffect(() => {
+    let cancelled = false
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '')
+
+    detectCountryFromClient().then((value) => {
+      if (!cancelled && value) {
+        setCountry(value)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,11 +67,16 @@ export default function SignupPage() {
     setError('')
 
     try {
+      const detectedCountry = country || await detectCountryFromClient()
+      if (!country && detectedCountry) {
+        setCountry(detectedCountry)
+      }
+
       const result = await signIn('credentials', {
         email,
         password,
         intent: 'signup',
-        timezone,
+        country: detectedCountry,
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })

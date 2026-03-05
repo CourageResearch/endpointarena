@@ -211,6 +211,7 @@ const TABLE_STATEMENTS = [
   `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_max_trade_usd real NOT NULL DEFAULT 1000`,
   `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_buy_cash_fraction real NOT NULL DEFAULT 0.02`,
   `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS max_position_per_side_shares real NOT NULL DEFAULT 10000`,
+  `ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`,
   `INSERT INTO market_runtime_configs (id) VALUES ('default') ON CONFLICT (id) DO NOTHING`,
 ]
 
