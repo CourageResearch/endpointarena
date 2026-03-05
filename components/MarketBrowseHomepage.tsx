@@ -166,20 +166,22 @@ function MarketCard({
       style={{ background: PANEL_GRADIENT }}
     >
       <div className="flex h-full flex-col rounded-sm bg-white/95 p-4 transition-colors duration-150 group-hover:bg-[#fffdfa] group-focus-visible:bg-[#fffdfa] sm:p-5">
-        <h3 className="min-w-0 line-clamp-2 text-[18px] font-semibold leading-tight text-[#1a1a1a] transition-colors duration-150 group-hover:text-[#111111] group-focus-visible:text-[#111111]">
-          {drugName}
-        </h3>
+        <div>
+          <h3 className="min-w-0 line-clamp-2 text-[18px] font-semibold leading-tight text-[#1a1a1a] transition-colors duration-150 group-hover:text-[#111111] group-focus-visible:text-[#111111]">
+            {drugName}
+          </h3>
 
-        <div className="mt-1 text-[11px]">
-          <span className="font-medium text-[#3f5f86]">{daysBadge.label}</span>
+          <div className="mt-2 text-[11px]">
+            <span className="font-medium text-[#3f5f86]">{daysBadge.label}</span>
+          </div>
+
+          <p className="mt-3 min-h-[4rem] line-clamp-4 text-xs leading-relaxed text-[#8a8075] transition-colors duration-150 group-hover:text-[#7b7167] group-focus-visible:text-[#7b7167] sm:min-h-[4.5rem]">
+            {entry.description}
+          </p>
         </div>
 
-        <p className="mt-2 min-h-[6.5rem] line-clamp-4 text-xs leading-relaxed text-[#8a8075] transition-colors duration-150 group-hover:text-[#7b7167] group-focus-visible:text-[#7b7167] sm:min-h-[7rem]">
-          {entry.description}
-        </p>
-
-        <div className="mt-auto">
-          <div className="mb-1 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Market Odds</div>
+        <div className="mt-3">
+          <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Market Odds</div>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-3 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
               <div className="text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">Yes</div>
@@ -193,42 +195,44 @@ function MarketCard({
         </div>
 
         <div className="mt-3">
-          <div className="mb-1 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Model Calls</div>
+          <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Model Calls</div>
           <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[#2f7b40]">Approve</div>
-            <ul className="mt-2 space-y-1.5">
-              {approveModelIds.length > 0 ? (
-                approveModelIds.map((modelId) => (
-                  <li key={`${entry.market.marketId}-approve-${modelId}`} className="text-[11px] leading-[1.35] text-[#6f665b]">
-                    {MODEL_INFO[modelId].fullName}
-                  </li>
-                ))
-              ) : (
-                <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">-</li>
-              )}
-            </ul>
-          </div>
-          <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[#9b3028]">Reject</div>
-            <ul className="mt-2 space-y-1.5">
-              {rejectModelIds.length > 0 ? (
-                rejectModelIds.map((modelId) => (
-                  <li key={`${entry.market.marketId}-reject-${modelId}`} className="text-[11px] leading-[1.35] text-[#6f665b]">
-                    {MODEL_INFO[modelId].fullName}
-                  </li>
-                ))
-              ) : (
-                <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">{pendingModelCount > 0 ? `${pendingModelCount} pending` : '-'}</li>
-              )}
-            </ul>
-          </div>
+            <div className="flex h-[12.75rem] flex-col overflow-hidden rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[#2f7b40]">Approve</div>
+              <ul className="mt-2 space-y-1.5 overflow-y-auto pr-1 hide-scrollbar">
+                {approveModelIds.length > 0 ? (
+                  approveModelIds.map((modelId) => (
+                    <li key={`${entry.market.marketId}-approve-${modelId}`} className="text-[11px] leading-[1.35] text-[#6f665b]">
+                      {MODEL_INFO[modelId].fullName}
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">-</li>
+                )}
+              </ul>
+            </div>
+            <div className="flex h-[12.75rem] flex-col overflow-hidden rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[#9b3028]">Reject</div>
+              <ul className="mt-2 space-y-1.5 overflow-y-auto pr-1 hide-scrollbar">
+                {rejectModelIds.length > 0 ? (
+                  rejectModelIds.map((modelId) => (
+                    <li key={`${entry.market.marketId}-reject-${modelId}`} className="text-[11px] leading-[1.35] text-[#6f665b]">
+                      {MODEL_INFO[modelId].fullName}
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">{pendingModelCount > 0 ? `${pendingModelCount} pending` : '-'}</li>
+                )}
+              </ul>
+            </div>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between border-t border-[#e8ddd0] pt-3 text-xs text-[#8a8075] transition-colors duration-150 group-hover:border-[#dfd1bf] group-focus-visible:border-[#dfd1bf]">
-          <span>Volume {formatCompactMoney(entry.volumeUsd)}</span>
-          <span>{entry.commentsCount} comments</span>
+        <div className="mt-auto pt-3">
+          <div className="flex items-center justify-between border-t border-[#e8ddd0] pt-3 text-xs text-[#8a8075] transition-colors duration-150 group-hover:border-[#dfd1bf] group-focus-visible:border-[#dfd1bf]">
+            <span>Volume {formatCompactMoney(entry.volumeUsd)}</span>
+            <span>{entry.commentsCount} comments</span>
+          </div>
         </div>
       </div>
     </Link>
