@@ -2,6 +2,15 @@ name: Uptime Monitor
 
 on:
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: Force a failure to test alert delivery
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
   schedule:
     - cron: "*/5 * * * *"
 
@@ -48,6 +57,12 @@ jobs:
           }
           NODE
 
+      - name: Force failure (manual test)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.simulate_failure == 'true'
+        run: |
+          echo "Simulated failure requested via workflow_dispatch input."
+          exit 1
+
       - name: Send webhook alert (optional)
         if: failure()
         env:
@@ -55,6 +70,7 @@ jobs:
           STATUS_CODE: ${{ steps.health.outputs.status_code }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          ALERT_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate_failure == 'true' && 'SIMULATED' || 'LIVE' }}
         run: |
           set -euo pipefail
           if [ -z "${UPTIME_ALERT_WEBHOOK_URL:-}" ]; then
@@ -65,7 +81,7 @@ jobs:
           timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
           payload="$(cat <<JSON
-          {"text":"Endpoint Arena healthcheck failed at ${timestamp}. URL: https://endpointarena.com/api/health status=${STATUS_CODE:-unknown}. Run: https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}"}
+          {"text":"Endpoint Arena healthcheck failed at ${timestamp}. mode=${ALERT_MODE}. URL: https://endpointarena.com/api/health status=${STATUS_CODE:-unknown}. Run: https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}"}
           JSON
           )"
 
@@ -83,6 +99,7 @@ jobs:
           STATUS_CODE: ${{ steps.health.outputs.status_code }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          ALERT_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate_failure == 'true' && 'SIMULATED' || 'LIVE' }}
         run: |
           set -euo pipefail
           if [ -z "${RESEND_API_KEY:-}" ] || [ -z "${UPTIME_ALERT_EMAIL_TO:-}" ]; then
@@ -102,8 +119,8 @@ jobs:
           const payload = {
             from: process.env.UPTIME_ALERT_EMAIL_FROM || 'Endpoint Arena <noreply@endpointarena.com>',
             to,
-            subject: '[ALERT] Endpoint Arena healthcheck failed',
-            text: `Endpoint Arena healthcheck failed at ${process.env.timestamp}. URL: https://endpointarena.com/api/health status=${process.env.STATUS_CODE || 'unknown'}. Run: https://github.com/${process.env.REPOSITORY}/actions/runs/${process.env.RUN_ID}`,
+            subject: `[ALERT] Endpoint Arena healthcheck failed (${process.env.ALERT_MODE || 'LIVE'})`,
+            text: `Endpoint Arena healthcheck failed at ${process.env.timestamp}. mode=${process.env.ALERT_MODE || 'LIVE'}. URL: https://endpointarena.com/api/health status=${process.env.STATUS_CODE || 'unknown'}. Run: https://github.com/${process.env.REPOSITORY}/actions/runs/${process.env.RUN_ID}`,
           }
 
           process.stdout.write(JSON.stringify(payload))
