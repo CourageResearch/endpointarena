@@ -361,12 +361,12 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
   return (
     <div className="space-y-6">
       {globalError && (
-        <div className="rounded-lg border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
+        <div className="rounded-none border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
           {globalError}
         </div>
       )}
       {/* Settings */}
-      <div className="flex flex-col gap-3 rounded-lg border border-[#e8ddd0] bg-white/80 p-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 rounded-none border border-[#e8ddd0] bg-white/80 p-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:flex-1">
           <div className="relative w-full sm:flex-1 sm:max-w-md">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#b5aa9e] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -378,7 +378,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter by drug, company, type, or area..."
-              className="w-full text-sm pl-8 pr-2 py-1.5 bg-[#F5F2ED] border border-[#e8ddd0] rounded text-[#1a1a1a] placeholder-[#b5aa9e] focus:outline-none focus:border-[#5BA5ED] focus:ring-1 focus:ring-[#5BA5ED]/20"
+              className="w-full text-sm pl-8 pr-2 py-1.5 bg-[#F5F2ED] border border-[#e8ddd0] rounded-none text-[#1a1a1a] placeholder-[#b5aa9e] focus:outline-none focus:border-[#5BA5ED] focus:ring-1 focus:ring-[#5BA5ED]/20"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -507,14 +507,14 @@ function EventCard({
   const hasPredictions = event.predictions.length > 0
 
   return (
-    <div className="bg-white/95 border border-[#e8ddd0] rounded-lg overflow-hidden">
+    <div className="bg-white/95 border border-[#e8ddd0] rounded-none overflow-hidden">
       {/* Event Header */}
       <div className="p-4 border-b border-[#e8ddd0]">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate-wrap text-lg font-bold text-[#1a1a1a]">{event.drugName}</span>
-              <span className="px-2 py-0.5 bg-[#F5F2ED] rounded text-xs text-[#8a8075] border border-[#e8ddd0]">
+              <span className="px-2 py-0.5 bg-[#F5F2ED] rounded-none text-xs text-[#8a8075] border border-[#e8ddd0]">
                 {event.applicationType}
               </span>
             </div>
@@ -551,7 +551,7 @@ function EventCard({
               value={event.outcome}
               onChange={(e) => updateOutcome(event.id, e.target.value)}
               disabled={updatingOutcome[event.id]}
-              className={`max-w-full px-3 py-1.5 rounded text-sm font-medium cursor-pointer border-0 ${
+              className={`max-w-full px-3 py-1.5 rounded-none text-sm font-medium cursor-pointer border-0 ${
                 getOutcomeStyle(event.outcome)
               } ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
             >
@@ -564,7 +564,7 @@ function EventCard({
             <button
               onClick={() => runAllPredictions(event.id)}
               disabled={isAnyLoading}
-              className={`whitespace-nowrap px-4 py-1.5 rounded text-sm font-medium transition-colors ${
+              className={`whitespace-nowrap px-4 py-1.5 rounded-none text-sm font-medium transition-colors ${
                 isAnyLoading
                   ? 'bg-[#e8ddd0] text-[#b5aa9e] cursor-not-allowed'
                   : hasPredictions
@@ -640,7 +640,7 @@ function ModelPredictionCard({
   const displayDuration = timing || prediction?.durationMs
 
   return (
-    <div className="h-full rounded border border-[#e8ddd0] bg-[#fffdfa] p-3 sm:p-4">
+    <div className="h-full rounded-none border border-[#e8ddd0] bg-[#fffdfa] p-3 sm:p-4">
       {/* Model Header */}
       <div className="mb-3 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
         <div className="min-w-0">
@@ -653,7 +653,7 @@ function ModelPredictionCard({
           {!loading && (
             <button
               onClick={() => runStreamingPrediction(eventId, modelId)}
-              className="whitespace-nowrap rounded border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-1 text-xs text-[#8a8075] hover:bg-[#e8ddd0]"
+              className="whitespace-nowrap rounded-none border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-1 text-xs text-[#8a8075] hover:bg-[#e8ddd0]"
             >
               {prediction ? 'Re-run' : 'Run'}
             </button>
@@ -661,7 +661,7 @@ function ModelPredictionCard({
           {prediction && !loading && (
             <button
               onClick={() => deletePrediction(eventId, modelId)}
-              className="whitespace-nowrap rounded border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1 text-xs text-[#c43a2b] hover:bg-[#c43a2b]/20"
+              className="whitespace-nowrap rounded-none border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1 text-xs text-[#c43a2b] hover:bg-[#c43a2b]/20"
             >
               Delete
             </button>
@@ -720,7 +720,7 @@ function SourceInput({
         onBlur={handleBlur}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
         placeholder="Source links or notes..."
-        className="w-full text-xs px-2 py-1 bg-[#F5F2ED] border border-[#e8ddd0] rounded text-[#8a8075] placeholder-[#b5aa9e] focus:outline-none focus:border-[#5BA5ED] focus:ring-1 focus:ring-[#5BA5ED]/20"
+        className="w-full text-xs px-2 py-1 bg-[#F5F2ED] border border-[#e8ddd0] rounded-none text-[#8a8075] placeholder-[#b5aa9e] focus:outline-none focus:border-[#5BA5ED] focus:ring-1 focus:ring-[#5BA5ED]/20"
       />
       {saved && (
         <span className="text-xs text-[#7d8e6e] shrink-0">Saved</span>
@@ -758,7 +758,7 @@ function NctIdInput({
         onBlur={handleBlur}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
         placeholder="NCT ID..."
-        className="w-24 sm:w-28 max-w-full text-xs px-2 py-1 bg-[#F5F2ED] border border-[#e8ddd0] rounded text-[#8a8075] placeholder-[#b5aa9e] focus:outline-none focus:border-[#5BA5ED] focus:ring-1 focus:ring-[#5BA5ED]/20 font-mono"
+        className="w-24 sm:w-28 max-w-full text-xs px-2 py-1 bg-[#F5F2ED] border border-[#e8ddd0] rounded-none text-[#8a8075] placeholder-[#b5aa9e] focus:outline-none focus:border-[#5BA5ED] focus:ring-1 focus:ring-[#5BA5ED]/20 font-mono"
       />
       {value.trim() && (
         <a
@@ -793,7 +793,7 @@ function LoadingState({ progress, color }: { progress?: StreamProgress; color: s
         <div className="text-xs text-[#b5aa9e] font-mono">{formatDuration(progress.elapsed)}</div>
       )}
       {progress?.thinkingTokens && (
-        <div className="h-1 bg-[#e8ddd0] rounded-full overflow-hidden">
+        <div className="h-1 bg-[#e8ddd0] rounded-none overflow-hidden">
           <div
             className="h-full transition-all duration-300"
             style={{
@@ -828,7 +828,7 @@ function PredictionResult({
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <span className={`px-2 py-0.5 rounded text-xs font-bold ${getPredictionStyle(prediction.prediction)}`}>
+        <span className={`px-2 py-0.5 rounded-none text-xs font-bold ${getPredictionStyle(prediction.prediction)}`}>
           {prediction.prediction.toUpperCase()}
         </span>
         <span className="text-xs text-[#8a8075]">{prediction.confidence}%</span>

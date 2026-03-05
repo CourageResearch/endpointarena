@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { gte, sql } from 'drizzle-orm'
-import { db, contactMessages, users, waitlistEntries } from '@/lib/db'
+import { db, contactMessages, crashEvents, users, waitlistEntries } from '@/lib/db'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
+import { ensureCrashEventsSchema } from '@/lib/crash-events'
 
-type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs'
+type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs' | 'crashes'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -23,20 +24,12 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
+  { id: 'crashes', href: '/admin/crashes', label: 'Crashes' },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
   { id: 'resources', href: '/admin/resources', label: 'Resources' },
   { id: 'costs', href: '/admin/costs', label: 'Costs' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
 ]
-
-const ADMIN_TAB_ROWS: AdminTab[][] = [
-  ['predictions', 'markets', 'humanTrades'],
-  ['users', 'contact'],
-  ['analytics', 'settings'],
-  ['waitlist', 'resources'],
-  ['costs'],
-]
-
 
 async function getWaitlistBadgeData() {
   try {
@@ -83,17 +76,32 @@ async function getContactCount() {
   }
 }
 
+async function getCrashes24hCount() {
+  try {
+    await ensureCrashEventsSchema()
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const rows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(crashEvents)
+      .where(gte(crashEvents.createdAt, since))
+    return rows[0]?.count ?? 0
+  } catch (error) {
+    console.error('Failed to load crash badge count:', error)
+    return 0
+  }
+}
+
 export async function AdminConsoleLayout({
   title,
-  description,
   activeTab,
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
-  const [waitlistBadge, usersCount, contactCount] = await Promise.all([
+  const [waitlistBadge, usersCount, contactCount, crashes24hCount] = await Promise.all([
     getWaitlistBadgeData(),
     getUsersCount(),
     getContactCount(),
+    getCrashes24hCount(),
   ])
   const tabsById = new Map(ADMIN_TABS.map((tab) => [tab.id, tab]))
 
@@ -106,23 +114,24 @@ export async function AdminConsoleLayout({
       <Link
         key={tab.id}
         href={tab.href}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+        aria-current={isActive ? 'page' : undefined}
+        className={`inline-flex min-h-[40px] shrink-0 items-center gap-1.5 border-b-2 px-1.5 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
           isActive
-            ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
-            : 'bg-white/80 text-[#8a8075] border-[#e8ddd0] hover:text-[#1a1a1a] hover:bg-white'
+            ? 'border-[#1a1a1a] text-[#1a1a1a]'
+            : 'border-transparent text-[#8a8075] hover:border-[#d8ccb9] hover:text-[#1a1a1a]'
         }`}
       >
         {tab.label}
         {tab.id === 'waitlist' ? (
           <span
-            title="New in last 7 days and total signups"
+            title="Total waitlist signups"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-white/20 text-white'
+                ? 'bg-[#1a1a1a] text-white'
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
-            {waitlistBadge.newLast7d} new / {waitlistBadge.total}
+            {waitlistBadge.total}
           </span>
         ) : null}
         {tab.id === 'users' ? (
@@ -130,7 +139,7 @@ export async function AdminConsoleLayout({
             title="Total users"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-white/20 text-white'
+                ? 'bg-[#1a1a1a] text-white'
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
@@ -142,11 +151,23 @@ export async function AdminConsoleLayout({
             title="Total contact messages"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-white/20 text-white'
+                ? 'bg-[#1a1a1a] text-white'
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
             {contactCount}
+          </span>
+        ) : null}
+        {tab.id === 'crashes' ? (
+          <span
+            title="Crash events in last 24 hours"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isActive
+                ? 'bg-[#1a1a1a] text-white'
+                : 'bg-[#f3ebe0] text-[#8a8075]'
+            }`}
+          >
+            {crashes24hCount}
           </span>
         ) : null}
       </Link>
@@ -158,25 +179,20 @@ export async function AdminConsoleLayout({
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className={`${SITE_CONTAINER_CLASS} py-8`}>
-        <header className="mb-7 rounded-xl border border-[#e8ddd0] bg-white/70 backdrop-blur-sm overflow-hidden">
-          <div className="px-4 sm:px-5 py-4 sm:py-5">
+        <header className="mb-7">
+          <div className="py-4 sm:py-5">
             <div>
               <div className="flex items-center gap-2">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#b5aa9e]">Admin Console</p>
                 <HeaderDots />
               </div>
               <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
-              <p className="text-sm text-[#8a8075] mt-1">{description}</p>
             </div>
           </div>
-          <div className="border-t border-[#e8ddd0] px-3 py-2">
-            <div className="flex flex-col gap-2">
-              {ADMIN_TAB_ROWS.map((row, rowIndex) => (
-                <nav key={`tab-row-${rowIndex}`} className="flex flex-wrap gap-2">
-                  {row.map((tabId) => renderTabLink(tabId))}
-                </nav>
-              ))}
-            </div>
+          <div className="mt-1">
+            <nav className="flex overflow-x-auto border-b border-[#d8ccb9]">
+              {ADMIN_TABS.map((tab) => renderTabLink(tab.id))}
+            </nav>
             {topActions ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 {topActions}

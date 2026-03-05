@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from 'crypto'
-import { ExternalServiceError, ValidationError } from '@/lib/errors'
+import { ExternalServiceError, ValidationError, isAppError } from '@/lib/errors'
 
 export const TWITTER_CHALLENGE_TTL_MINUTES = 10
-export const TWEET_MUST_STAY_LIVE_HOURS = 24
+export const TWEET_MUST_STAY_LIVE_HOURS = 12
+export const X_CONNECTION_EXPIRED_REASON = 'x_connection_expired'
+export const X_CREDITS_DEPLETED_REASON = 'x_credits_depleted'
 
 type TwitterUserMeResponse = {
   data?: {
@@ -51,7 +53,7 @@ export function getTweetMustStayUntil(now: Date = new Date()): Date {
 }
 
 export function buildDefaultVerificationTweet(token: string): string {
-  return `I just joined Humans vs AI on EndpointArena. I'm making my calls against the models. #EndpointArena #HumansVsAI ${token}`
+  return `Prediction markets for clinical trial outcomes.\nVerifying my account on https://endpointarena.com\n\nCode: ${token}`
 }
 
 export function parseTweetId(input: string): string {
@@ -77,6 +79,23 @@ export function parseTweetId(input: string): string {
   throw new ValidationError('Could not parse tweet ID from the provided URL')
 }
 
+function hasReason(error: unknown, reason: string): boolean {
+  if (!isAppError(error)) return false
+  return error.details?.reason === reason
+}
+
+export function isXConnectionExpiredError(error: unknown): boolean {
+  if (hasReason(error, X_CONNECTION_EXPIRED_REASON)) return true
+  return error instanceof ValidationError
+    && error.message === 'Your X connection expired. Reconnect your X account and retry.'
+}
+
+export function isXCreditsDepletedError(error: unknown): boolean {
+  if (hasReason(error, X_CREDITS_DEPLETED_REASON)) return true
+  return error instanceof ValidationError
+    && error.message === 'X API credits are depleted. Add credits in X Developer Console, then try again.'
+}
+
 async function fetchFromTwitter<T>(
   url: string,
   accessToken: string,
@@ -99,11 +118,21 @@ async function fetchFromTwitter<T>(
     }
 
     if (response.status === 402 && parsed?.title === 'CreditsDepleted') {
-      throw new ValidationError('X API credits are depleted. Add credits in X Developer Console, then try again.')
+      throw new ValidationError('X API credits are depleted. Add credits in X Developer Console, then try again.', {
+        details: {
+          reason: X_CREDITS_DEPLETED_REASON,
+          status: response.status,
+        },
+      })
     }
 
     if (response.status === 401) {
-      throw new ValidationError('Your X connection expired. Reconnect your X account and retry.')
+      throw new ValidationError('Your X connection expired. Reconnect your X account and retry.', {
+        details: {
+          reason: X_CONNECTION_EXPIRED_REASON,
+          status: response.status,
+        },
+      })
     }
 
     throw new ExternalServiceError('Failed to query X API', {
@@ -161,11 +190,21 @@ export async function fetchTweetById(accessToken: string, tweetId: string): Prom
     }
 
     if (response.status === 402 && parsed?.title === 'CreditsDepleted') {
-      throw new ValidationError('X API credits are depleted. Add credits in X Developer Console, then try again.')
+      throw new ValidationError('X API credits are depleted. Add credits in X Developer Console, then try again.', {
+        details: {
+          reason: X_CREDITS_DEPLETED_REASON,
+          status: response.status,
+        },
+      })
     }
 
     if (response.status === 401) {
-      throw new ValidationError('Your X connection expired. Reconnect your X account and retry.')
+      throw new ValidationError('Your X connection expired. Reconnect your X account and retry.', {
+        details: {
+          reason: X_CONNECTION_EXPIRED_REASON,
+          status: response.status,
+        },
+      })
     }
 
     throw new ExternalServiceError('Failed to fetch tweet from X', {

@@ -17,8 +17,10 @@
     "db:add-fda-prediction-provider-usage-columns": "npx tsx scripts/add-fda-prediction-provider-usage-columns.ts",
     "db:add-twitter-verification-columns": "npx tsx scripts/add-twitter-verification-columns.ts",
     "db:add-user-password-hash-column": "npx tsx scripts/add-user-password-hash-column.ts",
+    "db:add-user-display-name-constraint": "npx tsx scripts/add-user-display-name-constraint.ts",
     "db:add-user-signup-location-column": "npx tsx scripts/add-user-signup-location-column.ts",
     "db:add-user-signup-state-column": "npx tsx scripts/add-user-signup-state-column.ts",
+    "db:shorten-twitter-hold-12h": "npx tsx scripts/shorten-twitter-hold-to-12h.ts",
     "db:audit-market": "npx tsx scripts/audit-market-db.ts",
     "db:seed": "npx tsx scripts/seed.ts",
     "db:seed-fda": "npx tsx scripts/seed-fda.ts"

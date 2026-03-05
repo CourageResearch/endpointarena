@@ -471,7 +471,7 @@ export const marketPriceSnapshotsRelations = relations(marketPriceSnapshots, ({ 
 // Users table
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  name: text('name'),
+  name: text('name').notNull(),
   email: text('email').unique(),
   signupLocation: text('signup_location'),
   signupState: text('signup_state'),
@@ -493,6 +493,10 @@ export const users = pgTable('users', {
   lastPointsRefillAt: timestamp('last_points_refill_at'),
 }, (table) => ({
   xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
+  displayNameCheck: check(
+    'users_display_name_check',
+    sql`${table.name} ~ '^[A-Za-z0-9]{1,20}$'`
+  ),
   pointsBalanceCheck: check(
     'users_points_balance_check',
     sql`${table.pointsBalance} >= 0`
@@ -564,6 +568,37 @@ export const analyticsEvents = pgTable('analytics_events', {
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
 })
 
+// Captured app crash events (SSR/render/runtime failures)
+export const crashEvents = pgTable('crash_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  fingerprint: text('fingerprint').notNull(),
+  digest: text('digest'),
+  errorName: text('error_name'),
+  message: text('message').notNull(),
+  stack: text('stack'),
+  componentStack: text('component_stack'),
+  url: text('url'),
+  path: text('path'),
+  source: text('source').notNull().default('app-error'),
+  requestId: text('request_id'),
+  errorCode: text('error_code'),
+  statusCode: integer('status_code'),
+  details: text('details'),
+  userId: text('user_id'),
+  userEmail: text('user_email'),
+  userAgent: text('user_agent'),
+  ipAddress: text('ip_address'),
+  country: text('country'),
+  city: text('city'),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+}, (table) => ({
+  fingerprintIdx: index('crash_events_fingerprint_idx').on(table.fingerprint),
+  createdAtIdx: index('crash_events_created_at_idx').on(table.createdAt),
+  digestIdx: index('crash_events_digest_idx').on(table.digest),
+  pathIdx: index('crash_events_path_idx').on(table.path),
+  sourceIdx: index('crash_events_source_idx').on(table.source),
+}))
+
 // Waitlist signups
 export const waitlistEntries = pgTable('waitlist_entries', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -593,6 +628,8 @@ export type NewFDAPrediction = typeof fdaPredictions.$inferInsert
 export type User = typeof users.$inferSelect
 export type AnalyticsEvent = typeof analyticsEvents.$inferSelect
 export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert
+export type CrashEvent = typeof crashEvents.$inferSelect
+export type NewCrashEvent = typeof crashEvents.$inferInsert
 export type WaitlistEntry = typeof waitlistEntries.$inferSelect
 export type NewWaitlistEntry = typeof waitlistEntries.$inferInsert
 export type ContactMessage = typeof contactMessages.$inferSelect

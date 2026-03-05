@@ -320,13 +320,13 @@ export default async function AdminUsersPage({
       activeTab="users"
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">
-        <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
+        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
           <p className="text-xl font-semibold text-[#5BA5ED]">{total}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Total Users</p>
         </div>
       </section>
 
-      <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Registered Users</h2>
           <p className="text-xs text-[#8a8075]">{sortDescriptionByKey[sortKey]}</p>
@@ -422,7 +422,7 @@ export default async function AdminUsersPage({
                       <td className="px-1.5 py-2 text-right tabular-nums text-[#8a8075] whitespace-nowrap">{trades.toLocaleString()}</td>
                       <td className="px-1.5 py-2 text-right whitespace-nowrap">
                         {isProtectedUser ? (
-                          <span className="inline-flex h-7 items-center justify-center rounded-md border border-[#e8ddd0] bg-[#f7f2eb] px-1.5 text-[11px] font-medium text-[#b5aa9e]">
+                          <span className="inline-flex h-7 items-center justify-center rounded-none border border-[#e8ddd0] bg-[#f7f2eb] px-1.5 text-[11px] font-medium text-[#b5aa9e]">
                             Protected
                           </span>
                         ) : (
@@ -430,7 +430,7 @@ export default async function AdminUsersPage({
                             <input type="hidden" name="userId" value={user.id} />
                             <button
                               type="submit"
-                              className="inline-flex h-7 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-1.5 text-[11px] font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
+                              className="inline-flex h-7 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-1.5 text-[11px] font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
                             >
                               Delete
                             </button>

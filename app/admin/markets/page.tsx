@@ -61,19 +61,19 @@ export default async function AdminMarketsPage() {
       activeTab="markets"
     >
       <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
+        <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
           <p className="text-xl font-semibold text-[#3a8a2e]">{openMarkets}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Open Markets</p>
         </div>
-        <div className="rounded-lg border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
+        <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
           <p className="text-xl font-semibold text-[#8a8075]">{resolvedMarkets}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Resolved Markets</p>
         </div>
-        <div className="rounded-lg border border-[#EF6F67]/30 bg-[#EF6F67]/5 p-3">
+        <div className="rounded-none border border-[#EF6F67]/30 bg-[#EF6F67]/5 p-3">
           <p className="text-xl font-semibold text-[#EF6F67]">{pendingWithoutMarket}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Pending, No Market</p>
         </div>
-        <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
+        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
           <p className="text-xl font-semibold text-[#5BA5ED]">{pendingWithMarket}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Pending, Open Market</p>
         </div>

@@ -60,17 +60,17 @@ export default async function AdminWaitlistPage() {
       activeTab="waitlist"
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">
-        <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
+        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
           <p className="text-xl font-semibold text-[#5BA5ED]">{newLast7d}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">New (7d)</p>
         </div>
-        <div className="rounded-lg border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
+        <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
           <p className="text-xl font-semibold text-[#3a8a2e]">{total}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Total</p>
         </div>
       </section>
 
-      <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Waitlist Signups</h2>
           <p className="text-xs text-[#8a8075]">Newest first</p>
@@ -115,7 +115,7 @@ export default async function AdminWaitlistPage() {
                           <input type="hidden" name="entryId" value={entry.id} />
                           <button
                             type="submit"
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
+                            className="inline-flex h-8 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
                           >
                             Delete
                           </button>

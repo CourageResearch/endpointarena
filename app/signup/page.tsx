@@ -93,6 +93,8 @@ export default function SignupPage() {
         params.set('signupAward', String(STARTER_POINTS))
         router.push(`${pathname}?${params.toString()}`)
         router.refresh()
+      } else if (result?.error === 'SIGNUPS_CLOSED') {
+        setError('Signups are full. Endpoint Arena is currently limited to the first 56 accounts.')
       } else if (result?.error === 'CredentialsSignin') {
         setError('An account with that email already exists. Please sign in instead.')
       } else if (result?.error === 'AUTH_UNAVAILABLE') {

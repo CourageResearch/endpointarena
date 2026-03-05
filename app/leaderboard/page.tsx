@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
-import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
-import { desc, eq, inArray, or } from 'drizzle-orm'
+import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets, users } from '@/lib/db'
+import { desc, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import { MODEL_DISPLAY_NAMES, MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
 import { FDAIcon, ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { BW2MobilePastCard, BW2PastRow } from '@/app/rows'
 import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
 import { FooterGradientRule } from '@/components/site/chrome'
+import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-name'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,16 @@ interface ModelStats {
   confidenceCorrectSum: number
   confidenceWrongSum: number
   total: number
+}
+
+interface HumanLeaderboardEntry {
+  userId: string
+  displayName: string
+  cashBalance: number
+  positionsValue: number
+  startingCash: number
+  totalEquity: number
+  pnl: number
 }
 
 const RANK_ORDER_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
@@ -112,8 +123,12 @@ function splitModelNameAndVersion(fullName: string): { model: string; version: s
   }
 }
 
+function getHumanActorId(userId: string): string {
+  return `human:${userId}`
+}
+
 async function getData() {
-  const [allPredictions, accounts, openMarkets, recentFdaDecisions] = await Promise.all([
+  const [allPredictions, accounts, openMarkets, recentFdaDecisions, verifiedUsers] = await Promise.all([
     db.query.fdaPredictions.findMany({
       where: eq(fdaPredictions.predictorType, 'model'),
       with: { fdaEvent: true },
@@ -130,6 +145,15 @@ async function getData() {
       with: { predictions: true },
       orderBy: [desc(fdaCalendarEvents.outcomeDate)],
       limit: 10,
+    }),
+    db.query.users.findMany({
+      where: isNotNull(users.tweetVerifiedAt),
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+        pointsBalance: true,
+      },
     }),
   ])
 
@@ -227,16 +251,50 @@ async function getData() {
     return b.correct - a.correct
   })
 
+  const humanLeaderboard = verifiedUsers
+    .map<HumanLeaderboardEntry>((user) => {
+      const actorId = getHumanActorId(user.id)
+      const account = accountByModelId.get(actorId)
+      const fallbackBalance = user.pointsBalance
+      const cashBalance = account?.cashBalance ?? fallbackBalance
+      const positionsValue = positionsValueByModelId.get(actorId) ?? 0
+      const startingCash = account?.startingCash ?? fallbackBalance
+      const totalEquity = cashBalance + positionsValue
+      const pnl = totalEquity - startingCash
+      const normalizedName = normalizeDisplayName(user.name)
+
+      return {
+        userId: user.id,
+        displayName: normalizedName ?? getGeneratedDisplayName(user.email || user.id),
+        cashBalance,
+        positionsValue,
+        startingCash,
+        totalEquity,
+        pnl,
+      }
+    })
+    .sort((a, b) => {
+      if (a.totalEquity !== b.totalEquity) return b.totalEquity - a.totalEquity
+      if (a.pnl !== b.pnl) return b.pnl - a.pnl
+
+      const byName = a.displayName.localeCompare(b.displayName, 'en-US', { sensitivity: 'base' })
+      if (byName !== 0) return byName
+
+      return a.userId.localeCompare(b.userId)
+    })
+
   return {
     leaderboard,
     moneyLeaderboard,
+    humanLeaderboard,
     recentFdaDecisions,
   }
 }
 
 export default async function LeaderboardPage() {
-  const { leaderboard, moneyLeaderboard, recentFdaDecisions } = await getData()
+  const { leaderboard, moneyLeaderboard, humanLeaderboard, recentFdaDecisions } = await getData()
   const comparisonModels = moneyLeaderboard
+  const topHumanLeaderboard = humanLeaderboard.slice(0, 3)
 
   return (
     <PageFrame>
@@ -249,7 +307,7 @@ export default async function LeaderboardPage() {
           <section className="space-y-4">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Accuracy Rankings</h2>
+                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">AI Accuracy Rankings</h2>
                 <HeaderDots />
               </div>
               <p className="text-[#8a8075] text-sm sm:text-base max-w-2xl">
@@ -304,7 +362,7 @@ export default async function LeaderboardPage() {
           <section className="space-y-4">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Money Rankings</h2>
+                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">AI Money Rankings</h2>
                 <HeaderDots />
               </div>
               <p className="text-[#8a8075] text-sm sm:text-base max-w-2xl">
@@ -350,6 +408,69 @@ export default async function LeaderboardPage() {
                     )
                   })}
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <SquareDivider className="my-8 sm:my-10" />
+
+          <section className="space-y-4">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Top 3 Human Traders</h2>
+                <HeaderDots />
+              </div>
+              <p className="text-[#8a8075] text-sm sm:text-base max-w-2xl">
+                Verified human traders ranked by current total equity across cash and open positions.
+              </p>
+            </div>
+
+            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+              <div className="bg-white/95 rounded-sm">
+                {topHumanLeaderboard.length === 0 ? (
+                  <div className="px-4 sm:px-8 py-8 text-sm text-center text-[#8a8075]">
+                    No verified human traders on the leaderboard yet.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[#e8ddd0] border-t border-[#e8ddd0]">
+                    {topHumanLeaderboard.map((human, i) => {
+                      const rankColor = RANK_ORDER_COLORS[i % RANK_ORDER_COLORS.length]
+                      return (
+                        <div
+                          key={human.userId}
+                          className="group relative px-4 sm:px-8 py-6 sm:py-8 hover:bg-[#f3ebe0]/30 transition-colors duration-150"
+                        >
+                          <div
+                            aria-hidden="true"
+                            className="absolute inset-y-0 left-0 w-[2px] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                            style={{ backgroundColor: rankColor }}
+                          />
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            <span className="text-lg sm:text-xl font-mono shrink-0" style={{ color: rankColor }}>#{i + 1}</span>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="text-base sm:text-lg text-[#1a1a1a] transition-colors duration-150 group-hover:text-[#111111]">
+                                {human.displayName}
+                              </div>
+                              <div className="mt-1 text-xs sm:text-sm text-[#8a8075]">
+                                Cash {formatMoney(human.cashBalance)} · Open {formatMoney(human.positionsValue)} ·{' '}
+                                <span style={{ color: human.pnl >= 0 ? '#3a8a2e' : '#c43a2b' }}>
+                                  P/L {human.pnl >= 0 ? '+' : '-'}{formatMoney(Math.abs(human.pnl))}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 transition-transform duration-150 group-hover:-translate-y-[1px]">
+                              <div className="text-2xl sm:text-3xl font-mono tracking-tight text-[#8a8075]">
+                                {formatMoney(human.totalEquity)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </section>

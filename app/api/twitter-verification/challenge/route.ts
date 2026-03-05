@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { db, accounts, users } from '@/lib/db'
 import { UnauthorizedError, ValidationError } from '@/lib/errors'
+import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
 import {
   buildDefaultVerificationTweet,
   generateChallengeToken,
@@ -38,7 +39,7 @@ export async function POST() {
 
     const resolvedXUserId = user.xUserId ?? twitterAccount?.providerAccountId ?? null
 
-    if (!resolvedXUserId || !twitterAccount?.access_token) {
+    if (!resolvedXUserId || !twitterAccount) {
       throw new ValidationError('Connect your X account before creating a challenge')
     }
 
@@ -49,6 +50,14 @@ export async function POST() {
           xConnectedAt: user.xConnectedAt ?? new Date(),
         })
         .where(eq(users.id, user.id))
+    }
+
+    const tokenResolution = await getUsableTwitterAccessToken(session.user.id, twitterAccount)
+    if (!tokenResolution.accessToken) {
+      if (tokenResolution.requiresReconnect) {
+        throw new ValidationError('Your X connection expired. Reconnect your X account and retry.')
+      }
+      throw new ValidationError('Connect your X account before creating a challenge')
     }
 
     if (user.tweetVerifiedAt) {

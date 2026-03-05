@@ -1,11 +1,22 @@
 import { and, eq } from 'drizzle-orm'
 import { db, accounts, users } from '@/lib/db'
 import { applyDailyRefillIfEligible, getVerifiedHumansRank } from '@/lib/humans'
-import { fetchTweetById } from '@/lib/twitter-verification'
+import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
+import { fetchTweetById, isXConnectionExpiredError } from '@/lib/twitter-verification'
+
+type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
+
+function trimOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
 
 export type TwitterVerificationStatus = {
   connected: boolean
   verified: boolean
+  requiresReconnect: boolean
+  xCheckState: XCheckState
   username: string | null
   mustStayUntil: string | null
   verifiedAt: string | null
@@ -44,10 +55,25 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
       .where(eq(users.id, user.id))
   }
 
-  const connected = Boolean(resolvedXUserId && twitterAccount?.access_token)
+  let tokenResolution = {
+    account: twitterAccount ?? null,
+    accessToken: trimOrNull(twitterAccount?.access_token),
+    requiresReconnect: false,
+  }
+  let xCheckState: XCheckState = 'ok'
+
+  try {
+    tokenResolution = await getUsableTwitterAccessToken(user.id, twitterAccount)
+  } catch (error) {
+    xCheckState = 'temporarily_unavailable'
+    console.warn('Failed to resolve X access token while building verification status', { userId: user.id })
+  }
+
+  const connected = Boolean(resolvedXUserId && tokenResolution.account)
   let verified = Boolean(user.tweetVerifiedAt)
   let mustStayUntil = user.tweetMustStayUntil
   let verifiedAt = user.tweetVerifiedAt
+  let requiresReconnect = tokenResolution.requiresReconnect
 
   if (
     verified &&
@@ -55,15 +81,34 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
     mustStayUntil.getTime() > Date.now()
   ) {
     const canCheckLiveTweet = Boolean(
-      twitterAccount?.access_token &&
+      tokenResolution.accessToken &&
       resolvedXUserId &&
       user.tweetVerifiedTweetId
     )
 
-    let keepVerified = canCheckLiveTweet
-    if (keepVerified && twitterAccount?.access_token && user.tweetVerifiedTweetId && resolvedXUserId) {
-      const tweet = await fetchTweetById(twitterAccount.access_token, user.tweetVerifiedTweetId)
-      keepVerified = Boolean(tweet && tweet.authorId === resolvedXUserId)
+    let keepVerified = true
+
+    if (canCheckLiveTweet && tokenResolution.accessToken && user.tweetVerifiedTweetId && resolvedXUserId) {
+      try {
+        const tweet = await fetchTweetById(tokenResolution.accessToken, user.tweetVerifiedTweetId)
+        keepVerified = Boolean(tweet && tweet.authorId === resolvedXUserId)
+      } catch (error) {
+        if (isXConnectionExpiredError(error)) {
+          requiresReconnect = true
+          xCheckState = 'requires_reconnect'
+          console.warn('X token expired while checking verification tweet', { userId: user.id })
+        } else {
+          xCheckState = 'temporarily_unavailable'
+          console.warn('Skipping live tweet check because X API is temporarily unavailable', { userId: user.id })
+        }
+      }
+    } else if (tokenResolution.requiresReconnect) {
+      requiresReconnect = true
+      xCheckState = 'requires_reconnect'
+      console.warn('Skipping live tweet check because X reconnect is required', { userId: user.id })
+    } else if (!resolvedXUserId || !user.tweetVerifiedTweetId) {
+      xCheckState = 'temporarily_unavailable'
+      console.warn('Skipping live tweet check because verification metadata is incomplete', { userId: user.id })
     }
 
     if (!keepVerified) {
@@ -78,6 +123,8 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
       verified = false
       mustStayUntil = null
       verifiedAt = null
+      requiresReconnect = false
+      xCheckState = 'ok'
     }
   }
 
@@ -101,6 +148,8 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
   return {
     connected,
     verified,
+    requiresReconnect,
+    xCheckState,
     username: user.xUsername ?? null,
     mustStayUntil: mustStayUntil?.toISOString() ?? null,
     verifiedAt: verifiedAt?.toISOString() ?? null,

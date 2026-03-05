@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { signIn } from 'next-auth/react'
+import { getSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
 import { ModelIcon } from '@/components/ModelIcon'
@@ -10,8 +10,11 @@ type VerificationStatus = {
   authenticated: boolean
   connected: boolean
   verified: boolean
+  requiresReconnect: boolean
+  xCheckState: 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
   username: string | null
   mustStayUntil: string | null
+  verifiedAt: string | null
   profile: {
     pointsBalance: number
     rank: number
@@ -105,10 +108,17 @@ export function ProfileVerificationPanel() {
   }, [challenge?.tweetTemplate])
 
   const handleConnectX = async () => {
-    if (!twitterAvailable) {
+    if (twitterAvailable === false) {
       setError('X login is not configured yet. Add TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET.')
       return
     }
+
+    const session = await getSession()
+    if (!session?.user?.id) {
+      router.push(`/login?error=TwitterSessionExpired&callbackUrl=${encodeURIComponent(callbackUrl)}`)
+      return
+    }
+
     setError('')
     await signIn('twitter', {
       callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
@@ -183,20 +193,33 @@ export function ProfileVerificationPanel() {
 
   if (statusLoading && !statusData) {
     return (
-      <div className="mt-6 rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 text-sm text-[#8a8075]">Loading verification…</div>
+      <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 text-sm text-[#8a8075]">Loading verification…</div>
     )
   }
 
   if (statusData?.verified) {
     return (
-      <div className="mt-6 rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
+      <div className="rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
         <p className="font-medium text-[#2f7b40]">Trading unlocked.</p>
+        {statusData.requiresReconnect ? (
+          <div className="mt-3 rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-3 text-[#b94e47]">
+            <p>Your X session expired. Reconnect X to continue verification checks.</p>
+            <button
+              type="button"
+              onClick={handleConnectX}
+              disabled={twitterAvailable === false}
+              className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reconnect X account
+            </button>
+          </div>
+        ) : null}
       </div>
     )
   }
 
   return (
-    <div className="mt-6 space-y-4 rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 sm:p-5">
+    <div className="space-y-5 rounded-sm border border-[#ef6f67] bg-[#fffdfa] p-5 sm:p-6">
       <div>
         <p className="text-sm font-medium text-[#1a1a1a]">Unlock trading</p>
         <p className="mt-1 text-sm text-[#6d645a]">Complete one X verification tweet to unlock Humans vs AI gameplay and earn points.</p>
@@ -206,58 +229,97 @@ export function ProfileVerificationPanel() {
         <p className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">{error}</p>
       ) : null}
 
-      {!statusData?.connected ? (
-        <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4">
-          <p className="text-sm text-[#6d645a]">Step 1: Connect your X account.</p>
+      {statusData?.requiresReconnect ? (
+        <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-3 text-sm text-[#b94e47]">
+          <p>Your X session expired. Reconnect X to continue verification checks.</p>
           <button
             type="button"
             onClick={handleConnectX}
             disabled={twitterAvailable === false}
-            className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Reconnect X account
+          </button>
+        </div>
+      ) : null}
+
+      {!statusData?.connected ? (
+        <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 1</p>
+          <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Connect the X account you want to verify</h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
+            Use the same X account that will post the verification tweet. We only use this connection to confirm the tweet belongs to you.
+          </p>
+          <button
+            type="button"
+            onClick={handleConnectX}
+            disabled={twitterAvailable === false}
+            className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span aria-hidden="true" className="mr-2 inline-flex h-4 w-4 items-center justify-center">
               <ModelIcon id="grok" className="h-4 w-4" />
             </span>
-            {twitterAvailable === false ? 'Login unavailable' : 'Connect X account'}
+            {twitterAvailable === false ? 'Login unavailable' : 'Connect X to begin'}
           </button>
         </div>
       ) : null}
 
       {statusData?.connected ? (
         <div className="space-y-4">
-          <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4">
-            <p className="text-sm text-[#6d645a]">Step 2: Generate your unique verification tag and post the default tweet.</p>
-            <button
-              type="button"
-              onClick={handleGenerateChallenge}
-              disabled={isGenerating}
-              className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isGenerating ? 'Generating...' : 'Generate challenge tag'}
-            </button>
-          </div>
+          {!challenge ? (
+            <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 2</p>
+              <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Generate your ready-to-post verification tweet</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
+                We will create the exact tweet text with your unique verification tag. Post it publicly without editing or removing that tag.
+              </p>
+              {statusData.username ? (
+                <p className="mt-2 text-xs text-[#8a8075]">
+                  Connected as <span className="font-medium text-[#1a1a1a]">@{statusData.username}</span>
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleGenerateChallenge}
+                disabled={isGenerating}
+                className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isGenerating ? 'Generating...' : 'Generate verification tweet'}
+              </button>
+            </div>
+          ) : null}
 
           {challenge ? (
-            <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4">
-              <p className="text-sm text-[#6d645a]">Step 3: Post this tweet on X.</p>
-              <p className="mt-2 rounded-sm bg-[#f8f3ec] p-3 text-xs text-[#4d453c]">{challenge.tweetTemplate}</p>
-              <a
-                href={intentHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
-              >
-                Open tweet composer
-              </a>
+            <div className="space-y-4">
+              <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 2</p>
+                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Post this tweet on X</h3>
+                <p className="mt-2 text-sm leading-6 text-[#6d645a]">
+                  Open the composer below and publish the tweet as written. Keep the unique verification tag exactly as shown.
+                </p>
+                <p className="mt-3 rounded-sm bg-[#f8f3ec] p-3 text-xs leading-6 text-[#4d453c]">{challenge.tweetTemplate}</p>
+                <a
+                  href={intentHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                >
+                  Open X composer
+                </a>
+              </div>
 
-              <div className="mt-4">
-                <label className="mb-2 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#b5aa9e]">Step 4: Paste your tweet URL</label>
+              <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 3</p>
+                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Paste the live tweet URL to unlock trading</h3>
+                <p className="mt-2 text-sm leading-6 text-[#6d645a]">
+                  After the tweet is posted, copy its public link and paste it below. Example: https://x.com/username/status/...
+                </p>
                 <input
                   type="text"
                   value={tweetInput}
                   onChange={(event) => setTweetInput(event.target.value)}
                   placeholder="https://x.com/username/status/..."
-                  className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
+                  className="mt-4 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                 />
                 <button
                   type="button"

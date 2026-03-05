@@ -159,19 +159,19 @@ export default async function AnalyticsPage({
         <section className="mb-8">
           <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Summary</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-3">
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-3">
               <div className="text-2xl font-bold text-[#1a1a1a]">{data.totalPageViews.toLocaleString()}</div>
               <div className="text-[#8a8075] text-xs">Page Views</div>
             </div>
-            <div className="bg-white/80 border border-[#5BA5ED]/30 rounded-lg p-3">
+            <div className="bg-white/80 border border-[#5BA5ED]/30 rounded-none p-3">
               <div className="text-2xl font-bold text-[#5BA5ED]">{data.uniqueVisitors.toLocaleString()}</div>
               <div className="text-[#5BA5ED]/60 text-xs">Unique Visitors (approx)</div>
             </div>
-            <div className="bg-white/80 border border-[#3a8a2e]/30 rounded-lg p-3">
+            <div className="bg-white/80 border border-[#3a8a2e]/30 rounded-none p-3">
               <div className="text-2xl font-bold text-[#3a8a2e]">{data.totalClicks.toLocaleString()}</div>
               <div className="text-[#3a8a2e]/60 text-xs">Total Clicks</div>
             </div>
-            <div className="bg-white/80 border border-[#EF6F67]/30 rounded-lg p-3">
+            <div className="bg-white/80 border border-[#EF6F67]/30 rounded-none p-3">
               <div className="text-2xl font-bold text-[#EF6F67]">{data.uniquePages}</div>
               <div className="text-[#EF6F67]/60 text-xs">Pages Tracked</div>
             </div>
@@ -185,7 +185,7 @@ export default async function AnalyticsPage({
             <div className="flex flex-wrap gap-2">
               <a
                 href="/admin/analytics?days=7"
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                className={`px-3 py-1.5 rounded-none text-sm border transition-colors ${
                   days === 7
                     ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
                     : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
@@ -195,7 +195,7 @@ export default async function AnalyticsPage({
               </a>
               <a
                 href="/admin/analytics?days=30"
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                className={`px-3 py-1.5 rounded-none text-sm border transition-colors ${
                   days === 30
                     ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
                     : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
@@ -205,15 +205,15 @@ export default async function AnalyticsPage({
               </a>
             </div>
           </div>
-          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
             <div className="flex items-end gap-1" style={{ height: '160px' }}>
               {data.dailyViews.map(d => (
                 <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                   <div
-                    className="w-full bg-[#5BA5ED] rounded-t min-h-[2px] transition-all hover:bg-[#5BA5ED]/80"
+                    className="w-full bg-[#5BA5ED] rounded-none min-h-[2px] transition-all hover:bg-[#5BA5ED]/80"
                     style={{ height: `${(d.count / maxDailyViews) * 100}%` }}
                   />
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-xs px-1.5 py-0.5 rounded-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                     {d.count} views
                   </div>
                 </div>
@@ -236,7 +236,7 @@ export default async function AnalyticsPage({
         {/* Top Pages */}
         <section className="mb-8">
           <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Top Pages</h2>
-          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-none overflow-hidden">
             {data.topPages.length === 0 ? (
               <div className="p-4 text-[#8a8075] text-sm">No pageview data yet</div>
             ) : (
@@ -265,7 +265,7 @@ export default async function AnalyticsPage({
         {/* Top Clicked Elements */}
         <section className="mb-8">
           <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Top Clicked Elements</h2>
-          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-none overflow-hidden">
             {data.topClicks.length === 0 ? (
               <div className="p-4 text-[#8a8075] text-sm">No click data yet</div>
             ) : (
@@ -296,7 +296,7 @@ export default async function AnalyticsPage({
           <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Geographic Distribution</h2>
           <div className="grid md:grid-cols-2 gap-4">
             {/* Top Countries */}
-            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-none overflow-hidden">
               <div className="px-4 py-2 border-b border-[#e8ddd0] text-[#8a8075] text-xs font-medium">Top Countries</div>
               {data.topCountries.length === 0 ? (
                 <div className="p-4 text-[#8a8075] text-sm">No geographic data yet</div>
@@ -320,7 +320,7 @@ export default async function AnalyticsPage({
               )}
             </div>
             {/* Top Cities */}
-            <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+            <div className="bg-white/80 border border-[#e8ddd0] rounded-none overflow-hidden">
               <div className="px-4 py-2 border-b border-[#e8ddd0] text-[#8a8075] text-xs font-medium">Top Cities</div>
               {data.topCities.length === 0 ? (
                 <div className="p-4 text-[#8a8075] text-sm">No geographic data yet</div>
@@ -349,7 +349,7 @@ export default async function AnalyticsPage({
         {/* Top Referrers */}
         <section className="mb-8">
           <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Top Referrers</h2>
-          <div className="bg-white/80 border border-[#e8ddd0] rounded-lg overflow-hidden">
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-none overflow-hidden">
             {data.topReferrers.length === 0 ? (
               <div className="p-4 text-[#8a8075] text-sm">No referrer data yet</div>
             ) : (

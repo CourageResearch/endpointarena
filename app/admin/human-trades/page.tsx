@@ -236,19 +236,19 @@ export default async function AdminHumanTradesPage({
       activeTab="humanTrades"
     >
       <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
+        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
           <p className="text-xl font-semibold text-[#5BA5ED]">{Number(summary?.totalTrades ?? 0).toLocaleString()}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">All Trades</p>
         </div>
-        <div className="rounded-lg border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
+        <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
           <p className="text-xl font-semibold text-[#3a8a2e]">{Number(summary?.uniqueTraders ?? 0).toLocaleString()}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Unique Traders</p>
         </div>
-        <div className="rounded-lg border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
+        <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
           <p className="text-xl font-semibold text-[#8a8075]">{formatMoney(Number(summary?.totalVolumeUsd ?? 0))}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">All-Time Volume</p>
         </div>
-        <div className="rounded-lg border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
+        <div className="rounded-none border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
           <p className="text-xl font-semibold text-[#D39D2E]">{formatMoney(Number(weekly?.weeklyVolumeUsd ?? 0))}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">
             Volume (Last 7d) • {Number(weekly?.weeklyTrades ?? 0).toLocaleString()} trades
@@ -256,7 +256,7 @@ export default async function AdminHumanTradesPage({
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="mb-6 rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <form action="/admin/human-trades" method="get" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <label className="block text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e] mb-1">
@@ -266,7 +266,7 @@ export default async function AdminHumanTradesPage({
               name="q"
               defaultValue={q}
               placeholder="Email, @username, drug, company, actor id"
-              className="w-full rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none focus:border-[#c8b7a2]"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none focus:border-[#c8b7a2]"
             />
           </div>
 
@@ -277,7 +277,7 @@ export default async function AdminHumanTradesPage({
             <select
               name="action"
               defaultValue={action}
-              className="w-full rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
             >
               {ACTION_FILTERS.map((option) => (
                 <option key={option} value={option}>{option}</option>
@@ -292,7 +292,7 @@ export default async function AdminHumanTradesPage({
             <select
               name="status"
               defaultValue={status}
-              className="w-full rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
             >
               {STATUS_FILTERS.map((option) => (
                 <option key={option} value={option}>{option}</option>
@@ -308,7 +308,7 @@ export default async function AdminHumanTradesPage({
               type="date"
               name="from"
               defaultValue={from}
-              className="w-full rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
             />
           </div>
 
@@ -320,20 +320,20 @@ export default async function AdminHumanTradesPage({
               type="date"
               name="to"
               defaultValue={to}
-              className="w-full rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#c8b7a2]"
             />
           </div>
 
           <div className="md:col-span-2 lg:col-span-6 flex flex-wrap gap-2 pt-1">
             <button
               type="submit"
-              className="inline-flex h-9 items-center justify-center rounded-md border border-[#1a1a1a] bg-[#1a1a1a] px-3 text-xs font-medium text-white transition-colors hover:bg-black"
+              className="inline-flex h-9 items-center justify-center rounded-none border border-[#1a1a1a] bg-[#1a1a1a] px-3 text-xs font-medium text-white transition-colors hover:bg-black"
             >
               Apply Filters
             </button>
             <Link
               href="/admin/human-trades"
-              className="inline-flex h-9 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-3 text-xs font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
+              className="inline-flex h-9 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-3 text-xs font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
             >
               Reset
             </Link>
@@ -341,7 +341,7 @@ export default async function AdminHumanTradesPage({
         </form>
       </section>
 
-      <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Human Trade Log</h2>
           <p className="text-xs text-[#8a8075]">
@@ -424,12 +424,12 @@ export default async function AdminHumanTradesPage({
             {previousHref ? (
               <Link
                 href={previousHref}
-                className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
+                className="inline-flex h-8 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
               >
                 Previous
               </Link>
             ) : (
-              <span className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-[#f7f2eb] px-2.5 text-xs font-medium text-[#b5aa9e]">
+              <span className="inline-flex h-8 items-center justify-center rounded-none border border-[#e8ddd0] bg-[#f7f2eb] px-2.5 text-xs font-medium text-[#b5aa9e]">
                 Previous
               </span>
             )}
@@ -437,12 +437,12 @@ export default async function AdminHumanTradesPage({
             {nextHref ? (
               <Link
                 href={nextHref}
-                className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
+                className="inline-flex h-8 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
               >
                 Next
               </Link>
             ) : (
-              <span className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-[#f7f2eb] px-2.5 text-xs font-medium text-[#b5aa9e]">
+              <span className="inline-flex h-8 items-center justify-center rounded-none border border-[#e8ddd0] bg-[#f7f2eb] px-2.5 text-xs font-medium text-[#b5aa9e]">
                 Next
               </span>
             )}

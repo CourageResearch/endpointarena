@@ -1,5 +1,6 @@
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import type { NextAuthOptions } from 'next-auth'
+import type { Adapter, AdapterUser } from 'next-auth/adapters'
 import { getServerSession } from 'next-auth'
 import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
@@ -7,12 +8,25 @@ import TwitterProvider from 'next-auth/providers/twitter'
 import { accounts, db, sessions, users, verificationTokens } from '@/lib/db'
 import { and, eq, sql } from 'drizzle-orm'
 import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
+import { getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
+const MAX_SIGNUPS = 56
+const SIGNUPS_CLOSED_ERROR = 'SIGNUPS_CLOSED'
+const SIGNUP_LIMIT_LOCK_ID = 20501
+
+type CredentialUserRecord = {
+  id: string
+  email: string | null
+  name: string | null
+  passwordHash: string | null
+  signupLocation: string | null
+  signupState: string | null
+}
 
 function normalizeEmail(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -138,6 +152,125 @@ async function findUserForCredentials(email: string): Promise<{
   }
 }
 
+function isSignupsClosedError(error: unknown): boolean {
+  return error instanceof Error && error.message === SIGNUPS_CLOSED_ERROR
+}
+
+async function assertSignupCapacity(tx: any): Promise<void> {
+  const rows = await tx
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(users)
+
+  const totalUsers = rows[0]?.count ?? 0
+  if (totalUsers >= MAX_SIGNUPS) {
+    throw new Error(SIGNUPS_CLOSED_ERROR)
+  }
+}
+
+async function createCredentialUser(
+  email: string,
+  passwordHash: string,
+  signupGeo: SignupGeoValues,
+): Promise<CredentialUserRecord | null> {
+  const generatedName = getGeneratedDisplayName(email)
+
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${SIGNUP_LIMIT_LOCK_ID})`)
+    await assertSignupCapacity(tx)
+
+    let newUser: CredentialUserRecord | null = null
+
+    if (signupGeo.signupLocation || signupGeo.signupState) {
+      try {
+        const [withLocation] = await tx.insert(users).values({
+          name: generatedName,
+          email,
+          passwordHash,
+          ...signupGeo,
+          pointsBalance: STARTER_POINTS,
+        }).returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          passwordHash: users.passwordHash,
+          signupLocation: users.signupLocation,
+          signupState: sql<string | null>`null`,
+        })
+        newUser = withLocation ?? null
+      } catch (error) {
+        const prunedGeo = pruneMissingSignupColumns(signupGeo, error)
+        if (!prunedGeo) {
+          throw error
+        }
+
+        const [withPrunedGeo] = await tx.insert(users).values({
+          name: generatedName,
+          email,
+          passwordHash,
+          ...prunedGeo,
+          pointsBalance: STARTER_POINTS,
+        }).returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          passwordHash: users.passwordHash,
+          signupLocation: users.signupLocation,
+          signupState: sql<string | null>`null`,
+        })
+        newUser = withPrunedGeo ?? null
+      }
+    }
+
+    if (!newUser) {
+      const [withoutLocation] = await tx.insert(users).values({
+        name: generatedName,
+        email,
+        passwordHash,
+        pointsBalance: STARTER_POINTS,
+      }).returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        passwordHash: users.passwordHash,
+        signupLocation: users.signupLocation,
+        signupState: sql<string | null>`null`,
+      })
+      newUser = withoutLocation ?? null
+    }
+
+    return newUser
+  })
+}
+
+async function createAdapterUserWithSignupLimit(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser> {
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${SIGNUP_LIMIT_LOCK_ID})`)
+    await assertSignupCapacity(tx)
+
+    const [createdUser] = await tx.insert(users).values({
+      name: resolveDisplayName(user.name, user.email ?? user.image ?? 'endpoint-arena'),
+      email: user.email,
+      emailVerified: user.emailVerified,
+      image: user.image,
+      pointsBalance: STARTER_POINTS,
+    }).returning({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      emailVerified: users.emailVerified,
+      image: users.image,
+    })
+
+    if (!createdUser) {
+      throw new Error('Failed to create user')
+    }
+
+    return createdUser as AdapterUser
+  })
+}
+
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
 
@@ -171,71 +304,7 @@ function getProviders() {
           if (intent === 'signup') {
             if (!user) {
               const passwordHash = hashPassword(password)
-              let newUser: {
-                id: string
-                email: string | null
-                name: string | null
-                passwordHash: string | null
-                signupLocation: string | null
-                signupState: string | null
-              } | null = null
-
-              if (signupGeo.signupLocation || signupGeo.signupState) {
-                try {
-                  const [withLocation] = await db.insert(users).values({
-                    email,
-                    passwordHash,
-                    ...signupGeo,
-                    pointsBalance: STARTER_POINTS,
-                  }).returning({
-                    id: users.id,
-                    email: users.email,
-                    name: users.name,
-                    passwordHash: users.passwordHash,
-                    signupLocation: users.signupLocation,
-                    signupState: sql<string | null>`null`,
-                  })
-                  newUser = withLocation ?? null
-                } catch (error) {
-                  const prunedGeo = pruneMissingSignupColumns(signupGeo, error)
-                  if (!prunedGeo) {
-                    throw error
-                  }
-
-                  const [withPrunedGeo] = await db.insert(users).values({
-                    email,
-                    passwordHash,
-                    ...prunedGeo,
-                    pointsBalance: STARTER_POINTS,
-                  }).returning({
-                    id: users.id,
-                    email: users.email,
-                    name: users.name,
-                    passwordHash: users.passwordHash,
-                    signupLocation: users.signupLocation,
-                    signupState: sql<string | null>`null`,
-                  })
-                  newUser = withPrunedGeo ?? null
-                }
-              }
-
-              if (!newUser) {
-                const [withoutLocation] = await db.insert(users).values({
-                  email,
-                  passwordHash,
-                  pointsBalance: STARTER_POINTS,
-                }).returning({
-                  id: users.id,
-                  email: users.email,
-                  name: users.name,
-                  passwordHash: users.passwordHash,
-                  signupLocation: users.signupLocation,
-                  signupState: sql<string | null>`null`,
-                })
-                newUser = withoutLocation ?? null
-              }
-
-              user = newUser
+              user = await createCredentialUser(email, passwordHash, signupGeo)
             } else if (!user.passwordHash) {
               const updateValues: Partial<typeof users.$inferInsert> = {
                 passwordHash: hashPassword(password),
@@ -334,8 +403,12 @@ function getProviders() {
             }
           }
 
+          if (!user) return null
           return { id: user.id, email: user.email, name: user.name }
         } catch (error) {
+          if (isSignupsClosedError(error)) {
+            throw error
+          }
           console.error('Credentials authorize failed', error)
           throw new Error('AUTH_UNAVAILABLE')
         }
@@ -406,13 +479,22 @@ function getProviders() {
   return providers
 }
 
+const baseAdapter = DrizzleAdapter(db, {
+  usersTable: users,
+  accountsTable: accounts as any,
+  sessionsTable: sessions as any,
+  verificationTokensTable: verificationTokens as any,
+}) as Adapter
+
+const authAdapter: Adapter = {
+  ...baseAdapter,
+  async createUser(user: Omit<AdapterUser, 'id'>) {
+    return await createAdapterUserWithSignupLimit(user)
+  },
+}
+
 export const authOptions: NextAuthOptions = {
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts as any,
-    sessionsTable: sessions as any,
-    verificationTokensTable: verificationTokens as any,
-  }) as NextAuthOptions['adapter'],
+  adapter: authAdapter as NextAuthOptions['adapter'],
   providers: getProviders(),
   pages: {
     signIn: '/login',

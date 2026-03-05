@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { db, accounts, users } from '@/lib/db'
 import { UnauthorizedError, ValidationError } from '@/lib/errors'
+import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
 import {
   fetchTweetById,
   getTweetMustStayUntil,
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
 
     const resolvedXUserId = user.xUserId ?? twitterAccount?.providerAccountId ?? null
 
-    if (!resolvedXUserId || !twitterAccount?.access_token) {
+    if (!resolvedXUserId || !twitterAccount) {
       throw new ValidationError('Connect your X account before verification')
     }
 
@@ -76,6 +77,14 @@ export async function POST(request: Request) {
           xConnectedAt: user.xConnectedAt ?? new Date(),
         })
         .where(eq(users.id, user.id))
+    }
+
+    const tokenResolution = await getUsableTwitterAccessToken(session.user.id, twitterAccount)
+    if (!tokenResolution.accessToken) {
+      if (tokenResolution.requiresReconnect) {
+        throw new ValidationError('Your X connection expired. Reconnect your X account and retry.')
+      }
+      throw new ValidationError('Connect your X account before verification')
     }
 
     if (!user.tweetChallengeTokenHash || !user.tweetChallengeExpiresAt) {
@@ -92,7 +101,7 @@ export async function POST(request: Request) {
 
     const source = (body.tweetId || body.tweetUrl || '').trim()
     const tweetId = parseTweetId(source)
-    const tweet = await fetchTweetById(twitterAccount.access_token, tweetId)
+    const tweet = await fetchTweetById(tokenResolution.accessToken, tweetId)
 
     if (!tweet) {
       throw new ValidationError('Could not find that tweet from your connected account')

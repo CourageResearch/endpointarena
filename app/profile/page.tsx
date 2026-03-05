@@ -11,6 +11,7 @@ import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { authOptions } from '@/lib/auth'
 import { db, fdaCalendarEvents, marketActions, marketPositions, predictionMarkets, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
+import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
 
 export const dynamic = 'force-dynamic'
@@ -225,8 +226,9 @@ async function updateProfileName(formData: FormData) {
   }
 
   const rawName = formData.get('name')
-  const trimmedName = typeof rawName === 'string' ? rawName.trim() : ''
-  const nextName = trimmedName.length > 0 ? trimmedName.slice(0, 80) : null
+  const nextName = typeof rawName === 'string'
+    ? resolveDisplayName(rawName, session.user.email ?? session.user.id)
+    : getGeneratedDisplayName(session.user.email ?? session.user.id)
 
   await db.update(users)
     .set({ name: nextName })
@@ -251,7 +253,10 @@ export default async function ProfilePage() {
 
   const [{ holdings, trades }, verificationStatus] = await Promise.all([
     getProfileTradingData(user.id),
-    getTwitterVerificationStatusForUser(user.id),
+    getTwitterVerificationStatusForUser(user.id).catch(() => {
+      console.warn('Failed to load Twitter verification status for profile page', { userId: user.id })
+      return null
+    }),
   ])
   const isVerified = Boolean(verificationStatus?.verified)
   const pointsState = isVerified
@@ -267,9 +272,11 @@ export default async function ProfilePage() {
       }
   const rank = isVerified ? (verificationStatus?.profile?.rank ?? null) : null
   const refillAwarded = verificationStatus?.profile?.refillAwarded ?? 0
-  const nameLabel = user.name?.trim() || null
-  const identity = nameLabel || (user.xUsername?.trim() ? `@${user.xUsername}` : (user.email || user.id))
-  const secondaryIdentity = user.email && user.email !== identity ? user.email : null
+  const nameLabel = user.name
+  const generatedIdentity = getGeneratedDisplayName(user.email || user.id)
+  const identity = nameLabel || generatedIdentity
+  const secondaryIdentity = user.email?.trim() || null
+  const editableIdentity = nameLabel || generatedIdentity
   const statusTone = isVerified
     ? 'border-[#b8d9b8] bg-[#eef8ee] text-[#2b6a2f]'
     : 'border-[#eadcc9] bg-[#fbf6ef] text-[#816c4e]'
@@ -280,6 +287,12 @@ export default async function ProfilePage() {
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16">
+        {!isVerified || verificationStatus?.requiresReconnect ? (
+          <div className="mb-6">
+            <ProfileVerificationPanel />
+          </div>
+        ) : null}
+
         <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-6 sm:p-9">
           <section>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -292,8 +305,6 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            {!isVerified ? <ProfileVerificationPanel /> : null}
-
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
@@ -303,9 +314,12 @@ export default async function ProfilePage() {
                   <input
                     name="name"
                     type="text"
-                    defaultValue={user.name ?? ''}
+                    defaultValue={editableIdentity}
                     placeholder="Set display name"
-                    maxLength={80}
+                    required
+                    pattern="[A-Za-z0-9]+"
+                    title="Use letters and numbers only."
+                    maxLength={DISPLAY_NAME_MAX_LENGTH}
                     className="h-9 w-full rounded-sm border border-[#e8ddd0] bg-white px-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                   />
                   <button

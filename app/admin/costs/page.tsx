@@ -217,25 +217,25 @@ export default async function AdminCostsPage() {
       activeTab="costs"
     >
       <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
+        <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
           <p className="text-xl font-semibold text-[#3a8a2e]">{formatUsdSummary(totalEstimatedCostUsd)}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Total Est. Spend</p>
         </div>
-        <div className="rounded-lg border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
+        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
           <p className="text-xl font-semibold text-[#5BA5ED]">{formatUsdCompact(avgCostPerRunUsd)}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Avg / Run</p>
         </div>
-        <div className="rounded-lg border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
+        <div className="rounded-none border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
           <p className="text-xl font-semibold text-[#D39D2E]">{formatUsdSummary(last30DayCostUsd)}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Last 30 Days</p>
         </div>
-        <div className="rounded-lg border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
+        <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
           <p className="text-xl font-semibold text-[#8a8075]">{providerTrackedRuns.toLocaleString()}/{totalRuns.toLocaleString()}</p>
           <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Provider-Tracked Runs</p>
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="mb-6 rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Model Breakdown</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm min-w-[760px]">
@@ -268,14 +268,14 @@ export default async function AdminCostsPage() {
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="mb-6 rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Recent Runs</h2>
           <p className="text-xs text-[#8a8075]">Showing latest {Math.min(runs.length, 150)} runs</p>
         </div>
 
         {runs.length === 0 ? (
-          <div className="mt-3 rounded-lg border border-[#e8ddd0] bg-white p-4 text-sm text-[#8a8075]">
+          <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white p-4 text-sm text-[#8a8075]">
             No AI runs found yet.
           </div>
         ) : (
@@ -317,7 +317,7 @@ export default async function AdminCostsPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4 text-sm text-[#8a8075]">
+      <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4 text-sm text-[#8a8075]">
         Provider source means token usage was captured from API usage fields. Heuristic source is a fallback estimate for older rows or providers that did not return usage tokens, including a Claude deep-research uplift for hidden thinking/search usage.
       </section>
     </AdminConsoleLayout>

@@ -636,11 +636,11 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   return (
     <div className="space-y-6">
       {uiError && (
-        <div className="rounded-lg border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
+        <div className="rounded-none border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
           {uiError}
         </div>
       )}
-      <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
+      <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
         <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
           <div>
             <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Market Cycle</h3>
@@ -649,7 +649,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
           <button
             onClick={runDailyCycle}
             disabled={runningDaily}
-            className="px-4 py-2 rounded-lg text-sm bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
+            className="px-4 py-2 rounded-none text-sm bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
           >
             {runningDaily
               ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
@@ -657,7 +657,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
           </button>
         </div>
         {runProgress && (
-          <div className="mt-3 rounded-lg border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
+          <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
             <div className="space-y-1">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Run Overview</p>
               <p className="text-xs text-[#8a8075]">
@@ -667,28 +667,28 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
               </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1">
+              <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Completed</p>
                 <p className="text-sm font-semibold text-[#1a1a1a]">{runProgress.completedActions}</p>
               </div>
-              <div className="rounded border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-2 py-1">
+              <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#2f6f24]">Worked</p>
                 <p className="text-sm font-semibold text-[#2f6f24]">{runProgress.okCount}</p>
               </div>
-              <div className="rounded border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1">
+              <div className="rounded-none border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8d2c22]">Failed</p>
                 <p className="text-sm font-semibold text-[#8d2c22]">{runProgress.errorCount}</p>
               </div>
-              <div className="rounded border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-1">
+              <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Skipped</p>
                 <p className="text-sm font-semibold text-[#6f665b]">{runProgress.skippedCount}</p>
               </div>
-              <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1">
+              <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Remaining</p>
                 <p className="text-sm font-semibold text-[#1a1a1a]">{pendingActions}</p>
               </div>
             </div>
-            <div className="h-2 rounded bg-[#e8ddd0] overflow-hidden">
+            <div className="h-2 rounded-none bg-[#e8ddd0] overflow-hidden">
               <div
                 className="h-full bg-[#1a1a1a] transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
@@ -696,13 +696,13 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               {runProgress.currentActivity && (
-                <div className="rounded border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
+                <div className="rounded-none border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
                   <p className="text-[11px] uppercase tracking-[0.08em] text-[#265f8f]">Current Step</p>
                   <p className="mt-1 text-xs text-[#2e5a7a]">{runProgress.currentActivity}</p>
                 </div>
               )}
               {runProgress.latestResult && (
-                <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1.5">
+                <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1.5">
                   <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Latest Result</p>
                   <p className="mt-1 text-xs text-[#5f564c]">
                     {statusLabel(runProgress.latestResult.status)}: {formatProgressLog(runProgress.latestResult)}
@@ -711,7 +711,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
               )}
             </div>
             {runProgress.errorCount > 0 && runProgress.latestError && (
-              <div className="rounded border border-[#c43a2b]/35 bg-[#c43a2b]/10 px-2 py-1.5">
+              <div className="rounded-none border border-[#c43a2b]/35 bg-[#c43a2b]/10 px-2 py-1.5">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Latest Failure</p>
                 <p className="mt-1 text-xs text-[#8d2c22]">{formatProgressLog(runProgress.latestError)}</p>
               </div>
@@ -722,7 +722,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         {(runLog.length > 0 || errorConsole.length > 0) && (
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
             {runLog.length > 0 && (
-              <div className="rounded-lg border border-[#e8ddd0] bg-white/70 p-3">
+              <div className="rounded-none border border-[#e8ddd0] bg-white/70 p-3">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
                   {runningDaily ? 'Live Activity Feed' : 'Recent Activity Feed'}
                 </p>
@@ -735,7 +735,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             )}
 
             {errorConsole.length > 0 && (
-              <div className="rounded-lg border border-[#c43a2b]/40 bg-[#2a1311] p-3">
+              <div className="rounded-none border border-[#c43a2b]/40 bg-[#2a1311] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] uppercase tracking-[0.08em] text-[#f5b5ae]">
                     {runningDaily ? 'Error Feed (Live)' : 'Error Feed (Last Run)'}
@@ -757,7 +757,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         )}
 
         {lastRunSummary && (
-          <div className={`mt-3 rounded-lg border px-3 py-3 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
+          <div className={`mt-3 rounded-none border px-3 py-3 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className={`text-[11px] uppercase tracking-[0.08em] ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
                 Run Recap
@@ -767,15 +767,15 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
               </p>
             </div>
             <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-              <div className="rounded border border-[#e8ddd0] bg-white/70 px-2 py-1">
+              <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Duration</p>
                 <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.durationSeconds}s</p>
               </div>
-              <div className="rounded border border-[#e8ddd0] bg-white/70 px-2 py-1">
+              <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Open Markets</p>
                 <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.openMarkets}</p>
               </div>
-              <div className="rounded border border-[#e8ddd0] bg-white/70 px-2 py-1">
+              <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Total Non-OK Models</p>
                 <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.nonOkModels.length}</p>
               </div>
@@ -789,8 +789,8 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                       const normalized = entry.toLowerCase()
                       const isSkipped = normalized.includes('skipped')
                       const chipClass = isSkipped
-                        ? 'rounded border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-0.5 text-xs text-[#6f665b]'
-                        : 'rounded border border-[#c43a2b]/30 bg-[#fff3f1] px-2 py-0.5 text-xs text-[#8d2c22]'
+                        ? 'rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-0.5 text-xs text-[#6f665b]'
+                        : 'rounded-none border border-[#c43a2b]/30 bg-[#fff3f1] px-2 py-0.5 text-xs text-[#8d2c22]'
 
                       return (
                         <span key={`${entry}-${index}`} className={chipClass}>
@@ -806,7 +806,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         )}
       </div>
 
-      <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
+      <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
         <input
           type="text"
           placeholder="Search drug, company, ticker"
@@ -825,7 +825,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
               : 'text-[#8a8075] bg-[#e8ddd0]/40'
 
           return (
-            <div key={event.id} className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
+            <div key={event.id} className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
@@ -834,7 +834,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded ${statusTone}`}>
+                  <span className={`text-xs px-2 py-1 rounded-none ${statusTone}`}>
                     {event.marketStatus || 'NO MARKET'}
                   </span>
                   {event.marketPriceYes !== null && (
@@ -845,7 +845,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                   <button
                     onClick={() => openMarket(event.id)}
                     disabled={loadingEventId === event.id || event.marketStatus !== null || event.outcome !== 'Pending'}
-                    className="px-3 py-1.5 rounded text-xs bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-none text-xs bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
                   >
                     {loadingEventId === event.id ? 'Opening...' : 'Open Market'}
                   </button>
@@ -856,11 +856,11 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         })}
       </div>
 
-      <div className="bg-white/80 border border-[#e8ddd0] rounded-lg p-4">
+      <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
         <h3 className="text-sm font-semibold text-[#1a1a1a] mb-2">Model Starting Bankroll</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
           {MODEL_IDS.map((modelId) => (
-            <div key={modelId} className="flex items-center justify-between border border-[#e8ddd0] rounded p-2 bg-white/70">
+            <div key={modelId} className="flex items-center justify-between border border-[#e8ddd0] rounded-none p-2 bg-white/70">
               <span className="text-[#8a8075]">{MODEL_INFO[modelId].fullName}</span>
               <span className="font-medium text-[#1a1a1a]">{formatMoney(100000)}</span>
             </div>

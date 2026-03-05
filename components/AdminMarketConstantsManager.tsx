@@ -148,18 +148,18 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-lg border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
+        <div className="rounded-none border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
           {error}
         </div>
       )}
 
       {successMessage && (
-        <div className="rounded-lg border border-[#3a8a2e]/40 bg-[#3a8a2e]/10 px-3 py-2 text-sm text-[#2e6e24]">
+        <div className="rounded-none border border-[#3a8a2e]/40 bg-[#3a8a2e]/10 px-3 py-2 text-sm text-[#2e6e24]">
           {successMessage}
         </div>
       )}
 
-      <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-1.5">
             <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Warm-up Runs</span>
@@ -170,7 +170,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={1}
               value={form.warmupRunCount}
               onChange={(e) => updateField('warmupRunCount', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">How many opening daily cycles use the warm-up cap.</p>
           </label>
@@ -183,7 +183,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={1}
               value={form.warmupMaxTradeUsd}
               onChange={(e) => updateField('warmupMaxTradeUsd', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Absolute USD cap per action during warm-up.</p>
           </label>
@@ -197,7 +197,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={0.001}
               value={form.warmupBuyCashFraction}
               onChange={(e) => updateField('warmupBuyCashFraction', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Buy cap is min(max trade USD, cash * fraction).</p>
           </label>
@@ -210,7 +210,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={1}
               value={form.steadyMaxTradeUsd}
               onChange={(e) => updateField('steadyMaxTradeUsd', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Absolute USD cap per action after warm-up.</p>
           </label>
@@ -224,7 +224,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={0.001}
               value={form.steadyBuyCashFraction}
               onChange={(e) => updateField('steadyBuyCashFraction', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Steady-state buy cap is min(max trade USD, cash * fraction).</p>
           </label>
@@ -237,7 +237,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={1}
               value={form.maxPositionPerSideShares}
               onChange={(e) => updateField('maxPositionPerSideShares', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Blocks additional buys once YES/NO holdings hit this cap in a market.</p>
           </label>
@@ -250,7 +250,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               step={1000}
               value={form.openingLmsrB}
               onChange={(e) => updateField('openingLmsrB', e.target.value)}
-              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
             <p className="text-xs text-[#8a8075]">Liquidity applied when a new market is opened.</p>
           </label>
@@ -261,7 +261,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
             type="button"
             onClick={saveConfig}
             disabled={isSaving}
-            className="px-4 py-2 rounded-lg text-sm bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
+            className="px-4 py-2 rounded-none text-sm bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Settings'}
           </button>
@@ -269,7 +269,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
             type="button"
             onClick={resetToCurrent}
             disabled={isSaving}
-            className="px-4 py-2 rounded-lg text-sm border border-[#e8ddd0] bg-white text-[#8a8075] hover:text-[#1a1a1a] disabled:opacity-50"
+            className="px-4 py-2 rounded-none text-sm border border-[#e8ddd0] bg-white text-[#8a8075] hover:text-[#1a1a1a] disabled:opacity-50"
           >
             Reset
           </button>
@@ -278,33 +278,33 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
       </section>
 
       {parsedPreview && (
-        <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+        <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h3 className="text-sm font-semibold text-[#1a1a1a]">Preview</h3>
           <p className="text-xs text-[#8a8075] mt-1">Estimated caps based on current settings.</p>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Window</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">
                 {parsedPreview.warmupRunCount} {parsedPreview.warmupRunCount === 1 ? 'run' : 'runs'}
               </p>
             </div>
-            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Buy Cap @ $100k</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.warmupBuyCapAtStartingCash)}</p>
             </div>
-            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Buy Cap @ $10k</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.warmupBuyCapAtTenThousandCash)}</p>
             </div>
-            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Steady Buy Cap @ $100k</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.steadyBuyCapAtStartingCash)}</p>
             </div>
-            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Steady Buy Cap @ $10k</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.steadyBuyCapAtTenThousandCash)}</p>
             </div>
-            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Position Cap / Side</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">
                 {Math.round(parsedPreview.maxPositionPerSideShares).toLocaleString('en-US')} shares

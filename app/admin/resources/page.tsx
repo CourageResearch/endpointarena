@@ -41,7 +41,7 @@ export default async function AdminResourcesPage() {
         <p className="text-sm text-[#8a8075] mt-1">Open links quickly while running predictions, resolving outcomes, or reviewing event metadata.</p>
       </section>
 
-      <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
+      <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <h3 className="text-sm font-semibold text-[#1a1a1a]">Sources & Tools</h3>
         <p className="text-xs text-[#8a8075] mt-1">Includes public calendars and internal views used during event operations.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -51,7 +51,7 @@ export default async function AdminResourcesPage() {
               href={link.href}
               target={link.external ? '_blank' : undefined}
               rel={link.external ? 'noopener noreferrer' : undefined}
-              className="block rounded-lg border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#8a8075] hover:text-[#1a1a1a] hover:border-[#d8ccb9] transition-colors"
+              className="block rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#8a8075] hover:text-[#1a1a1a] hover:border-[#d8ccb9] transition-colors"
             >
               {link.label}
             </a>

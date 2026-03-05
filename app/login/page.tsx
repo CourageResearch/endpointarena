@@ -39,7 +39,11 @@ export default function LoginPage() {
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
     const oauthError = params.get('error')
     if (oauthError === 'TwitterAccountAlreadyLinked') {
-      setError('That X account is already linked to another Endpoint Arena account.')
+      setError('That X account is already linked to a different Endpoint Arena account. Sign in to the original account or use another X account.')
+    } else if (oauthError === 'TwitterSessionExpired') {
+      setError('Your Endpoint Arena session expired before X could be connected. Sign in again, then reconnect X from your profile.')
+    } else if (oauthError === 'OAuthAccountNotLinked') {
+      setError('This X account is not linked to the Endpoint Arena account you are using. Sign in with the original account first, then reconnect X from your profile.')
     } else if (oauthError === 'TwitterConnectionFailed') {
       setError('Failed to connect your X account. Please try again.')
     } else if (oauthError === 'Callback' || oauthError === 'OAuthCallback') {
