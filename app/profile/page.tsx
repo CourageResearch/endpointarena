@@ -398,12 +398,12 @@ export default async function ProfilePage() {
                       {holdings.map((holding) => (
                         <tr key={`${holding.marketId}-${holding.ticker}`} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
                           <td className="px-3 py-2 text-[#1a1a1a]">
-                            <p className="font-medium">{holding.drugName}</p>
-                            <p className="mt-0.5 text-xs text-[#8a8075]">
-                              {holding.companyName}
-                              {holding.ticker !== '—' ? ` • $${holding.ticker}` : ''}
-                              {' '}• PDUFA {formatShortDate(holding.pdufaDate)}
-                            </p>
+                            <Link
+                              href={`/markets/${holding.marketId}`}
+                              className="font-medium transition-colors hover:text-[#6d645a]"
+                            >
+                              {holding.drugName}
+                            </Link>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.yesShares)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.noShares)}</td>
@@ -449,11 +449,12 @@ export default async function ProfilePage() {
                               <LocalDateTime value={trade.timestamp.toISOString()} />
                             </td>
                             <td className="px-3 py-2 text-[#1a1a1a]">
-                              <p className="font-medium">{trade.drugName}</p>
-                              <p className="mt-0.5 text-xs text-[#8a8075]">
-                                {trade.companyName}
-                                {trade.ticker !== '—' ? ` • $${trade.ticker}` : ''}
-                              </p>
+                              <Link
+                                href={`/markets/${trade.marketId}`}
+                                className="font-medium transition-colors hover:text-[#6d645a]"
+                              >
+                                {trade.drugName}
+                              </Link>
                             </td>
                             <td className={`px-3 py-2 font-medium ${actionTone}`}>{toTradeActionLabel(trade.action)}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatUsd(trade.usdAmount)}</td>
