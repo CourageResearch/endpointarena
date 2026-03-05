@@ -35,6 +35,7 @@ export default function SignupPage() {
   const [errorCode, setErrorCode] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
   const [geo, setGeo] = useState({ country: '', state: '' })
+  const signupsClosed = errorCode === 'SIGNUPS_CLOSED'
 
   useEffect(() => {
     let cancelled = false
@@ -59,6 +60,7 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (signupsClosed) return
     if (!email || !password || !confirmPassword) return
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
@@ -153,11 +155,12 @@ export default function SignupPage() {
                       placeholder="you@example.com"
                       value={email}
                       onChange={(e) => {
-                        if (error) setError('')
-                        if (errorCode) setErrorCode('')
+                        if (!signupsClosed && error) setError('')
+                        if (!signupsClosed && errorCode) setErrorCode('')
                         setEmail(e.target.value)
                       }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
+                      disabled={signupsClosed}
                       required
                     />
                   </div>
@@ -175,11 +178,12 @@ export default function SignupPage() {
                       placeholder="At least 8 characters"
                       value={password}
                       onChange={(e) => {
-                        if (error) setError('')
-                        if (errorCode) setErrorCode('')
+                        if (!signupsClosed && error) setError('')
+                        if (!signupsClosed && errorCode) setErrorCode('')
                         setPassword(e.target.value)
                       }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
+                      disabled={signupsClosed}
                       minLength={8}
                       required
                     />
@@ -198,11 +202,12 @@ export default function SignupPage() {
                       placeholder="Repeat password"
                       value={confirmPassword}
                       onChange={(e) => {
-                        if (error) setError('')
-                        if (errorCode) setErrorCode('')
+                        if (!signupsClosed && error) setError('')
+                        if (!signupsClosed && errorCode) setErrorCode('')
                         setConfirmPassword(e.target.value)
                       }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
+                      disabled={signupsClosed}
                       minLength={8}
                       required
                     />
@@ -210,10 +215,10 @@ export default function SignupPage() {
 
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || signupsClosed}
                     className="w-full rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isLoading ? 'Creating account...' : 'Create account'}
+                    {signupsClosed ? 'Signups full' : isLoading ? 'Creating account...' : 'Create account'}
                   </button>
                 </form>
 
@@ -231,7 +236,7 @@ export default function SignupPage() {
                       <p className="mt-2">
                         Join the waitlist at{' '}
                         <a
-                          href="/waitlist"
+                          href="https://endpointarena.com/waitlist"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium underline"
