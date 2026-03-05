@@ -296,6 +296,8 @@ const MODEL_STREAM_RUNNERS: Record<ModelId, StreamRunner> = {
     baseURL: 'https://api.groq.com/openai/v1',
     model: LLAMA_4_MODEL,
     displayName: 'Llama 4 Maverick',
+    maxTokensReasoning: 8_192,
+    maxTokensFast: 4_096,
   }),
   'kimi-k2': async (args) => streamOpenAICompatibleChat({
     prompt: args.prompt,
@@ -761,6 +763,8 @@ async function streamOpenAICompatibleChat(args: {
   model: string
   displayName: string
   extraBody?: Record<string, unknown>
+  maxTokensReasoning?: number
+  maxTokensFast?: number
 }) {
   const client = new OpenAI({
     apiKey: args.apiKey,
@@ -774,10 +778,14 @@ async function streamOpenAICompatibleChat(args: {
       : `Starting ${args.displayName}...`,
   })
 
+  const configuredMaxTokens = args.useReasoning
+    ? (args.maxTokensReasoning ?? 16_000)
+    : (args.maxTokensFast ?? 4_096)
+
   const requestOptions: any = {
     model: args.model,
     messages: [{ role: 'user', content: args.prompt }],
-    max_tokens: args.useReasoning ? 16_000 : 4_096,
+    max_tokens: configuredMaxTokens,
     stream: true,
     stream_options: { include_usage: true },
   }
@@ -786,13 +794,52 @@ async function streamOpenAICompatibleChat(args: {
     requestOptions.extra_body = args.extraBody
   }
 
+  const isContextWindowTokenError = (error: unknown): boolean => {
+    const message = error instanceof Error ? error.message : String(error)
+    const lower = message.toLowerCase()
+    return lower.includes('max_tokens') && (
+      lower.includes('context_window') ||
+      lower.includes('less than or equal')
+    )
+  }
+
+  const createStreamWithFallback = async (options: any): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> => {
+    try {
+      return await client.chat.completions.create(options as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+    } catch (error) {
+      // Some OpenAI-compatible providers may not support include_usage on streamed chunks.
+      if (options.stream_options) {
+        const withoutUsage = { ...options }
+        delete withoutUsage.stream_options
+        return await client.chat.completions.create(withoutUsage as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+      }
+      throw error
+    }
+  }
+
   let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
   try {
-    stream = await client.chat.completions.create(requestOptions as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
-  } catch {
-    // Some OpenAI-compatible providers may not support include_usage on streamed chunks.
-    delete requestOptions.stream_options
-    stream = await client.chat.completions.create(requestOptions as any) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+    stream = await createStreamWithFallback(requestOptions)
+  } catch (initialError) {
+    if (!isContextWindowTokenError(initialError)) {
+      throw initialError
+    }
+
+    const initialMaxTokens = typeof requestOptions.max_tokens === 'number'
+      ? requestOptions.max_tokens
+      : 4_096
+    const reducedMaxTokens = Math.max(1_024, Math.floor(initialMaxTokens / 2))
+    const reducedOptions = {
+      ...requestOptions,
+      max_tokens: reducedMaxTokens,
+    }
+
+    args.send({
+      type: 'status',
+      status: `${args.displayName} adjusted token budget for context window...`,
+    })
+
+    stream = await createStreamWithFallback(reducedOptions)
   }
 
   let responseText = ''

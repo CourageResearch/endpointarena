@@ -59,7 +59,7 @@ function getMarketAgeInRuns(openedAt: Date, runDate: Date): number {
   return Math.floor((runDate.getTime() - openedRunDate.getTime()) / DAY_MS)
 }
 
-function applyWarmupCap({
+function applyRiskCap({
   action,
   requestedUsd,
   accountCash,
@@ -87,26 +87,13 @@ function applyWarmupCap({
     }
   }
 
-  if (config.warmupRunCount <= 0) {
-    return {
-      amountUsd: requested,
-      capApplied: false,
-      note: '',
-    }
-  }
-
   const runAge = getMarketAgeInRuns(marketOpenedAt, runDate)
-  if (runAge < 0 || runAge >= config.warmupRunCount) {
-    return {
-      amountUsd: requested,
-      capApplied: false,
-      note: '',
-    }
-  }
-
+  const inWarmupWindow = config.warmupRunCount > 0 && runAge >= 0 && runAge < config.warmupRunCount
+  const maxTradeUsd = inWarmupWindow ? config.warmupMaxTradeUsd : config.steadyMaxTradeUsd
+  const buyCashFraction = inWarmupWindow ? config.warmupBuyCashFraction : config.steadyBuyCashFraction
   const tradeCapUsd = action === 'BUY_YES' || action === 'BUY_NO'
-    ? Math.min(config.warmupMaxTradeUsd, Math.max(0, accountCash * config.warmupBuyCashFraction))
-    : config.warmupMaxTradeUsd
+    ? Math.min(maxTradeUsd, Math.max(0, accountCash * buyCashFraction))
+    : maxTradeUsd
 
   const cappedAmount = Math.max(0, Math.min(requested, tradeCapUsd))
   if (cappedAmount >= requested - 1e-9) {
@@ -120,7 +107,7 @@ function applyWarmupCap({
   return {
     amountUsd: cappedAmount,
     capApplied: true,
-    note: `Warm-up cap reduced request to $${cappedAmount.toFixed(2)}.`,
+    note: `${inWarmupWindow ? 'Warm-up' : 'Steady-state'} cap reduced request to $${cappedAmount.toFixed(2)}.`,
   }
 }
 
@@ -464,7 +451,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             throw new Error(`Market ${latestMarket.id} is missing openedAt`)
           }
 
-          const cappedDecision = applyWarmupCap({
+          const cappedDecision = applyRiskCap({
             action: decision.action,
             requestedUsd: decision.amountUsd,
             accountCash: account.cashBalance,
@@ -508,6 +495,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
               side: decision.action,
               requestedUsd: cappedDecision.amountUsd,
               explanation,
+              maxPositionPerSideShares: runtimeConfig.maxPositionPerSideShares,
             })
             const action = buyResult.spent > 0 ? decision.action : 'HOLD'
 

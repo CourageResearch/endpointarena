@@ -380,6 +380,9 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   warmupRunCount: integer('warmup_run_count').notNull().default(3),
   warmupMaxTradeUsd: real('warmup_max_trade_usd').notNull().default(1000),
   warmupBuyCashFraction: real('warmup_buy_cash_fraction').notNull().default(0.02),
+  steadyMaxTradeUsd: real('steady_max_trade_usd').notNull().default(1000),
+  steadyBuyCashFraction: real('steady_buy_cash_fraction').notNull().default(0.02),
+  maxPositionPerSideShares: real('max_position_per_side_shares').notNull().default(10000),
   openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
   createdAt: timestamp('created_at').$defaultFn(() => new Date()),
   updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
@@ -395,6 +398,18 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   warmupBuyCashFractionCheck: check(
     'market_runtime_configs_warmup_buy_cash_fraction_check',
     sql`${table.warmupBuyCashFraction} >= 0 AND ${table.warmupBuyCashFraction} <= 1`
+  ),
+  steadyMaxTradeUsdCheck: check(
+    'market_runtime_configs_steady_max_trade_usd_check',
+    sql`${table.steadyMaxTradeUsd} >= 0 AND ${table.steadyMaxTradeUsd} <= 10000000`
+  ),
+  steadyBuyCashFractionCheck: check(
+    'market_runtime_configs_steady_buy_cash_fraction_check',
+    sql`${table.steadyBuyCashFraction} >= 0 AND ${table.steadyBuyCashFraction} <= 1`
+  ),
+  maxPositionPerSideSharesCheck: check(
+    'market_runtime_configs_max_position_per_side_shares_check',
+    sql`${table.maxPositionPerSideShares} >= 0 AND ${table.maxPositionPerSideShares} <= 10000000`
   ),
   openingLmsrBCheck: check(
     'market_runtime_configs_opening_lmsr_b_check',
@@ -458,6 +473,7 @@ export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name'),
   email: text('email').unique(),
+  signupLocation: text('signup_location'),
   passwordHash: text('password_hash'),
   emailVerified: timestamp('email_verified'),
   image: text('image'),

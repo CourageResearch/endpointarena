@@ -13,6 +13,9 @@ function toDto(config: Awaited<ReturnType<typeof getMarketRuntimeConfig>>): Mark
     warmupRunCount: config.warmupRunCount,
     warmupMaxTradeUsd: config.warmupMaxTradeUsd,
     warmupBuyCashFraction: config.warmupBuyCashFraction,
+    steadyMaxTradeUsd: config.steadyMaxTradeUsd,
+    steadyBuyCashFraction: config.steadyBuyCashFraction,
+    maxPositionPerSideShares: config.maxPositionPerSideShares,
     openingLmsrB: config.openingLmsrB,
     createdAt: config.createdAt.toISOString(),
     updatedAt: config.updatedAt.toISOString(),
@@ -30,7 +33,7 @@ export default async function AdminSettingsPage() {
   return (
     <AdminConsoleLayout
       title="Market Settings"
-      description="Tune cold-start controls and opening liquidity without redeploying."
+      description="Tune warm-up, steady-state risk controls, and opening liquidity without redeploying."
       activeTab="settings"
     >
       <section className="mb-4">

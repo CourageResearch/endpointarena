@@ -965,16 +965,21 @@ export function MarketDashboardConcept5({
       <div className="rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
         <div className="rounded-md bg-white/95 p-4">
           <div className="-mx-4 -mt-4 mb-4 border-b border-[#e8ddd0] bg-[#f8f3ec]/45 px-4">
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-0">
               <button
                 type="button"
                 disabled={!isTradeVerified}
                 onClick={() => setTradeDirection('buy')}
+                style={{ transform: 'scale(0.58)', transformOrigin: 'left bottom' }}
                 className={cn(
-                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:border-transparent disabled:text-[#b5aa9e]',
+                  'inline-flex items-end border-b px-0 pb-0.5 pt-2 text-xs font-medium uppercase tracking-[0.16em] leading-none font-sans transition-colors focus-visible:outline-none disabled:cursor-not-allowed',
                   tradeDirection === 'buy'
-                    ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                    : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
+                    ? isTradeVerified
+                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                      : 'border-[#b5aa9e] text-[#b5aa9e]'
+                    : isTradeVerified
+                      ? 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]'
+                      : 'border-transparent text-[#b5aa9e]',
                 )}
               >
                 Buy
@@ -983,11 +988,16 @@ export function MarketDashboardConcept5({
                 type="button"
                 disabled={!isTradeVerified}
                 onClick={() => setTradeDirection('sell')}
+                style={{ transform: 'scale(0.58)', transformOrigin: 'left bottom' }}
                 className={cn(
-                  'border-b-2 px-0 pb-2.5 pt-3 text-[9px] font-medium uppercase tracking-[0.2em] transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:border-transparent disabled:text-[#b5aa9e]',
+                  'inline-flex items-end border-b px-0 pb-0.5 pt-2 text-xs font-medium uppercase tracking-[0.16em] leading-none font-sans transition-colors focus-visible:outline-none disabled:cursor-not-allowed',
                   tradeDirection === 'sell'
-                    ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                    : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
+                    ? isTradeVerified
+                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                      : 'border-[#b5aa9e] text-[#b5aa9e]'
+                    : isTradeVerified
+                      ? 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]'
+                      : 'border-transparent text-[#b5aa9e]',
                 )}
               >
                 Sell
@@ -1043,6 +1053,10 @@ export function MarketDashboardConcept5({
                 placeholder="1"
               />
             </label>
+
+            <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
+              Paper Trading
+            </div>
 
             <button
               type="submit"

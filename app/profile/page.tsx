@@ -317,7 +317,7 @@ export default async function ProfilePage() {
                 </form>
               </div>
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Points Balance</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash Balance</p>
                 <ProfilePointsBalance
                   pointsBalance={pointsState.pointsBalance}
                   pointsAwarded={refillAwarded}

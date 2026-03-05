@@ -194,14 +194,23 @@ const TABLE_STATEMENTS = [
     warmup_run_count integer NOT NULL DEFAULT 3,
     warmup_max_trade_usd real NOT NULL DEFAULT 1000,
     warmup_buy_cash_fraction real NOT NULL DEFAULT 0.02,
+    steady_max_trade_usd real NOT NULL DEFAULT 1000,
+    steady_buy_cash_fraction real NOT NULL DEFAULT 0.02,
+    max_position_per_side_shares real NOT NULL DEFAULT 10000,
     opening_lmsr_b real NOT NULL DEFAULT 100000,
     created_at timestamp DEFAULT NOW(),
     updated_at timestamp DEFAULT NOW(),
     CONSTRAINT market_runtime_configs_warmup_run_count_check CHECK (warmup_run_count >= 0 AND warmup_run_count <= 365),
     CONSTRAINT market_runtime_configs_warmup_max_trade_usd_check CHECK (warmup_max_trade_usd >= 0 AND warmup_max_trade_usd <= 10000000),
     CONSTRAINT market_runtime_configs_warmup_buy_cash_fraction_check CHECK (warmup_buy_cash_fraction >= 0 AND warmup_buy_cash_fraction <= 1),
+    CONSTRAINT market_runtime_configs_steady_max_trade_usd_check CHECK (steady_max_trade_usd >= 0 AND steady_max_trade_usd <= 10000000),
+    CONSTRAINT market_runtime_configs_steady_buy_cash_fraction_check CHECK (steady_buy_cash_fraction >= 0 AND steady_buy_cash_fraction <= 1),
+    CONSTRAINT market_runtime_configs_max_position_per_side_shares_check CHECK (max_position_per_side_shares >= 0 AND max_position_per_side_shares <= 10000000),
     CONSTRAINT market_runtime_configs_opening_lmsr_b_check CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000)
   )`,
+  `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_max_trade_usd real NOT NULL DEFAULT 1000`,
+  `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_buy_cash_fraction real NOT NULL DEFAULT 0.02`,
+  `ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS max_position_per_side_shares real NOT NULL DEFAULT 10000`,
   `INSERT INTO market_runtime_configs (id) VALUES ('default') ON CONFLICT (id) DO NOTHING`,
 ]
 

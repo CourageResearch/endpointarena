@@ -117,6 +117,20 @@ export function executeLmsrBudgetTrade(
   }
 }
 
+function buyCostForShares(
+  state: MarketState,
+  side: BuyMarketAction,
+  sharesToBuy: number
+): number {
+  const shares = Math.max(0, sharesToBuy)
+  if (shares <= 0) return 0
+
+  const nextQYes = side === 'BUY_YES' ? state.qYes + shares : state.qYes
+  const nextQNo = side === 'BUY_NO' ? state.qNo + shares : state.qNo
+
+  return Math.max(0, lmsrCost({ qYes: nextQYes, qNo: nextQNo, b: state.b }) - lmsrCost(state))
+}
+
 export function executeLmsrShareSale(
   state: MarketState,
   side: SellMarketAction,
@@ -422,6 +436,7 @@ export async function runBuyAction({
   side,
   requestedUsd,
   explanation,
+  maxPositionPerSideShares,
 }: {
   runId?: string
   market: typeof predictionMarkets.$inferSelect
@@ -430,12 +445,17 @@ export async function runBuyAction({
   side: Extract<MarketActionType, 'BUY_YES' | 'BUY_NO'>
   requestedUsd: number
   explanation: string
+  maxPositionPerSideShares?: number
 }): Promise<{
   spent: number
   shares: number
   priceBefore: number
   priceAfter: number
 }> {
+  const configuredMaxPositionPerSideShares = Number.isFinite(maxPositionPerSideShares)
+    ? Math.max(0, Number(maxPositionPerSideShares))
+    : (await getMarketRuntimeConfig()).maxPositionPerSideShares
+
   return db.transaction(async (tx) => {
     // Lock and re-read rows inside the transaction so trade math is based on
     // current q/cash/position state, preventing stale overwrite races.
@@ -479,7 +499,33 @@ export async function runBuyAction({
       throw new ConfigurationError(`Missing market account for model ${modelId}`)
     }
 
-    const spent = Math.max(0, Math.min(requestedUsd, account.cashBalance))
+    const position = await tx.query.marketPositions.findFirst({
+      where: and(
+        eq(marketPositions.marketId, freshMarket.id),
+        eq(marketPositions.modelId, modelId)
+      ),
+    })
+
+    if (!position) {
+      throw new ConfigurationError(`Missing position for model ${modelId} in market ${freshMarket.id}`)
+    }
+
+    const requestedSpend = Math.max(0, requestedUsd)
+    const state = {
+      qYes: freshMarket.qYes,
+      qNo: freshMarket.qNo,
+      b: freshMarket.b,
+    }
+    const heldSideShares = side === 'BUY_YES' ? Math.max(0, position.yesShares) : Math.max(0, position.noShares)
+    const remainingShareCapacity = Math.max(0, configuredMaxPositionPerSideShares - heldSideShares)
+    const maxSpendByPositionCap = buyCostForShares(state, side, remainingShareCapacity)
+    const uncappedSpend = Math.max(0, Math.min(requestedSpend, account.cashBalance))
+    const spent = Math.max(0, Math.min(uncappedSpend, maxSpendByPositionCap))
+    const positionCapApplied = maxSpendByPositionCap < uncappedSpend - 1e-9
+    const resolvedExplanation = positionCapApplied
+      ? `${explanation} Position cap reduced buy size.`
+      : explanation
+
     if (spent <= 0) {
       await tx.insert(marketActions)
         .values({
@@ -493,7 +539,7 @@ export async function runBuyAction({
           sharesDelta: 0,
           priceBefore: freshMarket.priceYes,
           priceAfter: freshMarket.priceYes,
-          explanation,
+          explanation: resolvedExplanation,
           status: 'ok',
         })
         .onConflictDoUpdate({
@@ -505,7 +551,7 @@ export async function runBuyAction({
             sharesDelta: 0,
             priceBefore: freshMarket.priceYes,
             priceAfter: freshMarket.priceYes,
-            explanation,
+            explanation: resolvedExplanation,
             status: 'ok',
             errorCode: null,
             errorDetails: null,
@@ -521,23 +567,8 @@ export async function runBuyAction({
       }
     }
 
-    const position = await tx.query.marketPositions.findFirst({
-      where: and(
-        eq(marketPositions.marketId, freshMarket.id),
-        eq(marketPositions.modelId, modelId)
-      ),
-    })
-
-    if (!position) {
-      throw new ConfigurationError(`Missing position for model ${modelId} in market ${freshMarket.id}`)
-    }
-
     const trade = executeLmsrBudgetTrade(
-      {
-        qYes: freshMarket.qYes,
-        qNo: freshMarket.qNo,
-        b: freshMarket.b,
-      },
+      state,
       side,
       spent
     )
@@ -578,7 +609,7 @@ export async function runBuyAction({
         sharesDelta: trade.shares,
         priceBefore: trade.priceBefore,
         priceAfter: trade.priceAfter,
-        explanation,
+        explanation: resolvedExplanation,
         status: 'ok',
       })
       .onConflictDoUpdate({
@@ -590,7 +621,7 @@ export async function runBuyAction({
           sharesDelta: trade.shares,
           priceBefore: trade.priceBefore,
           priceAfter: trade.priceAfter,
-          explanation,
+          explanation: resolvedExplanation,
           status: 'ok',
           errorCode: null,
           errorDetails: null,

@@ -118,6 +118,9 @@ export function ProfilePointsBalance({
   return (
     <>
       <ProfileRefillCelebration pointsAwarded={celebrationAwarded} />
+      <div className="mt-2 inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
+        Paper Trading
+      </div>
       <p className="mt-2 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{label}</p>
       <p className="mt-1 text-xs text-[#8a8075]">Daily refill auto-applies when eligible.</p>
     </>

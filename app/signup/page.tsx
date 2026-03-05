@@ -32,10 +32,12 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
+  const [timezone, setTimezone] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '')
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +60,7 @@ export default function SignupPage() {
         email,
         password,
         intent: 'signup',
+        timezone,
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })

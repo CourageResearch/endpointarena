@@ -9,6 +9,9 @@ export type MarketRuntimeConfig = {
   warmupRunCount: number
   warmupMaxTradeUsd: number
   warmupBuyCashFraction: number
+  steadyMaxTradeUsd: number
+  steadyBuyCashFraction: number
+  maxPositionPerSideShares: number
   openingLmsrB: number
   createdAt: Date
   updatedAt: Date
@@ -18,6 +21,9 @@ export type MarketRuntimeConfigPatchInput = Partial<{
   warmupRunCount: unknown
   warmupMaxTradeUsd: unknown
   warmupBuyCashFraction: unknown
+  steadyMaxTradeUsd: unknown
+  steadyBuyCashFraction: unknown
+  maxPositionPerSideShares: unknown
   openingLmsrB: unknown
 }>
 
@@ -25,6 +31,9 @@ type MarketRuntimeConfigPatch = Partial<{
   warmupRunCount: number
   warmupMaxTradeUsd: number
   warmupBuyCashFraction: number
+  steadyMaxTradeUsd: number
+  steadyBuyCashFraction: number
+  maxPositionPerSideShares: number
   openingLmsrB: number
 }>
 
@@ -63,6 +72,30 @@ function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPa
     patch.warmupBuyCashFraction = parsed
   }
 
+  if (input.steadyMaxTradeUsd !== undefined) {
+    const parsed = coerceNumber(input.steadyMaxTradeUsd, 'steadyMaxTradeUsd')
+    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
+      throw new ValidationError(`steadyMaxTradeUsd must be between 0 and ${MAX_CONFIG_NUMBER}`)
+    }
+    patch.steadyMaxTradeUsd = parsed
+  }
+
+  if (input.steadyBuyCashFraction !== undefined) {
+    const parsed = coerceNumber(input.steadyBuyCashFraction, 'steadyBuyCashFraction')
+    if (parsed < 0 || parsed > 1) {
+      throw new ValidationError('steadyBuyCashFraction must be between 0 and 1')
+    }
+    patch.steadyBuyCashFraction = parsed
+  }
+
+  if (input.maxPositionPerSideShares !== undefined) {
+    const parsed = coerceNumber(input.maxPositionPerSideShares, 'maxPositionPerSideShares')
+    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
+      throw new ValidationError(`maxPositionPerSideShares must be between 0 and ${MAX_CONFIG_NUMBER}`)
+    }
+    patch.maxPositionPerSideShares = parsed
+  }
+
   if (input.openingLmsrB !== undefined) {
     const parsed = Math.round(coerceNumber(input.openingLmsrB, 'openingLmsrB'))
     if (parsed <= 0 || parsed > MAX_CONFIG_NUMBER) {
@@ -83,6 +116,9 @@ function mapRow(row: typeof marketRuntimeConfigs.$inferSelect): MarketRuntimeCon
     warmupRunCount: row.warmupRunCount,
     warmupMaxTradeUsd: row.warmupMaxTradeUsd,
     warmupBuyCashFraction: row.warmupBuyCashFraction,
+    steadyMaxTradeUsd: row.steadyMaxTradeUsd,
+    steadyBuyCashFraction: row.steadyBuyCashFraction,
+    maxPositionPerSideShares: row.maxPositionPerSideShares,
     openingLmsrB: row.openingLmsrB,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

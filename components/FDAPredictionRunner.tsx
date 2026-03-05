@@ -55,10 +55,9 @@ interface Props {
   events: FDAEvent[]
 }
 
-const MODEL_CARD_MIN_WIDTH_PX = 290
+const MODEL_CARD_MIN_WIDTH_PX = 240
 const MODEL_CARD_GRID_STYLE: CSSProperties = {
-  gridTemplateColumns: `repeat(${MODEL_IDS.length}, minmax(${MODEL_CARD_MIN_WIDTH_PX}px, 1fr))`,
-  minWidth: `${MODEL_IDS.length * MODEL_CARD_MIN_WIDTH_PX}px`,
+  gridTemplateColumns: `repeat(auto-fit, minmax(${MODEL_CARD_MIN_WIDTH_PX}px, 1fr))`,
 }
 
 // =============================================================================
@@ -580,8 +579,8 @@ function EventCard({
       </div>
 
       {/* Model Predictions */}
-      <div className="overflow-x-auto overscroll-x-contain">
-        <div className="grid divide-x divide-[#e8ddd0]" style={MODEL_CARD_GRID_STYLE}>
+      <div className="p-3 sm:p-4">
+        <div className="grid gap-3" style={MODEL_CARD_GRID_STYLE}>
           {MODEL_IDS.map(modelId => (
             <ModelPredictionCard
               key={modelId}
@@ -641,7 +640,7 @@ function ModelPredictionCard({
   const displayDuration = timing || prediction?.durationMs
 
   return (
-    <div className="p-4">
+    <div className="h-full rounded border border-[#e8ddd0] bg-[#fffdfa] p-3 sm:p-4">
       {/* Model Header */}
       <div className="mb-3 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
         <div className="min-w-0">
@@ -840,7 +839,7 @@ function PredictionResult({
       {prediction.reasoning.length > 200 && (
         <button
           onClick={() => setExpandedReasoning(prev => ({ ...prev, [reasoningKey]: !isExpanded }))}
-          className="text-xs text-[#5BA5ED] hover:text-[#5BA5ED]/80 mt-1"
+          className="mt-1 text-[11px] leading-tight text-[#5BA5ED] hover:text-[#5BA5ED]/80"
         >
           {isExpanded ? 'Show less' : 'Show more'}
         </button>

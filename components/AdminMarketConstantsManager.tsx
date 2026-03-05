@@ -7,6 +7,9 @@ export interface MarketRuntimeConfigDto {
   warmupRunCount: number
   warmupMaxTradeUsd: number
   warmupBuyCashFraction: number
+  steadyMaxTradeUsd: number
+  steadyBuyCashFraction: number
+  maxPositionPerSideShares: number
   openingLmsrB: number
   createdAt: string
   updatedAt: string
@@ -20,6 +23,9 @@ type FormState = {
   warmupRunCount: string
   warmupMaxTradeUsd: string
   warmupBuyCashFraction: string
+  steadyMaxTradeUsd: string
+  steadyBuyCashFraction: string
+  maxPositionPerSideShares: string
   openingLmsrB: string
 }
 
@@ -44,6 +50,9 @@ function toFormState(config: MarketRuntimeConfigDto): FormState {
     warmupRunCount: String(config.warmupRunCount),
     warmupMaxTradeUsd: String(config.warmupMaxTradeUsd),
     warmupBuyCashFraction: String(config.warmupBuyCashFraction),
+    steadyMaxTradeUsd: String(config.steadyMaxTradeUsd),
+    steadyBuyCashFraction: String(config.steadyBuyCashFraction),
+    maxPositionPerSideShares: String(config.maxPositionPerSideShares),
     openingLmsrB: String(config.openingLmsrB),
   }
 }
@@ -59,21 +68,28 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
     const warmupRunCount = Number(form.warmupRunCount)
     const warmupMaxTradeUsd = Number(form.warmupMaxTradeUsd)
     const warmupBuyCashFraction = Number(form.warmupBuyCashFraction)
+    const steadyMaxTradeUsd = Number(form.steadyMaxTradeUsd)
+    const steadyBuyCashFraction = Number(form.steadyBuyCashFraction)
+    const maxPositionPerSideShares = Number(form.maxPositionPerSideShares)
 
     if (
       !Number.isFinite(warmupRunCount) ||
       !Number.isFinite(warmupMaxTradeUsd) ||
-      !Number.isFinite(warmupBuyCashFraction)
+      !Number.isFinite(warmupBuyCashFraction) ||
+      !Number.isFinite(steadyMaxTradeUsd) ||
+      !Number.isFinite(steadyBuyCashFraction) ||
+      !Number.isFinite(maxPositionPerSideShares)
     ) {
       return null
     }
 
     return {
       warmupRunCount,
-      warmupMaxTradeUsd,
-      warmupBuyCashFraction,
-      buyCapAtStartingCash: Math.min(warmupMaxTradeUsd, 100_000 * warmupBuyCashFraction),
-      buyCapAtTenThousandCash: Math.min(warmupMaxTradeUsd, 10_000 * warmupBuyCashFraction),
+      warmupBuyCapAtStartingCash: Math.min(warmupMaxTradeUsd, 100_000 * warmupBuyCashFraction),
+      warmupBuyCapAtTenThousandCash: Math.min(warmupMaxTradeUsd, 10_000 * warmupBuyCashFraction),
+      steadyBuyCapAtStartingCash: Math.min(steadyMaxTradeUsd, 100_000 * steadyBuyCashFraction),
+      steadyBuyCapAtTenThousandCash: Math.min(steadyMaxTradeUsd, 10_000 * steadyBuyCashFraction),
+      maxPositionPerSideShares,
     }
   }, [form])
 
@@ -97,6 +113,9 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
         warmupRunCount: parseField(form.warmupRunCount, 'Warm-up runs'),
         warmupMaxTradeUsd: parseField(form.warmupMaxTradeUsd, 'Warm-up max trade USD'),
         warmupBuyCashFraction: parseField(form.warmupBuyCashFraction, 'Warm-up buy cash fraction'),
+        steadyMaxTradeUsd: parseField(form.steadyMaxTradeUsd, 'Steady-state max trade USD'),
+        steadyBuyCashFraction: parseField(form.steadyBuyCashFraction, 'Steady-state buy cash fraction'),
+        maxPositionPerSideShares: parseField(form.maxPositionPerSideShares, 'Max position per side shares'),
         openingLmsrB: parseField(form.openingLmsrB, 'Opening LMSR b'),
       }
 
@@ -184,6 +203,46 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
           </label>
 
           <label className="space-y-1.5">
+            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Steady Max Trade (USD)</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={form.steadyMaxTradeUsd}
+              onChange={(e) => updateField('steadyMaxTradeUsd', e.target.value)}
+              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+            />
+            <p className="text-xs text-[#8a8075]">Absolute USD cap per action after warm-up.</p>
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Steady Buy Cash Fraction</span>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.001}
+              value={form.steadyBuyCashFraction}
+              onChange={(e) => updateField('steadyBuyCashFraction', e.target.value)}
+              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+            />
+            <p className="text-xs text-[#8a8075]">Steady-state buy cap is min(max trade USD, cash * fraction).</p>
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Max Position Per Side (Shares)</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={form.maxPositionPerSideShares}
+              onChange={(e) => updateField('maxPositionPerSideShares', e.target.value)}
+              className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
+            />
+            <p className="text-xs text-[#8a8075]">Blocks additional buys once YES/NO holdings hit this cap in a market.</p>
+          </label>
+
+          <label className="space-y-1.5">
             <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Opening LMSR b</span>
             <input
               type="number"
@@ -222,7 +281,7 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
         <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
           <h3 className="text-sm font-semibold text-[#1a1a1a]">Preview</h3>
           <p className="text-xs text-[#8a8075] mt-1">Estimated caps based on current settings.</p>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Window</p>
               <p className="text-sm font-semibold text-[#1a1a1a] mt-1">
@@ -230,12 +289,26 @@ export function AdminMarketConstantsManager({ initialConfig }: Props) {
               </p>
             </div>
             <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Buy Cap @ $100k cash</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.buyCapAtStartingCash)}</p>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Buy Cap @ $100k</p>
+              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.warmupBuyCapAtStartingCash)}</p>
             </div>
             <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Buy Cap @ $10k cash</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.buyCapAtTenThousandCash)}</p>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Buy Cap @ $10k</p>
+              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.warmupBuyCapAtTenThousandCash)}</p>
+            </div>
+            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Steady Buy Cap @ $100k</p>
+              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.steadyBuyCapAtStartingCash)}</p>
+            </div>
+            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Steady Buy Cap @ $10k</p>
+              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.steadyBuyCapAtTenThousandCash)}</p>
+            </div>
+            <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Position Cap / Side</p>
+              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">
+                {Math.round(parsedPreview.maxPositionPerSideShares).toLocaleString('en-US')} shares
+              </p>
             </div>
           </div>
         </section>

@@ -46,6 +46,55 @@ function extractTwitterUsername(profile: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+type HeaderCollection = Headers | Record<string, string | string[] | undefined> | null | undefined
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function getHeader(headers: HeaderCollection, name: string): string | null {
+  if (!headers) return null
+
+  if (headers instanceof Headers) {
+    return toNonEmptyString(headers.get(name) ?? headers.get(name.toLowerCase()))
+  }
+
+  const direct = headers[name] ?? headers[name.toLowerCase()]
+  const value = Array.isArray(direct) ? direct[0] : direct
+  return toNonEmptyString(value)
+}
+
+function inferSignupLocation(
+  req: { headers?: HeaderCollection } | undefined,
+  fallbackTimezone: unknown,
+): string | null {
+  const headers = req?.headers
+
+  const city =
+    getHeader(headers, 'x-vercel-ip-city') ||
+    getHeader(headers, 'x-geo-city') ||
+    getHeader(headers, 'cf-ipcity')
+  const region =
+    getHeader(headers, 'x-vercel-ip-country-region') ||
+    getHeader(headers, 'x-geo-region')
+  const country =
+    getHeader(headers, 'x-vercel-ip-country') ||
+    getHeader(headers, 'x-geo-country') ||
+    getHeader(headers, 'cf-ipcountry')
+  const timezone =
+    getHeader(headers, 'x-vercel-ip-timezone') ||
+    getHeader(headers, 'x-geo-timezone') ||
+    toNonEmptyString(fallbackTimezone)
+
+  const geoParts = [city, region, country].filter((part): part is string => Boolean(part))
+  if (geoParts.length > 0) return geoParts.join(', ')
+  if (country && timezone) return `${country} (${timezone})`
+  if (country) return country
+  return timezone ? `Timezone: ${timezone}` : null
+}
+
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
 
@@ -57,11 +106,13 @@ function getProviders() {
         email: { label: 'Email', type: 'email', placeholder: 'demo@example.com' },
         password: { label: 'Password', type: 'password' },
         intent: { label: 'Intent', type: 'text' },
+        timezone: { label: 'Timezone', type: 'text' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = normalizeEmail(credentials?.email)
         const password = typeof credentials?.password === 'string' ? credentials.password : ''
         const intent = credentials?.intent === 'signup' ? 'signup' : 'signin'
+        const signupLocation = inferSignupLocation(req, credentials?.timezone)
         if (!email || password.length < MIN_PASSWORD_LENGTH) return null
 
         let user = await db.query.users.findFirst({
@@ -73,12 +124,20 @@ function getProviders() {
             const [newUser] = await db.insert(users).values({
               email,
               passwordHash: hashPassword(password),
+              signupLocation,
               pointsBalance: STARTER_POINTS,
             }).returning()
             user = newUser
           } else if (!user.passwordHash) {
+            const updateValues: Partial<typeof users.$inferInsert> = {
+              passwordHash: hashPassword(password),
+            }
+            if (!user.signupLocation && signupLocation) {
+              updateValues.signupLocation = signupLocation
+            }
+
             const [updatedUser] = await db.update(users)
-              .set({ passwordHash: hashPassword(password) })
+              .set(updateValues)
               .where(eq(users.id, user.id))
               .returning()
             user = updatedUser ?? user
