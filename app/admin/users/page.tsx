@@ -203,25 +203,25 @@ export default async function AdminUsersPage() {
               <colgroup>
                 <col className="w-[16%]" />
                 <col className="w-[8%]" />
-                <col className="w-[24%]" />
+                <col className="w-[27%]" />
                 <col className="w-[11%]" />
                 <col className="w-[11%]" />
-                <col className="w-[12%]" />
-                <col className="w-[7%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
                 <col className="w-[5%]" />
                 <col className="w-[6%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-[#e8ddd0]">
-                  <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Created</th>
-                  <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Name</th>
-                  <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Email</th>
-                  <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Country</th>
-                  <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Region</th>
-                  <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">X</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Money</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">TX</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Actions</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Created</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Name</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Email</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Country</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Region</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">X</th>
+                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Money</th>
+                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">TX</th>
+                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,29 +245,29 @@ export default async function AdminUsersPage() {
 
                   return (
                     <tr key={user.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
-                      <td className="px-2 py-2 text-[#8a8075] whitespace-nowrap text-xs">
+                      <td className="px-1.5 py-2 text-[#8a8075] whitespace-nowrap text-xs">
                         <span className="block truncate" title={createdAt}>{createdAt}</span>
                       </td>
-                      <td className="px-2 py-2 text-[#1a1a1a]">
+                      <td className="px-1.5 py-2 text-[#1a1a1a]">
                         <span className="block truncate" title={user.name || '—'}>{user.name || '—'}</span>
                       </td>
-                      <td className="px-2 py-2 text-[#1a1a1a]">
+                      <td className="px-1.5 py-2 text-[#1a1a1a]">
                         <span className="block truncate" title={email}>{email}</span>
                       </td>
-                      <td className="px-2 py-2 text-[#8a8075]">
+                      <td className="px-1.5 py-2 text-[#8a8075]">
                         <span className="block truncate" title={country}>{country}</span>
                       </td>
-                      <td className="px-2 py-2 text-[#8a8075]">
+                      <td className="px-1.5 py-2 text-[#8a8075]">
                         <span className="block truncate" title={region}>{region}</span>
                       </td>
-                      <td className="px-2 py-2 text-[#8a8075]">
+                      <td className="px-1.5 py-2 text-[#8a8075]">
                         <span className="block truncate" title={xLabel}>{xLabel}</span>
                       </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-[#1a1a1a] whitespace-nowrap">{formatMoney(money)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums text-[#8a8075] whitespace-nowrap">{trades.toLocaleString()}</td>
-                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                      <td className="px-1.5 py-2 text-right tabular-nums text-[#1a1a1a] whitespace-nowrap">{formatMoney(money)}</td>
+                      <td className="px-1.5 py-2 text-right tabular-nums text-[#8a8075] whitespace-nowrap">{trades.toLocaleString()}</td>
+                      <td className="px-1.5 py-2 text-right whitespace-nowrap">
                         {isProtectedUser ? (
-                          <span className="inline-flex h-7 items-center justify-center rounded-md border border-[#e8ddd0] bg-[#f7f2eb] px-2 text-[11px] font-medium text-[#b5aa9e]">
+                          <span className="inline-flex h-7 items-center justify-center rounded-md border border-[#e8ddd0] bg-[#f7f2eb] px-1.5 text-[11px] font-medium text-[#b5aa9e]">
                             Protected
                           </span>
                         ) : (
@@ -275,7 +275,7 @@ export default async function AdminUsersPage() {
                             <input type="hidden" name="userId" value={user.id} />
                             <button
                               type="submit"
-                              className="inline-flex h-7 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-2 text-[11px] font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
+                              className="inline-flex h-7 items-center justify-center rounded-md border border-[#e8ddd0] bg-white px-1.5 text-[11px] font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
                             >
                               Delete
                             </button>

@@ -38,6 +38,7 @@ nul
 # Data
 data/
 output/
+tmp/
 tmp/backups/
 
 # TypeScript
