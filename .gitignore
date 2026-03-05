@@ -37,6 +37,8 @@ nul
 
 # Data
 data/
+output/
+tmp/backups/
 
 # TypeScript
 *.tsbuildinfo
