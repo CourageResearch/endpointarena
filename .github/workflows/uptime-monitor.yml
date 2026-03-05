@@ -73,3 +73,43 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$UPTIME_ALERT_WEBHOOK_URL"
+
+      - name: Send Resend email alert (optional)
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          UPTIME_ALERT_EMAIL_TO: ${{ secrets.UPTIME_ALERT_EMAIL_TO }}
+          UPTIME_ALERT_EMAIL_FROM: ${{ secrets.UPTIME_ALERT_EMAIL_FROM }}
+          STATUS_CODE: ${{ steps.health.outputs.status_code }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RESEND_API_KEY:-}" ] || [ -z "${UPTIME_ALERT_EMAIL_TO:-}" ]; then
+            echo "RESEND_API_KEY or UPTIME_ALERT_EMAIL_TO is not configured; skipping email alert."
+            exit 0
+          fi
+
+          timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          export timestamp
+
+          node <<'NODE' > /tmp/resend-email.json
+          const to = (process.env.UPTIME_ALERT_EMAIL_TO || '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean)
+
+          const payload = {
+            from: process.env.UPTIME_ALERT_EMAIL_FROM || 'Endpoint Arena <noreply@endpointarena.com>',
+            to,
+            subject: '[ALERT] Endpoint Arena healthcheck failed',
+            text: `Endpoint Arena healthcheck failed at ${process.env.timestamp}. URL: https://endpointarena.com/api/health status=${process.env.STATUS_CODE || 'unknown'}. Run: https://github.com/${process.env.REPOSITORY}/actions/runs/${process.env.RUN_ID}`,
+          }
+
+          process.stdout.write(JSON.stringify(payload))
+          NODE
+
+          curl -fsS https://api.resend.com/emails \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/resend-email.json
