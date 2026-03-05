@@ -95,6 +95,34 @@ function inferSignupLocation(
   return timezone ? `Timezone: ${timezone}` : null
 }
 
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  if (!error || typeof error !== 'object') return false
+  const maybe = error as { code?: unknown; message?: unknown }
+  const code = typeof maybe.code === 'string' ? maybe.code : ''
+  const message = typeof maybe.message === 'string' ? maybe.message : ''
+  return code === '42703' && message.toLowerCase().includes(columnName.toLowerCase())
+}
+
+async function findUserForCredentials(email: string): Promise<{
+  id: string
+  email: string | null
+  name: string | null
+  passwordHash: string | null
+} | null> {
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      passwordHash: users.passwordHash,
+    })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1)
+
+  return rows[0] ?? null
+}
+
 function getProviders() {
   const providers: NextAuthOptions['providers'] = []
 
@@ -116,31 +144,96 @@ function getProviders() {
           const signupLocation = inferSignupLocation(req, credentials?.timezone)
           if (!email || password.length < MIN_PASSWORD_LENGTH) return null
 
-          let user = await db.query.users.findFirst({
-            where: eq(users.email, email),
-          })
+          let user = await findUserForCredentials(email)
 
           if (intent === 'signup') {
             if (!user) {
-              const [newUser] = await db.insert(users).values({
-                email,
-                passwordHash: hashPassword(password),
-                signupLocation,
-                pointsBalance: STARTER_POINTS,
-              }).returning()
+              const passwordHash = hashPassword(password)
+              let newUser: {
+                id: string
+                email: string | null
+                name: string | null
+                passwordHash: string | null
+              } | null = null
+
+              if (signupLocation) {
+                try {
+                  const [withLocation] = await db.insert(users).values({
+                    email,
+                    passwordHash,
+                    signupLocation,
+                    pointsBalance: STARTER_POINTS,
+                  }).returning({
+                    id: users.id,
+                    email: users.email,
+                    name: users.name,
+                    passwordHash: users.passwordHash,
+                  })
+                  newUser = withLocation ?? null
+                } catch (error) {
+                  if (!isMissingColumnError(error, 'signup_location')) {
+                    throw error
+                  }
+                }
+              }
+
+              if (!newUser) {
+                const [withoutLocation] = await db.insert(users).values({
+                  email,
+                  passwordHash,
+                  pointsBalance: STARTER_POINTS,
+                }).returning({
+                  id: users.id,
+                  email: users.email,
+                  name: users.name,
+                  passwordHash: users.passwordHash,
+                })
+                newUser = withoutLocation ?? null
+              }
+
               user = newUser
             } else if (!user.passwordHash) {
               const updateValues: Partial<typeof users.$inferInsert> = {
                 passwordHash: hashPassword(password),
               }
-              if (!user.signupLocation && signupLocation) {
+              if (signupLocation) {
                 updateValues.signupLocation = signupLocation
               }
 
-              const [updatedUser] = await db.update(users)
-                .set(updateValues)
-                .where(eq(users.id, user.id))
-                .returning()
+              let updatedUser: {
+                id: string
+                email: string | null
+                name: string | null
+                passwordHash: string | null
+              } | null = null
+
+              try {
+                const [updatedWithLocation] = await db.update(users)
+                  .set(updateValues)
+                  .where(eq(users.id, user.id))
+                  .returning({
+                    id: users.id,
+                    email: users.email,
+                    name: users.name,
+                    passwordHash: users.passwordHash,
+                  })
+                updatedUser = updatedWithLocation ?? null
+              } catch (error) {
+                if (!isMissingColumnError(error, 'signup_location')) {
+                  throw error
+                }
+                const [updatedWithoutLocation] = await db.update(users)
+                  .set({ passwordHash: updateValues.passwordHash })
+                  .where(eq(users.id, user.id))
+                  .returning({
+                    id: users.id,
+                    email: users.email,
+                    name: users.name,
+                    passwordHash: users.passwordHash,
+                  })
+                updatedUser = updatedWithoutLocation ?? null
+              }
+
               user = updatedUser ?? user
             } else {
               return null
@@ -248,14 +341,20 @@ export const authOptions: NextAuthOptions = {
         return '/login?error=TwitterConnectionFailed'
       }
 
-      const existingXUser = await db.query.users.findFirst({
-        where: and(eq(users.xUserId, xUserId), eq(users.id, user.id)),
-      })
+      const existingRows = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.xUserId, xUserId), eq(users.id, user.id)))
+        .limit(1)
+      const existingXUser = existingRows[0] ?? null
 
       if (!existingXUser) {
-        const linkedElsewhere = await db.query.users.findFirst({
-          where: eq(users.xUserId, xUserId),
-        })
+        const linkedRows = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.xUserId, xUserId))
+          .limit(1)
+        const linkedElsewhere = linkedRows[0] ?? null
         if (linkedElsewhere && linkedElsewhere.id !== user.id) {
           return '/login?error=TwitterAccountAlreadyLinked'
         }
@@ -300,9 +399,17 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub
-        const currentUser = await db.query.users.findFirst({
-          where: eq(users.id, token.sub),
-        })
+        const userRows = await db
+          .select({
+            xUserId: users.xUserId,
+            xUsername: users.xUsername,
+            tweetVerifiedAt: users.tweetVerifiedAt,
+            tweetMustStayUntil: users.tweetMustStayUntil,
+          })
+          .from(users)
+          .where(eq(users.id, token.sub))
+          .limit(1)
+        const currentUser = userRows[0] ?? null
         session.user.xConnected = Boolean(currentUser?.xUserId)
         session.user.xUsername = currentUser?.xUsername ?? null
         session.user.tweetVerified = Boolean(currentUser?.tweetVerifiedAt)
