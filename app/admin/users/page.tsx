@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
@@ -11,6 +12,63 @@ import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
 export const dynamic = 'force-dynamic'
 
 const TRADE_ACTIONS = ['BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO'] as const
+const SORT_KEYS = ['created', 'money', 'tx', 'country', 'region'] as const
+const SORT_DIRECTIONS = ['asc', 'desc'] as const
+
+type SearchParamValue = string | string[] | undefined
+type PageSearchParams = Record<string, SearchParamValue>
+type UserSortKey = (typeof SORT_KEYS)[number]
+type SortDirection = (typeof SORT_DIRECTIONS)[number]
+
+function firstSearchParam(value: SearchParamValue): string {
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  return typeof value === 'string' ? value : ''
+}
+
+function parseSortKey(value: string): UserSortKey {
+  return SORT_KEYS.includes(value as UserSortKey) ? (value as UserSortKey) : 'created'
+}
+
+function defaultSortDirection(sortKey: UserSortKey): SortDirection {
+  if (sortKey === 'country' || sortKey === 'region') return 'asc'
+  return 'desc'
+}
+
+function parseSortDirection(value: string, sortKey: UserSortKey): SortDirection {
+  if (SORT_DIRECTIONS.includes(value as SortDirection)) {
+    return value as SortDirection
+  }
+  return defaultSortDirection(sortKey)
+}
+
+function buildSortHref({
+  currentSortKey,
+  currentSortDirection,
+  targetSortKey,
+}: {
+  currentSortKey: UserSortKey
+  currentSortDirection: SortDirection
+  targetSortKey: UserSortKey
+}): string {
+  const nextDirection: SortDirection = currentSortKey === targetSortKey
+    ? (currentSortDirection === 'asc' ? 'desc' : 'asc')
+    : defaultSortDirection(targetSortKey)
+  const params = new URLSearchParams()
+  params.set('sort', targetSortKey)
+  params.set('dir', nextDirection)
+  return `/admin/users?${params.toString()}`
+}
+
+function compareNumbers(a: number, b: number): number {
+  if (a === b) return 0
+  return a > b ? 1 : -1
+}
+
+function compareText(a: string, b: string): number {
+  return a.localeCompare(b, 'en-US', { sensitivity: 'base' })
+}
 
 function getHumanActorId(userId: string): string {
   return `human:${userId}`
@@ -164,17 +222,90 @@ async function backfillMissingXUsernames(userRows: Array<typeof users.$inferSele
   }))
 }
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams?: PageSearchParams | Promise<PageSearchParams>
+}) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
     redirect('/login')
   }
 
+  const resolvedSearchParams = (await searchParams) ?? {}
+  const sortKey = parseSortKey(firstSearchParam(resolvedSearchParams.sort))
+  const sortDirection = parseSortDirection(firstSearchParam(resolvedSearchParams.dir), sortKey)
   const { users: userRows, total } = await getUsersData()
   await backfillMissingXUsernames(userRows)
   const { cashBalanceByActorId, tradeCountByActorId } = await getUserTradingStats(userRows)
   const currentAdminEmail = session.user.email.trim().toLowerCase()
   const protectedAdminEmail = ADMIN_EMAIL.toLowerCase()
+
+  const rows = userRows.map((user) => {
+    const email = user.email ?? '—'
+    const country = formatStoredCountry(user.signupLocation)
+    const region = formatStoredRegion(user.signupState)
+    const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : '—')
+    const actorId = getHumanActorId(user.id)
+    const money = cashBalanceByActorId.get(actorId) ?? user.pointsBalance ?? 0
+    const trades = tradeCountByActorId.get(actorId) ?? 0
+    const emailLower = user.email?.trim().toLowerCase() ?? null
+    const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
+    const createdAtMs = user.createdAt ? user.createdAt.getTime() : 0
+
+    return {
+      user,
+      email,
+      country,
+      region,
+      xLabel,
+      money,
+      trades,
+      isProtectedUser,
+      createdAtMs,
+    }
+  })
+
+  const sortedRows = [...rows].sort((a, b) => {
+    let result = 0
+    switch (sortKey) {
+      case 'money':
+        result = compareNumbers(a.money, b.money)
+        break
+      case 'tx':
+        result = compareNumbers(a.trades, b.trades)
+        break
+      case 'country':
+        result = compareText(a.country, b.country)
+        break
+      case 'region':
+        result = compareText(a.region, b.region)
+        break
+      case 'created':
+      default:
+        result = compareNumbers(a.createdAtMs, b.createdAtMs)
+        break
+    }
+
+    if (result !== 0) {
+      return sortDirection === 'asc' ? result : -result
+    }
+
+    return compareNumbers(b.createdAtMs, a.createdAtMs)
+  })
+
+  const sortDirectionMark = (key: UserSortKey): string => {
+    if (sortKey !== key) return ''
+    return sortDirection === 'asc' ? ' \u2191' : ' \u2193'
+  }
+
+  const sortDescriptionByKey: Record<UserSortKey, string> = {
+    created: sortDirection === 'asc' ? 'Oldest first' : 'Newest first',
+    money: `Money (${sortDirection})`,
+    tx: `TX (${sortDirection})`,
+    country: `Country (${sortDirection})`,
+    region: `Region (${sortDirection})`,
+  }
 
   return (
     <AdminConsoleLayout
@@ -192,7 +323,7 @@ export default async function AdminUsersPage() {
       <section className="rounded-xl border border-[#e8ddd0] bg-white/80 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Registered Users</h2>
-          <p className="text-xs text-[#8a8075]">Newest first</p>
+          <p className="text-xs text-[#8a8075]">{sortDescriptionByKey[sortKey]}</p>
         </div>
 
         {userRows.length === 0 ? (
@@ -216,32 +347,50 @@ export default async function AdminUsersPage() {
                   <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Created</th>
                   <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Name</th>
                   <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Email</th>
-                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Country</th>
-                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Region</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
+                    <Link
+                      href={buildSortHref({ currentSortKey: sortKey, currentSortDirection: sortDirection, targetSortKey: 'country' })}
+                      className="inline-flex items-center transition-colors hover:text-[#8a8075]"
+                    >
+                      Country{sortDirectionMark('country')}
+                    </Link>
+                  </th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
+                    <Link
+                      href={buildSortHref({ currentSortKey: sortKey, currentSortDirection: sortDirection, targetSortKey: 'region' })}
+                      className="inline-flex items-center transition-colors hover:text-[#8a8075]"
+                    >
+                      Region{sortDirectionMark('region')}
+                    </Link>
+                  </th>
                   <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">X</th>
-                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Money</th>
-                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">TX</th>
+                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
+                    <Link
+                      href={buildSortHref({ currentSortKey: sortKey, currentSortDirection: sortDirection, targetSortKey: 'money' })}
+                      className="inline-flex w-full items-center justify-end transition-colors hover:text-[#8a8075]"
+                    >
+                      Money{sortDirectionMark('money')}
+                    </Link>
+                  </th>
+                  <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
+                    <Link
+                      href={buildSortHref({ currentSortKey: sortKey, currentSortDirection: sortDirection, targetSortKey: 'tx' })}
+                      className="inline-flex w-full items-center justify-end transition-colors hover:text-[#8a8075]"
+                    >
+                      TX{sortDirectionMark('tx')}
+                    </Link>
+                  </th>
                   <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {userRows.map((user) => {
+                {sortedRows.map(({ user, email, country, region, xLabel, money, trades, isProtectedUser }) => {
                   const createdAt = user.createdAt
                     ? user.createdAt.toLocaleString('en-US', {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     })
                     : 'Unknown'
-
-                  const email = user.email ?? '—'
-                  const country = formatStoredCountry(user.signupLocation)
-                  const region = formatStoredRegion(user.signupState)
-                  const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : '—')
-                  const actorId = getHumanActorId(user.id)
-                  const money = cashBalanceByActorId.get(actorId) ?? user.pointsBalance ?? 0
-                  const trades = tradeCountByActorId.get(actorId) ?? 0
-                  const emailLower = user.email?.trim().toLowerCase() ?? null
-                  const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
 
                   return (
                     <tr key={user.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
@@ -252,7 +401,7 @@ export default async function AdminUsersPage() {
                         <span className="block truncate" title={user.name || '—'}>{user.name || '—'}</span>
                       </td>
                       <td className="px-1.5 py-2 text-[#1a1a1a]">
-                        <span className="block truncate" title={email}>{email}</span>
+                        <span className="block max-w-[28ch] truncate" title={email}>{email}</span>
                       </td>
                       <td className="px-1.5 py-2 text-[#8a8075]">
                         <span className="block truncate" title={country}>{country}</span>
