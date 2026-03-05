@@ -474,6 +474,7 @@ export const users = pgTable('users', {
   name: text('name'),
   email: text('email').unique(),
   signupLocation: text('signup_location'),
+  signupState: text('signup_state'),
   passwordHash: text('password_hash'),
   emailVerified: timestamp('email_verified'),
   image: text('image'),

@@ -4,11 +4,25 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { accounts, db, users } from '@/lib/db'
+import { accounts, db, marketAccounts, marketActions, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { formatStoredCountry } from '@/lib/geo-country'
+import { formatStoredCountry, formatStoredState } from '@/lib/geo-country'
 
 export const dynamic = 'force-dynamic'
+
+const TRADE_ACTIONS = ['BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO'] as const
+
+function getHumanActorId(userId: string): string {
+  return `human:${userId}`
+}
+
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(value)
+}
 
 async function deleteUser(formData: FormData) {
   'use server'
@@ -50,6 +64,43 @@ async function getUsersData() {
   return {
     users: userRows,
     total: totalRows[0]?.count ?? 0,
+  }
+}
+
+async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
+  const actorIds = userRows.map((user) => getHumanActorId(user.id))
+  if (actorIds.length === 0) {
+    return {
+      cashBalanceByActorId: new Map<string, number>(),
+      tradeCountByActorId: new Map<string, number>(),
+    }
+  }
+
+  const [accountRows, tradeRows] = await Promise.all([
+    db
+      .select({
+        modelId: marketAccounts.modelId,
+        cashBalance: marketAccounts.cashBalance,
+      })
+      .from(marketAccounts)
+      .where(inArray(marketAccounts.modelId, actorIds)),
+    db
+      .select({
+        modelId: marketActions.modelId,
+        tradeCount: sql<number>`count(*)`,
+      })
+      .from(marketActions)
+      .where(and(
+        inArray(marketActions.modelId, actorIds),
+        eq(marketActions.status, 'ok'),
+        inArray(marketActions.action, [...TRADE_ACTIONS]),
+      ))
+      .groupBy(marketActions.modelId),
+  ])
+
+  return {
+    cashBalanceByActorId: new Map(accountRows.map((row) => [row.modelId, row.cashBalance])),
+    tradeCountByActorId: new Map(tradeRows.map((row) => [row.modelId, Number(row.tradeCount)])),
   }
 }
 
@@ -121,6 +172,7 @@ export default async function AdminUsersPage() {
 
   const { users: userRows, total } = await getUsersData()
   await backfillMissingXUsernames(userRows)
+  const { cashBalanceByActorId, tradeCountByActorId } = await getUserTradingStats(userRows)
   const currentAdminEmail = session.user.email.trim().toLowerCase()
   const protectedAdminEmail = ADMIN_EMAIL.toLowerCase()
 
@@ -147,14 +199,17 @@ export default async function AdminUsersPage() {
           <p className="mt-4 text-sm text-[#8a8075]">No users found.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[920px] text-sm">
+            <table className="w-full min-w-[1220px] text-sm">
               <thead>
                 <tr className="border-b border-[#e8ddd0]">
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Created</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Country</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">State</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">X Account</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Money</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Trades</th>
                   <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Actions</th>
                 </tr>
               </thead>
@@ -169,7 +224,11 @@ export default async function AdminUsersPage() {
 
                   const email = user.email ?? '—'
                   const country = formatStoredCountry(user.signupLocation)
+                  const state = formatStoredState(user.signupState)
                   const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : 'Not connected')
+                  const actorId = getHumanActorId(user.id)
+                  const money = cashBalanceByActorId.get(actorId) ?? user.pointsBalance ?? 0
+                  const trades = tradeCountByActorId.get(actorId) ?? 0
                   const emailLower = user.email?.trim().toLowerCase() ?? null
                   const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
 
@@ -179,7 +238,10 @@ export default async function AdminUsersPage() {
                       <td className="px-3 py-2 text-[#1a1a1a]">{user.name || '—'}</td>
                       <td className="px-3 py-2 text-[#1a1a1a]">{email}</td>
                       <td className="px-3 py-2 text-[#8a8075]">{country}</td>
+                      <td className="px-3 py-2 text-[#8a8075]">{state}</td>
                       <td className="px-3 py-2 text-[#8a8075]">{xLabel}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatMoney(money)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[#8a8075]">{trades.toLocaleString()}</td>
                       <td className="px-3 py-2 text-right">
                         {isProtectedUser ? (
                           <span className="inline-flex h-8 items-center justify-center rounded-md border border-[#e8ddd0] bg-[#f7f2eb] px-2.5 text-xs font-medium text-[#b5aa9e]">

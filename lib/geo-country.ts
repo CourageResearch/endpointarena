@@ -1,5 +1,10 @@
 export type HeaderCollection = Headers | Record<string, string | string[] | undefined> | null | undefined
 
+export type InferredGeo = {
+  country: string | null
+  state: string | null
+}
+
 const PRIVATE_IPV4_PATTERN = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.0\.0\.0)/
 const PRIVATE_IPV6_PATTERN = /^(::1|fc|fd|fe80:)/i
 
@@ -23,6 +28,12 @@ export function normalizeCountryName(value: unknown): string | null {
     }
   }
 
+  return raw
+}
+
+export function normalizeStateName(value: unknown): string | null {
+  const raw = toNonEmptyString(value)
+  if (!raw) return null
   return raw
 }
 
@@ -117,70 +128,130 @@ export function extractClientIp(headers: HeaderCollection): string | null {
   return fallbackForwardedIp
 }
 
-async function geolocateCountryFromIp(ip: string): Promise<string | null> {
-  if (!ip || isPrivateIp(ip)) return null
+async function geolocateGeoFromIp(ip: string): Promise<InferredGeo> {
+  if (!ip || isPrivateIp(ip)) return { country: null, state: null }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 1500)
 
   try {
-    const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, {
-      signal: controller.signal,
-      cache: 'no-store',
-    })
+    const response = await fetch(
+      `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country,region,region_code`,
+      {
+        signal: controller.signal,
+        cache: 'no-store',
+      }
+    )
+
     if (response.ok) {
-      const data = await response.json() as { success?: boolean; country?: string }
+      const data = await response.json() as {
+        success?: boolean
+        country?: string
+        region?: string
+        region_code?: string
+      }
+
       if (data.success) {
         const country = normalizeCountryName(data.country)
-        if (country) return country
+        const state = normalizeStateName(data.region) ?? normalizeStateName(data.region_code)
+        if (country || state) {
+          return { country, state }
+        }
       }
     }
+  } catch {
+    // Fall through to secondary provider.
   } finally {
     clearTimeout(timeout)
   }
 
   try {
-    const fallbackResponse = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country`, {
-      cache: 'no-store',
-    })
-    if (!fallbackResponse.ok) return null
+    const fallbackResponse = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,regionName,region`,
+      { cache: 'no-store' }
+    )
+    if (!fallbackResponse.ok) return { country: null, state: null }
 
-    const fallbackData = await fallbackResponse.json() as { status?: string; country?: string }
-    if (fallbackData.status !== 'success') return null
-    return normalizeCountryName(fallbackData.country)
+    const fallbackData = await fallbackResponse.json() as {
+      status?: string
+      country?: string
+      regionName?: string
+      region?: string
+    }
+
+    if (fallbackData.status !== 'success') return { country: null, state: null }
+
+    return {
+      country: normalizeCountryName(fallbackData.country),
+      state: normalizeStateName(fallbackData.regionName) ?? normalizeStateName(fallbackData.region),
+    }
   } catch {
-    return null
+    return { country: null, state: null }
   }
 }
 
-type InferCountryOptions = {
+type InferGeoOptions = {
   fallbackCountry?: unknown
-  preferFallbackCountry?: boolean
+  fallbackState?: unknown
+  preferFallbackGeo?: boolean
 }
 
-export async function inferCountryFromHeaders(
+export async function inferGeoFromHeaders(
   headers: HeaderCollection,
-  options?: InferCountryOptions,
-): Promise<string | null> {
+  options?: InferGeoOptions,
+): Promise<InferredGeo> {
   const countryFromHeaders = normalizeCountryName(
     getHeader(headers, 'x-vercel-ip-country') ||
     getHeader(headers, 'x-geo-country') ||
     getHeader(headers, 'cf-ipcountry')
   )
-  if (countryFromHeaders) return countryFromHeaders
+  const stateFromHeaders = normalizeStateName(
+    getHeader(headers, 'x-vercel-ip-country-region') ||
+    getHeader(headers, 'x-geo-region') ||
+    getHeader(headers, 'cf-region')
+  )
 
-  const countryFromFallback = normalizeCountryName(options?.fallbackCountry)
-  if (options?.preferFallbackCountry && countryFromFallback) {
-    return countryFromFallback
+  const fallbackCountry = normalizeCountryName(options?.fallbackCountry)
+  const fallbackState = normalizeStateName(options?.fallbackState)
+
+  if (countryFromHeaders && stateFromHeaders) {
+    return { country: countryFromHeaders, state: stateFromHeaders }
+  }
+
+  if (countryFromHeaders && !stateFromHeaders && fallbackState) {
+    return { country: countryFromHeaders, state: fallbackState }
+  }
+
+  if (options?.preferFallbackGeo && fallbackCountry) {
+    return { country: fallbackCountry, state: fallbackState }
   }
 
   const ip = extractClientIp(headers)
   if (ip) {
-    const geolocatedCountry = await geolocateCountryFromIp(ip)
-    if (geolocatedCountry) return geolocatedCountry
+    const geolocated = await geolocateGeoFromIp(ip)
+    if (countryFromHeaders || geolocated.country || geolocated.state) {
+      return {
+        country: countryFromHeaders ?? geolocated.country ?? fallbackCountry,
+        state: stateFromHeaders ?? geolocated.state ?? fallbackState,
+      }
+    }
   }
 
-  return countryFromFallback
+  return {
+    country: countryFromHeaders ?? fallbackCountry,
+    state: stateFromHeaders ?? fallbackState,
+  }
+}
+
+export async function inferCountryFromHeaders(
+  headers: HeaderCollection,
+  options?: { fallbackCountry?: unknown; preferFallbackCountry?: boolean },
+): Promise<string | null> {
+  const geo = await inferGeoFromHeaders(headers, {
+    fallbackCountry: options?.fallbackCountry,
+    preferFallbackGeo: options?.preferFallbackCountry,
+  })
+  return geo.country
 }
 
 export function formatStoredCountry(rawLocation: string | null | undefined): string {
@@ -203,4 +274,9 @@ export function formatStoredCountry(rawLocation: string | null | undefined): str
   }
 
   return normalizeCountryName(raw) ?? 'Unknown'
+}
+
+export function formatStoredState(rawState: string | null | undefined): string {
+  const normalized = normalizeStateName(rawState)
+  return normalized ?? 'Unknown'
 }

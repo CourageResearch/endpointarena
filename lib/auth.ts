@@ -5,11 +5,11 @@ import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import TwitterProvider from 'next-auth/providers/twitter'
 import { accounts, db, sessions, users, verificationTokens } from '@/lib/db'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
-import { inferCountryFromHeaders, type HeaderCollection } from '@/lib/geo-country'
+import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
@@ -47,11 +47,25 @@ function extractTwitterUsername(profile: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-async function inferSignupCountry(
+type SignupGeoValues = {
+  signupLocation?: string
+  signupState?: string
+}
+
+async function inferSignupGeo(
   req: { headers?: HeaderCollection } | undefined,
-  fallbackCountry: unknown,
-): Promise<string | null> {
-  return inferCountryFromHeaders(req?.headers, { fallbackCountry })
+  fallback: { country?: unknown; state?: unknown },
+): Promise<SignupGeoValues> {
+  const geo = await inferGeoFromHeaders(req?.headers, {
+    fallbackCountry: fallback.country,
+    fallbackState: fallback.state,
+    preferFallbackGeo: true,
+  })
+
+  const values: SignupGeoValues = {}
+  if (geo.country) values.signupLocation = geo.country
+  if (geo.state) values.signupState = geo.state
+  return values
 }
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
@@ -62,26 +76,66 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
   return code === '42703' && message.toLowerCase().includes(columnName.toLowerCase())
 }
 
+function pruneMissingSignupColumns(values: SignupGeoValues, error: unknown): SignupGeoValues | null {
+  const next: SignupGeoValues = { ...values }
+  let pruned = false
+
+  if (isMissingColumnError(error, 'signup_location') && 'signupLocation' in next) {
+    delete next.signupLocation
+    pruned = true
+  }
+  if (isMissingColumnError(error, 'signup_state') && 'signupState' in next) {
+    delete next.signupState
+    pruned = true
+  }
+
+  return pruned ? next : null
+}
+
 async function findUserForCredentials(email: string): Promise<{
   id: string
   email: string | null
   name: string | null
   passwordHash: string | null
   signupLocation: string | null
+  signupState: string | null
 } | null> {
-  const rows = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      passwordHash: users.passwordHash,
-      signupLocation: users.signupLocation,
-    })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1)
+  try {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        passwordHash: users.passwordHash,
+        signupLocation: users.signupLocation,
+        signupState: users.signupState,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
 
-  return rows[0] ?? null
+    return rows[0] ?? null
+  } catch (error) {
+    if (!isMissingColumnError(error, 'signup_state')) {
+      throw error
+    }
+
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        passwordHash: users.passwordHash,
+        signupLocation: users.signupLocation,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+
+    const row = rows[0]
+    if (!row) return null
+    return { ...row, signupState: null }
+  }
 }
 
 function getProviders() {
@@ -96,13 +150,16 @@ function getProviders() {
         password: { label: 'Password', type: 'password' },
         intent: { label: 'Intent', type: 'text' },
         country: { label: 'Country', type: 'text' },
+        state: { label: 'State', type: 'text' },
       },
       async authorize(credentials, req) {
         try {
           const email = normalizeEmail(credentials?.email)
           const password = typeof credentials?.password === 'string' ? credentials.password : ''
           const intent = credentials?.intent === 'signup' ? 'signup' : 'signin'
-          const signupLocation = intent === 'signup' ? await inferSignupCountry(req, credentials?.country) : null
+          const signupGeo = intent === 'signup'
+            ? await inferSignupGeo(req, { country: credentials?.country, state: credentials?.state })
+            : {}
           if (!email || password.length < MIN_PASSWORD_LENGTH) return null
 
           let user = await findUserForCredentials(email)
@@ -116,14 +173,15 @@ function getProviders() {
                 name: string | null
                 passwordHash: string | null
                 signupLocation: string | null
+                signupState: string | null
               } | null = null
 
-              if (signupLocation) {
+              if (signupGeo.signupLocation || signupGeo.signupState) {
                 try {
                   const [withLocation] = await db.insert(users).values({
                     email,
                     passwordHash,
-                    signupLocation,
+                    ...signupGeo,
                     pointsBalance: STARTER_POINTS,
                   }).returning({
                     id: users.id,
@@ -131,12 +189,29 @@ function getProviders() {
                     name: users.name,
                     passwordHash: users.passwordHash,
                     signupLocation: users.signupLocation,
+                    signupState: sql<string | null>`null`,
                   })
                   newUser = withLocation ?? null
                 } catch (error) {
-                  if (!isMissingColumnError(error, 'signup_location')) {
+                  const prunedGeo = pruneMissingSignupColumns(signupGeo, error)
+                  if (!prunedGeo) {
                     throw error
                   }
+
+                  const [withPrunedGeo] = await db.insert(users).values({
+                    email,
+                    passwordHash,
+                    ...prunedGeo,
+                    pointsBalance: STARTER_POINTS,
+                  }).returning({
+                    id: users.id,
+                    email: users.email,
+                    name: users.name,
+                    passwordHash: users.passwordHash,
+                    signupLocation: users.signupLocation,
+                    signupState: sql<string | null>`null`,
+                  })
+                  newUser = withPrunedGeo ?? null
                 }
               }
 
@@ -151,6 +226,7 @@ function getProviders() {
                   name: users.name,
                   passwordHash: users.passwordHash,
                   signupLocation: users.signupLocation,
+                  signupState: sql<string | null>`null`,
                 })
                 newUser = withoutLocation ?? null
               }
@@ -160,8 +236,11 @@ function getProviders() {
               const updateValues: Partial<typeof users.$inferInsert> = {
                 passwordHash: hashPassword(password),
               }
-              if (!user.signupLocation && signupLocation) {
-                updateValues.signupLocation = signupLocation
+              if (!user.signupLocation && signupGeo.signupLocation) {
+                updateValues.signupLocation = signupGeo.signupLocation
+              }
+              if (!user.signupState && signupGeo.signupState) {
+                updateValues.signupState = signupGeo.signupState
               }
 
               let updatedUser: {
@@ -170,6 +249,7 @@ function getProviders() {
                 name: string | null
                 passwordHash: string | null
                 signupLocation: string | null
+                signupState: string | null
               } | null = null
 
               try {
@@ -182,14 +262,20 @@ function getProviders() {
                     name: users.name,
                     passwordHash: users.passwordHash,
                     signupLocation: users.signupLocation,
+                    signupState: sql<string | null>`null`,
                   })
                 updatedUser = updatedWithLocation ?? null
               } catch (error) {
-                if (!isMissingColumnError(error, 'signup_location')) {
+                const prunedUpdateValues = pruneMissingSignupColumns(updateValues as SignupGeoValues, error)
+                if (!prunedUpdateValues) {
                   throw error
                 }
+
                 const [updatedWithoutLocation] = await db.update(users)
-                  .set({ passwordHash: updateValues.passwordHash })
+                  .set({
+                    passwordHash: updateValues.passwordHash,
+                    ...prunedUpdateValues,
+                  })
                   .where(eq(users.id, user.id))
                   .returning({
                     id: users.id,
@@ -197,6 +283,7 @@ function getProviders() {
                     name: users.name,
                     passwordHash: users.passwordHash,
                     signupLocation: users.signupLocation,
+                    signupState: sql<string | null>`null`,
                   })
                 updatedUser = updatedWithoutLocation ?? null
               }
@@ -209,19 +296,34 @@ function getProviders() {
             if (!user?.passwordHash) return null
             if (!verifyPassword(password, user.passwordHash)) return null
 
-            if (!user.signupLocation) {
-              const signinCountry = await inferSignupCountry(req, credentials?.country)
-              if (signinCountry) {
+            if (!user.signupLocation || !user.signupState) {
+              const signinGeo = await inferSignupGeo(req, {
+                country: credentials?.country,
+                state: credentials?.state,
+              })
+              const backfillValues: SignupGeoValues = {}
+              if (!user.signupLocation && signinGeo.signupLocation) {
+                backfillValues.signupLocation = signinGeo.signupLocation
+              }
+              if (!user.signupState && signinGeo.signupState) {
+                backfillValues.signupState = signinGeo.signupState
+              }
+
+              if (backfillValues.signupLocation || backfillValues.signupState) {
                 try {
                   await db.update(users)
-                    .set({ signupLocation: signinCountry })
-                    .where(and(
-                      eq(users.id, user.id),
-                      isNull(users.signupLocation),
-                    ))
+                    .set(backfillValues)
+                    .where(eq(users.id, user.id))
                 } catch (error) {
-                  if (!isMissingColumnError(error, 'signup_location')) {
+                  const prunedBackfillValues = pruneMissingSignupColumns(backfillValues, error)
+                  if (!prunedBackfillValues) {
                     throw error
+                  }
+
+                  if (prunedBackfillValues.signupLocation || prunedBackfillValues.signupState) {
+                    await db.update(users)
+                      .set(prunedBackfillValues)
+                      .where(eq(users.id, user.id))
                   }
                 }
               }

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { inferCountryFromHeaders } from '@/lib/geo-country'
+import { inferGeoFromHeaders } from '@/lib/geo-country'
 
 export async function GET(request: Request) {
-  const country = await inferCountryFromHeaders(request.headers)
-  return NextResponse.json({ country }, {
+  const geo = await inferGeoFromHeaders(request.headers)
+  return NextResponse.json({ country: geo.country, state: geo.state }, {
     headers: { 'Cache-Control': 'no-store' },
   })
 }

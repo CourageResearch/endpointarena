@@ -5,7 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
-import { detectCountryFromClient } from '@/lib/client-country'
+import { detectGeoFromClient } from '@/lib/client-country'
 
 function normalizeCallbackUrl(raw: string | null): string {
   if (!raw) return '/markets'
@@ -31,7 +31,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/markets')
-  const [country, setCountry] = useState('')
+  const [geo, setGeo] = useState({ country: '', state: '' })
 
   useEffect(() => {
     let cancelled = false
@@ -59,9 +59,9 @@ export default function LoginPage() {
       window.history.replaceState(null, '', nextUrl)
     }
 
-    detectCountryFromClient().then((value) => {
-      if (!cancelled && value) {
-        setCountry(value)
+    detectGeoFromClient().then((detectedGeo) => {
+      if (!cancelled && (detectedGeo.country || detectedGeo.state)) {
+        setGeo(detectedGeo)
       }
     })
 
@@ -78,16 +78,17 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const detectedCountry = country || await detectCountryFromClient()
-      if (!country && detectedCountry) {
-        setCountry(detectedCountry)
+      const detectedGeo = geo.country || geo.state ? geo : await detectGeoFromClient()
+      if (!geo.country && !geo.state && (detectedGeo.country || detectedGeo.state)) {
+        setGeo(detectedGeo)
       }
 
       const result = await signIn('credentials', {
         email,
         password,
         intent: 'signin',
-        country: detectedCountry,
+        country: detectedGeo.country,
+        state: detectedGeo.state,
         redirect: false,
         callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
       })
