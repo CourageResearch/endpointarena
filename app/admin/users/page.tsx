@@ -82,6 +82,12 @@ function formatMoney(value: number): string {
   }).format(value)
 }
 
+function normalizeUnknownToDash(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed || trimmed.toLowerCase() === 'unknown') return '—'
+  return trimmed
+}
+
 async function deleteUser(formData: FormData) {
   'use server'
 
@@ -243,8 +249,8 @@ export default async function AdminUsersPage({
 
   const rows = userRows.map((user) => {
     const email = user.email ?? '—'
-    const country = formatStoredCountry(user.signupLocation)
-    const region = formatStoredRegion(user.signupState)
+    const country = normalizeUnknownToDash(formatStoredCountry(user.signupLocation))
+    const region = normalizeUnknownToDash(formatStoredRegion(user.signupState))
     const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : '—')
     const actorId = getHumanActorId(user.id)
     const money = cashBalanceByActorId.get(actorId) ?? user.pointsBalance ?? 0
@@ -332,15 +338,15 @@ export default async function AdminUsersPage({
           <div className="mt-4 overflow-hidden">
             <table className="w-full table-fixed text-[13px]">
               <colgroup>
-                <col className="w-[16%]" />
+                <col className="w-[15%]" />
                 <col className="w-[8%]" />
-                <col className="w-[27%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[8%]" />
-                <col className="w-[8%]" />
-                <col className="w-[5%]" />
+                <col className="w-[24%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[7%]" />
+                <col className="w-[10%]" />
                 <col className="w-[6%]" />
+                <col className="w-[10%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-[#e8ddd0]">
@@ -401,7 +407,7 @@ export default async function AdminUsersPage({
                         <span className="block truncate" title={user.name || '—'}>{user.name || '—'}</span>
                       </td>
                       <td className="px-1.5 py-2 text-[#1a1a1a]">
-                        <span className="block max-w-[28ch] truncate" title={email}>{email}</span>
+                        <span className="block max-w-[22ch] truncate" title={email}>{email}</span>
                       </td>
                       <td className="px-1.5 py-2 text-[#8a8075]">
                         <span className="block truncate" title={country}>{country}</span>
