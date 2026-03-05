@@ -167,7 +167,11 @@ function MarketCard({
     >
       <div className="flex h-full flex-col rounded-sm bg-white/95 p-4 transition-colors duration-150 group-hover:bg-[#fffdfa] group-focus-visible:bg-[#fffdfa] sm:p-5">
         <div>
-          <h3 className="min-w-0 line-clamp-2 text-[18px] font-semibold leading-tight text-[#1a1a1a] transition-colors duration-150 group-hover:text-[#111111] group-focus-visible:text-[#111111]">
+          <h3
+            title={drugName}
+            aria-label={drugName}
+            className="h-6 min-w-0 truncate whitespace-nowrap overflow-hidden text-ellipsis text-[18px] font-semibold leading-tight text-[#1a1a1a] transition-colors duration-150 group-hover:text-[#111111] group-focus-visible:text-[#111111]"
+          >
             {drugName}
           </h3>
 
