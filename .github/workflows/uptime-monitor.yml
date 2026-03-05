@@ -1,0 +1,70 @@
+name: Uptime Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check production health endpoint
+        id: health
+        env:
+          HEALTHCHECK_URL: https://endpointarena.com/api/health
+        run: |
+          set -euo pipefail
+
+          status_code="$(curl -sS --retry 2 --retry-connrefused --max-time 10 -o /tmp/health.json -w "%{http_code}" "$HEALTHCHECK_URL")"
+          echo "status_code=$status_code" >> "$GITHUB_OUTPUT"
+          echo "HTTP $status_code"
+          cat /tmp/health.json
+
+          if [ "$status_code" -ne 200 ]; then
+            echo "Health endpoint returned non-200 status"
+            exit 1
+          fi
+
+          node <<'NODE'
+          const fs = require('fs')
+          const raw = fs.readFileSync('/tmp/health.json', 'utf8')
+
+          let payload
+          try {
+            payload = JSON.parse(raw)
+          } catch (error) {
+            console.error('Health endpoint returned invalid JSON')
+            process.exit(1)
+          }
+
+          if (!payload || payload.ok !== true) {
+            console.error('Health endpoint JSON did not contain ok=true')
+            process.exit(1)
+          }
+          NODE
+
+      - name: Send webhook alert (optional)
+        if: failure() && secrets.UPTIME_ALERT_WEBHOOK_URL != ''
+        env:
+          UPTIME_ALERT_WEBHOOK_URL: ${{ secrets.UPTIME_ALERT_WEBHOOK_URL }}
+          STATUS_CODE: ${{ steps.health.outputs.status_code }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          payload="$(cat <<JSON
+          {"text":"Endpoint Arena healthcheck failed at ${timestamp}. URL: https://endpointarena.com/api/health status=${STATUS_CODE:-unknown}. Run: https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}"}
+          JSON
+          )"
+
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "$UPTIME_ALERT_WEBHOOK_URL"
