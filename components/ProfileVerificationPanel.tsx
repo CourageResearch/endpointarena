@@ -183,7 +183,7 @@ export function ProfileVerificationPanel() {
 
   if (statusLoading && !statusData) {
     return (
-      <div className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 text-sm text-[#8a8075]">Loading verification…</div>
+      <div className="mt-6 rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 text-sm text-[#8a8075]">Loading verification…</div>
     )
   }
 
@@ -196,7 +196,7 @@ export function ProfileVerificationPanel() {
   }
 
   return (
-    <div className="mt-6 space-y-4 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
+    <div className="mt-6 space-y-4 rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 sm:p-5">
       <div>
         <p className="text-sm font-medium text-[#1a1a1a]">Unlock trading</p>
         <p className="mt-1 text-sm text-[#6d645a]">Complete one X verification tweet to unlock Humans vs AI gameplay and earn points.</p>
@@ -207,7 +207,7 @@ export function ProfileVerificationPanel() {
       ) : null}
 
       {!statusData?.connected ? (
-        <div className="rounded-sm border border-[#e8ddd0] bg-white/80 p-4">
+        <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4">
           <p className="text-sm text-[#6d645a]">Step 1: Connect your X account.</p>
           <button
             type="button"
@@ -225,7 +225,7 @@ export function ProfileVerificationPanel() {
 
       {statusData?.connected ? (
         <div className="space-y-4">
-          <div className="rounded-sm border border-[#e8ddd0] bg-white/80 p-4">
+          <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4">
             <p className="text-sm text-[#6d645a]">Step 2: Generate your unique verification tag and post the default tweet.</p>
             <button
               type="button"
@@ -238,7 +238,7 @@ export function ProfileVerificationPanel() {
           </div>
 
           {challenge ? (
-            <div className="rounded-sm border border-[#e8ddd0] bg-white/80 p-4">
+            <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4">
               <p className="text-sm text-[#6d645a]">Step 3: Post this tweet on X.</p>
               <p className="mt-2 rounded-sm bg-[#f8f3ec] p-3 text-xs text-[#4d453c]">{challenge.tweetTemplate}</p>
               <a

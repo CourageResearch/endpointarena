@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { gte, sql } from 'drizzle-orm'
-import { db, users, waitlistEntries } from '@/lib/db'
+import { db, contactMessages, users, waitlistEntries } from '@/lib/db'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
@@ -72,6 +72,16 @@ async function getUsersCount() {
   }
 }
 
+async function getContactCount() {
+  try {
+    const rows = await db.select({ count: sql<number>`count(*)` }).from(contactMessages)
+    return rows[0]?.count ?? 0
+  } catch (error) {
+    console.error('Failed to load contact count:', error)
+    return 0
+  }
+}
+
 export async function AdminConsoleLayout({
   title,
   description,
@@ -79,9 +89,10 @@ export async function AdminConsoleLayout({
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
-  const [waitlistBadge, usersCount] = await Promise.all([
+  const [waitlistBadge, usersCount, contactCount] = await Promise.all([
     getWaitlistBadgeData(),
     getUsersCount(),
+    getContactCount(),
   ])
   const tabsById = new Map(ADMIN_TABS.map((tab) => [tab.id, tab]))
 
@@ -123,6 +134,18 @@ export async function AdminConsoleLayout({
             }`}
           >
             {usersCount}
+          </span>
+        ) : null}
+        {tab.id === 'contact' ? (
+          <span
+            title="Total contact messages"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isActive
+                ? 'bg-white/20 text-white'
+                : 'bg-[#f3ebe0] text-[#8a8075]'
+            }`}
+          >
+            {contactCount}
           </span>
         ) : null}
       </Link>

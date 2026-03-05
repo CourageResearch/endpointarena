@@ -74,10 +74,16 @@ function PredictionDetail({ prediction, outcome }: { prediction: Prediction; out
       {/* Result badge if FDA decided */}
       {fdaDecided && (
         <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
-          isPredictionCorrect ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+          isPredictionCorrect == null
+            ? 'bg-yellow-500/10 text-yellow-400'
+            : isPredictionCorrect
+              ? 'bg-emerald-500/10 text-emerald-400'
+              : 'bg-red-500/10 text-red-400'
         }`}>
-          <span>{isPredictionCorrect ? '✓' : '✗'}</span>
-          <span>{isPredictionCorrect ? 'Correct' : 'Incorrect'} - FDA ruled {outcome}</span>
+          <span>{isPredictionCorrect == null ? '—' : isPredictionCorrect ? '✓' : '✗'}</span>
+          <span>
+            {isPredictionCorrect == null ? 'Unscored' : isPredictionCorrect ? 'Correct' : 'Incorrect'} - FDA ruled {outcome}
+          </span>
         </div>
       )}
 
@@ -177,6 +183,16 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
   }
 
   const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions, expandedPrediction) : null
+  const outcomeBadgeClass = event.outcome === 'Approved'
+    ? 'bg-emerald-500/20 text-emerald-400'
+    : event.outcome === 'Rejected'
+      ? 'bg-red-500/20 text-red-400'
+      : 'bg-yellow-500/20 text-yellow-400'
+  const outcomeBadgeLabel = event.outcome === 'Approved'
+    ? 'APPROVED'
+    : event.outcome === 'Rejected'
+      ? 'REJECTED'
+      : event.outcome.toUpperCase()
 
   return (
     <>
@@ -196,10 +212,8 @@ export function PastFDAEventRow({ event }: { event: FDAEvent }) {
           <AcronymTooltip acronym={event.applicationType} className="text-zinc-400" />
         </td>
         <td className="text-center px-4 py-3">
-          <span className={`px-2 py-1 rounded text-xs font-medium ${
-            event.outcome === 'Approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-          }`}>
-            {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
+          <span className={`px-2 py-1 rounded text-xs font-medium ${outcomeBadgeClass}`}>
+            {outcomeBadgeLabel}
           </span>
         </td>
         {MODEL_IDS.map((modelId) => {
@@ -338,6 +352,16 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
   }
 
   const expandedPred = expandedPrediction ? findPredictionByModelId(event.predictions, expandedPrediction) : null
+  const outcomeBadgeClass = event.outcome === 'Approved'
+    ? 'bg-emerald-500/20 text-emerald-400'
+    : event.outcome === 'Rejected'
+      ? 'bg-red-500/20 text-red-400'
+      : 'bg-yellow-500/20 text-yellow-400'
+  const outcomeBadgeLabel = event.outcome === 'Approved'
+    ? 'APPROVED'
+    : event.outcome === 'Rejected'
+      ? 'REJECTED'
+      : event.outcome.toUpperCase()
 
   return (
     <div
@@ -349,10 +373,8 @@ export function MobilePastFDAEventCard({ event }: { event: FDAEvent }) {
           <div className="font-medium text-white truncate">{event.drugName}</div>
           <div className="text-xs text-zinc-500 truncate">{event.companyName}</div>
         </div>
-        <span className={`ml-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-          event.outcome === 'Approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-        }`}>
-          {event.outcome === 'Approved' ? 'APPROVED' : 'REJECTED'}
+        <span className={`ml-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${outcomeBadgeClass}`}>
+          {outcomeBadgeLabel}
         </span>
       </div>
       <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">

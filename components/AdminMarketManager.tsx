@@ -657,12 +657,15 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
           </button>
         </div>
         {runProgress && (
-          <div className="mt-3 rounded-lg border border-[#e8ddd0] bg-white/70 p-3 space-y-2">
-            <p className="text-xs text-[#8a8075]">
-              {runProgress.runDate
-                ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
-                : 'Initializing run'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
-            </p>
+          <div className="mt-3 rounded-lg border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Run Overview</p>
+              <p className="text-xs text-[#8a8075]">
+                {runProgress.runDate
+                  ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
+                  : 'Initializing run'} • {runProgress.openMarkets} open market{runProgress.openMarkets === 1 ? '' : 's'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
+              </p>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1">
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Completed</p>
@@ -691,17 +694,22 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            {runProgress.currentActivity && (
-              <div className="rounded border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-[#265f8f]">Current Step</p>
-                <p className="mt-1 text-xs text-[#2e5a7a]">{runProgress.currentActivity}</p>
-              </div>
-            )}
-            {runProgress.latestResult && (
-              <p className="text-xs text-[#5f564c]">
-                Latest ({statusLabel(runProgress.latestResult.status)}): {formatProgressLog(runProgress.latestResult)}
-              </p>
-            )}
+            <div className="grid gap-2 md:grid-cols-2">
+              {runProgress.currentActivity && (
+                <div className="rounded border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#265f8f]">Current Step</p>
+                  <p className="mt-1 text-xs text-[#2e5a7a]">{runProgress.currentActivity}</p>
+                </div>
+              )}
+              {runProgress.latestResult && (
+                <div className="rounded border border-[#e8ddd0] bg-white px-2 py-1.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Latest Result</p>
+                  <p className="mt-1 text-xs text-[#5f564c]">
+                    {statusLabel(runProgress.latestResult.status)}: {formatProgressLog(runProgress.latestResult)}
+                  </p>
+                </div>
+              )}
+            </div>
             {runProgress.errorCount > 0 && runProgress.latestError && (
               <div className="rounded border border-[#c43a2b]/35 bg-[#c43a2b]/10 px-2 py-1.5">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Latest Failure</p>
@@ -710,52 +718,90 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             )}
           </div>
         )}
-        {runLog.length > 0 && (
-          <div className="mt-3 rounded-lg border border-[#e8ddd0] bg-white/70 p-3">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
-              {runningDaily ? 'Live Activity' : 'Recent Activity'}
-            </p>
-            <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
-              {runLog.map((line, index) => (
-                <p key={`${line}-${index}`} className="text-xs text-[#6f665b]">{line}</p>
-              ))}
-            </div>
-          </div>
-        )}
-        {lastRunSummary && (
-          <div className={`mt-3 rounded-lg border px-3 py-2 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
-            <p className={`text-xs ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
-              Run {lastRunSummary.runDateLabel} UTC ({lastRunSummary.durationSeconds}s) •
-              {' '}Worked {lastRunSummary.ok} •
-              {' '}Failed {lastRunSummary.error} •
-              {' '}Skipped {lastRunSummary.skipped} •
-              {' '}Open Markets {lastRunSummary.openMarkets}
-            </p>
-            {lastRunSummary.nonOkModels.length > 0 && (
-              <p className="mt-1 text-xs text-[#8d2c22]">
-                Issues: {lastRunSummary.nonOkModels.join(', ')}
-              </p>
+
+        {(runLog.length > 0 || errorConsole.length > 0) && (
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {runLog.length > 0 && (
+              <div className="rounded-lg border border-[#e8ddd0] bg-white/70 p-3">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
+                  {runningDaily ? 'Live Activity Feed' : 'Recent Activity Feed'}
+                </p>
+                <div className="reasoning-scrollbox mt-2 max-h-44 overflow-y-auto space-y-1">
+                  {runLog.map((line, index) => (
+                    <p key={`${line}-${index}`} className="text-xs text-[#6f665b]">{line}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {errorConsole.length > 0 && (
+              <div className="rounded-lg border border-[#c43a2b]/40 bg-[#2a1311] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#f5b5ae]">
+                    {runningDaily ? 'Error Feed (Live)' : 'Error Feed (Last Run)'}
+                  </p>
+                  <p className="text-[11px] text-[#f5b5ae]/80">
+                    {errorConsole.length} issue{errorConsole.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="reasoning-scrollbox mt-2 max-h-44 overflow-y-auto space-y-1">
+                  {errorConsole.map((entry) => (
+                    <p key={entry.id} className="text-xs text-[#ffd1cb]">
+                      {entry.utcTime} UTC {entry.message}
+                    </p>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {errorConsole.length > 0 && (
-          <div className="mt-3 rounded-lg border border-[#c43a2b]/40 bg-[#2a1311] p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#f5b5ae]">
-                {runningDaily ? 'Error Console (Live)' : 'Error Console (Last Run)'}
+        {lastRunSummary && (
+          <div className={`mt-3 rounded-lg border px-3 py-3 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className={`text-[11px] uppercase tracking-[0.08em] ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
+                Run Recap
               </p>
-              <p className="text-[11px] text-[#f5b5ae]/80">
-                {errorConsole.length} issue{errorConsole.length === 1 ? '' : 's'}
+              <p className={`text-xs ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
+                {lastRunSummary.runDateLabel} UTC
               </p>
             </div>
-            <div className="mt-2 max-h-44 overflow-y-auto space-y-1">
-              {errorConsole.map((entry) => (
-                <p key={entry.id} className="text-xs text-[#ffd1cb]">
-                  {entry.utcTime} UTC {entry.message}
-                </p>
-              ))}
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="rounded border border-[#e8ddd0] bg-white/70 px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Duration</p>
+                <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.durationSeconds}s</p>
+              </div>
+              <div className="rounded border border-[#e8ddd0] bg-white/70 px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Open Markets</p>
+                <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.openMarkets}</p>
+              </div>
+              <div className="rounded border border-[#e8ddd0] bg-white/70 px-2 py-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Total Non-OK Models</p>
+                <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.nonOkModels.length}</p>
+              </div>
             </div>
+            {lastRunSummary.nonOkModels.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Model Issues</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {lastRunSummary.nonOkModels.map((entry, index) => (
+                    (() => {
+                      const normalized = entry.toLowerCase()
+                      const isSkipped = normalized.includes('skipped')
+                      const chipClass = isSkipped
+                        ? 'rounded border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-0.5 text-xs text-[#6f665b]'
+                        : 'rounded border border-[#c43a2b]/30 bg-[#fff3f1] px-2 py-0.5 text-xs text-[#8d2c22]'
+
+                      return (
+                        <span key={`${entry}-${index}`} className={chipClass}>
+                          {entry}
+                        </span>
+                      )
+                    })()
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

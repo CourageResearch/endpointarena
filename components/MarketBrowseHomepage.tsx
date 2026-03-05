@@ -156,7 +156,8 @@ function MarketCard({
   const daysBadge = getDaysBadge(entry.daysUntil)
   const modelStances = getModelStanceMap(entry)
   const approveModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') === 'YES')
-  const rejectModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') !== 'YES')
+  const rejectModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') === 'NO')
+  const pendingModelCount = MODEL_IDS.length - approveModelIds.length - rejectModelIds.length
 
   return (
     <Link
@@ -218,7 +219,7 @@ function MarketCard({
                   </li>
                 ))
               ) : (
-                <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">-</li>
+                <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">{pendingModelCount > 0 ? `${pendingModelCount} pending` : '-'}</li>
               )}
             </ul>
           </div>

@@ -34,6 +34,7 @@ export function PredictionModal({ prediction, drugName, outcome, onClose }: Pred
   const isPredictionCorrect = prediction.correct
   const isApproved = prediction.prediction === 'approved'
   const fdaDecided = outcome !== 'Pending'
+  const outcomeColor = outcome === 'Approved' ? '#a3b396' : outcome === 'Rejected' ? '#d9a08a' : '#b3a58f'
 
   // Mount check for portal
   useEffect(() => {
@@ -104,18 +105,28 @@ export function PredictionModal({ prediction, drugName, outcome, onClose }: Pred
           {/* Result Badge (if FDA decided) */}
           {fdaDecided && (
             <div className="flex items-center gap-2 p-3 rounded-lg border" style={{
-              backgroundColor: isPredictionCorrect ? 'rgba(125, 142, 110, 0.1)' : 'rgba(192, 122, 95, 0.1)',
-              borderColor: isPredictionCorrect ? 'rgba(125, 142, 110, 0.3)' : 'rgba(192, 122, 95, 0.3)',
+              backgroundColor:
+                isPredictionCorrect == null
+                  ? 'rgba(179, 165, 143, 0.1)'
+                  : isPredictionCorrect
+                    ? 'rgba(125, 142, 110, 0.1)'
+                    : 'rgba(192, 122, 95, 0.1)',
+              borderColor:
+                isPredictionCorrect == null
+                  ? 'rgba(179, 165, 143, 0.3)'
+                  : isPredictionCorrect
+                    ? 'rgba(125, 142, 110, 0.3)'
+                    : 'rgba(192, 122, 95, 0.3)',
             }}>
-              <span className="text-lg" style={{ color: isPredictionCorrect ? '#a3b396' : '#d9a08a' }}>
-                {isPredictionCorrect ? '✓' : '✗'}
+              <span className="text-lg" style={{ color: isPredictionCorrect == null ? '#b3a58f' : isPredictionCorrect ? '#a3b396' : '#d9a08a' }}>
+                {isPredictionCorrect == null ? '—' : isPredictionCorrect ? '✓' : '✗'}
               </span>
               <div>
-                <div className="font-medium" style={{ color: isPredictionCorrect ? '#a3b396' : '#d9a08a' }}>
-                  {isPredictionCorrect ? 'Correct Prediction' : 'Incorrect Prediction'}
+                <div className="font-medium" style={{ color: isPredictionCorrect == null ? '#b3a58f' : isPredictionCorrect ? '#a3b396' : '#d9a08a' }}>
+                  {isPredictionCorrect == null ? 'Unscored Prediction' : isPredictionCorrect ? 'Correct Prediction' : 'Incorrect Prediction'}
                 </div>
                 <div className="text-xs text-zinc-500">
-                  FDA ruled: <span style={{ color: outcome === 'Approved' ? '#a3b396' : '#d9a08a' }}>{outcome}</span>
+                  FDA ruled: <span style={{ color: outcomeColor }}>{outcome}</span>
                 </div>
               </div>
             </div>
