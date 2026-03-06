@@ -11,7 +11,7 @@ interface MarketGeneratorConfig {
 
 const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
 const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
-const LLAMA_4_MODEL = 'meta-llama/llama-4-maverick-17b-128e-instruct'
+const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 const KIMI_MODEL = 'moonshotai/Kimi-K2-Thinking'
 const MINIMAX_MODEL = 'MiniMax-M2.5'
 
@@ -243,7 +243,7 @@ async function generateLlama4MarketDecision(input: MarketDecisionInput): Promise
     baseURL: 'https://api.groq.com/openai/v1',
     model: LLAMA_4_MODEL,
     input,
-    errorLabel: 'Llama 4 Maverick',
+    errorLabel: 'Llama 4 Scout',
     maxTokens: 8_192,
     temperature: 0.4,
   })

@@ -98,8 +98,8 @@ export const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPri
     outputUsdPer1MTokens: 1.68,
   },
   'llama-4': {
-    inputUsdPer1MTokens: 0.59,
-    outputUsdPer1MTokens: 0.79,
+    inputUsdPer1MTokens: 0.15,
+    outputUsdPer1MTokens: 0.6,
   },
   'kimi-k2': {
     inputUsdPer1MTokens: 2,

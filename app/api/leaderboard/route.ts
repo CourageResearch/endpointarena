@@ -1,40 +1,26 @@
-import { NextResponse } from 'next/server'
-import { db, fdaPredictions } from '@/lib/db'
-import { eq } from 'drizzle-orm'
+import { NextRequest, NextResponse } from 'next/server'
+import { getLeaderboardData } from '@/lib/leaderboard-data'
+import type { LeaderboardPredictionMode } from '@/lib/model-decision-snapshots'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const allPredictions = await db.query.fdaPredictions.findMany({
-    where: eq(fdaPredictions.predictorType, 'model'),
-    with: { fdaEvent: true },
-  })
+function parseMode(value: string | null): LeaderboardPredictionMode {
+  return value === 'first' ? 'first' : 'final'
+}
 
-  const predictorStats = new Map<string, { correct: number; total: number; type: string }>()
+export async function GET(request: NextRequest) {
+  const mode = parseMode(new URL(request.url).searchParams.get('mode'))
+  const { leaderboard } = await getLeaderboardData(mode)
 
-  for (const pred of allPredictions) {
-    const outcome = pred.fdaEvent?.outcome
-    const isDecided = outcome === 'Approved' || outcome === 'Rejected'
-    if (!isDecided) continue
-
-    const isCorrect =
-      (pred.prediction === 'approved' && outcome === 'Approved') ||
-      (pred.prediction === 'rejected' && outcome === 'Rejected')
-
-    const key = pred.predictorId
-    const current = predictorStats.get(key) || { correct: 0, total: 0, type: pred.predictorType }
-    current.total++
-    if (isCorrect) current.correct++
-    predictorStats.set(key, current)
-  }
-
-  const entries = Array.from(predictorStats.entries())
-    .map(([id, stats]) => ({
-      predictorId: id,
-      predictorType: stats.type,
-      totalPredictions: stats.total,
-      correctPredictions: stats.correct,
-      accuracy: stats.total > 0 ? (stats.correct / stats.total) * 100 : 0,
+  const entries = leaderboard
+    .map((entry) => ({
+      predictorId: entry.id,
+      predictorType: 'model',
+      totalPredictions: entry.decided,
+      correctPredictions: entry.correct,
+      accuracy: entry.accuracy,
+      pendingPredictions: entry.pending,
+      mode,
     }))
     .sort((a, b) =>
       b.accuracy - a.accuracy ||
@@ -42,7 +28,7 @@ export async function GET() {
       b.totalPredictions - a.totalPredictions ||
       a.predictorId.localeCompare(b.predictorId)
     )
-    .map((entry, i) => ({ ...entry, rank: i + 1 }))
+    .map((entry, index) => ({ ...entry, rank: index + 1 }))
 
   return NextResponse.json(entries)
 }

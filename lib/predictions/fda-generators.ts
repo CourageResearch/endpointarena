@@ -11,7 +11,7 @@ const GEMINI_25_MODEL = 'gemini-2.5-pro'
 const GEMINI_3_MODEL = 'gemini-3-pro-preview'
 const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
 const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
-const LLAMA_4_MODEL = 'meta-llama/llama-4-maverick-17b-128e-instruct'
+const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 const KIMI_MODEL = 'moonshotai/Kimi-K2-Thinking'
 const MINIMAX_MODEL = 'MiniMax-M2.5'
 const CLAUDE_MAX_OUTPUT_TOKENS = 4_096
@@ -256,7 +256,7 @@ export async function generateLlama4FDAPrediction(event: FDAEventInfo): Promise<
     baseURL: 'https://api.groq.com/openai/v1',
     model: LLAMA_4_MODEL,
     event,
-    errorLabel: 'Llama 4 Maverick',
+    errorLabel: 'Llama 4 Scout',
     maxTokens: 8_192,
     temperature: 0.4,
   })

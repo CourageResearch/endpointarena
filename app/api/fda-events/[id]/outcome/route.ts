@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
+import { db, fdaCalendarEvents } from '@/lib/db'
 import { ensureAdmin } from '@/lib/auth'
 import { reopenMarketForEvent, resolveMarketForEvent } from '@/lib/markets/engine'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
@@ -63,26 +63,8 @@ export async function PATCH(
 
     if (outcome) {
       if (outcome !== 'Pending') {
-        const predictions = await db.query.fdaPredictions.findMany({
-          where: eq(fdaPredictions.fdaEventId, id),
-        })
-
-        for (const prediction of predictions) {
-          const isCorrect =
-            (prediction.prediction === 'approved' && outcome === 'Approved') ||
-            (prediction.prediction === 'rejected' && outcome === 'Rejected')
-
-          await db.update(fdaPredictions)
-            .set({ correct: isCorrect })
-            .where(eq(fdaPredictions.id, prediction.id))
-        }
-
         await resolveMarketForEvent(id, outcome)
       } else {
-        await db.update(fdaPredictions)
-          .set({ correct: null })
-          .where(eq(fdaPredictions.fdaEventId, id))
-
         await reopenMarketForEvent(id)
       }
     }
@@ -106,4 +88,3 @@ export async function PATCH(
     return errorResponse(error, requestId, 'Failed to update FDA event')
   }
 }
-

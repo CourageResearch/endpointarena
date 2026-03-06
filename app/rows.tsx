@@ -13,9 +13,11 @@ import {
 } from '@/lib/constants'
 import type { Prediction, FDAEvent } from '@/lib/types'
 import { ModelIcon } from '@/components/ModelIcon'
+import { EventDateBadge } from '@/components/EventDateBadge'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
+import { formatEventDateLabel } from '@/lib/event-dates'
 
 const PREDICTION_ORDER: ModelId[] = [...MODEL_IDS]
 const DETAIL_TABLE_FIXED_COLUMNS = 5
@@ -50,12 +52,11 @@ ${reasoning}`
 }
 
 function buildClipboardTextForEvent(event: FDAEvent): string {
-  const pdufaDate = new Date(event.pdufaDate).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+  const pdufaDate = formatEventDateLabel(
+    event.pdufaDate,
+    event.dateKind,
+    { month: 'numeric', day: 'numeric', year: 'numeric' },
+  )
   const primaryTicker = event.symbols?.split(',')[0]?.trim() || '—'
   const eventSummary = event.eventDescription || event.therapeuticArea || '—'
 
@@ -77,6 +78,13 @@ function buildClipboardTextForEvent(event: FDAEvent): string {
     .join('\n\n---\n\n')
 
   return `${header.join('\n')}\n\n${modelBlocks}`
+}
+
+function formatRowDate(event: Pick<FDAEvent, 'pdufaDate' | 'dateKind'>, options: Intl.DateTimeFormatOptions = {
+  month: 'numeric',
+  day: 'numeric',
+}) {
+  return formatEventDateLabel(event.pdufaDate, event.dateKind, options)
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -403,6 +411,50 @@ function ClinicalTrialLink({ nctId }: { nctId: string }) {
   )
 }
 
+function getPredictionHistory(prediction: Prediction): Array<NonNullable<Prediction['history']>[number]> {
+  if (prediction.history && prediction.history.length > 0) {
+    return prediction.history
+  }
+
+  return [{
+    id: `${prediction.predictorId}-latest`,
+    predictorId: prediction.predictorId,
+    prediction: prediction.prediction,
+    confidence: prediction.confidence,
+    reasoning: prediction.reasoning,
+    durationMs: prediction.durationMs,
+    correct: prediction.correct,
+    createdAt: prediction.createdAt,
+    source: prediction.source,
+    runSource: prediction.runSource,
+    approvalProbability: prediction.approvalProbability,
+    action: prediction.action ?? null,
+    linkedMarketActionId: prediction.linkedMarketActionId ?? null,
+  }]
+}
+
+function formatPredictionSnapshotTime(value: string | undefined): string {
+  if (!value) return 'Unknown time'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown time'
+  return date.toLocaleString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }) + ' UTC'
+}
+
+function formatPredictionAction(entry: ReturnType<typeof getPredictionHistory>[number]): string {
+  if (!entry.action) return 'No proposed action'
+  const amount = entry.action.amountUsd >= 100
+    ? Math.round(entry.action.amountUsd).toString()
+    : entry.action.amountUsd.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+  return `${entry.action.type} $${amount}`
+}
+
 function PredictionDetail({
   prediction,
   outcome,
@@ -420,6 +472,7 @@ function PredictionDetail({
   const isApproved = prediction.prediction === 'approved'
   const fdaDecided = outcome !== 'Pending'
   const isPredictionCorrect = prediction.correct
+  const history = getPredictionHistory(prediction)
   const copyButtonLabel =
     copyStatus === 'copied'
       ? `Copied all ${MODEL_IDS.length}`
@@ -436,6 +489,9 @@ function PredictionDetail({
             {isApproved ? 'APPROVE' : 'REJECT'}
           </span>
           <span className="text-sm text-black/40"><span className="font-mono">{prediction.confidence}%</span> confidence</span>
+          {prediction.approvalProbability != null ? (
+            <span className="text-sm text-black/40">p={Math.round(prediction.approvalProbability * 100)}%</span>
+          ) : null}
         </div>
         {showCopyAllButton && onCopyAllPredictions && (
           <button
@@ -475,6 +531,26 @@ function PredictionDetail({
         text={prediction.reasoning}
         className="truncate-wrap text-sm leading-relaxed text-black/50"
       />
+
+      <div className="border-t border-black/[0.06] pt-3">
+        <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-black/35">Snapshot History</div>
+        <div className="space-y-2">
+          {history.map((entry) => (
+            <div key={entry.id} className="rounded-md border border-black/[0.06] bg-white/70 px-3 py-2 text-xs text-black/45">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span style={{ color: entry.prediction === 'approved' ? STATUS_COLORS.Approved : STATUS_COLORS.Rejected }}>
+                  {entry.prediction === 'approved' ? 'APPROVE' : 'REJECT'}
+                  {entry.approvalProbability != null ? ` · p=${Math.round(entry.approvalProbability * 100)}%` : ''}
+                </span>
+                <span>{formatPredictionSnapshotTime(entry.createdAt)}</span>
+              </div>
+              <div className="mt-1">
+                {entry.confidence}% confidence · {formatPredictionAction(entry)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -495,7 +571,7 @@ export function BW2UpcomingRow({ event }: { event: FDAEvent }) {
     <>
       <tr className={`hover:bg-black/[0.015] transition-colors align-top ${rowDescription ? '' : 'border-b border-black/[0.06]'}`}>
         <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
-          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
+          <div>{formatRowDate(event)}</div>
         </td>
         <td className="px-4 py-5 text-sm font-medium text-black/70">
           <span className="flex max-w-full flex-wrap items-center gap-1 truncate-wrap">
@@ -593,7 +669,7 @@ export function BW2PastRow({ event }: { event: FDAEvent }) {
     <>
       <tr className={`hover:bg-black/[0.015] transition-colors align-top ${rowDescription ? '' : 'border-b border-black/[0.06]'}`}>
         <td className="px-4 py-5 text-sm text-black/40 font-mono whitespace-nowrap">
-          {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
+          <div>{formatRowDate(event)}</div>
         </td>
         <td className="px-4 py-5 text-sm font-medium text-black/70">
           <span className="flex max-w-full flex-wrap items-center gap-1 truncate-wrap">
@@ -705,8 +781,12 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
         </div>
         <div className="text-right shrink-0 ml-3">
           <div className="text-xs text-neutral-500">
-            {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
+            {formatRowDate(event)}
           </div>
+          <EventDateBadge
+            dateKind={event.dateKind}
+            className="mt-1 inline-flex rounded-full border border-[#D39D2E]/30 bg-[#D39D2E]/10 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-[#a66a17]"
+          />
           {ticker && (
             <a
               href={`https://finance.yahoo.com/quote/${ticker}`}
@@ -795,8 +875,12 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
         </div>
         <div className="text-right shrink-0 ml-3">
           <div className="text-xs text-neutral-500">
-            {new Date(event.pdufaDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })}
+            {formatRowDate(event)}
           </div>
+          <EventDateBadge
+            dateKind={event.dateKind}
+            className="mt-1 inline-flex rounded-full border border-[#D39D2E]/30 bg-[#D39D2E]/10 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-[#a66a17]"
+          />
           {ticker && (
             <a
               href={`https://finance.yahoo.com/quote/${ticker}`}

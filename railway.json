@@ -2,6 +2,6 @@
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
     "healthcheckPath": "/api/health",
-    "preDeployCommand": "npm run db:ensure-market-schema"
+    "preDeployCommand": "npm run db:ensure-market-schema && npm run db:add-cnpv-event-fields"
   }
 }

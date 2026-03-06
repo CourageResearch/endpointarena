@@ -7,12 +7,20 @@ import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 import { abbreviateType, findPredictionByModelId, MODEL_DISPLAY_NAMES, MODEL_IDS, type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
+import type { PredictionHistoryEntry } from '@/lib/types'
 
 type PredictionRow = {
   predictorId: string
   prediction: string
   confidence: number
   reasoning: string
+  approvalProbability?: number
+  action?: {
+    type: string
+    amountUsd: number
+    explanation: string
+  } | null
+  history?: PredictionHistoryEntry[]
 }
 
 interface FDAEvent {
@@ -49,10 +57,53 @@ function PredictionDirectionIcon({ prediction }: { prediction: string }) {
   )
 }
 
+function buildFallbackHistory(prediction: PredictionRow): PredictionHistoryEntry {
+  return {
+    id: `${prediction.predictorId}-latest`,
+    predictorId: prediction.predictorId,
+    prediction: prediction.prediction,
+    confidence: prediction.confidence,
+    reasoning: prediction.reasoning,
+    durationMs: null,
+    correct: null,
+    approvalProbability: prediction.approvalProbability,
+    action: prediction.action ?? null,
+  }
+}
+
+function getPredictionHistory(prediction: PredictionRow): PredictionHistoryEntry[] {
+  return prediction.history && prediction.history.length > 0
+    ? prediction.history
+    : [buildFallbackHistory(prediction)]
+}
+
+function formatHistoryTimestamp(value: string | undefined): string {
+  if (!value) return 'Unknown time'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown time'
+  return date.toLocaleString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }) + ' UTC'
+}
+
+function formatActionSummary(entry: PredictionHistoryEntry): string {
+  if (!entry.action) return 'No proposed action'
+  const usd = entry.action.amountUsd >= 100
+    ? Math.round(entry.action.amountUsd).toString()
+    : entry.action.amountUsd.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+  return `${entry.action.type} $${usd}`
+}
+
 function PredictionPanel({ modelId, prediction }: { modelId: ModelId; prediction: PredictionRow }) {
   const tag = prediction.prediction === 'approved' ? 'APPROVE' : 'REJECT'
   const tagColor = prediction.prediction === 'approved' ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral
   const reasoningText = prediction.reasoning?.trim() || 'No reasoning provided.'
+  const history = getPredictionHistory(prediction)
 
   return (
     <div className="rounded-sm border border-[#e8ddd0] bg-white/70 p-4">
@@ -62,12 +113,35 @@ function PredictionPanel({ modelId, prediction }: { modelId: ModelId; prediction
         <span className="text-sm text-[#8a8075]">
           <span className="font-mono">{prediction.confidence}%</span> confidence
         </span>
+        {prediction.approvalProbability != null ? (
+          <span className="text-sm text-[#8a8075]">p={Math.round(prediction.approvalProbability * 100)}%</span>
+        ) : null}
       </div>
 
       <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-[#7c7f82]">
         {reasoningText.split(/\n{2,}/).map((paragraph, index) => (
           <p key={index} className="whitespace-pre-line">{paragraph}</p>
         ))}
+      </div>
+
+      <div className="mt-4 border-t border-[#e8ddd0] pt-3">
+        <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Snapshot History</div>
+        <div className="space-y-2">
+          {history.map((entry) => (
+            <div key={entry.id} className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-xs text-[#7c7f82]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span style={{ color: entry.prediction === 'approved' ? BRAND_DOT_COLORS.green : BRAND_DOT_COLORS.coral }}>
+                  {entry.prediction === 'approved' ? 'APPROVE' : 'REJECT'}
+                  {entry.approvalProbability != null ? ` · p=${Math.round(entry.approvalProbability * 100)}%` : ''}
+                </span>
+                <span className="text-[#8a8075]">{formatHistoryTimestamp(entry.createdAt)}</span>
+              </div>
+              <div className="mt-1 text-[#8a8075]">
+                {entry.confidence}% confidence · {formatActionSummary(entry)}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

@@ -2,6 +2,8 @@ import { desc, eq, inArray } from 'drizzle-orm'
 import { db, fdaCalendarEvents, marketAccounts, marketActions, marketDailySnapshots, marketPositions, marketPriceSnapshots, marketRuns, predictionMarkets } from '@/lib/db'
 import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
 import { MODEL_IDS, type ModelId } from '@/lib/constants'
+import { getMarketDecisionHistoryByMarketIds } from '@/lib/model-decision-snapshots'
+import type { ModelDecisionSnapshot, PredictionHistoryEntry } from '@/lib/types'
 
 const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
 
@@ -18,6 +20,26 @@ function toRunStatus(value: string): OverviewResponse['recentRuns'][number]['sta
 
 function toIsoString(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
+}
+
+function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, eventId: string): ModelDecisionSnapshot {
+  return {
+    id: entry.id,
+    eventId,
+    marketId,
+    modelId: entry.predictorId,
+    source: entry.source ?? 'snapshot',
+    runSource: entry.runSource,
+    createdAt: entry.createdAt,
+    linkedMarketActionId: entry.linkedMarketActionId ?? null,
+    forecast: {
+      approvalProbability: entry.approvalProbability ?? (entry.prediction === 'approved' ? 1 : 0),
+      binaryCall: entry.prediction,
+      confidence: entry.confidence,
+      reasoning: entry.reasoning,
+    },
+    action: entry.action ?? null,
+  }
 }
 
 export async function getMarketOverviewData(): Promise<OverviewResponse> {
@@ -58,6 +80,9 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
         })
       : Promise.resolve([]),
   ])
+
+  const eventOutcomeById = new Map(events.map((event) => [event.id, event.outcome]))
+  const decisionHistoryByMarketId = await getMarketDecisionHistoryByMarketIds(openMarketIds, eventOutcomeById)
 
   const eventById = new Map(events.map((event) => [event.id, event]))
   const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
@@ -123,12 +148,17 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
       const key = `${market.id}:${account.modelId}`
       const position = positionByMarketModel.get(key)
       const latestAction = latestActionByMarketModel.get(key)
+      const decisionHistory = (decisionHistoryByMarketId.get(market.id) || [])
+        .filter((entry) => entry.predictorId === account.modelId)
+        .map((entry) => toDecisionSnapshot(entry, market.id, market.fdaEventId))
 
       return {
         modelId: account.modelId,
         yesShares: position?.yesShares ?? 0,
         noShares: position?.noShares ?? 0,
         costBasisUsd: costBasisByMarketModel.get(key) ?? 0,
+        latestDecision: decisionHistory[0] ?? null,
+        decisionHistory,
         latestAction: latestAction
           ? {
               action: latestAction.action,
@@ -163,6 +193,8 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
             symbols: event.symbols,
             applicationType: event.applicationType,
             pdufaDate: event.pdufaDate.toISOString(),
+            dateKind: event.dateKind as 'public' | 'synthetic',
+            cnpvAwardDate: toIsoString(event.cnpvAwardDate),
             eventDescription: event.eventDescription,
             outcome: event.outcome,
           }
@@ -234,6 +266,7 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
             companyName: event.companyName,
             symbols: event.symbols,
             pdufaDate: event.pdufaDate.toISOString(),
+            dateKind: event.dateKind as 'public' | 'synthetic',
           }
         : null,
     }]

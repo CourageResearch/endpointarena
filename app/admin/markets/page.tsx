@@ -33,8 +33,10 @@ async function getMarketAdminData() {
       symbols: event.symbols,
       pdufaDate: event.pdufaDate.toISOString(),
       outcome: event.outcome,
+      marketId: market?.id ?? null,
       marketStatus,
       marketPriceYes: market?.priceYes ?? null,
+      marketOpenedAt: market?.openedAt?.toISOString() ?? null,
     }
   })
 }

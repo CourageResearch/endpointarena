@@ -1,4 +1,5 @@
 import { getDaysUntilUtc } from './date'
+import { glossaryTermAnchor } from './glossary'
 
 // =============================================================================
 // CENTRALIZED CONSTANTS
@@ -80,9 +81,10 @@ export const MODEL_INFO: Record<ModelId, {
     provider: 'Baseten',
     features: ['Reasoning', 'High Throughput'],
   },
+  // Keep the legacy `llama-4` slot id stable so existing model state keeps mapping cleanly.
   'llama-4': {
-    name: 'Llama 4',
-    fullName: 'Llama 4 Maverick',
+    name: 'Llama',
+    fullName: 'Llama 4 Scout',
     color: '#2E7D32',
     provider: 'Groq (Meta)',
     features: ['Fast Inference', 'Reasoning'],
@@ -207,7 +209,7 @@ export const MODEL_DISPLAY_NAMES: Record<ModelVariant, string> = {
   'gemini-2.5': 'Gemini 2.5 Pro',
   'gemini-3-pro': 'Gemini 3 Pro',
   'deepseek-v3.2': 'DeepSeek V3.1',
-  'llama-4': 'Llama 4 Maverick',
+  'llama-4': 'Llama 4 Scout',
   'kimi-k2': 'Kimi K2 Thinking',
   'minimax-m2.5': 'MiniMax M2.5',
 }
@@ -220,7 +222,7 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   'gemini-2.5': 'Gemini 2.5 Pro',
   'gemini-3-pro': 'Gemini 3 Pro',
   'deepseek-v3.2': 'DeepSeek V3.1',
-  'llama-4': 'Llama 4 Maverick',
+  'llama-4': 'Llama 4 Scout',
   'kimi-k2': 'Kimi K2 Thinking',
   'minimax-m2.5': 'MiniMax M2.5',
 }
@@ -246,7 +248,7 @@ export const MODEL_SHORT_NAMES: Record<ModelVariant, string> = {
   'gemini-2.5': 'Gemini 2.5',
   'gemini-3-pro': 'Gemini 3',
   'deepseek-v3.2': 'DeepSeek',
-  'llama-4': 'Llama 4',
+  'llama-4': 'Llama',
   'kimi-k2': 'Kimi',
   'minimax-m2.5': 'MiniMax',
 }
@@ -260,6 +262,7 @@ export const STATUS_COLORS = {
 
 // Application type abbreviations
 export const APP_TYPE_ABBREV: Record<string, string> = {
+  'CNPV': 'CNPV',
   'Resubmitted BLA': 'rBLA',
   'Resubmitted Biologics License Application': 'rBLA',
   'Supplemental New Drug Application': 'sNDA',
@@ -271,5 +274,5 @@ export const APP_TYPE_ABBREV: Record<string, string> = {
 // Abbreviate application type for display
 export function abbreviateType(type: string): { display: string; anchor: string } {
   const abbrev = APP_TYPE_ABBREV[type] || type
-  return { display: abbrev, anchor: abbrev }
+  return { display: abbrev, anchor: glossaryTermAnchor(abbrev) }
 }

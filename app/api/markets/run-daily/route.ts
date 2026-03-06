@@ -5,7 +5,7 @@ import { errorResponse, parseOptionalJsonBody, createRequestId, successResponse 
 import { ValidationError } from '@/lib/errors'
 import { executeDailyRun } from '@/lib/markets/daily-run'
 import { normalizeRunDate } from '@/lib/markets/engine'
-import type { DailyRunResult, DailyRunStatus, DailyRunStreamEvent } from '@/lib/markets/types'
+import type { DailyRunActivityPhase, DailyRunResult, DailyRunStatus, DailyRunStreamEvent } from '@/lib/markets/types'
 import { MODEL_INFO } from '@/lib/constants'
 import { db, marketRuns } from '@/lib/db'
 import { appendMarketRunLog, clearMarketRunLogs, ensureMarketRunLogSchema, getRunningMarketRunId } from '@/lib/market-run-logs'
@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
             message: string
             completedActions?: number
             totalActions?: number
+            marketId?: string
+            fdaEventId?: string
+            modelId?: DailyRunResult['modelId']
+            activityPhase?: DailyRunActivityPhase
             status?: DailyRunStatus
             result?: DailyRunResult
           }) => {
@@ -98,7 +102,10 @@ export async function POST(request: NextRequest) {
                   okCount,
                   errorCount,
                   skippedCount,
-                  modelId: input.result?.modelId ?? null,
+                  marketId: input.result?.marketId ?? input.marketId ?? null,
+                  fdaEventId: input.result?.fdaEventId ?? input.fdaEventId ?? null,
+                  modelId: input.result?.modelId ?? input.modelId ?? null,
+                  activityPhase: input.activityPhase ?? null,
                   action: input.result?.action ?? null,
                   actionStatus: input.status ?? null,
                   amountUsd: input.result?.amountUsd ?? null,
@@ -151,12 +158,16 @@ export async function POST(request: NextRequest) {
                 })
                 writeEvent({ type: 'start', ...start })
               },
-              onActivity: ({ completedActions, totalActions, message }) => {
+              onActivity: ({ completedActions, totalActions, message, marketId, fdaEventId, modelId, phase }) => {
                 queuePersist({
                   logType: 'activity',
                   message,
                   completedActions,
                   totalActions,
+                  marketId,
+                  fdaEventId,
+                  modelId,
+                  activityPhase: phase,
                 })
                 queueRunHeartbeat(completedActions, totalActions)
                 writeEvent({
@@ -164,6 +175,10 @@ export async function POST(request: NextRequest) {
                   completedActions,
                   totalActions,
                   message,
+                  marketId,
+                  fdaEventId,
+                  modelId,
+                  phase,
                 })
               },
               onProgress: ({ completedActions, totalActions, result }) => {

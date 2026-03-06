@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { formatDate, MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
-import type { DailyRunPayload, DailyRunResult, DailyRunStatus, DailyRunSummary, DailyRunStreamEvent } from '@/lib/markets/types'
+import type {
+  DailyRunActivityPhase,
+  DailyRunPayload,
+  DailyRunPlannedMarket,
+  DailyRunResult,
+  DailyRunStatus,
+  DailyRunSummary,
+  DailyRunStreamEvent,
+} from '@/lib/markets/types'
 import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
 
 interface AdminMarketEvent {
@@ -13,8 +21,10 @@ interface AdminMarketEvent {
   symbols: string
   pdufaDate: string
   outcome: string
+  marketId: string | null
   marketStatus: 'OPEN' | 'RESOLVED' | null
   marketPriceYes: number | null
+  marketOpenedAt: string | null
 }
 
 interface Props {
@@ -35,6 +45,8 @@ interface LastRunSummaryState {
 interface DailyRunProgressState {
   startedAtMs: number
   runDate: string | null
+  modelOrder: ModelId[]
+  orderedMarkets: DailyRunPlannedMarket[]
   openMarkets: number
   totalActions: number
   completedActions: number
@@ -50,6 +62,190 @@ interface ErrorConsoleEntry {
   id: string
   utcTime: string
   message: string
+}
+
+type ExecutionStepStatus = 'queued' | 'running' | 'waiting' | 'ok' | 'error' | 'skipped'
+
+interface ExecutionPlanStep {
+  key: string
+  marketId: string
+  fdaEventId: string
+  modelId: ModelId
+  marketSequence: number
+  modelSequence: number
+  globalSequence: number
+  status: ExecutionStepStatus
+  detail: string | null
+}
+
+interface ExecutionPlanMarket {
+  marketId: string
+  fdaEventId: string
+  drugName: string
+  companyName: string
+  pdufaDate: string
+  marketSequence: number
+  steps: ExecutionPlanStep[]
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function normalizeRunDateLocal(input?: string | Date | null): Date {
+  const parsed = input ? new Date(input) : new Date()
+  if (Number.isNaN(parsed.getTime())) {
+    const now = new Date()
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  }
+
+  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()))
+}
+
+function rotateModelOrderLocal(runDate?: string | Date | null): ModelId[] {
+  const normalized = normalizeRunDateLocal(runDate)
+  const dayNumber = Math.floor(normalized.getTime() / DAY_MS)
+  const offset = ((dayNumber % MODEL_IDS.length) + MODEL_IDS.length) % MODEL_IDS.length
+  return MODEL_IDS.map((_, index) => MODEL_IDS[(index + offset) % MODEL_IDS.length])
+}
+
+function sortCycleEvents(
+  events: AdminMarketEvent[],
+  allowedStatuses: Array<AdminMarketEvent['marketStatus']> = ['OPEN']
+): AdminMarketEvent[] {
+  return [...events]
+    .filter((event) => event.marketId && allowedStatuses.includes(event.marketStatus))
+    .sort((a, b) => {
+      const aPdufaTime = new Date(a.pdufaDate).getTime()
+      const bPdufaTime = new Date(b.pdufaDate).getTime()
+      if (aPdufaTime !== bPdufaTime) return aPdufaTime - bPdufaTime
+
+      const aOpenedTime = a.marketOpenedAt ? new Date(a.marketOpenedAt).getTime() : 0
+      const bOpenedTime = b.marketOpenedAt ? new Date(b.marketOpenedAt).getTime() : 0
+      if (aOpenedTime !== bOpenedTime) return aOpenedTime - bOpenedTime
+
+      return (a.marketId ?? a.id).localeCompare(b.marketId ?? b.id)
+    })
+}
+
+function buildExecutionPlan(input: {
+  events: AdminMarketEvent[]
+  runDate?: string | Date | null
+  modelOrder?: ModelId[]
+  orderedMarkets?: DailyRunPlannedMarket[] | null
+  fallbackStatuses?: Array<AdminMarketEvent['marketStatus']>
+}): ExecutionPlanMarket[] {
+  const modelOrder = input.modelOrder && input.modelOrder.length > 0
+    ? input.modelOrder
+    : rotateModelOrderLocal(input.runDate)
+
+  const marketById = new Map(
+    input.events
+      .filter((event): event is AdminMarketEvent & { marketId: string } => typeof event.marketId === 'string')
+      .map((event) => [event.marketId, event] as const)
+  )
+
+  const orderedMarkets = input.orderedMarkets && input.orderedMarkets.length > 0
+    ? input.orderedMarkets
+    : sortCycleEvents(input.events, input.fallbackStatuses).map((event) => ({
+        marketId: event.marketId as string,
+        fdaEventId: event.id,
+        drugName: event.drugName,
+        companyName: event.companyName,
+        pdufaDate: event.pdufaDate,
+      }))
+
+  let globalSequence = 0
+
+  return orderedMarkets.map((market, marketIndex) => {
+    const event = marketById.get(market.marketId)
+    const steps = modelOrder.map((modelId, modelIndex) => {
+      globalSequence += 1
+      return {
+        key: `${market.marketId}:${modelId}`,
+        marketId: market.marketId,
+        fdaEventId: market.fdaEventId,
+        modelId,
+        marketSequence: marketIndex + 1,
+        modelSequence: modelIndex + 1,
+        globalSequence,
+        status: 'queued',
+        detail: null,
+      } satisfies ExecutionPlanStep
+    })
+
+    return {
+      marketId: market.marketId,
+      fdaEventId: market.fdaEventId,
+      drugName: event?.drugName ?? market.drugName,
+      companyName: event?.companyName ?? market.companyName,
+      pdufaDate: event?.pdufaDate ?? market.pdufaDate,
+      marketSequence: marketIndex + 1,
+      steps,
+    } satisfies ExecutionPlanMarket
+  })
+}
+
+function clearActiveExecutionSteps(plan: ExecutionPlanMarket[]): ExecutionPlanMarket[] {
+  return plan.map((market) => ({
+    ...market,
+    steps: market.steps.map((step) => (
+      step.status === 'running' || step.status === 'waiting'
+        ? { ...step, status: 'queued' as const }
+        : step
+    )),
+  }))
+}
+
+function updateExecutionPlanStep(
+  plan: ExecutionPlanMarket[],
+  marketId: string,
+  modelId: ModelId,
+  updater: (step: ExecutionPlanStep) => ExecutionPlanStep
+): ExecutionPlanMarket[] {
+  let changed = false
+
+  const nextPlan = plan.map((market) => ({
+    ...market,
+    steps: market.steps.map((step) => {
+      if (step.marketId !== marketId || step.modelId !== modelId) return step
+      changed = true
+      return updater(step)
+    }),
+  }))
+
+  return changed ? nextPlan : plan
+}
+
+function applyActivityToExecutionPlan(
+  plan: ExecutionPlanMarket[],
+  input: {
+    marketId?: string
+    modelId?: ModelId
+    phase?: DailyRunActivityPhase
+    message: string
+  }
+): ExecutionPlanMarket[] {
+  if (!input.marketId || !input.modelId || !input.phase) return plan
+  const clearedPlan = clearActiveExecutionSteps(plan)
+  const nextStatus: ExecutionStepStatus = input.phase === 'waiting' ? 'waiting' : 'running'
+
+  return updateExecutionPlanStep(clearedPlan, input.marketId, input.modelId, (step) => ({
+    ...step,
+    status: nextStatus,
+    detail: input.message,
+  }))
+}
+
+function applyProgressToExecutionPlan(plan: ExecutionPlanMarket[], result: DailyRunResult): ExecutionPlanMarket[] {
+  const clearedPlan = clearActiveExecutionSteps(plan)
+  return updateExecutionPlanStep(clearedPlan, result.marketId, result.modelId, (step) => ({
+    ...step,
+    status: result.status,
+    detail: result.detail,
+  }))
+}
+
+function finalizeExecutionPlan(plan: ExecutionPlanMarket[]): ExecutionPlanMarket[] {
+  return clearActiveExecutionSteps(plan)
 }
 
 function formatMoney(value: number): string {
@@ -297,6 +493,8 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
   return {
     startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
     runDate: snapshot.runDate,
+    modelOrder: rotateModelOrderLocal(snapshot.runDate),
+    orderedMarkets: [],
     openMarkets: snapshot.openMarkets,
     totalActions: counts.totalActions,
     completedActions: counts.completedActions,
@@ -309,6 +507,139 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
   }
 }
 
+function buildExecutionPlanFromSnapshot(
+  events: AdminMarketEvent[],
+  snapshot: AdminMarketRunSnapshot | null
+): ExecutionPlanMarket[] {
+  if (!snapshot) {
+    return buildExecutionPlan({
+      events,
+      runDate: new Date().toISOString(),
+      fallbackStatuses: ['OPEN'],
+    })
+  }
+
+  let plan = buildExecutionPlan({
+    events,
+    runDate: snapshot.runDate,
+    fallbackStatuses: ['OPEN', 'RESOLVED'],
+  })
+
+  if (plan.length === 0) {
+    plan = buildExecutionPlan({
+      events,
+      runDate: snapshot.runDate,
+      fallbackStatuses: ['OPEN'],
+    })
+  }
+
+  for (const log of [...snapshot.logs].reverse()) {
+    const modelId = toModelId(log.modelId)
+
+    if (log.actionStatus && modelId && log.marketId) {
+      plan = applyProgressToExecutionPlan(plan, {
+        marketId: log.marketId,
+        fdaEventId: log.fdaEventId ?? '',
+        modelId,
+        action: log.action ?? 'HOLD',
+        amountUsd: log.amountUsd ?? 0,
+        status: log.actionStatus,
+        detail: log.message,
+      })
+      continue
+    }
+
+    if (log.logType === 'activity' && modelId && log.marketId && log.activityPhase) {
+      plan = applyActivityToExecutionPlan(plan, {
+        marketId: log.marketId,
+        modelId,
+        phase: log.activityPhase,
+        message: log.message,
+      })
+    }
+  }
+
+  return snapshot.status === 'running' ? plan : finalizeExecutionPlan(plan)
+}
+
+function buildNextExecutionPlan(events: AdminMarketEvent[], runDate?: string | Date | null): ExecutionPlanMarket[] {
+  return buildExecutionPlan({
+    events,
+    runDate: runDate ?? new Date().toISOString(),
+    fallbackStatuses: ['OPEN'],
+  })
+}
+
+function getCurrentExecutionStep(plan: ExecutionPlanMarket[]): ExecutionPlanStep | null {
+  for (const market of plan) {
+    const activeStep = market.steps.find((step) => step.status === 'running' || step.status === 'waiting')
+    if (activeStep) return activeStep
+  }
+
+  return null
+}
+
+function getExecutionStepTone(status: ExecutionStepStatus): {
+  container: string
+  badge: string
+  label: string
+} {
+  if (status === 'ok') {
+    return {
+      container: 'border-[#3a8a2e]/30 bg-[#3a8a2e]/10',
+      badge: 'border-[#3a8a2e]/30 bg-white/80 text-[#2f6f24]',
+      label: 'text-[#2f6f24]',
+    }
+  }
+
+  if (status === 'error') {
+    return {
+      container: 'border-[#c43a2b]/30 bg-[#fff3f1]',
+      badge: 'border-[#c43a2b]/30 bg-white/80 text-[#8d2c22]',
+      label: 'text-[#8d2c22]',
+    }
+  }
+
+  if (status === 'skipped') {
+    return {
+      container: 'border-[#b5aa9e]/45 bg-[#f5f2ed]',
+      badge: 'border-[#d9ccbb] bg-white/80 text-[#6f665b]',
+      label: 'text-[#6f665b]',
+    }
+  }
+
+  if (status === 'running') {
+    return {
+      container: 'border-[#2d7cf6]/35 bg-[#2d7cf6]/12',
+      badge: 'border-[#2d7cf6]/35 bg-white/85 text-[#1f5cb9]',
+      label: 'text-[#1f5cb9]',
+    }
+  }
+
+  if (status === 'waiting') {
+    return {
+      container: 'border-[#5BA5ED]/35 bg-[#5BA5ED]/10',
+      badge: 'border-[#5BA5ED]/35 bg-white/85 text-[#265f8f]',
+      label: 'text-[#265f8f]',
+    }
+  }
+
+  return {
+    container: 'border-[#e8ddd0] bg-white/75',
+    badge: 'border-[#e8ddd0] bg-[#f8f4ee] text-[#8a8075]',
+    label: 'text-[#8a8075]',
+  }
+}
+
+function getExecutionStatusLabel(status: ExecutionStepStatus): string {
+  if (status === 'ok') return 'Done'
+  if (status === 'error') return 'Failed'
+  if (status === 'skipped') return 'Skipped'
+  if (status === 'running') return 'Running'
+  if (status === 'waiting') return 'Waiting'
+  return 'Queued'
+}
+
 export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }: Props) {
   const [events, setEvents] = useState(initialEvents)
   const [search, setSearch] = useState('')
@@ -319,10 +650,17 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const [elapsedSeconds, setElapsedSeconds] = useState(() => buildRunSummaryFromSnapshot(initialRunSnapshot)?.durationSeconds ?? 0)
   const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
   const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlanMarket[]>(() => (
+    initialRunSnapshot?.status === 'running'
+      ? buildExecutionPlanFromSnapshot(initialEvents, initialRunSnapshot)
+      : buildNextExecutionPlan(initialEvents)
+  ))
+  const [preserveExecutionPlan, setPreserveExecutionPlan] = useState(initialRunSnapshot?.status === 'running')
   const [uiError, setUiError] = useState<string | null>(null)
   const [isStreamingRun, setIsStreamingRun] = useState(false)
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
+  const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
 
   useEffect(() => {
     if (!runningDaily || runStartedAtMs === null) return
@@ -336,7 +674,11 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   }, [runningDaily, runStartedAtMs])
 
   const applyRunSnapshot = (snapshot: AdminMarketRunSnapshot | null) => {
-    if (!snapshot) return
+    if (!snapshot) {
+      setPreserveExecutionPlan(false)
+      setExecutionPlan(buildNextExecutionPlan(events))
+      return
+    }
 
     const nextProgress = buildRunProgressFromSnapshot(snapshot)
     const nextSummary = buildRunSummaryFromSnapshot(snapshot)
@@ -344,8 +686,14 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     setRunLog(buildRunLogFromSnapshot(snapshot))
     setErrorConsole(buildErrorConsoleFromSnapshot(snapshot))
     setRunProgress(nextProgress)
+    setExecutionPlan(
+      snapshot.status === 'running'
+        ? buildExecutionPlanFromSnapshot(events, snapshot)
+        : buildNextExecutionPlan(events, snapshot.runDate)
+    )
 
     if (snapshot.status === 'running') {
+      setPreserveExecutionPlan(true)
       setRunningDaily(true)
       setLastRunSummary(null)
       return
@@ -355,6 +703,11 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     setLastRunSummary(nextSummary)
     setElapsedSeconds(nextSummary?.durationSeconds ?? 0)
   }
+
+  useEffect(() => {
+    if (runningDaily || preserveExecutionPlan) return
+    setExecutionPlan(buildNextExecutionPlan(events))
+  }, [events, preserveExecutionPlan, runningDaily])
 
   useEffect(() => {
     if (!runningDaily || isStreamingRun) return
@@ -410,8 +763,10 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         event.id === fdaEventId
           ? {
               ...event,
+              marketId: data.market.id,
               marketStatus: data.market.status,
               marketPriceYes: data.market.priceYes,
+              marketOpenedAt: data.market.openedAt,
             }
           : event
       )))
@@ -456,6 +811,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
 
     setUiError(null)
     setIsStreamingRun(true)
+    setPreserveExecutionPlan(true)
     setRunningDaily(true)
     setLastRunSummary(null)
     setElapsedSeconds(0)
@@ -464,6 +820,8 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     setRunProgress({
       startedAtMs,
       runDate: null,
+      modelOrder: rotateModelOrderLocal(new Date(startedAtMs)),
+      orderedMarkets: [],
       openMarkets: 0,
       totalActions: 0,
       completedActions: 0,
@@ -474,6 +832,11 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
       latestError: null,
       currentActivity: 'Initializing daily run...',
     })
+    setExecutionPlan(buildExecutionPlan({
+      events,
+      runDate: new Date(startedAtMs),
+      fallbackStatuses: ['OPEN'],
+    }))
 
     try {
       const response = await fetch('/api/markets/run-daily?stream=1', { method: 'POST' })
@@ -496,10 +859,19 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
           setRunProgress((prev) => prev ? {
             ...prev,
             runDate: event.runDate,
+            modelOrder: event.modelOrder,
+            orderedMarkets: event.orderedMarkets,
             openMarkets: event.openMarkets,
             totalActions: event.totalActions,
             currentActivity: `Discovered ${event.openMarkets} open markets (${event.totalActions} actions)`,
           } : prev)
+          setExecutionPlan(buildExecutionPlan({
+            events,
+            runDate: event.runDate,
+            modelOrder: event.modelOrder,
+            orderedMarkets: event.orderedMarkets,
+            fallbackStatuses: ['OPEN'],
+          }))
           appendRunLog(`Found ${event.openMarkets} open markets (${event.totalActions} model actions)`)
           return
         }
@@ -526,6 +898,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
 
             return next
           })
+          setExecutionPlan((prev) => applyProgressToExecutionPlan(prev, event.result))
           appendRunLog(formatProgressLog(event.result))
           return
         }
@@ -537,6 +910,12 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             totalActions: event.totalActions,
             currentActivity: event.message,
           } : prev)
+          setExecutionPlan((prev) => applyActivityToExecutionPlan(prev, {
+            marketId: event.marketId,
+            modelId: event.modelId,
+            phase: event.phase,
+            message: event.message,
+          }))
           appendRunLog(event.message)
           return
         }
@@ -547,11 +926,14 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             ...prev,
             completedActions: event.payload.processedActions,
             totalActions: event.payload.totalActions,
+            modelOrder: event.payload.modelOrder,
+            orderedMarkets: event.payload.orderedMarkets,
             okCount: event.payload.summary.ok,
             errorCount: event.payload.summary.error,
             skippedCount: event.payload.summary.skipped,
             currentActivity: 'Daily market cycle completed',
           } : prev)
+          setExecutionPlan((prev) => finalizeExecutionPlan(prev))
           setSummaryFromPayload(event.payload, startedAtMs)
           appendRunLog('Daily market cycle completed')
           return
@@ -599,6 +981,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         ...prev,
         currentActivity: `Daily market cycle failed: ${message}`,
       } : prev)
+      setExecutionPlan((prev) => finalizeExecutionPlan(prev))
       appendErrorConsole(`RUN FAILED - ${message}`)
 
       if (message.toLowerCase().includes('already running')) {
@@ -632,6 +1015,19 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const displayElapsedSeconds = runningDaily
     ? elapsedSeconds
     : (lastRunSummary?.durationSeconds ?? elapsedSeconds)
+  const executionPlanStepCount = executionPlan.reduce((sum, market) => sum + market.steps.length, 0)
+  const queuedExecutionSteps = executionPlan.reduce(
+    (sum, market) => sum + market.steps.filter((step) => step.status === 'queued').length,
+    0
+  )
+  const executionPlanHeading = runningDaily
+    ? 'Execution Plan'
+    : preserveExecutionPlan
+      ? 'Latest Run Plan'
+      : 'Next Run Plan'
+  const currentExecutionMarket = currentExecutionStep
+    ? executionPlan.find((market) => market.marketId === currentExecutionStep.marketId) ?? null
+    : null
 
   return (
     <div className="space-y-6">
@@ -718,6 +1114,111 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             )}
           </div>
         )}
+
+        <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">{executionPlanHeading}</p>
+              <p className="text-xs text-[#8a8075]">
+                {executionPlan.length} drug{executionPlan.length === 1 ? '' : 's'} • {executionPlanStepCount} model step{executionPlanStepCount === 1 ? '' : 's'}
+                {!runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 ? ` • ${queuedExecutionSteps} queued for the next run` : ''}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(['queued', 'waiting', 'running', 'ok', 'skipped', 'error'] as const).map((status) => {
+                const tone = getExecutionStepTone(status)
+                return (
+                  <span
+                    key={status}
+                    className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}
+                  >
+                    {getExecutionStatusLabel(status)}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+
+          {currentExecutionStep && currentExecutionMarket && (
+            <div className="mt-3 rounded-none border border-[#2d7cf6]/35 bg-[#2d7cf6]/10 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#1f5cb9]">Now In Flight</p>
+              <p className="mt-1 text-sm text-[#1f5cb9]">
+                {MODEL_INFO[currentExecutionStep.modelId].fullName} on {currentExecutionMarket.drugName}
+              </p>
+              <p className="mt-1 text-xs text-[#265f8f]">
+                Drug {currentExecutionMarket.marketSequence} of {executionPlan.length} • model {currentExecutionStep.modelSequence} of {currentExecutionMarket.steps.length}
+              </p>
+            </div>
+          )}
+
+          {!currentExecutionStep && !runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 && (
+            <div className="mt-3 rounded-none border border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queued Next</p>
+              <p className="mt-1 text-sm text-[#5f564c]">
+                {MODEL_INFO[executionPlan[0].steps[0].modelId].fullName} on {executionPlan[0].drugName}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-3 space-y-3">
+            {executionPlan.length > 0 ? executionPlan.map((market) => {
+              const marketDoneCount = market.steps.filter((step) => step.status === 'ok' || step.status === 'skipped' || step.status === 'error').length
+
+              return (
+                <div key={market.marketId} className="rounded-none border border-[#e8ddd0] bg-white p-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-[#1a1a1a]">
+                        {market.marketSequence}. {market.drugName}
+                      </p>
+                      <p className="mt-1 text-xs text-[#8a8075]">
+                        {market.companyName} • PDUFA {formatDate(market.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
+                      {marketDoneCount}/{market.steps.length} step{market.steps.length === 1 ? '' : 's'} closed
+                    </p>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    {market.steps.map((step) => {
+                      const tone = getExecutionStepTone(step.status)
+                      const detail = step.detail
+                        ? truncateText(step.detail, 120)
+                        : `Run slot ${step.globalSequence} of ${executionPlanStepCount}`
+
+                      return (
+                        <div
+                          key={step.key}
+                          className={`rounded-none border px-3 py-2 ${tone.container}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Model {step.modelSequence}</p>
+                              <p className="mt-1 text-sm font-medium text-[#1a1a1a]">
+                                {MODEL_INFO[step.modelId].fullName}
+                              </p>
+                            </div>
+                            <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}>
+                              {getExecutionStatusLabel(step.status)}
+                            </span>
+                          </div>
+                          <p className={`mt-2 text-xs ${tone.label}`}>
+                            {detail}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            }) : (
+              <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#8a8075]">
+                No open markets are queued for the next daily cycle yet.
+              </div>
+            )}
+          </div>
+        </div>
 
         {(runLog.length > 0 || errorConsole.length > 0) && (
           <div className="mt-3 grid gap-3 lg:grid-cols-2">

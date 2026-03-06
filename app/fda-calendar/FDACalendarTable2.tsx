@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { Fragment, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { abbreviateType } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
+import { formatEventCountdown, formatEventDateLabel } from '@/lib/event-dates'
 
 interface FDAEvent {
   id: string
@@ -13,6 +14,8 @@ interface FDAEvent {
   drugName: string
   applicationType: string
   pdufaDate: string
+  dateKind: 'public' | 'synthetic'
+  cnpvAwardDate: string | null
   eventDescription: string
   outcome: string
   drugStatus: string | null
@@ -28,8 +31,50 @@ interface FDACalendarTable2Props {
   }
 }
 
-type SortField = 'pdufaDate' | 'companyName' | 'drugName' | 'applicationType' | 'outcome'
+type SortField = 'pdufaDate' | 'when' | 'companyName' | 'drugName' | 'applicationType' | 'outcome'
 type SortDirection = 'asc' | 'desc'
+const DESKTOP_COLUMN_COUNT = 7
+
+function getEventSummaryParts(event: Pick<FDAEvent, 'drugName' | 'eventDescription'>) {
+  const title = event.drugName.trim()
+  const description = event.eventDescription.trim()
+
+  if (!description) {
+    return {
+      title: '—',
+      description: null as string | null,
+    }
+  }
+
+  if (!title) {
+    return {
+      title: description,
+      description: null as string | null,
+    }
+  }
+
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const withoutLeadingTitle = description.replace(new RegExp(`^${escapedTitle}(?=\\b|[:\\s\\-])`, 'i'), '').trim()
+  const secondaryText = withoutLeadingTitle.replace(/^[:\\s\\-]+/, '').trim()
+
+  return {
+    title,
+    description: secondaryText || null,
+  }
+}
+
+function SyntheticDateInfoLink() {
+  return (
+    <Link
+      href="/glossary#term-cnpv"
+      aria-label="Learn about estimated CNPV dates"
+      title="Learn about estimated CNPV dates"
+      className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#d9cdbf] text-[9px] font-medium leading-none text-[#b8893f] transition-colors hover:border-[#c99b4d] hover:text-[#a66a17]"
+    >
+      ?
+    </Link>
+  )
+}
 
 export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Props) {
   const [sortField, setSortField] = useState<SortField>('pdufaDate')
@@ -40,6 +85,17 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
     outcome: '',
     search: '',
   })
+
+  const getWhenSortTuple = (event: FDAEvent): [number, number, number] => {
+    const daysUntil = getDaysUntilUtc(event.pdufaDate)
+    if (daysUntil == null) return [Number.POSITIVE_INFINITY, 1, Number.POSITIVE_INFINITY]
+
+    return [
+      Math.abs(daysUntil),
+      daysUntil < 0 ? 1 : 0,
+      daysUntil,
+    ]
+  }
 
   const filteredAndSortedEvents = useMemo(() => {
     let result = [...events]
@@ -63,6 +119,18 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
     }
 
     result.sort((a, b) => {
+      if (sortField === 'when') {
+        const aTuple = getWhenSortTuple(a)
+        const bTuple = getWhenSortTuple(b)
+
+        for (let i = 0; i < aTuple.length; i += 1) {
+          if (aTuple[i] === bTuple[i]) continue
+          return sortDirection === 'asc' ? aTuple[i] - bTuple[i] : bTuple[i] - aTuple[i]
+        }
+
+        return 0
+      }
+
       let aVal: string | Date = a[sortField] || ''
       let bVal: string | Date = b[sortField] || ''
 
@@ -164,8 +232,7 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
   }
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' })
+    return formatEventDateLabel(dateStr, undefined, { month: 'numeric', day: 'numeric' })
   }
 
   const getOutcomeStyle = (outcome: string) => {
@@ -234,7 +301,9 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
       <div className="sm:hidden space-y-3">
         {filteredAndSortedEvents.map((event) => {
           const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
-          const symbol = event.symbols.split(', ')[0]
+          const symbol = event.symbols.split(', ')[0] || ''
+          const eventSummary = getEventSummaryParts(event)
+          const showWhenCountdown = !(event.outcome === 'Approved' && daysUntil < 0)
           return (
             <div key={event.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4">
@@ -244,17 +313,24 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
                     <div className="truncate-wrap mt-0.5 text-xs text-[#8a8075]">{event.companyName}</div>
                   </div>
                   <div className="text-right shrink-0 ml-3">
-                    <div className="text-xs text-[#8a8075]">{formatDate(event.pdufaDate)}</div>
+                    <div className="text-xs text-[#8a8075]">
+                      {formatEventDateLabel(event.pdufaDate, event.dateKind, { month: 'numeric', day: 'numeric' })}
+                    </div>
                     <div
                       className={`text-xs ${daysUntil < 0 ? 'text-[#b5aa9e]' : daysUntil <= 30 ? '' : 'text-[#b5aa9e]'}`}
                       style={daysUntil >= 0 && daysUntil <= 30 ? { color: BRAND_DOT_COLORS.coral } : undefined}
                     >
-                      {daysUntil < 0 ? 'Past' : daysUntil === 0 ? 'Today' : `${daysUntil}d`}
+                      {showWhenCountdown ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span>{formatEventCountdown(daysUntil, event.dateKind)}</span>
+                          {event.dateKind === 'synthetic' ? <SyntheticDateInfoLink /> : null}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
-                {event.eventDescription && (
-                  <div className="truncate-wrap mb-2 text-xs text-[#b5aa9e] line-clamp-2">{event.eventDescription}</div>
+                {eventSummary.description && (
+                  <div className="truncate-wrap mb-2 text-xs text-[#b5aa9e] line-clamp-2">{eventSummary.description}</div>
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
@@ -266,14 +342,18 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
                   <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="text-xs text-[#b5aa9e] underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-2 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]">
                     {abbreviateType(event.applicationType).display}
                   </Link>
-                  <a
-                    href={`https://finance.yahoo.com/quote/${symbol}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-mono text-[#b5aa9e] underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-2 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                  >
-                    ${symbol}
-                  </a>
+                  {symbol ? (
+                    <a
+                      href={`https://finance.yahoo.com/quote/${symbol}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-mono text-[#b5aa9e] underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-2 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                    >
+                      ${symbol}
+                    </a>
+                  ) : (
+                    <span className="text-xs font-mono text-[#d0c4b8]">—</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -294,7 +374,12 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
                   >
                     Date <SortIcon field="pdufaDate" />
                   </th>
-                  <th className="text-left px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap font-medium">When</th>
+                  <th
+                    className="text-left px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap font-medium cursor-pointer hover:text-[#1a1a1a]"
+                    onClick={() => handleSort('when')}
+                  >
+                    When <SortIcon field="when" />
+                  </th>
                   <th
                     className="text-left px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap font-medium cursor-pointer hover:text-[#1a1a1a]"
                     onClick={() => handleSort('drugName')}
@@ -314,7 +399,6 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
                   >
                     Type <SortIcon field="applicationType" />
                   </th>
-                  <th className="text-left px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap font-medium">Event</th>
                   <th
                     className="text-center px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap font-medium cursor-pointer hover:text-[#1a1a1a]"
                     onClick={() => handleSort('outcome')}
@@ -326,51 +410,70 @@ export function FDACalendarTable2({ events, filterOptions }: FDACalendarTable2Pr
               <tbody>
                 {filteredAndSortedEvents.map((event) => {
                   const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
-                  const symbol = event.symbols.split(', ')[0]
+                  const symbol = event.symbols.split(', ')[0] || ''
+                  const rowDescription = event.eventDescription?.trim() || null
+                  const showWhenCountdown = !(event.outcome === 'Approved' && daysUntil < 0)
                   return (
-                    <tr key={event.id} className="hover:bg-[#f3ebe0]/30 border-b border-[#e8ddd0]">
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap text-sm text-[#8a8075]">
-                        <div className="leading-none">{formatDate(event.pdufaDate)}</div>
-                      </td>
-                      <td
-                        className={`px-3 py-3 first:pl-5 last:pr-7 whitespace-nowrap text-sm ${daysUntil < 0 ? 'text-[#b5aa9e]' : daysUntil <= 30 ? '' : 'text-[#b5aa9e]'}`}
-                        style={daysUntil >= 0 && daysUntil <= 30 ? { color: BRAND_DOT_COLORS.coral } : undefined}
-                      >
-                        {daysUntil < 0 ? 'Past' : daysUntil === 0 ? 'Today' : `${daysUntil}d`}
-                      </td>
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 text-sm">
-                        <div className="truncate-wrap max-w-[180px]">{event.drugName}</div>
-                      </td>
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
-                        <div className="truncate-wrap max-w-[180px]">{event.companyName}</div>
-                      </td>
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
-                        <a
-                          href={`https://finance.yahoo.com/quote/${symbol}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                    <Fragment key={event.id}>
+                      <tr className={`hover:bg-[#f3ebe0]/30 ${rowDescription ? '' : 'border-b border-[#e8ddd0]'}`}>
+                        <td className="px-3 pb-1 pt-3 first:pl-5 last:pr-7 whitespace-nowrap text-sm text-[#8a8075]">
+                          <div className="leading-none">
+                            {formatEventDateLabel(event.pdufaDate, event.dateKind, { month: 'numeric', day: 'numeric' })}
+                          </div>
+                        </td>
+                        <td
+                          className={`px-3 pb-1 pt-3 first:pl-5 last:pr-7 whitespace-nowrap text-sm ${daysUntil < 0 ? 'text-[#b5aa9e]' : daysUntil <= 30 ? '' : 'text-[#b5aa9e]'}`}
+                          style={daysUntil >= 0 && daysUntil <= 30 ? { color: BRAND_DOT_COLORS.coral } : undefined}
                         >
-                          ${symbol}
-                        </a>
-                      </td>
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
-                        <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]">
-                          {abbreviateType(event.applicationType).display}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
-                        <div className="truncate-wrap max-w-[340px]">{event.eventDescription || '—'}</div>
-                      </td>
-                      <td className="px-3 py-3 first:pl-5 last:pr-7 text-center">
-                        <span
-                          className={`text-xs font-medium ${getOutcomeStyle(event.outcome)}`}
-                          style={event.outcome === 'Rejected' ? { color: BRAND_DOT_COLORS.coral } : undefined}
-                        >
-                          {event.outcome.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
+                          {showWhenCountdown ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span>{formatEventCountdown(daysUntil, event.dateKind)}</span>
+                              {event.dateKind === 'synthetic' ? <SyntheticDateInfoLink /> : null}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 pb-1 pt-3 first:pl-5 last:pr-7 text-sm">
+                          <div className="truncate-wrap max-w-[180px]">{event.drugName}</div>
+                        </td>
+                        <td className="px-3 pb-1 pt-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
+                          <div className="truncate-wrap max-w-[180px]">{event.companyName}</div>
+                        </td>
+                        <td className="px-3 pb-1 pt-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
+                          {symbol ? (
+                            <a
+                              href={`https://finance.yahoo.com/quote/${symbol}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                            >
+                              ${symbol}
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="px-3 pb-1 pt-3 first:pl-5 last:pr-7 text-sm text-[#8a8075]">
+                          <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]">
+                            {abbreviateType(event.applicationType).display}
+                          </Link>
+                        </td>
+                        <td className="px-3 pb-1 pt-3 first:pl-5 last:pr-7 text-center">
+                          <span
+                            className={`text-xs font-medium ${getOutcomeStyle(event.outcome)}`}
+                            style={event.outcome === 'Rejected' ? { color: BRAND_DOT_COLORS.coral } : undefined}
+                          >
+                            {event.outcome.toUpperCase()}
+                          </span>
+                        </td>
+                      </tr>
+                      {rowDescription ? (
+                        <tr className="border-b border-[#e8ddd0]">
+                          <td colSpan={DESKTOP_COLUMN_COUNT} className="px-5 pb-4 pt-0 text-sm leading-relaxed text-[#8a8075]">
+                            <div className="truncate-wrap">{rowDescription}</div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   )
                 })}
               </tbody>

@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useMemo, type KeyboardEvent, type MouseEvent } from 'react'
+import { EventDateBadge } from '@/components/EventDateBadge'
 import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
 import {
   daysUntilUtc,
   formatCompactMoney,
   formatPercent,
-  getModelStance,
   getMarketQuestion,
   getMarketSubtitle,
   getPriceMoveFromHistory,
@@ -116,32 +116,73 @@ function sortEntries(entries: MarketCardEntry[], mode: SortMode): MarketCardEntr
   })
 }
 
-function getDaysBadge(daysUntil: number | null): { label: string } {
+function getDaysBadge(daysUntil: number | null, dateKind?: string | null): { label: string } {
   if (daysUntil === null) {
     return { label: 'No date' }
   }
+  const dayWord = Math.abs(daysUntil) === 1 ? 'day' : 'days'
+  if (dateKind === 'synthetic') {
+    if (daysUntil < 0) {
+      return { label: `~${Math.abs(daysUntil)} ${dayWord} past` }
+    }
+    if (daysUntil === 0) {
+      return { label: 'Today' }
+    }
+    return { label: `~${daysUntil} ${dayWord} left` }
+  }
   if (daysUntil < 0) {
-    return { label: `${Math.abs(daysUntil)}d past` }
+    return { label: `${Math.abs(daysUntil)} ${dayWord} past` }
   }
   if (daysUntil === 0) {
     return { label: 'Today' }
   }
-  if (daysUntil <= 14) {
-    return { label: `${daysUntil}d left` }
-  }
-  if (daysUntil <= 45) {
-    return { label: `${daysUntil}d left` }
-  }
-  return { label: `${daysUntil}d left` }
+  return { label: `${daysUntil} ${dayWord} left` }
 }
 
-function getModelStanceMap(entry: MarketCardEntry): Map<string, 'YES' | 'NO' | 'HOLD' | 'ERROR'> {
-  const stances = new Map<string, 'YES' | 'NO' | 'HOLD' | 'ERROR'>()
-  for (const state of entry.market.modelStates) {
-    const stance = getModelStance(state)
-    stances.set(state.modelId, stance)
+function SyntheticDateInfoButton() {
+  const handleClick = (event: MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    window.location.assign('/glossary#term-cnpv')
   }
-  return stances
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    event.stopPropagation()
+    window.location.assign('/glossary#term-cnpv')
+  }
+
+  return (
+    <span
+      role="link"
+      tabIndex={0}
+      aria-label="Learn about estimated CNPV dates"
+      title="Learn about estimated CNPV dates"
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#d9cdbf] text-[9px] font-medium leading-none text-[#b8893f] transition-colors hover:border-[#c99b4d] hover:text-[#a66a17] focus-visible:outline-none focus-visible:border-[#c99b4d] focus-visible:text-[#a66a17]"
+    >
+      ?
+    </span>
+  )
+}
+
+function getModelDecisionMap(entry: MarketCardEntry): Map<string, 'APPROVE' | 'REJECT' | 'PENDING'> {
+  const decisions = new Map<string, 'APPROVE' | 'REJECT' | 'PENDING'>()
+  for (const state of entry.market.modelStates) {
+    const binaryCall = state.latestDecision?.forecast.binaryCall
+    if (binaryCall === 'approved') {
+      decisions.set(state.modelId, 'APPROVE')
+      continue
+    }
+    if (binaryCall === 'rejected') {
+      decisions.set(state.modelId, 'REJECT')
+      continue
+    }
+    decisions.set(state.modelId, 'PENDING')
+  }
+  return decisions
 }
 
 function MarketCard({
@@ -153,10 +194,10 @@ function MarketCard({
 }) {
   const marketHref = `${detailBasePath}/${encodeURIComponent(entry.market.marketId)}`
   const drugName = entry.market.event?.drugName || entry.question
-  const daysBadge = getDaysBadge(entry.daysUntil)
-  const modelStances = getModelStanceMap(entry)
-  const approveModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') === 'YES')
-  const rejectModelIds = MODEL_IDS.filter((modelId) => (modelStances.get(modelId) || 'HOLD') === 'NO')
+  const daysBadge = getDaysBadge(entry.daysUntil, entry.market.event?.dateKind)
+  const modelDecisions = getModelDecisionMap(entry)
+  const approveModelIds = MODEL_IDS.filter((modelId) => (modelDecisions.get(modelId) || 'PENDING') === 'APPROVE')
+  const rejectModelIds = MODEL_IDS.filter((modelId) => (modelDecisions.get(modelId) || 'PENDING') === 'REJECT')
   const pendingModelCount = MODEL_IDS.length - approveModelIds.length - rejectModelIds.length
 
   return (
@@ -165,8 +206,13 @@ function MarketCard({
       className="group block h-full rounded-sm p-[1px] transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-[1px] hover:shadow-[0_10px_24px_rgba(26,26,26,0.08)] focus-visible:outline-none focus-visible:-translate-y-[1px] focus-visible:shadow-[0_10px_24px_rgba(26,26,26,0.08)] motion-reduce:transform-none"
       style={{ background: PANEL_GRADIENT }}
     >
-      <div className="flex h-full flex-col rounded-sm bg-white/95 p-4 transition-colors duration-150 group-hover:bg-[#fffdfa] group-focus-visible:bg-[#fffdfa] sm:p-5">
-        <div>
+      <div className="relative flex h-full flex-col overflow-hidden rounded-sm bg-white/95 p-4 transition-colors duration-150 group-hover:bg-[#fffdfa] group-focus-visible:bg-[#fffdfa] sm:p-5">
+        <EventDateBadge
+          dateKind={entry.market.event?.dateKind}
+          variant="cornerCard"
+          className="absolute right-0 top-0 z-10"
+        />
+        <div className="pr-20">
           <h3
             title={drugName}
             aria-label={drugName}
@@ -176,7 +222,10 @@ function MarketCard({
           </h3>
 
           <div className="mt-2 text-[11px]">
-            <span className="font-medium text-[#3f5f86]">{daysBadge.label}</span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#3f5f86]">
+              <span>{daysBadge.label}</span>
+              {entry.market.event?.dateKind === 'synthetic' ? <SyntheticDateInfoButton /> : null}
+            </span>
           </div>
 
           <p className="mt-3 min-h-[4rem] line-clamp-4 text-xs leading-relaxed text-[#8a8075] transition-colors duration-150 group-hover:text-[#7b7167] group-focus-visible:text-[#7b7167] sm:min-h-[4.5rem]">
@@ -199,7 +248,7 @@ function MarketCard({
         </div>
 
         <div className="mt-3">
-          <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Model Calls</div>
+          <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Decision Calls</div>
           <div className="grid grid-cols-2 gap-2">
             <div className="flex h-[12.75rem] flex-col overflow-hidden rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-2.5 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
               <div className="text-[10px] uppercase tracking-[0.14em] text-[#2f7b40]">Approve</div>

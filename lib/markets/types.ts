@@ -1,6 +1,15 @@
 import type { ModelId } from '@/lib/constants'
 
 export type DailyRunStatus = 'ok' | 'error' | 'skipped'
+export type DailyRunActivityPhase = 'running' | 'waiting'
+
+export type DailyRunPlannedMarket = {
+  marketId: string
+  fdaEventId: string
+  drugName: string
+  companyName: string
+  pdufaDate: string
+}
 
 export type DailyRunResult = {
   marketId: string
@@ -23,6 +32,7 @@ export type DailyRunPayload = {
   runId: string
   runDate: string
   modelOrder: ModelId[]
+  orderedMarkets: DailyRunPlannedMarket[]
   openMarkets: number
   totalActions: number
   processedActions: number
@@ -36,6 +46,7 @@ export type DailyRunStreamEvent =
       runId: string
       runDate: string
       modelOrder: ModelId[]
+      orderedMarkets: DailyRunPlannedMarket[]
       openMarkets: number
       totalActions: number
     }
@@ -44,6 +55,10 @@ export type DailyRunStreamEvent =
       completedActions: number
       totalActions: number
       message: string
+      marketId?: string
+      fdaEventId?: string
+      modelId?: ModelId
+      phase?: DailyRunActivityPhase
     }
   | {
       type: 'progress'
@@ -65,6 +80,7 @@ export type DailyRunHooks = {
     runId: string
     runDate: string
     modelOrder: ModelId[]
+    orderedMarkets: DailyRunPlannedMarket[]
     openMarkets: number
     totalActions: number
   }) => void
@@ -72,6 +88,10 @@ export type DailyRunHooks = {
     completedActions: number
     totalActions: number
     message: string
+    marketId?: string
+    fdaEventId?: string
+    modelId?: ModelId
+    phase?: DailyRunActivityPhase
   }) => void
   onProgress?: (input: {
     completedActions: number

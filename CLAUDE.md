@@ -101,7 +101,7 @@ Use the exported types:
 - `gemini-2.5` - Gemini 2.5 Pro (Google)
 - `gemini-3-pro` - Gemini 3 Pro (`gemini-3-pro-preview`, Google)
 - `deepseek-v3.2` - DeepSeek V3.1 (`deepseek-ai/DeepSeek-V3.1`, Baseten)
-- `llama-4` - Llama 4 Maverick (`meta-llama/llama-4-maverick-17b-128e-instruct`, Groq)
+- `llama-4` - Llama 4 Scout (`meta-llama/llama-4-scout-17b-16e-instruct`, Groq)
 - `kimi-k2` - Kimi K2 Thinking (`moonshotai/Kimi-K2-Thinking`, Baseten)
 - `minimax-m2.5` - MiniMax M2.5 (`MiniMax-M2.5`, MiniMax)
 

@@ -4,15 +4,21 @@
   "description": "AI models predict clinical trial outcomes",
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:one-drug": "node scripts/run-with-env.js .env.one-drug.local -- next dev --webpack",
     "dev:all": "concurrently \"next dev --turbopack\" \"drizzle-kit studio\"",
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
+    "db:push-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx drizzle-kit push",
     "db:migrate": "drizzle-kit generate",
     "db:ensure-market-schema": "node scripts/ensure-market-schema.js",
+    "db:create-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/create-one-drug-local-db.ts",
+    "db:bootstrap-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/bootstrap-one-drug-local.ts",
+    "db:check-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/check-one-drug-local.ts",
     "db:add-market-runtime-config": "npx tsx scripts/add-market-runtime-config.ts",
+    "db:add-cnpv-event-fields": "npx tsx scripts/add-cnpv-event-fields.ts",
     "db:add-fda-prediction-usage-columns": "npx tsx scripts/add-fda-prediction-usage-columns.ts",
     "db:add-fda-prediction-provider-usage-columns": "npx tsx scripts/add-fda-prediction-provider-usage-columns.ts",
     "db:add-twitter-verification-columns": "npx tsx scripts/add-twitter-verification-columns.ts",
@@ -23,7 +29,9 @@
     "db:shorten-twitter-hold-12h": "npx tsx scripts/shorten-twitter-hold-to-12h.ts",
     "db:audit-market": "npx tsx scripts/audit-market-db.ts",
     "db:seed": "npx tsx scripts/seed.ts",
-    "db:seed-fda": "npx tsx scripts/seed-fda.ts"
+    "db:import-cnpv:dry-run": "npx tsx scripts/import-cnpv.ts --dry-run",
+    "db:import-cnpv": "npx tsx scripts/import-cnpv.ts --apply",
+    "db:seed-fda": "npm run db:import-cnpv"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

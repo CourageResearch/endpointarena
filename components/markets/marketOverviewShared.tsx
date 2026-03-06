@@ -3,7 +3,9 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
+import { formatEventDateLabel, isSyntheticEventDate } from '@/lib/event-dates'
 import { getApiErrorMessage } from '@/lib/client-api'
+import type { ModelDecisionSnapshot } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export interface AccountRow {
@@ -19,6 +21,8 @@ export interface MarketModelState {
   yesShares: number
   noShares: number
   costBasisUsd: number
+  latestDecision: ModelDecisionSnapshot | null
+  decisionHistory: ModelDecisionSnapshot[]
   latestAction: {
     action: string
     usdAmount: number
@@ -49,6 +53,8 @@ export interface OpenMarketRow {
     symbols: string
     applicationType: string
     pdufaDate: string
+    dateKind: 'public' | 'synthetic'
+    cnpvAwardDate: string | null
     eventDescription: string
     outcome: string
   } | null
@@ -92,6 +98,7 @@ export interface RecentMarketActionRow {
     companyName: string
     symbols: string
     pdufaDate: string
+    dateKind: 'public' | 'synthetic'
   } | null
 }
 
@@ -221,8 +228,14 @@ export function daysUntilUtc(dateLike: string | null | undefined): number | null
 
 export function getMarketQuestion(market: Pick<OpenMarketRow, 'event'>): string {
   if (!market.event) return 'Will this FDA event be approved by the PDUFA date?'
-  const date = formatShortDateUtc(market.event.pdufaDate)
-  return `Will ${market.event.drugName} be approved by ${date}?`
+  const date = formatEventDateLabel(
+    market.event.pdufaDate,
+    market.event.dateKind,
+    { timeZone: 'UTC', month: 'short', day: 'numeric' },
+  )
+  return isSyntheticEventDate(market.event.dateKind)
+    ? `Will ${market.event.drugName} be approved by the estimated CNPV action date (${date})?`
+    : `Will ${market.event.drugName} be approved by ${date}?`
 }
 
 export function getMarketSubtitle(market: Pick<OpenMarketRow, 'event'>): string {

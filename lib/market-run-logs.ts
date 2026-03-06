@@ -1,9 +1,10 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db, marketRunLogs, marketRuns } from '@/lib/db'
-import type { DailyRunStatus } from '@/lib/markets/types'
+import type { DailyRunActivityPhase, DailyRunStatus } from '@/lib/markets/types'
 import { MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
 
 type LogType = 'system' | 'activity' | 'progress' | 'error'
+const MARKET_RUN_LOG_SCHEMA_VERSION = 2
 
 export type PersistedRunLogEntry = {
   id: string
@@ -15,7 +16,10 @@ export type PersistedRunLogEntry = {
   okCount: number | null
   errorCount: number | null
   skippedCount: number | null
+  marketId: string | null
+  fdaEventId: string | null
   modelId: string | null
+  activityPhase: DailyRunActivityPhase | null
   action: string | null
   actionStatus: DailyRunStatus | null
   amountUsd: number | null
@@ -41,7 +45,7 @@ export type AdminMarketRunSnapshot = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __marketRunLogSchemaReadyPromise: Promise<void> | undefined
+  var __marketRunLogSchemaReadyState: { version: number; promise: Promise<void> } | undefined
 }
 
 function toIsoString(value: Date | null | undefined): string | null {
@@ -75,11 +79,11 @@ async function failStaleRunningRunIfNeeded(run: {
 }
 
 export async function ensureMarketRunLogSchema(): Promise<void> {
-  if (globalThis.__marketRunLogSchemaReadyPromise) {
-    return globalThis.__marketRunLogSchemaReadyPromise
+  if (globalThis.__marketRunLogSchemaReadyState?.version === MARKET_RUN_LOG_SCHEMA_VERSION) {
+    return globalThis.__marketRunLogSchemaReadyState.promise
   }
 
-  globalThis.__marketRunLogSchemaReadyPromise = (async () => {
+  const promise = (async () => {
     try {
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS market_run_logs (
@@ -92,12 +96,16 @@ export async function ensureMarketRunLogSchema(): Promise<void> {
           ok_count integer,
           error_count integer,
           skipped_count integer,
+          market_id text,
+          fda_event_id text,
           model_id text,
+          activity_phase text,
           action text,
           action_status text,
           amount_usd real,
           created_at timestamp DEFAULT now(),
           CONSTRAINT market_run_logs_log_type_check CHECK (log_type IN ('system', 'activity', 'progress', 'error')),
+          CONSTRAINT market_run_logs_activity_phase_check CHECK (activity_phase IS NULL OR activity_phase IN ('running', 'waiting')),
           CONSTRAINT market_run_logs_action_status_check CHECK (action_status IS NULL OR action_status IN ('ok', 'error', 'skipped')),
           CONSTRAINT market_run_logs_completed_actions_check CHECK (completed_actions IS NULL OR completed_actions >= 0),
           CONSTRAINT market_run_logs_total_actions_check CHECK (total_actions IS NULL OR total_actions >= 0),
@@ -105,6 +113,21 @@ export async function ensureMarketRunLogSchema(): Promise<void> {
           CONSTRAINT market_run_logs_error_count_check CHECK (error_count IS NULL OR error_count >= 0),
           CONSTRAINT market_run_logs_skipped_count_check CHECK (skipped_count IS NULL OR skipped_count >= 0)
         )
+      `)
+
+      await db.execute(sql`
+        ALTER TABLE market_run_logs
+          ADD COLUMN IF NOT EXISTS market_id text
+      `)
+
+      await db.execute(sql`
+        ALTER TABLE market_run_logs
+          ADD COLUMN IF NOT EXISTS fda_event_id text
+      `)
+
+      await db.execute(sql`
+        ALTER TABLE market_run_logs
+          ADD COLUMN IF NOT EXISTS activity_phase text
       `)
 
       await db.execute(sql`
@@ -129,6 +152,23 @@ export async function ensureMarketRunLogSchema(): Promise<void> {
             ALTER TABLE market_run_logs
               ADD CONSTRAINT market_run_logs_log_type_check
               CHECK (log_type IN ('system', 'activity', 'progress', 'error'));
+          END IF;
+        END
+        $$;
+      `)
+
+      await db.execute(sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'market_run_logs_activity_phase_check'
+              AND conrelid = 'market_run_logs'::regclass
+          ) THEN
+            ALTER TABLE market_run_logs
+              ADD CONSTRAINT market_run_logs_activity_phase_check
+              CHECK (activity_phase IS NULL OR activity_phase IN ('running', 'waiting'));
           END IF;
         END
         $$;
@@ -236,12 +276,17 @@ export async function ensureMarketRunLogSchema(): Promise<void> {
         $$;
       `)
     } catch (error) {
-      globalThis.__marketRunLogSchemaReadyPromise = undefined
+      globalThis.__marketRunLogSchemaReadyState = undefined
       throw error
     }
   })()
 
-  return globalThis.__marketRunLogSchemaReadyPromise
+  globalThis.__marketRunLogSchemaReadyState = {
+    version: MARKET_RUN_LOG_SCHEMA_VERSION,
+    promise,
+  }
+
+  return promise
 }
 
 export async function appendMarketRunLog(input: {
@@ -253,7 +298,10 @@ export async function appendMarketRunLog(input: {
   okCount?: number | null
   errorCount?: number | null
   skippedCount?: number | null
+  marketId?: string | null
+  fdaEventId?: string | null
   modelId?: string | null
+  activityPhase?: DailyRunActivityPhase | null
   action?: string | null
   actionStatus?: DailyRunStatus | null
   amountUsd?: number | null
@@ -269,7 +317,10 @@ export async function appendMarketRunLog(input: {
     okCount: input.okCount ?? null,
     errorCount: input.errorCount ?? null,
     skippedCount: input.skippedCount ?? null,
+    marketId: input.marketId ?? null,
+    fdaEventId: input.fdaEventId ?? null,
     modelId: input.modelId ?? null,
+    activityPhase: input.activityPhase ?? null,
     action: input.action ?? null,
     actionStatus: input.actionStatus ?? null,
     amountUsd: input.amountUsd ?? null,
@@ -343,7 +394,10 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
       okCount: log.okCount ?? null,
       errorCount: log.errorCount ?? null,
       skippedCount: log.skippedCount ?? null,
+      marketId: log.marketId ?? null,
+      fdaEventId: log.fdaEventId ?? null,
       modelId: log.modelId ?? null,
+      activityPhase: (log.activityPhase as DailyRunActivityPhase | null) ?? null,
       action: log.action ?? null,
       actionStatus: (log.actionStatus as DailyRunStatus | null) ?? null,
       amountUsd: log.amountUsd ?? null,

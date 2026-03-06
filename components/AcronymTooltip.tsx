@@ -24,6 +24,10 @@ export const FDA_ACRONYMS: Record<string, { fullName: string; definition: string
     fullName: 'Abbreviated New Drug Application',
     definition: 'FDA submission for generic drugs',
   },
+  'CNPV': {
+    fullName: "Commissioner's National Priority Voucher",
+    definition: 'FDA pilot pathway that can accelerate review for selected drugs tied to national priorities',
+  },
   'PDUFA': {
     fullName: 'Prescription Drug User Fee Act',
     definition: 'Law requiring FDA decision deadlines; the "PDUFA date" is the target decision date',

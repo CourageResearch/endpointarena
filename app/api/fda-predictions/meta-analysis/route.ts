@@ -4,6 +4,7 @@ import { db, fdaCalendarEvents } from '@/lib/db'
 import { ensureAdmin } from '@/lib/auth'
 import { generateMetaAnalysis } from '@/lib/predictions/fda-generators'
 import { MODEL_NAMES, type ModelId } from '@/lib/constants'
+import { getLatestPredictionsForEvent } from '@/lib/model-decision-snapshots'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
 
@@ -24,14 +25,13 @@ export async function POST(request: NextRequest) {
 
     const event = await db.query.fdaCalendarEvents.findFirst({
       where: eq(fdaCalendarEvents.id, fdaEventId),
-      with: { predictions: true },
     })
 
     if (!event) {
       throw new NotFoundError('FDA event not found')
     }
 
-    const modelPredictions = event.predictions.filter((prediction) => prediction.predictorType === 'model')
+    const modelPredictions = await getLatestPredictionsForEvent(event.id, event.outcome)
     if (modelPredictions.length < 2) {
       throw new ValidationError('Need at least 2 model predictions to generate meta-analysis')
     }
@@ -105,4 +105,3 @@ export async function GET(request: NextRequest) {
     return errorResponse(error, requestId, 'Failed to fetch meta-analysis')
   }
 }
-

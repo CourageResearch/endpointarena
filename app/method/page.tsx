@@ -1,4 +1,4 @@
-import { db, fdaCalendarEvents, fdaPredictions } from '@/lib/db'
+import { db, fdaCalendarEvents, fdaPredictions, modelDecisionSnapshots } from '@/lib/db'
 import { eq, sql } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
@@ -8,21 +8,23 @@ import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chr
 export const dynamic = 'force-dynamic'
 
 async function getData() {
-  const [fdaEventCount, predictionCount] = await Promise.all([
+  const [fdaEventCount, legacyPredictionCount, snapshotCount] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(fdaCalendarEvents),
     db.select({ count: sql<number>`count(*)` })
       .from(fdaPredictions)
       .where(eq(fdaPredictions.predictorType, 'model')),
+    db.select({ count: sql<number>`count(*)` }).from(modelDecisionSnapshots),
   ])
 
   return {
     fdaEventCount: fdaEventCount[0]?.count ?? 0,
-    predictionCount: predictionCount[0]?.count ?? 0,
+    predictionCount: (legacyPredictionCount[0]?.count ?? 0) + (snapshotCount[0]?.count ?? 0),
+    snapshotCount: snapshotCount[0]?.count ?? 0,
   }
 }
 
 export default async function MethodPage() {
-  const { fdaEventCount, predictionCount } = await getData()
+  const { fdaEventCount, predictionCount, snapshotCount } = await getData()
 
   const MODEL_BINDINGS: Record<ModelId, {
     version: string
@@ -75,15 +77,15 @@ export default async function MethodPage() {
     'deepseek-v3.2': {
       version: 'deepseek-ai/DeepSeek-V3.1',
       internet: false,
-      internetDetail: 'No web-search tool configured in FDA generator',
+      internetDetail: 'No web-search tool configured in the combined decision generator',
       reasoning: 'Reasoning mode',
       reasoningDetail: 'extra_body.reasoning_effort = high',
       maxTokens: '16,000 output',
     },
     'llama-4': {
-      version: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+      version: 'meta-llama/llama-4-scout-17b-16e-instruct',
       internet: false,
-      internetDetail: 'No web-search tool configured in FDA generator',
+      internetDetail: 'No web-search tool configured in the combined decision generator',
       reasoning: 'Provider default',
       reasoningDetail: 'No explicit reasoning parameter configured',
       maxTokens: '8,192 output',
@@ -91,7 +93,7 @@ export default async function MethodPage() {
     'kimi-k2': {
       version: 'moonshotai/Kimi-K2-Thinking',
       internet: false,
-      internetDetail: 'No web-search tool configured in FDA generator',
+      internetDetail: 'No web-search tool configured in the combined decision generator',
       reasoning: 'Thinking',
       reasoningDetail: 'extra_body.reasoning_effort = high',
       maxTokens: '16,000 output',
@@ -132,11 +134,11 @@ export default async function MethodPage() {
     },
     {
       title: 'Prepare Shared Context',
-      description: 'Each model receives the same core FDA context and prediction task. Then each provider runs with native best-effort settings: web search where supported, strong reasoning/thinking mode, and generous output token budgets. We avoid lowest-common-denominator constraints so each model can perform at its best.'
+      description: 'Each model receives the same structured event, market, and portfolio context. One provider call produces both a forecast snapshot and a proposed market action, while application-side guardrails enforce trading limits.'
     },
     {
-      title: 'Request Predictions',
-      description: 'Ask each model: "Will the FDA approve this drug?" Models provide a binary "approved" or "rejected" prediction with reasoning. All predictions are timestamped before decisions.'
+      title: 'Record Decision Snapshots',
+      description: 'Ask each model for an intrinsic approval forecast first, then a market action for the same timepoint. Each snapshot stores approval probability, binary call, confidence, reasoning, and proposed action.'
     },
     {
       title: 'Wait for FDA Decisions',
@@ -144,7 +146,7 @@ export default async function MethodPage() {
     },
     {
       title: 'Score Results',
-      description: "Compare each model's prediction to the actual outcome. A prediction is correct if \"approved\" matches approval, or if \"rejected\" matches rejection/CRL."
+      description: "Compare either the first or final pre-outcome snapshot to the actual outcome. A prediction is correct if \"approved\" matches approval, or if \"rejected\" matches rejection/CRL."
     }
   ]
 
@@ -176,13 +178,13 @@ export default async function MethodPage() {
             <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Problem with AI Benchmarks</h3>
-                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
               </div>
             </div>
             <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Solution</h3>
-                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">FDA decisions don't exist until they're announced. No memorization possible, no data leakage, no benchmark contamination.</p>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">FDA decisions do not exist until they are announced. No memorization, no leakage, and now a full time series of how each model updated over time.</p>
               </div>
             </div>
             <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
@@ -387,14 +389,18 @@ predict the outcome.
             </div>
           </div>
           <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-            <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
+            <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{fdaEventCount}</div>
                 <div className="text-sm text-[#b5aa9e] mt-1">FDA Events Tracked</div>
               </div>
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{predictionCount}</div>
-                <div className="text-sm text-[#b5aa9e] mt-1">Predictions Made</div>
+                <div className="text-sm text-[#b5aa9e] mt-1">Total Prediction Records</div>
+              </div>
+              <div className="p-4 sm:p-6">
+                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{snapshotCount}</div>
+                <div className="text-sm text-[#b5aa9e] mt-1">Decision Snapshots</div>
               </div>
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{MODEL_IDS.length}</div>

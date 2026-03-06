@@ -4,6 +4,7 @@ import { relations, sql } from 'drizzle-orm'
 // FDA Calendar Events table
 export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  externalKey: text('external_key'),
   companyName: text('company_name').notNull(),
   symbols: text('symbols').notNull(),
   drugName: text('drug_name').notNull(),
@@ -12,6 +13,8 @@ export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   eventDescription: text('event_description').notNull(),
   outcome: text('outcome').notNull().default('Pending'),
   outcomeDate: timestamp('outcome_date'),
+  dateKind: text('date_kind').notNull().default('public'),
+  cnpvAwardDate: timestamp('cnpv_award_date'),
   drugStatus: text('drug_status'),
   therapeuticArea: text('therapeutic_area'),
   rivalDrugs: text('rival_drugs'),
@@ -26,11 +29,16 @@ export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
   scrapedAt: timestamp('scraped_at').$defaultFn(() => new Date()),
 }, (table) => ({
+  externalKeyIdx: uniqueIndex('fda_calendar_events_external_key_idx').on(table.externalKey),
   pdufaDateIdx: index('fda_calendar_events_pdufa_date_idx').on(table.pdufaDate),
   outcomeIdx: index('fda_calendar_events_outcome_idx').on(table.outcome),
   outcomeCheck: check(
     'fda_calendar_events_outcome_check',
     sql`${table.outcome} IN ('Pending', 'Approved', 'Rejected')`
+  ),
+  dateKindCheck: check(
+    'fda_calendar_events_date_kind_check',
+    sql`${table.dateKind} IN ('public', 'synthetic')`
   ),
 }))
 
@@ -240,7 +248,10 @@ export const marketRunLogs = pgTable('market_run_logs', {
   okCount: integer('ok_count'),
   errorCount: integer('error_count'),
   skippedCount: integer('skipped_count'),
+  marketId: text('market_id'),
+  fdaEventId: text('fda_event_id'),
   modelId: text('model_id'),
+  activityPhase: text('activity_phase'),
   action: text('action'),
   actionStatus: text('action_status'), // ok | error | skipped
   amountUsd: real('amount_usd'),
@@ -251,6 +262,10 @@ export const marketRunLogs = pgTable('market_run_logs', {
   logTypeCheck: check(
     'market_run_logs_log_type_check',
     sql`${table.logType} IN ('system', 'activity', 'progress', 'error')`
+  ),
+  activityPhaseCheck: check(
+    'market_run_logs_activity_phase_check',
+    sql`${table.activityPhase} IS NULL OR ${table.activityPhase} IN ('running', 'waiting')`
   ),
   actionStatusCheck: check(
     'market_run_logs_action_status_check',
@@ -329,6 +344,115 @@ export const marketActions = pgTable('market_actions', {
       OR
       (${table.action} = 'HOLD' AND ${table.sharesDelta} = 0 AND ${table.usdAmount} = 0)
     )`
+  ),
+}))
+
+export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
+  fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  modelId: text('model_id').notNull(),
+  runSource: text('run_source').notNull(),
+  approvalProbability: real('approval_probability').notNull(),
+  binaryCall: text('binary_call').notNull(),
+  confidence: integer('confidence').notNull(),
+  reasoning: text('reasoning').notNull(),
+  proposedActionType: text('proposed_action_type').notNull(),
+  proposedAmountUsd: real('proposed_amount_usd').notNull().default(0),
+  proposedExplanation: text('proposed_explanation').notNull(),
+  marketPriceYes: real('market_price_yes'),
+  marketPriceNo: real('market_price_no'),
+  cashAvailable: real('cash_available'),
+  yesSharesHeld: real('yes_shares_held'),
+  noSharesHeld: real('no_shares_held'),
+  maxBuyUsd: real('max_buy_usd'),
+  maxSellYesUsd: real('max_sell_yes_usd'),
+  maxSellNoUsd: real('max_sell_no_usd'),
+  durationMs: integer('duration_ms'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  totalTokens: integer('total_tokens'),
+  reasoningTokens: integer('reasoning_tokens'),
+  estimatedCostUsd: real('estimated_cost_usd'),
+  costSource: text('cost_source'),
+  cacheCreationInputTokens5m: integer('cache_creation_input_tokens_5m'),
+  cacheCreationInputTokens1h: integer('cache_creation_input_tokens_1h'),
+  cacheReadInputTokens: integer('cache_read_input_tokens'),
+  webSearchRequests: integer('web_search_requests'),
+  inferenceGeo: text('inference_geo'),
+  linkedMarketActionId: text('linked_market_action_id').references(() => marketActions.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+}, (table) => ({
+  eventModelCreatedIdx: index('model_decision_snapshots_event_model_created_idx').on(
+    table.fdaEventId,
+    table.modelId,
+    table.createdAt,
+  ),
+  marketModelCreatedIdx: index('model_decision_snapshots_market_model_created_idx').on(
+    table.marketId,
+    table.modelId,
+    table.createdAt,
+  ),
+  runSourceIdx: index('model_decision_snapshots_run_source_idx').on(table.runSource),
+  runSourceCheck: check(
+    'model_decision_snapshots_run_source_check',
+    sql`${table.runSource} IN ('manual', 'cycle')`,
+  ),
+  binaryCallCheck: check(
+    'model_decision_snapshots_binary_call_check',
+    sql`${table.binaryCall} IN ('approved', 'rejected')`,
+  ),
+  confidenceCheck: check(
+    'model_decision_snapshots_confidence_check',
+    sql`${table.confidence} >= 50 AND ${table.confidence} <= 100`,
+  ),
+  approvalProbabilityCheck: check(
+    'model_decision_snapshots_approval_probability_check',
+    sql`${table.approvalProbability} >= 0 AND ${table.approvalProbability} <= 1`,
+  ),
+  proposedActionCheck: check(
+    'model_decision_snapshots_proposed_action_check',
+    sql`${table.proposedActionType} IN ('BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO', 'HOLD')`,
+  ),
+  proposedAmountCheck: check(
+    'model_decision_snapshots_proposed_amount_check',
+    sql`${table.proposedAmountUsd} >= 0`,
+  ),
+  marketPriceYesCheck: check(
+    'model_decision_snapshots_market_price_yes_check',
+    sql`${table.marketPriceYes} IS NULL OR (${table.marketPriceYes} >= 0 AND ${table.marketPriceYes} <= 1)`,
+  ),
+  marketPriceNoCheck: check(
+    'model_decision_snapshots_market_price_no_check',
+    sql`${table.marketPriceNo} IS NULL OR (${table.marketPriceNo} >= 0 AND ${table.marketPriceNo} <= 1)`,
+  ),
+  nonNegativeCashCheck: check(
+    'model_decision_snapshots_cash_available_check',
+    sql`${table.cashAvailable} IS NULL OR ${table.cashAvailable} >= 0`,
+  ),
+  nonNegativeYesSharesCheck: check(
+    'model_decision_snapshots_yes_shares_held_check',
+    sql`${table.yesSharesHeld} IS NULL OR ${table.yesSharesHeld} >= 0`,
+  ),
+  nonNegativeNoSharesCheck: check(
+    'model_decision_snapshots_no_shares_held_check',
+    sql`${table.noSharesHeld} IS NULL OR ${table.noSharesHeld} >= 0`,
+  ),
+  nonNegativeMaxBuyCheck: check(
+    'model_decision_snapshots_max_buy_usd_check',
+    sql`${table.maxBuyUsd} IS NULL OR ${table.maxBuyUsd} >= 0`,
+  ),
+  nonNegativeMaxSellYesCheck: check(
+    'model_decision_snapshots_max_sell_yes_usd_check',
+    sql`${table.maxSellYesUsd} IS NULL OR ${table.maxSellYesUsd} >= 0`,
+  ),
+  nonNegativeMaxSellNoCheck: check(
+    'model_decision_snapshots_max_sell_no_usd_check',
+    sql`${table.maxSellNoUsd} IS NULL OR ${table.maxSellNoUsd} >= 0`,
+  ),
+  costSourceCheck: check(
+    'model_decision_snapshots_cost_source_check',
+    sql`${table.costSource} IS NULL OR ${table.costSource} IN ('provider', 'estimated')`,
   ),
 }))
 
@@ -429,6 +553,7 @@ export const predictionMarketsRelations = relations(predictionMarkets, ({ one, m
   }),
   positions: many(marketPositions),
   actions: many(marketActions),
+  decisionSnapshots: many(modelDecisionSnapshots),
   priceSnapshots: many(marketPriceSnapshots),
 }))
 
@@ -463,6 +588,21 @@ export const marketActionsRelations = relations(marketActions, ({ one }) => ({
   fdaEvent: one(fdaCalendarEvents, {
     fields: [marketActions.fdaEventId],
     references: [fdaCalendarEvents.id],
+  }),
+}))
+
+export const modelDecisionSnapshotsRelations = relations(modelDecisionSnapshots, ({ one }) => ({
+  market: one(predictionMarkets, {
+    fields: [modelDecisionSnapshots.marketId],
+    references: [predictionMarkets.id],
+  }),
+  fdaEvent: one(fdaCalendarEvents, {
+    fields: [modelDecisionSnapshots.fdaEventId],
+    references: [fdaCalendarEvents.id],
+  }),
+  linkedMarketAction: one(marketActions, {
+    fields: [modelDecisionSnapshots.linkedMarketActionId],
+    references: [marketActions.id],
   }),
 }))
 
@@ -647,6 +787,8 @@ export type MarketPosition = typeof marketPositions.$inferSelect
 export type NewMarketPosition = typeof marketPositions.$inferInsert
 export type MarketAction = typeof marketActions.$inferSelect
 export type NewMarketAction = typeof marketActions.$inferInsert
+export type ModelDecisionSnapshot = typeof modelDecisionSnapshots.$inferSelect
+export type NewModelDecisionSnapshot = typeof modelDecisionSnapshots.$inferInsert
 export type MarketRun = typeof marketRuns.$inferSelect
 export type NewMarketRun = typeof marketRuns.$inferInsert
 export type MarketRunLog = typeof marketRunLogs.$inferSelect

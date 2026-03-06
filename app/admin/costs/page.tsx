@@ -3,9 +3,10 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL, MODEL_IDS, MODEL_INFO, formatDuration, type ModelId } from '@/lib/constants'
-import { db, fdaPredictions } from '@/lib/db'
+import { db, fdaPredictions, modelDecisionSnapshots } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { buildFDAPredictionPrompt } from '@/lib/predictions/fda-prompt'
+import { buildModelDecisionPrompt } from '@/lib/predictions/model-decision-prompt'
 import {
   estimateCostFromTokenUsage,
   estimateTextGenerationCost,
@@ -20,6 +21,7 @@ type RunCostRow = {
   modelId: ModelId
   modelName: string
   provider: string
+  runKind: 'snapshot' | 'legacy'
   drugName: string
   companyName: string
   createdAt: Date | null
@@ -68,18 +70,136 @@ function formatUsdSummary(value: number): string {
 }
 
 async function getCostData() {
-  const predictions = await db.query.fdaPredictions.findMany({
-    where: eq(fdaPredictions.predictorType, 'model'),
-    with: {
-      fdaEvent: true,
-    },
-    orderBy: [desc(fdaPredictions.createdAt)],
-  })
+  const [snapshotRuns, legacyPredictions] = await Promise.all([
+    db.query.modelDecisionSnapshots.findMany({
+      with: {
+        fdaEvent: true,
+      },
+      orderBy: [desc(modelDecisionSnapshots.createdAt)],
+    }),
+    db.query.fdaPredictions.findMany({
+      where: eq(fdaPredictions.predictorType, 'model'),
+      with: {
+        fdaEvent: true,
+      },
+      orderBy: [desc(fdaPredictions.createdAt)],
+    }),
+  ])
 
-  const promptByEventId = new Map<string, string>()
+  const legacyPromptByEventId = new Map<string, string>()
   const runs: RunCostRow[] = []
 
-  for (const prediction of predictions) {
+  for (const snapshot of snapshotRuns) {
+    const event = snapshot.fdaEvent
+    if (!event || !isModelId(snapshot.modelId)) {
+      continue
+    }
+
+    let inputTokens = snapshot.inputTokens ?? null
+    let outputTokens = snapshot.outputTokens ?? null
+    let totalTokens = snapshot.totalTokens ?? null
+    let estimatedCostUsd = snapshot.estimatedCostUsd ?? null
+    let costSource: AICostSource = isAICostSource(snapshot.costSource)
+      ? snapshot.costSource
+      : 'estimated'
+
+    if (inputTokens == null || outputTokens == null) {
+      const prompt = buildModelDecisionPrompt({
+        meta: {
+          eventId: snapshot.fdaEventId,
+          marketId: snapshot.marketId,
+          modelId: snapshot.modelId,
+          asOf: snapshot.createdAt?.toISOString() ?? new Date().toISOString(),
+          runDateIso: snapshot.createdAt?.toISOString() ?? new Date().toISOString(),
+        },
+        event: {
+          drugName: event.drugName,
+          companyName: event.companyName,
+          symbols: event.symbols || null,
+          applicationType: event.applicationType,
+          pdufaDate: event.pdufaDate.toISOString(),
+          daysToDecision: 0,
+          eventDescription: event.eventDescription,
+          drugStatus: event.drugStatus,
+          nctId: event.nctId ?? null,
+        },
+        market: {
+          yesPrice: snapshot.marketPriceYes ?? 0.5,
+          noPrice: snapshot.marketPriceNo ?? 0.5,
+          otherOpenMarkets: [],
+        },
+        portfolio: {
+          cashAvailable: snapshot.cashAvailable ?? 0,
+          yesSharesHeld: snapshot.yesSharesHeld ?? 0,
+          noSharesHeld: snapshot.noSharesHeld ?? 0,
+          maxBuyUsd: snapshot.maxBuyUsd ?? 0,
+          maxSellYesUsd: snapshot.maxSellYesUsd ?? 0,
+          maxSellNoUsd: snapshot.maxSellNoUsd ?? 0,
+        },
+        constraints: {
+          allowedActions: ['BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO', 'HOLD'],
+          explanationMaxChars: 220,
+        },
+      })
+
+      const estimate = estimateTextGenerationCost({
+        modelId: snapshot.modelId,
+        promptText: prompt,
+        responseText: JSON.stringify({
+          forecast: {
+            approvalProbability: snapshot.approvalProbability,
+            binaryCall: snapshot.binaryCall,
+            confidence: snapshot.confidence,
+            reasoning: snapshot.reasoning,
+          },
+          action: {
+            type: snapshot.proposedActionType,
+            amountUsd: snapshot.proposedAmountUsd,
+            explanation: snapshot.proposedExplanation,
+          },
+        }),
+        profile: getCostEstimationProfileForModel(snapshot.modelId),
+      })
+      inputTokens = estimate.inputTokens
+      outputTokens = estimate.outputTokens
+      totalTokens = estimate.inputTokens + estimate.outputTokens
+      estimatedCostUsd = estimate.estimatedCostUsd
+      costSource = 'estimated'
+    } else {
+      if (totalTokens == null) {
+        totalTokens = inputTokens + outputTokens
+      }
+      estimatedCostUsd = estimateCostFromTokenUsage({
+        modelId: snapshot.modelId,
+        inputTokens,
+        outputTokens,
+        cacheCreationInputTokens5m: snapshot.cacheCreationInputTokens5m,
+        cacheCreationInputTokens1h: snapshot.cacheCreationInputTokens1h,
+        cacheReadInputTokens: snapshot.cacheReadInputTokens,
+        webSearchRequests: snapshot.webSearchRequests,
+        inferenceGeo: snapshot.inferenceGeo,
+      })
+    }
+
+    runs.push({
+      id: snapshot.id,
+      modelId: snapshot.modelId,
+      modelName: MODEL_INFO[snapshot.modelId].fullName,
+      provider: MODEL_INFO[snapshot.modelId].provider,
+      runKind: 'snapshot',
+      drugName: event.drugName,
+      companyName: event.companyName,
+      createdAt: snapshot.createdAt,
+      durationMs: snapshot.durationMs,
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      estimatedCostUsd,
+      costSource,
+    })
+  }
+
+  for (const prediction of legacyPredictions) {
     const event = prediction.fdaEvent
     if (!event || !isModelId(prediction.predictorId)) {
       continue
@@ -94,7 +214,7 @@ async function getCostData() {
       : 'estimated'
 
     if (inputTokens == null || outputTokens == null) {
-      let prompt = promptByEventId.get(event.id)
+      let prompt = legacyPromptByEventId.get(event.id)
       if (!prompt) {
         prompt = buildFDAPredictionPrompt({
           drugName: event.drugName,
@@ -108,7 +228,7 @@ async function getCostData() {
           otherApprovals: event.otherApprovals,
           source: event.source,
         })
-        promptByEventId.set(event.id, prompt)
+        legacyPromptByEventId.set(event.id, prompt)
       }
 
       const estimate = estimateTextGenerationCost({
@@ -144,6 +264,7 @@ async function getCostData() {
       modelId: prediction.predictorId,
       modelName: MODEL_INFO[prediction.predictorId].fullName,
       provider: MODEL_INFO[prediction.predictorId].provider,
+      runKind: 'legacy',
       drugName: event.drugName,
       companyName: event.companyName,
       createdAt: prediction.createdAt,
@@ -155,6 +276,8 @@ async function getCostData() {
       costSource,
     })
   }
+
+  runs.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
 
   const totalRuns = runs.length
   const totalEstimatedCostUsd = runs.reduce((sum, run) => sum + run.estimatedCostUsd, 0)
@@ -213,7 +336,7 @@ export default async function AdminCostsPage() {
   return (
     <AdminConsoleLayout
       title="AI Cost Estimates"
-      description="Provider usage where available, with heuristic fallback for older runs."
+      description="Decision snapshot runs plus legacy FDA-only rows, using provider usage where available and heuristic fallback otherwise."
       activeTab="costs"
     >
       <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -284,6 +407,7 @@ export default async function AdminCostsPage() {
               <thead>
                 <tr className="border-b border-[#e8ddd0]">
                   <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-2 py-2">Run Time</th>
+                  <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-2 py-2">Kind</th>
                   <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-2 py-2">Model</th>
                   <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-2 py-2">Event</th>
                   <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-2 py-2">Duration</th>
@@ -298,6 +422,7 @@ export default async function AdminCostsPage() {
                 {runs.slice(0, 150).map((run) => (
                   <tr key={run.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
                     <td className="px-2 py-2 text-[#8a8075] font-mono text-xs">{formatRunTimestamp(run.createdAt)}</td>
+                    <td className="px-2 py-2 text-[#8a8075]">{run.runKind === 'snapshot' ? 'Snapshot' : 'Legacy'}</td>
                     <td className="px-2 py-2 text-[#1a1a1a]">{run.modelName}</td>
                     <td className="px-2 py-2 text-[#8a8075]">
                       <div className="font-medium text-[#1a1a1a]">{run.drugName}</div>
@@ -318,7 +443,7 @@ export default async function AdminCostsPage() {
       </section>
 
       <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4 text-sm text-[#8a8075]">
-        Provider source means token usage was captured from API usage fields. Heuristic source is a fallback estimate for older rows or providers that did not return usage tokens, including a Claude deep-research uplift for hidden thinking/search usage.
+        Provider source means token usage was captured from API usage fields. Heuristic source is a fallback estimate for legacy rows or providers that did not return usage tokens, including a Claude deep-research uplift for hidden thinking/search usage.
       </section>
     </AdminConsoleLayout>
   )

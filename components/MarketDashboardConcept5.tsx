@@ -228,6 +228,13 @@ function formatShares(value: number): string {
   return value.toFixed(digits).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
 }
 
+function clipText(value: string | null | undefined, maxChars: number): string {
+  const normalized = (value || '').replace(/\s+/g, ' ').trim()
+  if (!normalized) return 'No details'
+  if (normalized.length <= maxChars) return normalized
+  return `${normalized.slice(0, maxChars).replace(/[ ,;:]+$/, '')}...`
+}
+
 function getSignedMoneyClass(value: number): string {
   if (value > 0.01) return 'text-emerald-700'
   if (value < -0.01) return 'text-rose-700'
@@ -776,6 +783,33 @@ export function MarketDashboardConcept5({
         return a.index - b.index
       })
 
+  const decisionRows = selectedMarket.modelStates.map((state) => {
+    const model = MODEL_INFO[state.modelId]
+    const latestDecision = state.latestDecision
+    const history = state.decisionHistory
+    const binaryCall = latestDecision?.forecast.binaryCall ?? null
+    const callToneClass =
+      binaryCall === 'approved'
+        ? APPROVE_TEXT_CLASS
+        : binaryCall === 'rejected'
+          ? REJECT_TEXT_CLASS
+          : 'text-[#7c7267]'
+
+    return {
+      state,
+      model,
+      latestDecision,
+      history,
+      callLabel:
+        binaryCall === 'approved'
+          ? 'Approve'
+          : binaryCall === 'rejected'
+            ? 'Reject'
+            : 'Pending',
+      callToneClass,
+    }
+  })
+
   const handlePositionSort = (key: PositionSortKey) => {
     startTransition(() => {
       setPositionSort((current) => {
@@ -1102,6 +1136,109 @@ export function MarketDashboardConcept5({
           ) : null}
         </>
       ) : null}
+      </section>
+    )
+
+  const renderDecisionSnapshotsPanel = ({ className }: { className?: string } = {}) => (
+    <section className={cn('space-y-4', className)}>
+      <div className="px-1">
+        <div className="flex items-center gap-3">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Decision Snapshots</div>
+          <HeaderDots />
+        </div>
+        <p className="mt-2 text-sm text-[#7c7267]">
+          Latest forecast per model, plus full snapshot history before trade guardrails and execution.
+        </p>
+      </div>
+
+      {decisionRows.length === 0 ? (
+        <div className="mx-1 rounded-xl border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
+          No decision snapshots recorded for this market yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {decisionRows.map(({ state, model, latestDecision, history, callLabel, callToneClass }) => (
+            <div key={`${selectedMarket.marketId}-decision-${state.modelId}`} className="mx-1 rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
+              <div className="h-full rounded-md bg-white/95 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]" aria-hidden="true">
+                        <ModelIcon id={state.modelId} className="h-4 w-4 grayscale" />
+                      </span>
+                      <span className="truncate text-sm font-medium text-[#1a1a1a]" title={model.fullName}>
+                        {model.fullName}
+                      </span>
+                    </div>
+                    <div className={cn('mt-2 text-sm font-medium', callToneClass)}>
+                      {callLabel}
+                      {latestDecision?.forecast.approvalProbability != null ? ` · p=${Math.round(latestDecision.forecast.approvalProbability * 100)}%` : ''}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right text-[11px] text-[#8a8075]">
+                    <div>{history.length} snapshot{history.length === 1 ? '' : 's'}</div>
+                    <div>{formatDateTimeLocalCompact(latestDecision?.createdAt)}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-2 text-sm text-[#7c7267]">
+                  <div>
+                    <span className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Latest Action</span>
+                    <div className="mt-1">
+                      {latestDecision?.action
+                        ? `${latestDecision.action.type} ${formatCompactMoney(latestDecision.action.amountUsd)}`
+                        : 'No proposed action'}
+                    </div>
+                    <div className="mt-1 text-xs text-[#8a8075]">
+                      {clipText(latestDecision?.action?.explanation, 160)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Latest Thesis</span>
+                    <div className="mt-1 text-xs leading-relaxed text-[#8a8075]">
+                      {clipText(latestDecision?.forecast.reasoning, 220)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 border-t border-[#e8ddd0] pt-3">
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">History</div>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
+                    {history.length > 0 ? history.map((snapshot) => {
+                      const snapshotCallClass =
+                        snapshot.forecast.binaryCall === 'approved'
+                          ? APPROVE_TEXT_CLASS
+                          : snapshot.forecast.binaryCall === 'rejected'
+                            ? REJECT_TEXT_CLASS
+                            : 'text-[#7c7267]'
+                      return (
+                        <div key={snapshot.id} className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
+                          <div className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className={cn('font-medium', snapshotCallClass)}>
+                              {snapshot.forecast.binaryCall === 'approved' ? 'Approve' : 'Reject'}
+                              {` · p=${Math.round(snapshot.forecast.approvalProbability * 100)}%`}
+                            </span>
+                            <span className="text-[#8a8075]">{formatDateTimeLocalCompact(snapshot.createdAt)}</span>
+                          </div>
+                          <div className="mt-1 text-[11px] text-[#7c7267]">
+                            {snapshot.action
+                              ? `${snapshot.action.type} ${formatCompactMoney(snapshot.action.amountUsd)} · ${clipText(snapshot.action.explanation, 110)}`
+                              : 'No proposed action'}
+                          </div>
+                        </div>
+                      )
+                    }) : (
+                      <div className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-xs text-[#8a8075]">
+                        No snapshot history yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   )
 
@@ -1573,7 +1710,8 @@ export function MarketDashboardConcept5({
 	              </div>
 	            </div>
 	            </div>
-	            {!useMarkets2Layout ? renderReasoningPanel({ className: cn('px-1', useStackedLayout && '-mt-2') }) : null}
+	            {renderDecisionSnapshotsPanel({ className: cn('mt-10 px-1', useStackedLayout && '-mt-2') })}
+	            {!useMarkets2Layout ? renderReasoningPanel({ className: 'px-1' }) : null}
 	            {!useMarkets2Layout ? (
 	              <div className="mt-10 px-1">
 	                <div className="mb-2 px-1">

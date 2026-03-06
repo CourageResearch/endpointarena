@@ -1,35 +1,14 @@
 import type { ReactNode } from 'react'
-import { db, fdaCalendarEvents, fdaPredictions, marketAccounts, marketPositions, predictionMarkets, users } from '@/lib/db'
-import { desc, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import { MODEL_DISPLAY_NAMES, MODEL_IDS, MODEL_NAMES, type ModelId } from '@/lib/constants'
 import { FDAIcon, ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { BW2MobilePastCard, BW2PastRow } from '@/app/rows'
 import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
 import { FooterGradientRule } from '@/components/site/chrome'
-import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-name'
+import { getLeaderboardData } from '@/lib/leaderboard-data'
+import type { LeaderboardPredictionMode } from '@/lib/model-decision-snapshots'
 
 export const dynamic = 'force-dynamic'
-
-interface ModelStats {
-  correct: number
-  wrong: number
-  pending: number
-  confidenceSum: number
-  confidenceCorrectSum: number
-  confidenceWrongSum: number
-  total: number
-}
-
-interface HumanLeaderboardEntry {
-  userId: string
-  displayName: string
-  cashBalance: number
-  positionsValue: number
-  startingCash: number
-  totalEquity: number
-  pnl: number
-}
 
 const RANK_ORDER_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
 const PAST_TABLE_FIXED_COLUMNS = 5
@@ -123,176 +102,21 @@ function splitModelNameAndVersion(fullName: string): { model: string; version: s
   }
 }
 
-function getHumanActorId(userId: string): string {
-  return `human:${userId}`
+function parseMode(value: string | string[] | undefined): LeaderboardPredictionMode {
+  if (Array.isArray(value)) {
+    return value[0] === 'first' ? 'first' : 'final'
+  }
+  return value === 'first' ? 'first' : 'final'
 }
 
-async function getData() {
-  const [allPredictions, accounts, openMarkets, recentFdaDecisions, verifiedUsers] = await Promise.all([
-    db.query.fdaPredictions.findMany({
-      where: eq(fdaPredictions.predictorType, 'model'),
-      with: { fdaEvent: true },
-    }),
-    db.query.marketAccounts.findMany(),
-    db.query.predictionMarkets.findMany({
-      where: eq(predictionMarkets.status, 'OPEN'),
-    }),
-    db.query.fdaCalendarEvents.findMany({
-      where: or(
-        eq(fdaCalendarEvents.outcome, 'Approved'),
-        eq(fdaCalendarEvents.outcome, 'Rejected')
-      ),
-      with: { predictions: true },
-      orderBy: [desc(fdaCalendarEvents.outcomeDate)],
-      limit: 10,
-    }),
-    db.query.users.findMany({
-      where: isNotNull(users.tweetVerifiedAt),
-      columns: {
-        id: true,
-        name: true,
-        email: true,
-        pointsBalance: true,
-      },
-    }),
-  ])
-
-  const openMarketIds = openMarkets.map((market) => market.id)
-  const positions = openMarketIds.length > 0
-    ? await db.query.marketPositions.findMany({
-        where: inArray(marketPositions.marketId, openMarketIds),
-      })
-    : []
-
-  const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
-  const accountByModelId = new Map(accounts.map((account) => [account.modelId, account]))
-  const positionsValueByModelId = new Map<string, number>()
-
-  for (const position of positions) {
-    const market = openMarketById.get(position.marketId)
-    if (!market) continue
-
-    const markedValue = (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
-    positionsValueByModelId.set(
-      position.modelId,
-      (positionsValueByModelId.get(position.modelId) ?? 0) + markedValue
-    )
-  }
-
-  const modelStats = new Map<string, ModelStats>()
-  for (const id of MODEL_IDS) {
-    modelStats.set(id, { correct: 0, wrong: 0, pending: 0, confidenceSum: 0, confidenceCorrectSum: 0, confidenceWrongSum: 0, total: 0 })
-  }
-
-  for (const pred of allPredictions) {
-    const stats = modelStats.get(pred.predictorId)
-    if (!stats) continue
-
-    stats.confidenceSum += pred.confidence
-    stats.total++
-
-    const outcome = pred.fdaEvent?.outcome
-    const isDecided = outcome === 'Approved' || outcome === 'Rejected'
-
-    if (!isDecided) {
-      stats.pending++
-      continue
-    }
-
-    const isCorrect =
-      (pred.prediction === 'approved' && outcome === 'Approved') ||
-      (pred.prediction === 'rejected' && outcome === 'Rejected')
-
-    if (isCorrect) {
-      stats.correct++
-      stats.confidenceCorrectSum += pred.confidence
-    } else {
-      stats.wrong++
-      stats.confidenceWrongSum += pred.confidence
-    }
-  }
-
-  const leaderboard = Array.from(modelStats.entries())
-    .map(([id, stats]) => {
-      const decided = stats.correct + stats.wrong
-      return {
-        id: id as ModelId,
-        correct: stats.correct,
-        wrong: stats.wrong,
-        pending: stats.pending,
-        decided,
-        total: stats.total,
-        accuracy: decided > 0 ? (stats.correct / decided) * 100 : 0,
-        avgConfidence: stats.total > 0 ? stats.confidenceSum / stats.total : 0,
-        avgConfidenceCorrect: stats.correct > 0 ? stats.confidenceCorrectSum / stats.correct : 0,
-        avgConfidenceWrong: stats.wrong > 0 ? stats.confidenceWrongSum / stats.wrong : 0,
-        totalEquity: (() => {
-          const account = accountByModelId.get(id)
-          if (!account) return null
-          const positionsValue = positionsValueByModelId.get(id) ?? 0
-          return account.cashBalance + positionsValue
-        })(),
-        pnl: (() => {
-          const account = accountByModelId.get(id)
-          if (!account) return null
-          const positionsValue = positionsValueByModelId.get(id) ?? 0
-          const totalEquity = account.cashBalance + positionsValue
-          return totalEquity - account.startingCash
-        })(),
-      }
-    })
-    .sort((a, b) => b.accuracy - a.accuracy || b.correct - a.correct)
-
-  const moneyLeaderboard = [...leaderboard].sort((a, b) => {
-    const aEquity = a.totalEquity ?? Number.NEGATIVE_INFINITY
-    const bEquity = b.totalEquity ?? Number.NEGATIVE_INFINITY
-    if (aEquity !== bEquity) return bEquity - aEquity
-    if (a.accuracy !== b.accuracy) return b.accuracy - a.accuracy
-    return b.correct - a.correct
-  })
-
-  const humanLeaderboard = verifiedUsers
-    .map<HumanLeaderboardEntry>((user) => {
-      const actorId = getHumanActorId(user.id)
-      const account = accountByModelId.get(actorId)
-      const fallbackBalance = user.pointsBalance
-      const cashBalance = account?.cashBalance ?? fallbackBalance
-      const positionsValue = positionsValueByModelId.get(actorId) ?? 0
-      const startingCash = account?.startingCash ?? fallbackBalance
-      const totalEquity = cashBalance + positionsValue
-      const pnl = totalEquity - startingCash
-      const normalizedName = normalizeDisplayName(user.name)
-
-      return {
-        userId: user.id,
-        displayName: normalizedName ?? getGeneratedDisplayName(user.email || user.id),
-        cashBalance,
-        positionsValue,
-        startingCash,
-        totalEquity,
-        pnl,
-      }
-    })
-    .sort((a, b) => {
-      if (a.totalEquity !== b.totalEquity) return b.totalEquity - a.totalEquity
-      if (a.pnl !== b.pnl) return b.pnl - a.pnl
-
-      const byName = a.displayName.localeCompare(b.displayName, 'en-US', { sensitivity: 'base' })
-      if (byName !== 0) return byName
-
-      return a.userId.localeCompare(b.userId)
-    })
-
-  return {
-    leaderboard,
-    moneyLeaderboard,
-    humanLeaderboard,
-    recentFdaDecisions,
-  }
-}
-
-export default async function LeaderboardPage() {
-  const { leaderboard, moneyLeaderboard, humanLeaderboard, recentFdaDecisions } = await getData()
+export default async function LeaderboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ mode?: string | string[] }>
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const mode = parseMode(resolvedSearchParams.mode)
+  const { leaderboard, moneyLeaderboard, humanLeaderboard, recentFdaDecisions } = await getLeaderboardData(mode)
   const comparisonModels = moneyLeaderboard
   const topHumanLeaderboard = humanLeaderboard.slice(0, 3)
 
@@ -306,12 +130,28 @@ export default async function LeaderboardPage() {
         <div className="mb-12 sm:mb-16">
           <section className="space-y-4">
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">AI Accuracy Rankings</h2>
-                <HeaderDots />
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">AI Accuracy Rankings</h2>
+                  <HeaderDots />
+                </div>
+                <div className="inline-flex rounded-sm border border-[#e8ddd0] bg-white/80 p-1 text-[11px] uppercase tracking-[0.16em] text-[#8a8075]">
+                  <a
+                    href="/leaderboard?mode=final"
+                    className={`rounded-sm px-2.5 py-1 ${mode === 'final' ? 'bg-[#1a1a1a] text-white' : 'hover:text-[#1a1a1a]'}`}
+                  >
+                    Final Call
+                  </a>
+                  <a
+                    href="/leaderboard?mode=first"
+                    className={`rounded-sm px-2.5 py-1 ${mode === 'first' ? 'bg-[#1a1a1a] text-white' : 'hover:text-[#1a1a1a]'}`}
+                  >
+                    First Call
+                  </a>
+                </div>
               </div>
               <p className="text-[#8a8075] text-sm sm:text-base max-w-2xl">
-                Ranked by decided prediction accuracy.
+                Ranked by decided prediction accuracy using the {mode === 'first' ? 'earliest' : 'latest'} pre-outcome snapshot per model and event.
               </p>
             </div>
 

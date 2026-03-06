@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { glossaryTermAnchor } from '@/lib/glossary'
 import { HeaderDots, SquareDivider } from '@/components/site/chrome'
 
 interface GlossaryTerm {
@@ -64,6 +65,12 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     fullName: 'Abbreviated New Drug Application',
     definition: 'Application for generic drug approval. It generally relies on pharmaceutical equivalence and bioequivalence to a reference drug rather than new efficacy trials, though some products require additional studies.',
     category: 'Application Types',
+  },
+  {
+    term: 'CNPV',
+    fullName: "Commissioner's National Priority Voucher",
+    definition: 'FDA pilot pathway that can compress review timelines for selected drugs or biologics tied to national priorities. In Endpoint Arena, CNPV may appear as the application type when the public FDA record has not yet disclosed NDA or BLA specifics.',
+    category: 'Expedited Programs & Designations',
   },
   {
     term: '505(b)(2)',
@@ -251,16 +258,25 @@ export function GlossaryTerms({
   const [highlightedTerm, setHighlightedTerm] = useState<string | null>(null)
 
   useEffect(() => {
-    const hash = window.location.hash
-    if (hash && hash.startsWith('#term-')) {
-      const term = decodeURIComponent(hash.replace('#term-', ''))
-      setHighlightedTerm(term)
-      setTimeout(() => {
-        const el = document.getElementById(`term-${term}`)
+    const highlightHashTarget = () => {
+      const hash = window.location.hash
+      if (!hash || !hash.startsWith('#term-')) return
+
+      const targetAnchor = glossaryTermAnchor(decodeURIComponent(hash.replace('#term-', '')))
+      const matchedTerm = GLOSSARY_TERMS.find((term) => glossaryTermAnchor(term.term) === targetAnchor)
+      if (!matchedTerm) return
+
+      setHighlightedTerm(matchedTerm.term)
+      window.setTimeout(() => {
+        const el = document.getElementById(`term-${targetAnchor}`)
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 100)
-      setTimeout(() => setHighlightedTerm(null), 3000)
+      window.setTimeout(() => setHighlightedTerm(null), 3000)
     }
+
+    highlightHashTarget()
+    window.addEventListener('hashchange', highlightHashTarget)
+    return () => window.removeEventListener('hashchange', highlightHashTarget)
   }, [])
 
   const groupedTerms = useMemo(() => {
@@ -301,10 +317,11 @@ export function GlossaryTerms({
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {terms.map((term) => {
                 const isHighlighted = highlightedTerm === term.term
+                const termAnchor = glossaryTermAnchor(term.term)
                 return (
                   <div
                     key={term.term}
-                    id={`term-${term.term}`}
+                    id={`term-${termAnchor}`}
                     className={`scroll-mt-32 rounded-sm p-[1px] transition-shadow duration-150 ${
                       isHighlighted
                         ? 'shadow-[0_0_0_2px_rgba(211,157,46,0.12)]'
