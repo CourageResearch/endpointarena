@@ -7,9 +7,12 @@
 - Backup DB (`postgres-backup`): `9bd7c35f-8aa2-4ce3-a731-bdac6b20bb9c`
 
 ## Current known-good release
-- Active production commit: `4f8af94dd03a76648ce0c652d45c7c9973c524fa`
-- Active production deployment: `ddcb4771-8ebf-408e-9978-bcee4b3f1c21`
-- Previous known-good rollback deployment: `273deb19-99b8-49db-b92e-f14420304bc0`
+- Active production commit: `a49d5d3b1d64284614f77dc6075066f92009e157`
+- Active production deployment: `e9278770-9226-4c5c-b49b-b4ce34f3b77d`
+- Stable tags:
+  - `prod-post-cutover-cleanup-20260310` (current)
+  - `prod-green-live-20260310` (pre-cleanup baseline)
+- Previous known-good rollback deployment: `ddcb4771-8ebf-408e-9978-bcee4b3f1c21`
 
 ## Data policy and retention window
 - `DATABASE_URL` currently targets `GREEN_DATABASE_URL`.
