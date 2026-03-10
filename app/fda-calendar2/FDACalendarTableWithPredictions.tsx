@@ -2,11 +2,12 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ModelIcon } from '@/components/ModelIcon'
+import { FDAIcon, ModelIcon } from '@/components/ModelIcon'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 import { abbreviateType, findPredictionByModelId, MODEL_DISPLAY_NAMES, MODEL_IDS, type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
+import { formatEventCountdown } from '@/lib/event-dates'
 import type { PredictionHistoryEntry } from '@/lib/types'
 
 type PredictionRow = {
@@ -50,8 +51,9 @@ type SortField = 'pdufaDate' | 'companyName' | 'drugName' | 'applicationType' | 
 type SortDirection = 'asc' | 'desc'
 const MODEL_ORDER: ModelId[] = [...MODEL_IDS]
 const TABLE_FIXED_COLUMNS = 6
-const TABLE_MODEL_COLUMN_WIDTH = 46
-const TABLE_MIN_WIDTH = 824 + (MODEL_ORDER.length * TABLE_MODEL_COLUMN_WIDTH)
+const TABLE_MODEL_COLUMN_WIDTH = 40
+const TABLE_FIXED_WIDTH = 594
+const TABLE_MIN_WIDTH = TABLE_FIXED_WIDTH + (MODEL_ORDER.length * TABLE_MODEL_COLUMN_WIDTH)
 const TABLE_EXPANDED_COLSPAN = TABLE_FIXED_COLUMNS + MODEL_ORDER.length
 
 function PredictionDirectionIcon({ prediction }: { prediction: string }) {
@@ -103,6 +105,30 @@ function formatActionSummary(entry: PredictionHistoryEntry): string {
     ? Math.round(entry.action.amountUsd).toString()
     : entry.action.amountUsd.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
   return `${entry.action.type} $${usd}`
+}
+
+function isResolvedOutcome(outcome: string): boolean {
+  const normalized = outcome.trim().toLowerCase()
+  return normalized === 'approved' || normalized === 'rejected' || normalized === 'denied'
+}
+
+function getCountdownTone(daysUntil: number | null, resolved: boolean): string {
+  if (resolved || daysUntil == null) return 'text-transparent'
+  if (daysUntil <= 30) return ''
+  return 'text-[#b5aa9e]'
+}
+
+function getCountdownStyle(daysUntil: number | null, resolved: boolean) {
+  if (resolved || daysUntil == null) return undefined
+  if (daysUntil <= 30) {
+    return { color: BRAND_DOT_COLORS.coral }
+  }
+  return undefined
+}
+
+function renderCountdown(daysUntil: number | null, outcome: string): string | null {
+  if (daysUntil == null || isResolvedOutcome(outcome)) return null
+  return formatEventCountdown(daysUntil, 'public')
 }
 
 function PredictionPanel({
@@ -366,6 +392,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
           const symbol = event.symbols?.split(', ')[0]
           const isOpen = expanded?.eventId === event.id
           const expandedPrediction = isOpen && expanded ? findPredictionByModelId(event.predictions, expanded.modelId) : null
+          const countdownLabel = renderCountdown(daysUntil, event.outcome)
           return (
             <div key={event.id} className="rounded-sm bg-white/95 p-4">
               <div className="mb-2 flex items-start justify-between">
@@ -376,10 +403,10 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                 <div className="ml-3 shrink-0 text-right">
                   <div className="text-xs text-[#8a8075]">{formatDate(event.pdufaDate)}</div>
                   <div
-                    className={`text-xs ${daysUntil < 0 ? 'text-[#b5aa9e]' : daysUntil <= 30 ? '' : 'text-[#b5aa9e]'}`}
-                    style={daysUntil >= 0 && daysUntil <= 30 ? { color: BRAND_DOT_COLORS.coral } : undefined}
+                    className={`text-xs ${getCountdownTone(daysUntil, isResolvedOutcome(event.outcome))}`}
+                    style={getCountdownStyle(daysUntil, isResolvedOutcome(event.outcome))}
                   >
-                    {daysUntil < 0 ? 'Past' : daysUntil === 0 ? 'Today' : `${daysUntil}d`}
+                    {countdownLabel}
                   </div>
                 </div>
               </div>
@@ -457,36 +484,43 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
           <div className="overflow-x-auto overscroll-x-contain">
             <table className="w-full table-fixed text-sm" style={{ minWidth: `${TABLE_MIN_WIDTH}px` }}>
               <colgroup>
-                <col style={{ width: '92px' }} />
-                <col style={{ width: '120px' }} />
-                <col style={{ width: '170px' }} />
-                <col style={{ width: '70px' }} />
-                <col style={{ width: '190px' }} />
-                <col style={{ width: '90px' }} />
+                <col style={{ width: '82px' }} />
+                <col style={{ width: '196px' }} />
+                <col style={{ width: '88px' }} />
+                <col style={{ width: '74px' }} />
+                <col style={{ width: '88px' }} />
+                <col style={{ width: '62px' }} />
                 {MODEL_ORDER.map((modelId) => (
                   <col key={`calendar2-col-${modelId}`} style={{ width: `${TABLE_MODEL_COLUMN_WIDTH}px` }} />
                 ))}
               </colgroup>
               <thead>
                 <tr className="border-b border-[#e8ddd0] text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">
-                  <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('pdufaDate')}>
+                  <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('pdufaDate')}>
                     Date <SortIcon field="pdufaDate" />
                   </th>
-                  <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('drugName')}>
+                  <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('drugName')}>
                     Drug <SortIcon field="drugName" />
                   </th>
-                  <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('companyName')}>
-                    Company / Ticker <SortIcon field="companyName" />
+                  <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('companyName')}>
+                    Ticker <SortIcon field="companyName" />
                   </th>
-                  <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('applicationType')}>
+                  <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('applicationType')}>
                     Type <SortIcon field="applicationType" />
                   </th>
-                  <th className="whitespace-nowrap px-3 py-3 text-left font-medium first:pl-5 last:pr-7">Event</th>
-                  <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-center font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('outcome')}>
-                    Outcome <SortIcon field="outcome" />
+                  <th className="whitespace-nowrap px-4 py-2.5 text-left font-medium text-[#b5aa9e]">
+                    When
+                  </th>
+                  <th className="cursor-pointer whitespace-nowrap px-6 py-2.5 text-center font-medium hover:text-[#1a1a1a]" onClick={() => handleSort('outcome')}>
+                    <span className="inline-flex items-center justify-center">
+                      <span className="h-4 w-6 text-[#8a8075]" title="FDA">
+                        <FDAIcon />
+                      </span>
+                      <SortIcon field="outcome" />
+                    </span>
                   </th>
                   {MODEL_ORDER.map((modelId) => (
-                    <th key={modelId} className="px-1.5 py-3 text-center">
+                    <th key={modelId} className="px-1.5 py-2.5 text-center">
                       <div className="mx-auto h-4 w-4 text-[#8a8075]" title={MODEL_DISPLAY_NAMES[modelId]}>
                         <ModelIcon id={modelId} />
                       </div>
@@ -499,44 +533,43 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                   const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
                   const symbol = event.symbols?.split(', ')[0]
                   const expandedPrediction = expanded?.eventId === event.id ? findPredictionByModelId(event.predictions, expanded.modelId) : null
+                  const rowDescription = event.eventDescription?.trim() || null
+                  const resolvedOutcome = isResolvedOutcome(event.outcome)
+                  const countdownLabel = renderCountdown(daysUntil, event.outcome)
 
                   return (
                     <Fragment key={event.id}>
-                      <tr className="border-b border-[#e8ddd0] align-top hover:bg-[#f3ebe0]/30">
-                        <td className="whitespace-nowrap px-3 py-3 text-sm text-[#8a8075] first:pl-5 last:pr-7">
+                      <tr className={`${rowDescription ? '' : 'border-b border-[#e8ddd0]'} align-top hover:bg-[#f3ebe0]/30`}>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-sm text-[#8a8075] first:pl-5 last:pr-7">
                           <div className="leading-none">{formatDate(event.pdufaDate)}</div>
-                          <div
-                            className={`mt-1 text-xs ${daysUntil < 0 ? 'text-[#b5aa9e]' : daysUntil <= 30 ? '' : 'text-[#b5aa9e]'}`}
-                            style={daysUntil >= 0 && daysUntil <= 30 ? { color: BRAND_DOT_COLORS.coral } : undefined}
-                          >
-                            {daysUntil < 0 ? 'Past' : daysUntil === 0 ? 'Today' : `${daysUntil}d`}
-                          </div>
                         </td>
-                        <td className="px-3 py-3 text-sm first:pl-5 last:pr-7">
-                          <div className="truncate-wrap">{event.drugName}</div>
+                        <td className="px-3 py-1.5 text-sm first:pl-5 last:pr-7">
+                          <div className="truncate-wrap leading-tight">{event.drugName}</div>
                         </td>
-                        <td className="px-3 py-3 text-sm text-[#8a8075] first:pl-5 last:pr-7">
-                          <div className="truncate-wrap">{event.companyName}</div>
+                        <td className="px-3 py-1.5 text-sm text-[#8a8075] first:pl-5 last:pr-7">
                           {symbol ? (
                             <a
                               href={`https://finance.yahoo.com/quote/${symbol}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="mt-0.5 inline-block underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                              className="inline-block underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
                             >
                               ${symbol}
                             </a>
                           ) : '—'}
                         </td>
-                        <td className="px-3 py-3 text-sm text-[#8a8075] first:pl-5 last:pr-7">
+                        <td className="px-3 py-1.5 text-sm text-[#8a8075] first:pl-5 last:pr-7">
                           <Link href={`/glossary#term-${abbreviateType(event.applicationType).anchor}`} className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]">
                             {abbreviateType(event.applicationType).display}
                           </Link>
                         </td>
-                        <td className="px-3 py-3 text-sm text-[#8a8075] first:pl-5 last:pr-7">
-                          <div className="truncate-wrap">{event.eventDescription || '—'}</div>
+                        <td
+                          className={`whitespace-nowrap px-4 py-1.5 text-left text-sm first:pl-5 last:pr-7 ${getCountdownTone(daysUntil, resolvedOutcome)}`}
+                          style={getCountdownStyle(daysUntil, resolvedOutcome)}
+                        >
+                          {countdownLabel}
                         </td>
-                        <td className="px-3 py-3 text-center first:pl-5 last:pr-7">
+                        <td className="px-6 py-1.5 text-center">
                           <span
                             className={`text-xs font-medium ${getOutcomeStyle(event.outcome)}`}
                             style={event.outcome === 'Rejected' ? { color: BRAND_DOT_COLORS.coral } : undefined}
@@ -548,12 +581,12 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                           const pred = findPredictionByModelId(event.predictions, modelId)
                           const selected = expanded?.eventId === event.id && expanded.modelId === modelId
                           return (
-                            <td key={modelId} className="px-2 py-3 text-center">
+                            <td key={modelId} className="px-1.5 py-1.5 text-center">
                               {pred ? (
                                 <button
                                   type="button"
                                   onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
-                                  className={`rounded-md px-2 py-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
+                                  className={`rounded-md px-1.5 py-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
                                     selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
                                   }`}
                                   aria-label={`Show ${MODEL_DISPLAY_NAMES[modelId]} prediction`}
@@ -567,6 +600,13 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                           )
                         })}
                       </tr>
+                      {rowDescription ? (
+                        <tr className={`${expandedPrediction ? '' : 'border-b border-[#e8ddd0]'} hover:bg-[#f3ebe0]/30`}>
+                          <td colSpan={TABLE_EXPANDED_COLSPAN} className="px-3 pb-1.5 pt-0 text-sm text-[#8a8075] first:pl-5 last:pr-7">
+                            <div className="truncate-wrap leading-tight">{rowDescription}</div>
+                          </td>
+                        </tr>
+                      ) : null}
                       {expandedPrediction && expanded?.eventId === event.id ? (
                         <tr className="border-b border-[#e8ddd0]">
                           <td colSpan={TABLE_EXPANDED_COLSPAN} className="px-3 py-5 first:pl-5 last:pr-7">

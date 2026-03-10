@@ -6,7 +6,6 @@ import { BW2MobilePastCard, BW2PastRow } from '@/app/rows'
 import { BrandDecisionMark } from '@/components/site/BrandDecisionMark'
 import { FooterGradientRule } from '@/components/site/chrome'
 import { getLeaderboardData } from '@/lib/leaderboard-data'
-import type { LeaderboardPredictionMode } from '@/lib/model-decision-snapshots'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,21 +101,8 @@ function splitModelNameAndVersion(fullName: string): { model: string; version: s
   }
 }
 
-function parseMode(value: string | string[] | undefined): LeaderboardPredictionMode {
-  if (Array.isArray(value)) {
-    return value[0] === 'first' ? 'first' : 'final'
-  }
-  return value === 'first' ? 'first' : 'final'
-}
-
-export default async function LeaderboardPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ mode?: string | string[] }>
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : {}
-  const mode = parseMode(resolvedSearchParams.mode)
-  const { leaderboard, moneyLeaderboard, humanLeaderboard, recentFdaDecisions } = await getLeaderboardData(mode)
+export default async function LeaderboardPage() {
+  const { leaderboard, moneyLeaderboard, humanLeaderboard, recentFdaDecisions } = await getLeaderboardData('first')
   const comparisonModels = moneyLeaderboard
   const topHumanLeaderboard = humanLeaderboard.slice(0, 3)
 
@@ -135,23 +121,9 @@ export default async function LeaderboardPage({
                   <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">AI Accuracy Rankings</h2>
                   <HeaderDots />
                 </div>
-                <div className="inline-flex rounded-sm border border-[#e8ddd0] bg-white/80 p-1 text-[11px] uppercase tracking-[0.16em] text-[#8a8075]">
-                  <a
-                    href="/leaderboard?mode=final"
-                    className={`rounded-sm px-2.5 py-1 ${mode === 'final' ? 'bg-[#1a1a1a] text-white' : 'hover:text-[#1a1a1a]'}`}
-                  >
-                    Final Call
-                  </a>
-                  <a
-                    href="/leaderboard?mode=first"
-                    className={`rounded-sm px-2.5 py-1 ${mode === 'first' ? 'bg-[#1a1a1a] text-white' : 'hover:text-[#1a1a1a]'}`}
-                  >
-                    First Call
-                  </a>
-                </div>
               </div>
               <p className="text-[#8a8075] text-sm sm:text-base max-w-2xl">
-                Ranked by decided prediction accuracy using the {mode === 'first' ? 'earliest' : 'latest'} pre-outcome snapshot per model and event.
+                Ranked by decided prediction accuracy using the earliest pre-outcome snapshot per model and event.
               </p>
             </div>
 
@@ -325,10 +297,6 @@ export default async function LeaderboardPage({
             <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Rankings Comparison</h2>
             <HeaderDots />
           </div>
-          <p className="mb-4 text-[#8a8075] text-sm sm:text-base max-w-2xl">
-            Columns follow the current money ranking order shown above.
-          </p>
-
           <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm overflow-x-auto sm:overflow-x-visible">
               <table className="w-full table-fixed">

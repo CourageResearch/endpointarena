@@ -7,7 +7,7 @@ import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { ensureCrashEventsSchema } from '@/lib/crash-events'
 
-type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs' | 'crashes'
+type AdminTab = 'predictions' | 'metadata' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs' | 'crashes'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -18,7 +18,6 @@ interface AdminConsoleLayoutProps {
 }
 
 const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
-  { id: 'predictions', href: '/admin', label: 'Predictions' },
   { id: 'markets', href: '/admin/markets', label: 'Markets' },
   { id: 'humanTrades', href: '/admin/human-trades', label: 'Human Trades' },
   { id: 'users', href: '/admin/users', label: 'Users' },
@@ -29,6 +28,8 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'resources', href: '/admin/resources', label: 'Resources' },
   { id: 'costs', href: '/admin/costs', label: 'Costs' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
+  { id: 'metadata', href: '/admin/metadata', label: 'Meta Data' },
+  { id: 'predictions', href: '/admin/predictions', label: 'Predictions' },
 ]
 
 async function getWaitlistBadgeData() {

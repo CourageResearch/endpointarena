@@ -1,6 +1,12 @@
 import { eq, sql } from 'drizzle-orm'
 import { CNPV_EVENT_SEEDS } from '../lib/cnpv-data'
 import { db, fdaCalendarEvents, marketRuntimeConfigs, predictionMarkets } from '../lib/db'
+import {
+  replaceEventNewsLinks,
+  upsertEventContext,
+  upsertEventExternalId,
+  upsertEventPrimarySource,
+} from '../lib/fda-event-metadata'
 import { openMarketForEvent } from '../lib/markets/engine'
 import { assertLocalOneDrugDatabaseUrl } from './one-drug-local-utils'
 
@@ -38,7 +44,10 @@ async function resetFixtureData() {
       market_runs,
       market_daily_snapshots,
       market_accounts,
-      fda_predictions,
+      fda_event_analyses,
+      fda_event_contexts,
+      fda_event_sources,
+      fda_event_external_ids,
       fda_calendar_events
     RESTART IDENTITY CASCADE
   `))
@@ -72,7 +81,6 @@ async function main() {
   }
 
   const [event] = await db.insert(fdaCalendarEvents).values({
-    externalKey: seed.externalKey,
     companyName: seed.companyName,
     symbols: seed.symbols,
     drugName: seed.drugName,
@@ -87,14 +95,21 @@ async function main() {
       ? `Pending under FDA CNPV (award date ${seed.cnpvAwardDate}; public action date ${seed.publicActionDate}).`
       : 'Pending under FDA CNPV.',
     therapeuticArea: seed.therapeuticArea,
-    otherApprovals: seed.otherApprovals ?? null,
-    newsLinks: seed.newsLinks?.join('\n') ?? null,
-    source: seed.source,
-    nctId: seed.nctId ?? null,
     scrapedAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
   }).returning()
+
+  await Promise.all([
+    upsertEventExternalId(event.id, 'external_key', seed.externalKey),
+    upsertEventExternalId(event.id, 'nct', seed.nctId ?? null),
+    upsertEventPrimarySource(event.id, seed.source),
+    replaceEventNewsLinks(event.id, seed.newsLinks ?? []),
+    upsertEventContext({
+      eventId: event.id,
+      otherApprovals: seed.otherApprovals ?? null,
+    }),
+  ])
 
   const market = await openMarketForEvent(event.id)
 
@@ -109,6 +124,7 @@ async function main() {
   console.log(`Opened market ${market.id}.`)
   console.log(`FDA events in DB: ${eventCountRows[0]?.count ?? 0}`)
   console.log(`Open markets in DB: ${marketCountRows[0]?.count ?? 0}`)
+  process.exit(0)
 }
 
 main().catch((error) => {

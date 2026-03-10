@@ -68,7 +68,14 @@ export interface FDAEvent {
   applicationType: string
   outcome: string
   eventDescription: string
+  externalKey?: string | null
   source?: string | null
+  newsLinks?: string[]
   nctId?: string | null
+  rttDetailId?: string | null
+  rivalDrugs?: string | null
+  marketPotential?: string | null
+  otherApprovals?: string | null
+  metaAnalysis?: string | null
   predictions: Prediction[]
 }

@@ -4,7 +4,6 @@ import type { DailyRunActivityPhase, DailyRunStatus } from '@/lib/markets/types'
 import { MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
 
 type LogType = 'system' | 'activity' | 'progress' | 'error'
-const MARKET_RUN_LOG_SCHEMA_VERSION = 2
 
 export type PersistedRunLogEntry = {
   id: string
@@ -18,6 +17,7 @@ export type PersistedRunLogEntry = {
   skippedCount: number | null
   marketId: string | null
   fdaEventId: string | null
+  actorId: string | null
   modelId: string | null
   activityPhase: DailyRunActivityPhase | null
   action: string | null
@@ -41,11 +41,6 @@ export type AdminMarketRunSnapshot = {
   updatedAt: string | null
   completedAt: string | null
   logs: PersistedRunLogEntry[]
-}
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __marketRunLogSchemaReadyState: { version: number; promise: Promise<void> } | undefined
 }
 
 function toIsoString(value: Date | null | undefined): string | null {
@@ -78,217 +73,6 @@ async function failStaleRunningRunIfNeeded(run: {
   return updated.length > 0
 }
 
-export async function ensureMarketRunLogSchema(): Promise<void> {
-  if (globalThis.__marketRunLogSchemaReadyState?.version === MARKET_RUN_LOG_SCHEMA_VERSION) {
-    return globalThis.__marketRunLogSchemaReadyState.promise
-  }
-
-  const promise = (async () => {
-    try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS market_run_logs (
-          id text PRIMARY KEY,
-          run_id text NOT NULL REFERENCES market_runs(id) ON DELETE CASCADE,
-          log_type text NOT NULL DEFAULT 'activity',
-          message text NOT NULL,
-          completed_actions integer,
-          total_actions integer,
-          ok_count integer,
-          error_count integer,
-          skipped_count integer,
-          market_id text,
-          fda_event_id text,
-          model_id text,
-          activity_phase text,
-          action text,
-          action_status text,
-          amount_usd real,
-          created_at timestamp DEFAULT now(),
-          CONSTRAINT market_run_logs_log_type_check CHECK (log_type IN ('system', 'activity', 'progress', 'error')),
-          CONSTRAINT market_run_logs_activity_phase_check CHECK (activity_phase IS NULL OR activity_phase IN ('running', 'waiting')),
-          CONSTRAINT market_run_logs_action_status_check CHECK (action_status IS NULL OR action_status IN ('ok', 'error', 'skipped')),
-          CONSTRAINT market_run_logs_completed_actions_check CHECK (completed_actions IS NULL OR completed_actions >= 0),
-          CONSTRAINT market_run_logs_total_actions_check CHECK (total_actions IS NULL OR total_actions >= 0),
-          CONSTRAINT market_run_logs_ok_count_check CHECK (ok_count IS NULL OR ok_count >= 0),
-          CONSTRAINT market_run_logs_error_count_check CHECK (error_count IS NULL OR error_count >= 0),
-          CONSTRAINT market_run_logs_skipped_count_check CHECK (skipped_count IS NULL OR skipped_count >= 0)
-        )
-      `)
-
-      await db.execute(sql`
-        ALTER TABLE market_run_logs
-          ADD COLUMN IF NOT EXISTS market_id text
-      `)
-
-      await db.execute(sql`
-        ALTER TABLE market_run_logs
-          ADD COLUMN IF NOT EXISTS fda_event_id text
-      `)
-
-      await db.execute(sql`
-        ALTER TABLE market_run_logs
-          ADD COLUMN IF NOT EXISTS activity_phase text
-      `)
-
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS market_run_logs_run_created_idx
-        ON market_run_logs (run_id, created_at)
-      `)
-
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS market_run_logs_created_at_idx
-        ON market_run_logs (created_at)
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_log_type_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_log_type_check
-              CHECK (log_type IN ('system', 'activity', 'progress', 'error'));
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_activity_phase_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_activity_phase_check
-              CHECK (activity_phase IS NULL OR activity_phase IN ('running', 'waiting'));
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_action_status_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_action_status_check
-              CHECK (action_status IS NULL OR action_status IN ('ok', 'error', 'skipped'));
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_completed_actions_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_completed_actions_check
-              CHECK (completed_actions IS NULL OR completed_actions >= 0);
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_total_actions_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_total_actions_check
-              CHECK (total_actions IS NULL OR total_actions >= 0);
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_ok_count_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_ok_count_check
-              CHECK (ok_count IS NULL OR ok_count >= 0);
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_error_count_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_error_count_check
-              CHECK (error_count IS NULL OR error_count >= 0);
-          END IF;
-        END
-        $$;
-      `)
-
-      await db.execute(sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'market_run_logs_skipped_count_check'
-              AND conrelid = 'market_run_logs'::regclass
-          ) THEN
-            ALTER TABLE market_run_logs
-              ADD CONSTRAINT market_run_logs_skipped_count_check
-              CHECK (skipped_count IS NULL OR skipped_count >= 0);
-          END IF;
-        END
-        $$;
-      `)
-    } catch (error) {
-      globalThis.__marketRunLogSchemaReadyState = undefined
-      throw error
-    }
-  })()
-
-  globalThis.__marketRunLogSchemaReadyState = {
-    version: MARKET_RUN_LOG_SCHEMA_VERSION,
-    promise,
-  }
-
-  return promise
-}
-
 export async function appendMarketRunLog(input: {
   runId: string
   logType: LogType
@@ -300,14 +84,12 @@ export async function appendMarketRunLog(input: {
   skippedCount?: number | null
   marketId?: string | null
   fdaEventId?: string | null
-  modelId?: string | null
+  actorId?: string | null
   activityPhase?: DailyRunActivityPhase | null
   action?: string | null
   actionStatus?: DailyRunStatus | null
   amountUsd?: number | null
 }): Promise<void> {
-  await ensureMarketRunLogSchema()
-
   await db.insert(marketRunLogs).values({
     runId: input.runId,
     logType: input.logType,
@@ -319,7 +101,7 @@ export async function appendMarketRunLog(input: {
     skippedCount: input.skippedCount ?? null,
     marketId: input.marketId ?? null,
     fdaEventId: input.fdaEventId ?? null,
-    modelId: input.modelId ?? null,
+    actorId: input.actorId ?? null,
     activityPhase: input.activityPhase ?? null,
     action: input.action ?? null,
     actionStatus: input.actionStatus ?? null,
@@ -327,15 +109,10 @@ export async function appendMarketRunLog(input: {
   })
 }
 
-export async function clearMarketRunLogs(runId: string): Promise<void> {
-  await ensureMarketRunLogSchema()
-  await db.delete(marketRunLogs).where(eq(marketRunLogs.runId, runId))
-}
-
 export async function getRunningMarketRunId(): Promise<string | null> {
   const activeRun = await db.query.marketRuns.findFirst({
     where: eq(marketRuns.status, 'running'),
-    orderBy: [desc(marketRuns.updatedAt)],
+    orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],
   })
 
   if (!activeRun) return null
@@ -344,11 +121,9 @@ export async function getRunningMarketRunId(): Promise<string | null> {
 }
 
 export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapshot | null> {
-  await ensureMarketRunLogSchema()
-
   let running = await db.query.marketRuns.findFirst({
     where: eq(marketRuns.status, 'running'),
-    orderBy: [desc(marketRuns.updatedAt)],
+    orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],
   })
 
   if (running) {
@@ -359,7 +134,7 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
   }
 
   const latest = running ?? await db.query.marketRuns.findFirst({
-    orderBy: [desc(marketRuns.runDate)],
+    orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
   })
 
   if (!latest) return null
@@ -368,6 +143,9 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
     where: eq(marketRunLogs.runId, latest.id),
     orderBy: [desc(marketRunLogs.createdAt)],
     limit: 120,
+    with: {
+      actor: true,
+    },
   })
 
   return {
@@ -396,7 +174,8 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
       skippedCount: log.skippedCount ?? null,
       marketId: log.marketId ?? null,
       fdaEventId: log.fdaEventId ?? null,
-      modelId: log.modelId ?? null,
+      actorId: log.actorId ?? null,
+      modelId: log.actor?.modelKey ?? null,
       activityPhase: (log.activityPhase as DailyRunActivityPhase | null) ?? null,
       action: log.action ?? null,
       actionStatus: (log.actionStatus as DailyRunStatus | null) ?? null,

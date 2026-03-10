@@ -1,6 +1,5 @@
 import { and, eq } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
-import type { ModelId } from '@/lib/constants'
 import { authOptions } from '@/lib/auth'
 import {
   createRequestId,
@@ -18,6 +17,7 @@ import {
 } from '@/lib/errors'
 import { runBuyAction, runSellAction } from '@/lib/markets/engine'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
+import { ensureHumanMarketActor } from '@/lib/market-actors'
 
 type TradeSide = 'BUY_YES' | 'BUY_NO' | 'SELL_YES' | 'SELL_NO'
 
@@ -46,22 +46,9 @@ function parseTradeSide(input: unknown): TradeSide | null {
   return null
 }
 
-function getHumanActorId(userId: string): string {
-  return `human:${userId}`
-}
-
-function toEngineModelId(actorId: string): ModelId {
-  return actorId as unknown as ModelId
-}
-
 function buildDefaultExplanation(side: TradeSide): string {
   const label = side.replace('_', ' ').toLowerCase()
   return `Human trader manual ${label}`
-}
-
-function normalizePointsBalance(input: number): number {
-  if (!Number.isFinite(input)) return 0
-  return Math.max(0, Math.round(input))
 }
 
 async function requireAuthenticatedUserId(): Promise<string> {
@@ -92,7 +79,8 @@ async function getUserPointsBalance(userId: string): Promise<number> {
     throw new UnauthorizedError('User account not found')
   }
 
-  return normalizePointsBalance(user.pointsBalance)
+  if (!Number.isFinite(user.pointsBalance)) return 0
+  return Math.max(0, Math.round(user.pointsBalance))
 }
 
 async function ensureHumanTraderState(
@@ -102,45 +90,18 @@ async function ensureHumanTraderState(
 ): Promise<void> {
   await db.insert(marketAccounts)
     .values({
-      modelId: actorId,
+      actorId,
       startingCash: initialCashBalance,
       cashBalance: initialCashBalance,
     })
-    .onConflictDoNothing({ target: marketAccounts.modelId })
+    .onConflictDoNothing({ target: marketAccounts.actorId })
 
   await db.insert(marketPositions)
     .values({
       marketId,
-      modelId: actorId,
+      actorId,
     })
-    .onConflictDoNothing({ target: [marketPositions.marketId, marketPositions.modelId] })
-}
-
-async function syncHumanTraderCashWithPoints(actorId: string, pointsBalance: number): Promise<void> {
-  await db.update(marketAccounts)
-    .set({
-      cashBalance: pointsBalance,
-      updatedAt: new Date(),
-    })
-    .where(eq(marketAccounts.modelId, actorId))
-}
-
-async function persistPointsBalance(userId: string, nextBalance: number): Promise<number> {
-  const normalizedBalance = normalizePointsBalance(nextBalance)
-  const [updated] = await db.update(users)
-    .set({
-      pointsBalance: normalizedBalance,
-    })
-    .where(eq(users.id, userId))
-    .returning({
-      pointsBalance: users.pointsBalance,
-    })
-
-  if (!updated) {
-    throw new UnauthorizedError('User account not found')
-  }
-
-  return normalizePointsBalance(updated.pointsBalance)
+    .onConflictDoNothing({ target: [marketPositions.marketId, marketPositions.actorId] })
 }
 
 async function getTraderSnapshot(actorId: string, marketId: string): Promise<{
@@ -150,12 +111,12 @@ async function getTraderSnapshot(actorId: string, marketId: string): Promise<{
 }> {
   const [account, position] = await Promise.all([
     db.query.marketAccounts.findFirst({
-      where: eq(marketAccounts.modelId, actorId),
+      where: eq(marketAccounts.actorId, actorId),
     }),
     db.query.marketPositions.findFirst({
       where: and(
         eq(marketPositions.marketId, marketId),
-        eq(marketPositions.modelId, actorId),
+        eq(marketPositions.actorId, actorId),
       ),
     }),
   ])
@@ -191,10 +152,10 @@ export async function GET(request: Request) {
       throw new NotFoundError('Market not found')
     }
 
-    const actorId = getHumanActorId(userId)
+    const actor = await ensureHumanMarketActor(userId)
+    const actorId = actor.id
     const pointsBalance = await getUserPointsBalance(userId)
     await ensureHumanTraderState(actorId, market.id, pointsBalance)
-    await syncHumanTraderCashWithPoints(actorId, pointsBalance)
     const snapshot = await getTraderSnapshot(actorId, market.id)
 
     return successResponse({
@@ -256,13 +217,12 @@ export async function POST(request: Request) {
       throw new ConflictError('This market is no longer open')
     }
 
-    const actorId = getHumanActorId(userId)
+    const actor = await ensureHumanMarketActor(userId)
+    const actorId = actor.id
     const pointsBalance = await getUserPointsBalance(userId)
     await ensureHumanTraderState(actorId, market.id, pointsBalance)
-    await syncHumanTraderCashWithPoints(actorId, pointsBalance)
 
     const beforeSnapshot = await getTraderSnapshot(actorId, market.id)
-    const engineModelId = toEngineModelId(actorId)
     const runDate = new Date()
 
     if ((side === 'BUY_YES' || side === 'BUY_NO') && beforeSnapshot.cashBalance <= 0) {
@@ -279,25 +239,24 @@ export async function POST(request: Request) {
     const result = side === 'BUY_YES' || side === 'BUY_NO'
       ? await runBuyAction({
           market,
-          modelId: engineModelId,
+          actorId,
           runDate,
           side,
           requestedUsd: amountUsd,
           explanation,
+          actionSource: 'human',
         })
       : await runSellAction({
           market,
-          modelId: engineModelId,
+          actorId,
           runDate,
           side,
           requestedUsd: amountUsd,
           explanation,
+          actionSource: 'human',
         })
 
     const traderState = await getTraderSnapshot(actorId, market.id)
-    const syncedPointsBalance = await persistPointsBalance(userId, traderState.cashBalance)
-    await syncHumanTraderCashWithPoints(actorId, syncedPointsBalance)
-    const syncedTraderState = await getTraderSnapshot(actorId, market.id)
 
     return successResponse({
       success: true,
@@ -309,7 +268,7 @@ export async function POST(request: Request) {
       sharesDelta: 'spent' in result ? result.shares : -result.shares,
       priceBefore: result.priceBefore,
       priceAfter: result.priceAfter,
-      trader: syncedTraderState,
+      trader: traderState,
     }, {
       headers: {
         'X-Request-Id': requestId,

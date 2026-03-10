@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { formatDate, MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
+import { formatDate, getDaysUntil, MODEL_IDS, MODEL_INFO, OUTCOME_COLORS, type FDAOutcome, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import type {
   DailyRunActivityPhase,
@@ -89,6 +89,12 @@ interface ExecutionPlanMarket {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+function isAdminStoppedMessage(message: string | null | undefined): boolean {
+  if (!message) return false
+  const normalized = message.toLowerCase()
+  return normalized.includes('stop requested by admin') || normalized.includes('stopped by admin')
+}
 
 function normalizeRunDateLocal(input?: string | Date | null): Date {
   const parsed = input ? new Date(input) : new Date()
@@ -383,13 +389,13 @@ function buildErrorConsoleFromSnapshot(snapshot: AdminMarketRunSnapshot | null):
       message: entry.message,
     }))
 
-  if (snapshot.failureReason) {
+  if (snapshot.status !== 'running' && snapshot.failureReason) {
     const exists = errors.some((entry) => entry.message.includes(snapshot.failureReason ?? ''))
     if (!exists) {
       errors.unshift({
         id: `${snapshot.runId}-failure`,
         utcTime: formatUtcLogPrefixFromIso(snapshot.updatedAt || snapshot.completedAt || snapshot.createdAt),
-        message: `RUN FAILED - ${snapshot.failureReason}`,
+        message: `${isAdminStoppedMessage(snapshot.failureReason) ? 'RUN STOPPED' : 'RUN FAILED'} - ${snapshot.failureReason}`,
       })
     }
   }
@@ -419,6 +425,7 @@ function buildRunSummaryFromSnapshot(snapshot: AdminMarketRunSnapshot | null): L
       return {
         marketId: '',
         fdaEventId: '',
+        actorId: entry.actorId,
         modelId,
         action: entry.action,
         amountUsd: entry.amountUsd ?? 0,
@@ -458,6 +465,7 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
         return {
           marketId: '',
           fdaEventId: '',
+          actorId: latestResultLog.actorId,
           modelId,
           action: latestResultLog.action,
           amountUsd: latestResultLog.amountUsd ?? 0,
@@ -474,6 +482,7 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
         return {
           marketId: '',
           fdaEventId: '',
+          actorId: latestErrorLog.actorId,
           modelId,
           action: latestErrorLog.action,
           amountUsd: latestErrorLog.amountUsd ?? 0,
@@ -484,11 +493,12 @@ function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | null): 
     : null
 
   const activityLog = snapshot.logs.find((entry) => entry.logType !== 'error')
+  const stopRequested = snapshot.status === 'running' && isAdminStoppedMessage(snapshot.failureReason)
   const defaultActivity = snapshot.status === 'running'
-    ? 'Daily run is in progress...'
+    ? (stopRequested ? snapshot.failureReason : 'Daily run is in progress...')
     : snapshot.status === 'completed'
       ? 'Daily market cycle completed'
-      : 'Daily market cycle failed'
+      : (isAdminStoppedMessage(snapshot.failureReason) ? 'Daily market cycle stopped by admin' : 'Daily market cycle failed')
 
   return {
     startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
@@ -540,6 +550,7 @@ function buildExecutionPlanFromSnapshot(
       plan = applyProgressToExecutionPlan(plan, {
         marketId: log.marketId,
         fdaEventId: log.fdaEventId ?? '',
+        actorId: log.actorId,
         modelId,
         action: log.action ?? 'HOLD',
         amountUsd: log.amountUsd ?? 0,
@@ -640,10 +651,22 @@ function getExecutionStatusLabel(status: ExecutionStepStatus): string {
   return 'Queued'
 }
 
+function getMarketStatusTone(status: AdminMarketEvent['marketStatus']): string {
+  if (status === 'OPEN') return 'text-[#3a8a2e] bg-[#3a8a2e]/10'
+  if (status === 'RESOLVED') return 'text-[#b5aa9e] bg-[#b5aa9e]/15'
+  return 'text-[#8a8075] bg-[#e8ddd0]/40'
+}
+
+function getOutcomeStyle(outcome: string): string {
+  const colors = OUTCOME_COLORS[outcome as FDAOutcome]
+  return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
+}
+
 export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }: Props) {
   const [events, setEvents] = useState(initialEvents)
   const [search, setSearch] = useState('')
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null)
+  const [updatingOutcome, setUpdatingOutcome] = useState<Record<string, boolean>>({})
   const [runningDaily, setRunningDaily] = useState(initialRunSnapshot?.status === 'running')
   const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(() => buildRunSummaryFromSnapshot(initialRunSnapshot))
   const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(() => buildRunProgressFromSnapshot(initialRunSnapshot))
@@ -657,6 +680,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   ))
   const [preserveExecutionPlan, setPreserveExecutionPlan] = useState(initialRunSnapshot?.status === 'running')
   const [uiError, setUiError] = useState<string | null>(null)
+  const [isStoppingDaily, setIsStoppingDaily] = useState(initialRunSnapshot?.status === 'running' && isAdminStoppedMessage(initialRunSnapshot?.failureReason))
   const [isStreamingRun, setIsStreamingRun] = useState(false)
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
@@ -676,6 +700,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const applyRunSnapshot = (snapshot: AdminMarketRunSnapshot | null) => {
     if (!snapshot) {
       setPreserveExecutionPlan(false)
+      setIsStoppingDaily(false)
       setExecutionPlan(buildNextExecutionPlan(events))
       return
     }
@@ -695,11 +720,13 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     if (snapshot.status === 'running') {
       setPreserveExecutionPlan(true)
       setRunningDaily(true)
+      setIsStoppingDaily(isAdminStoppedMessage(snapshot.failureReason))
       setLastRunSummary(null)
       return
     }
 
     setRunningDaily(false)
+    setIsStoppingDaily(false)
     setLastRunSummary(nextSummary)
     setElapsedSeconds(nextSummary?.durationSeconds ?? 0)
   }
@@ -746,6 +773,21 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     )
   }, [events, search])
 
+  const openEvents = useMemo(
+    () => filtered.filter((event) => event.marketStatus === 'OPEN'),
+    [filtered],
+  )
+
+  const adjudicationEvents = useMemo(
+    () => filtered.filter((event) => event.marketStatus !== null && event.marketStatus !== 'OPEN'),
+    [filtered],
+  )
+
+  const needsMarketEvents = useMemo(
+    () => filtered.filter((event) => event.marketStatus === null && event.outcome === 'Pending'),
+    [filtered],
+  )
+
   const openMarket = async (fdaEventId: string) => {
     setUiError(null)
     setLoadingEventId(fdaEventId)
@@ -777,6 +819,38 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     }
   }
 
+  const updateOutcome = async (eventId: string, outcome: string) => {
+    setUiError(null)
+    setUpdatingOutcome((prev) => ({ ...prev, [eventId]: true }))
+
+    try {
+      const response = await fetch(`/api/fda-events/${eventId}/outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outcome }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to update outcome'))
+
+      setEvents((prev) => prev.map((event) => (
+        event.id === eventId
+          ? {
+              ...event,
+              outcome,
+              marketStatus: event.marketId
+                ? (outcome === 'Pending' ? 'OPEN' : 'RESOLVED')
+                : event.marketStatus,
+            }
+          : event
+      )))
+    } catch (error) {
+      setUiError(error instanceof Error ? error.message : 'Failed to update outcome')
+    } finally {
+      setUpdatingOutcome((prev) => ({ ...prev, [eventId]: false }))
+    }
+  }
+
   const appendRunLog = (line: string) => {
     const prefix = formatUtcLogPrefix()
     setRunLog((prev) => [`${prefix} UTC  ${line}`, ...prev].slice(0, 10))
@@ -786,6 +860,32 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     const utcTime = formatUtcLogPrefix()
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     setErrorConsole((prev) => [{ id, utcTime, message }, ...prev].slice(0, 25))
+  }
+
+  const pauseDailyCycle = async () => {
+    if (isStoppingDaily) return
+
+    setIsStoppingDaily(true)
+    setUiError(null)
+    setRunProgress((prev) => prev ? {
+      ...prev,
+      currentActivity: 'Stop requested by admin. Waiting for the current model step to finish.',
+    } : prev)
+    appendRunLog('Stop requested by admin; waiting for the current model step to finish')
+
+    try {
+      const response = await fetch('/api/admin/markets/cancel-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Failed to stop daily market cycle'))
+      }
+    } catch (error) {
+      setIsStoppingDaily(false)
+      setUiError(error instanceof Error ? error.message : 'Failed to stop daily market cycle')
+    }
   }
 
   const setSummaryFromPayload = (payload: DailyRunPayload, startedAtMs: number) => {
@@ -808,8 +908,10 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const runDailyCycle = async () => {
     const startedAtMs = Date.now()
     let keepPersistedRunningState = false
+    const controller = new AbortController()
 
     setUiError(null)
+    setIsStoppingDaily(false)
     setIsStreamingRun(true)
     setPreserveExecutionPlan(true)
     setRunningDaily(true)
@@ -839,7 +941,10 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     }))
 
     try {
-      const response = await fetch('/api/markets/run-daily?stream=1', { method: 'POST' })
+      const response = await fetch('/api/markets/run-daily?stream=1', {
+        method: 'POST',
+        signal: controller.signal,
+      })
 
       if (!response.ok) {
         throw new Error(await parseErrorMessage(response, 'Failed daily run'))
@@ -853,6 +958,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
       const decoder = new TextDecoder()
       let buffer = ''
       let donePayload: DailyRunPayload | null = null
+      let cancelledMessage: string | null = null
 
       const handleStreamEvent = (event: DailyRunStreamEvent): void => {
         if (event.type === 'start') {
@@ -922,6 +1028,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
 
         if (event.type === 'done') {
           donePayload = event.payload
+          setIsStoppingDaily(false)
           setRunProgress((prev) => prev ? {
             ...prev,
             completedActions: event.payload.processedActions,
@@ -936,6 +1043,18 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
           setExecutionPlan((prev) => finalizeExecutionPlan(prev))
           setSummaryFromPayload(event.payload, startedAtMs)
           appendRunLog('Daily market cycle completed')
+          return
+        }
+
+        if (event.type === 'cancelled') {
+          cancelledMessage = event.message
+          setIsStoppingDaily(false)
+          setRunProgress((prev) => prev ? {
+            ...prev,
+            currentActivity: event.message,
+          } : prev)
+          setExecutionPlan((prev) => finalizeExecutionPlan(prev))
+          appendRunLog(event.message)
           return
         }
 
@@ -971,10 +1090,41 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         handleStreamEvent(event)
       }
 
+      if (cancelledMessage) {
+        try {
+          const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+          const payload = await response.json().catch(() => ({}))
+          if (response.ok) {
+            applyRunSnapshot(payload?.snapshot ?? null)
+          }
+        } catch {
+          // Preserve local stopped state if the snapshot refresh fails.
+        }
+        return
+      }
+
       if (!donePayload) {
         throw new Error('Daily run ended before completion status was received')
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        try {
+          const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+          const payload = await response.json().catch(() => ({}))
+          if (response.ok) {
+            applyRunSnapshot(payload?.snapshot ?? null)
+            keepPersistedRunningState = payload?.snapshot?.status === 'running'
+          } else {
+            setIsStoppingDaily(false)
+            setRunningDaily(false)
+          }
+        } catch {
+          setIsStoppingDaily(false)
+          setRunningDaily(false)
+        }
+        return
+      }
+
       const message = error instanceof Error ? error.message : 'Failed daily run'
       setUiError(message)
       setRunProgress((prev) => prev ? {
@@ -992,15 +1142,18 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             applyRunSnapshot(payload?.snapshot ?? null)
             keepPersistedRunningState = payload?.snapshot?.status === 'running'
           } else {
+            setIsStoppingDaily(false)
             setRunningDaily(false)
           }
         } catch {
+          setIsStoppingDaily(false)
           setRunningDaily(false)
         }
       }
     } finally {
       setIsStreamingRun(false)
       if (!keepPersistedRunningState) {
+        setIsStoppingDaily(false)
         setRunningDaily(false)
       }
     }
@@ -1042,15 +1195,27 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
             <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Market Cycle</h3>
             <p className="text-xs text-[#8a8075] mt-1">Runs model actions for every OPEN market. Target schedule: 6:00 AM ET.</p>
           </div>
-          <button
-            onClick={runDailyCycle}
-            disabled={runningDaily}
-            className="px-4 py-2 rounded-none text-sm bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
-          >
-            {runningDaily
-              ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
-              : 'Run Daily Cycle Now'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={runDailyCycle}
+              disabled={runningDaily}
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {runningDaily
+                ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
+                : 'Run Daily Cycle Now'}
+            </button>
+            {runningDaily ? (
+                <button
+                  type="button"
+                  onClick={pauseDailyCycle}
+                  disabled={isStoppingDaily}
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                >
+                  {isStoppingDaily ? 'Stopping...' : 'Pause'}
+                </button>
+              ) : null}
+          </div>
         </div>
         {runProgress && (
           <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
@@ -1317,57 +1482,175 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
         />
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((event) => {
-          const statusTone = event.marketStatus === 'OPEN'
-            ? 'text-[#3a8a2e] bg-[#3a8a2e]/10'
-            : event.marketStatus === 'RESOLVED'
-              ? 'text-[#b5aa9e] bg-[#b5aa9e]/15'
-              : 'text-[#8a8075] bg-[#e8ddd0]/40'
+      <div className="space-y-5">
+        <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1a1a1a]">Open Markets</h3>
+              <p className="mt-1 text-xs text-[#8a8075]">Markets that are currently live.</p>
+            </div>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{openEvents.length} shown</p>
+          </div>
 
-          return (
-            <div key={event.id} className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
-                  <div className="text-xs text-[#8a8075] mt-1">
-                    {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+          <div className="mt-3 space-y-3">
+            {openEvents.length === 0 ? (
+              <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
+                No open markets match the current filter.
+              </div>
+            ) : openEvents.map((event) => {
+              const statusTone = getMarketStatusTone(event.marketStatus)
+              const days = getDaysUntil(event.pdufaDate)
+
+              return (
+                <div key={event.id} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+                  <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
+                      <div className="mt-1 text-xs text-[#8a8075]">
+                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <span className={`rounded-none px-2 py-1 text-xs ${statusTone}`}>
+                        {event.marketStatus || 'NO MARKET'}
+                      </span>
+                      {event.marketPriceYes !== null ? (
+                        <span className="text-xs text-[#8a8075]">
+                          YES {(event.marketPriceYes * 100).toFixed(1)}%
+                        </span>
+                      ) : null}
+
+                      <div className="min-w-[56px] text-left sm:text-right">
+                        <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
+                          {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
+                        </div>
+                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.pdufaDate)}</div>
+                      </div>
+
+                      <select
+                        value={event.outcome}
+                        onChange={(input) => updateOutcome(event.id, input.target.value)}
+                        disabled={updatingOutcome[event.id]}
+                        className={`max-w-full cursor-pointer rounded-none border-0 px-3 py-1.5 text-sm font-medium ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
+                      >
+                        <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
+                        <option value="Approved" className="bg-white text-[#3a8a2e]">Approved</option>
+                        <option value="Rejected" className="bg-white text-[#EF6F67]">Rejected</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-none ${statusTone}`}>
-                    {event.marketStatus || 'NO MARKET'}
-                  </span>
-                  {event.marketPriceYes !== null && (
-                    <span className="text-xs text-[#8a8075]">
-                      YES {(event.marketPriceYes * 100).toFixed(1)}%
-                    </span>
-                  )}
-                  <button
-                    onClick={() => openMarket(event.id)}
-                    disabled={loadingEventId === event.id || event.marketStatus !== null || event.outcome !== 'Pending'}
-                    className="px-3 py-1.5 rounded-none text-xs bg-[#1a1a1a] text-white hover:bg-[#333] disabled:opacity-50"
-                  >
-                    {loadingEventId === event.id ? 'Opening...' : 'Open Market'}
-                  </button>
-                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {needsMarketEvents.length > 0 ? (
+          <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-[#1a1a1a]">Needs Market</h3>
+                <p className="mt-1 text-xs text-[#8a8075]">Pending FDA events that still need a market opened.</p>
               </div>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{needsMarketEvents.length} shown</p>
             </div>
-          )
-        })}
+
+            <div className="mt-3 space-y-3">
+              {needsMarketEvents.map((event) => {
+                const isOpening = loadingEventId === event.id
+
+                return (
+                  <div key={`needs-market-${event.id}`} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+                    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
+                        <div className="mt-1 text-xs text-[#8a8075]">
+                          {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-none px-2 py-1 text-xs text-[#8a8075] bg-[#e8ddd0]/40">
+                          NO MARKET
+                        </span>
+                        <button
+                          onClick={() => openMarket(event.id)}
+                          disabled={isOpening}
+                          className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isOpening ? 'Opening...' : 'Open Market'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1a1a1a]">Resolved Markets</h3>
+              <p className="mt-1 text-xs text-[#8a8075]">Markets that have already been resolved.</p>
+            </div>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{adjudicationEvents.length} shown</p>
+          </div>
+
+          <div className="mt-3 space-y-3">
+            {adjudicationEvents.length === 0 ? (
+              <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
+                No resolved markets match the current filter.
+              </div>
+            ) : adjudicationEvents.map((event) => {
+              const days = getDaysUntil(event.pdufaDate)
+              const statusTone = getMarketStatusTone(event.marketStatus)
+
+              return (
+                <div key={`adjudication-${event.id}`} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+                  <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
+                        <span className={`rounded-none px-2 py-1 text-xs ${statusTone}`}>
+                          {event.marketStatus}
+                        </span>
+                        {event.marketPriceYes !== null ? (
+                          <span className="text-xs text-[#8a8075]">YES {(event.marketPriceYes * 100).toFixed(1)}%</span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-[#8a8075]">
+                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div className="min-w-[56px] text-left sm:text-right">
+                        <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
+                          {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
+                        </div>
+                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.pdufaDate)}</div>
+                      </div>
+
+                      <select
+                        value={event.outcome}
+                        onChange={(input) => updateOutcome(event.id, input.target.value)}
+                        disabled={updatingOutcome[event.id]}
+                        className={`max-w-full cursor-pointer rounded-none border-0 px-3 py-1.5 text-sm font-medium ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
+                      >
+                        <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
+                        <option value="Approved" className="bg-white text-[#3a8a2e]">Approved</option>
+                        <option value="Rejected" className="bg-white text-[#EF6F67]">Rejected</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
       </div>
 
-      <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
-        <h3 className="text-sm font-semibold text-[#1a1a1a] mb-2">Model Starting Bankroll</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-          {MODEL_IDS.map((modelId) => (
-            <div key={modelId} className="flex items-center justify-between border border-[#e8ddd0] rounded-none p-2 bg-white/70">
-              <span className="text-[#8a8075]">{MODEL_INFO[modelId].fullName}</span>
-              <span className="font-medium text-[#1a1a1a]">{formatMoney(100000)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

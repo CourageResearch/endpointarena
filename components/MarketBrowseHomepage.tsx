@@ -199,6 +199,9 @@ function MarketCard({
   const approveModelIds = MODEL_IDS.filter((modelId) => (modelDecisions.get(modelId) || 'PENDING') === 'APPROVE')
   const rejectModelIds = MODEL_IDS.filter((modelId) => (modelDecisions.get(modelId) || 'PENDING') === 'REJECT')
   const pendingModelCount = MODEL_IDS.length - approveModelIds.length - rejectModelIds.length
+  const hasAnyModelCall = approveModelIds.length > 0 || rejectModelIds.length > 0
+  const approveEmptyLabel = hasAnyModelCall ? '-' : 'Awaiting first run'
+  const rejectEmptyLabel = hasAnyModelCall && pendingModelCount > 0 ? `${pendingModelCount} pending` : '-'
 
   return (
     <Link
@@ -260,7 +263,7 @@ function MarketCard({
                     </li>
                   ))
                 ) : (
-                  <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">-</li>
+                  <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">{approveEmptyLabel}</li>
                 )}
               </ul>
             </div>
@@ -274,7 +277,7 @@ function MarketCard({
                     </li>
                   ))
                 ) : (
-                  <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">{pendingModelCount > 0 ? `${pendingModelCount} pending` : '-'}</li>
+                  <li className="text-[11px] leading-[1.35] text-[#b5aa9e]">{rejectEmptyLabel}</li>
                 )}
               </ul>
             </div>

@@ -542,7 +542,7 @@ export function MarketDetailChart({
           {path && (
             <>
               <path d={`${path} L ${plotRight} ${plotHeight - padding} L ${padding} ${plotHeight - padding} Z`} fill={chartAreaFill} />
-              <path d={path} fill="none" stroke={chartStroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d={path} fill="none" stroke={chartStroke} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
             </>
           )}
           {pointPositions.map(({ point, index, x, y }) => {

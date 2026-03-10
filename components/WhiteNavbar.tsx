@@ -24,7 +24,7 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
   const isAdminUser = Boolean(session?.user?.email && session.user.email === ADMIN_EMAIL)
   const safeCallback = encodeURIComponent(pathname || '/markets')
   const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
-  const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Join Humans vs AI'
+  const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Sign up'
   const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null
 
   const handleNavClick = () => {

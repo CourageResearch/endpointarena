@@ -38,6 +38,7 @@ async function main() {
   console.log('One-drug local database looks correct.')
   console.log(`- Event: ${pendingEvent.drugName} (${pendingEvent.companyName})`)
   console.log(`- Open markets: ${openMarketCount}`)
+  process.exit(0)
 }
 
 main().catch((error) => {

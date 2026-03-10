@@ -3,10 +3,12 @@ import { MODEL_IDS, type ModelId } from '@/lib/constants'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { DEFAULT_LMSR_B, HISTORICAL_PDUFA_APPROVAL_BASELINE, MARKET_STARTING_CASH, type MarketActionType, type MarketOutcome } from './constants'
 import { ConfigurationError, ConflictError, NotFoundError } from '@/lib/errors'
-import { getMarketRuntimeConfig } from './runtime-config'
+import { getMarketRuntimeConfig, type MarketRuntimeConfig } from './runtime-config'
+import { getModelActorIds } from '@/lib/market-actors'
 
 const OPENING_PROBABILITY_FLOOR = 0.05
 const OPENING_PROBABILITY_CEIL = 0.95
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export type MarketState = {
   qYes: number
@@ -14,8 +16,49 @@ export type MarketState = {
   b: number
 }
 
+type TradeCapConfig = Pick<
+  MarketRuntimeConfig,
+  'warmupRunCount' |
+  'warmupMaxTradeUsd' |
+  'warmupBuyCashFraction' |
+  'steadyMaxTradeUsd' |
+  'steadyBuyCashFraction' |
+  'maxPositionPerSideShares'
+>
+
 type BuyMarketAction = Extract<MarketActionType, 'BUY_YES' | 'BUY_NO'>
 type SellMarketAction = Extract<MarketActionType, 'SELL_YES' | 'SELL_NO'>
+export type MarketActionSource = 'cycle' | 'human'
+export type ExecutableTradeCaps = {
+  maxBuyUsd: number
+  maxBuyYesUsd: number
+  maxBuyNoUsd: number
+  maxSellYesUsd: number
+  maxSellNoUsd: number
+  maxTradeUsd: number
+  inWarmupWindow: boolean
+}
+
+type PersistedMarketAction = typeof marketActions.$inferSelect
+type MarketDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
+type PersistMarketActionInput = {
+  runId?: string | null
+  marketId: string
+  fdaEventId: string
+  actorId: string
+  runDate: Date
+  actionSource: MarketActionSource
+  action: MarketActionType
+  usdAmount: number
+  sharesDelta: number
+  priceBefore: number
+  priceAfter: number
+  explanation: string
+  status: 'ok' | 'error' | 'skipped'
+  errorCode?: string | null
+  errorDetails?: string | null
+  error?: string | null
+}
 
 export function normalizeRunDate(input: Date = new Date()): Date {
   const normalized = new Date(Date.UTC(input.getUTCFullYear(), input.getUTCMonth(), input.getUTCDate()))
@@ -26,6 +69,78 @@ export function rotateModelOrder(runDate: Date): ModelId[] {
   const dayNumber = Math.floor(normalizeRunDate(runDate).getTime() / (1000 * 60 * 60 * 24))
   const offset = ((dayNumber % MODEL_IDS.length) + MODEL_IDS.length) % MODEL_IDS.length
   return MODEL_IDS.map((_, i) => MODEL_IDS[(i + offset) % MODEL_IDS.length])
+}
+
+function resolveActionSource(runId: string | undefined, actionSource?: MarketActionSource): MarketActionSource {
+  if (actionSource) return actionSource
+  return runId ? 'cycle' : 'human'
+}
+
+function getMarketAgeInRuns(openedAt: Date, runDate: Date): number {
+  const normalizedOpenedAt = normalizeRunDate(openedAt)
+  const normalizedRunDate = normalizeRunDate(runDate)
+  return Math.floor((normalizedRunDate.getTime() - normalizedOpenedAt.getTime()) / DAY_MS)
+}
+
+async function persistMarketAction(
+  client: MarketDbClient,
+  input: PersistMarketActionInput,
+): Promise<PersistedMarketAction> {
+  const runDate = normalizeRunDate(input.runDate)
+  const baseValues = {
+    runId: input.actionSource === 'cycle' ? input.runId ?? null : null,
+    marketId: input.marketId,
+    fdaEventId: input.fdaEventId,
+    actorId: input.actorId,
+    runDate,
+    actionSource: input.actionSource,
+    action: input.action,
+    usdAmount: input.usdAmount,
+    sharesDelta: input.sharesDelta,
+    priceBefore: input.priceBefore,
+    priceAfter: input.priceAfter,
+    explanation: input.explanation,
+    status: input.status,
+    errorCode: input.errorCode ?? null,
+    errorDetails: input.errorDetails ?? null,
+    error: input.error ?? null,
+  } as const
+
+  if (input.actionSource === 'cycle') {
+    if (!input.runId) {
+      throw new ConfigurationError('Cycle market actions require a runId')
+    }
+
+    const [actionRecord] = await client.insert(marketActions)
+      .values(baseValues)
+      .onConflictDoUpdate({
+        target: [marketActions.marketId, marketActions.actorId, marketActions.runDate],
+        targetWhere: sql`${marketActions.actionSource} = 'cycle'`,
+        set: {
+          runId: input.runId,
+          actionSource: 'cycle',
+          action: input.action,
+          usdAmount: input.usdAmount,
+          sharesDelta: input.sharesDelta,
+          priceBefore: input.priceBefore,
+          priceAfter: input.priceAfter,
+          explanation: input.explanation,
+          status: input.status,
+          errorCode: input.errorCode ?? null,
+          errorDetails: input.errorDetails ?? null,
+          error: input.error ?? null,
+        },
+      })
+      .returning()
+
+    return actionRecord
+  }
+
+  const [actionRecord] = await client.insert(marketActions)
+    .values(baseValues)
+    .returning()
+
+  return actionRecord
 }
 
 function clampProbability(probability: number): number {
@@ -131,6 +246,41 @@ function buyCostForShares(
   return Math.max(0, lmsrCost({ qYes: nextQYes, qNo: nextQNo, b: state.b }) - lmsrCost(state))
 }
 
+export function calculateExecutableTradeCaps(args: {
+  state: MarketState
+  accountCash: number
+  yesSharesHeld: number
+  noSharesHeld: number
+  marketOpenedAt: Date | null | undefined
+  runDate: Date
+  config: TradeCapConfig
+}): ExecutableTradeCaps {
+  const openedAt = args.marketOpenedAt ?? args.runDate
+  const runAge = getMarketAgeInRuns(openedAt, args.runDate)
+  const inWarmupWindow = args.config.warmupRunCount > 0 && runAge >= 0 && runAge < args.config.warmupRunCount
+  const maxTradeUsd = inWarmupWindow ? args.config.warmupMaxTradeUsd : args.config.steadyMaxTradeUsd
+  const buyCashFraction = inWarmupWindow ? args.config.warmupBuyCashFraction : args.config.steadyBuyCashFraction
+  const cashCapUsd = Math.max(0, Math.min(args.accountCash, maxTradeUsd, args.accountCash * buyCashFraction))
+  const yesSharesHeld = Math.max(0, args.yesSharesHeld)
+  const noSharesHeld = Math.max(0, args.noSharesHeld)
+  const remainingYesCapacity = Math.max(0, args.config.maxPositionPerSideShares - yesSharesHeld)
+  const remainingNoCapacity = Math.max(0, args.config.maxPositionPerSideShares - noSharesHeld)
+  const maxBuyYesUsd = Math.max(0, Math.min(cashCapUsd, buyCostForShares(args.state, 'BUY_YES', remainingYesCapacity)))
+  const maxBuyNoUsd = Math.max(0, Math.min(cashCapUsd, buyCostForShares(args.state, 'BUY_NO', remainingNoCapacity)))
+  const maxSellYesUsd = Math.max(0, Math.min(maxTradeUsd, executeLmsrShareSale(args.state, 'SELL_YES', yesSharesHeld).proceeds))
+  const maxSellNoUsd = Math.max(0, Math.min(maxTradeUsd, executeLmsrShareSale(args.state, 'SELL_NO', noSharesHeld).proceeds))
+
+  return {
+    maxBuyUsd: Math.max(maxBuyYesUsd, maxBuyNoUsd),
+    maxBuyYesUsd,
+    maxBuyNoUsd,
+    maxSellYesUsd,
+    maxSellNoUsd,
+    maxTradeUsd,
+    inWarmupWindow,
+  }
+}
+
 export function executeLmsrShareSale(
   state: MarketState,
   side: SellMarketAction,
@@ -228,25 +378,31 @@ export async function calculateHistoricalApprovalRate(): Promise<number> {
 }
 
 export async function ensureMarketAccounts(): Promise<void> {
+  const actorIdByModelId = await getModelActorIds()
   for (const modelId of MODEL_IDS) {
+    const actorId = actorIdByModelId.get(modelId)
+    if (!actorId) continue
     await db.insert(marketAccounts)
       .values({
-        modelId,
+        actorId,
         startingCash: MARKET_STARTING_CASH,
         cashBalance: MARKET_STARTING_CASH,
       })
-      .onConflictDoNothing({ target: marketAccounts.modelId })
+      .onConflictDoNothing({ target: marketAccounts.actorId })
   }
 }
 
 export async function ensureMarketPositions(marketId: string): Promise<void> {
+  const actorIdByModelId = await getModelActorIds()
   for (const modelId of MODEL_IDS) {
+    const actorId = actorIdByModelId.get(modelId)
+    if (!actorId) continue
     await db.insert(marketPositions)
       .values({
         marketId,
-        modelId,
+        actorId,
       })
-      .onConflictDoNothing({ target: [marketPositions.marketId, marketPositions.modelId] })
+      .onConflictDoNothing({ target: [marketPositions.marketId, marketPositions.actorId] })
   }
 }
 
@@ -325,136 +481,112 @@ export async function runHoldAction({
   runId,
   marketId,
   fdaEventId,
-  modelId,
+  actorId,
   runDate,
   explanation,
   priceYes,
+  actionSource,
 }: {
   runId?: string
   marketId: string
   fdaEventId: string
-  modelId: ModelId
+  actorId: string
   runDate: Date
   explanation: string
   priceYes: number
-}): Promise<void> {
-  await db.insert(marketActions)
-    .values({
-      runId,
-      marketId,
-      fdaEventId,
-      modelId,
-      runDate,
-      action: 'HOLD',
-      usdAmount: 0,
-      sharesDelta: 0,
-      priceBefore: priceYes,
-      priceAfter: priceYes,
-      explanation,
-      status: 'ok',
-    })
-    .onConflictDoUpdate({
-      target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-      set: {
-        runId,
-        action: 'HOLD',
-        usdAmount: 0,
-        sharesDelta: 0,
-        priceBefore: priceYes,
-        priceAfter: priceYes,
-        explanation,
-        status: 'ok',
-        errorCode: null,
-        errorDetails: null,
-        error: null,
-      },
-    })
+  actionSource?: MarketActionSource
+}): Promise<PersistedMarketAction> {
+  return persistMarketAction(db, {
+    runId,
+    marketId,
+    fdaEventId,
+    actorId,
+    runDate,
+    actionSource: resolveActionSource(runId, actionSource),
+    action: 'HOLD',
+    usdAmount: 0,
+    sharesDelta: 0,
+    priceBefore: priceYes,
+    priceAfter: priceYes,
+    explanation,
+    status: 'ok',
+  })
 }
 
 export async function recordMarketActionError({
   runId,
   marketId,
   fdaEventId,
-  modelId,
+  actorId,
   runDate,
   priceYes,
   message,
   code,
   details,
+  actionSource,
 }: {
   runId?: string
   marketId: string
   fdaEventId: string
-  modelId: ModelId
+  actorId: string
   runDate: Date
   priceYes: number
   message: string
   code?: string
   details?: string
-}): Promise<void> {
-  await db.insert(marketActions)
-    .values({
-      runId,
-      marketId,
-      fdaEventId,
-      modelId,
-      runDate,
-      action: 'HOLD',
-      usdAmount: 0,
-      sharesDelta: 0,
-      priceBefore: priceYes,
-      priceAfter: priceYes,
-      explanation: `Error: ${message}`,
-      status: 'error',
-      errorCode: code ?? null,
-      errorDetails: details ?? null,
-      error: message,
-    })
-    .onConflictDoUpdate({
-      target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-      set: {
-        runId,
-        action: 'HOLD',
-        usdAmount: 0,
-        sharesDelta: 0,
-        priceBefore: priceYes,
-        priceAfter: priceYes,
-        explanation: `Error: ${message}`,
-        status: 'error',
-        errorCode: code ?? null,
-        errorDetails: details ?? null,
-        error: message,
-      },
-    })
+  actionSource?: MarketActionSource
+}): Promise<PersistedMarketAction> {
+  return persistMarketAction(db, {
+    runId,
+    marketId,
+    fdaEventId,
+    actorId,
+    runDate,
+    actionSource: resolveActionSource(runId, actionSource),
+    action: 'HOLD',
+    usdAmount: 0,
+    sharesDelta: 0,
+    priceBefore: priceYes,
+    priceAfter: priceYes,
+    explanation: `Error: ${message}`,
+    status: 'error',
+    errorCode: code ?? null,
+    errorDetails: details ?? null,
+    error: message,
+  })
 }
 
 export async function runBuyAction({
   runId,
   market,
-  modelId,
+  actorId,
   runDate,
   side,
   requestedUsd,
   explanation,
   maxPositionPerSideShares,
+  actionSource,
 }: {
   runId?: string
   market: typeof predictionMarkets.$inferSelect
-  modelId: ModelId
+  actorId: string
   runDate: Date
   side: Extract<MarketActionType, 'BUY_YES' | 'BUY_NO'>
   requestedUsd: number
   explanation: string
   maxPositionPerSideShares?: number
+  actionSource?: MarketActionSource
 }): Promise<{
   spent: number
   shares: number
   priceBefore: number
   priceAfter: number
+  actionId: string | null
 }> {
   const configuredMaxPositionPerSideShares = Number.isFinite(maxPositionPerSideShares)
     ? Math.max(0, Number(maxPositionPerSideShares))
     : (await getMarketRuntimeConfig()).maxPositionPerSideShares
+  const resolvedActionSource = resolveActionSource(runId, actionSource)
 
   return db.transaction(async (tx) => {
     // Lock and re-read rows inside the transaction so trade math is based on
@@ -468,14 +600,14 @@ export async function runBuyAction({
     await tx.execute(sql`
       SELECT 1
       FROM ${marketAccounts}
-      WHERE ${marketAccounts.modelId} = ${modelId}
+      WHERE ${marketAccounts.actorId} = ${actorId}
       FOR UPDATE
     `)
     await tx.execute(sql`
       SELECT 1
       FROM ${marketPositions}
       WHERE ${marketPositions.marketId} = ${market.id}
-        AND ${marketPositions.modelId} = ${modelId}
+        AND ${marketPositions.actorId} = ${actorId}
       FOR UPDATE
     `)
 
@@ -492,22 +624,22 @@ export async function runBuyAction({
     }
 
     const account = await tx.query.marketAccounts.findFirst({
-      where: eq(marketAccounts.modelId, modelId),
+      where: eq(marketAccounts.actorId, actorId),
     })
 
     if (!account) {
-      throw new ConfigurationError(`Missing market account for model ${modelId}`)
+      throw new ConfigurationError(`Missing market account for actor ${actorId}`)
     }
 
     const position = await tx.query.marketPositions.findFirst({
       where: and(
         eq(marketPositions.marketId, freshMarket.id),
-        eq(marketPositions.modelId, modelId)
+        eq(marketPositions.actorId, actorId)
       ),
     })
 
     if (!position) {
-      throw new ConfigurationError(`Missing position for model ${modelId} in market ${freshMarket.id}`)
+      throw new ConfigurationError(`Missing position for actor ${actorId} in market ${freshMarket.id}`)
     }
 
     const requestedSpend = Math.max(0, requestedUsd)
@@ -527,25 +659,14 @@ export async function runBuyAction({
       : explanation
 
     if (spent <= 0) {
-      await tx.insert(marketActions)
-        .values({
-          runId,
-          marketId: freshMarket.id,
-          fdaEventId: freshMarket.fdaEventId,
-          modelId,
-          runDate,
-          action: 'HOLD',
-          usdAmount: 0,
-          sharesDelta: 0,
-          priceBefore: freshMarket.priceYes,
-          priceAfter: freshMarket.priceYes,
-          explanation: resolvedExplanation,
-          status: 'ok',
-        })
-        .onConflictDoUpdate({
-          target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-          set: {
+      const actionRecord = resolvedActionSource === 'cycle'
+        ? await persistMarketAction(tx, {
             runId,
+            marketId: freshMarket.id,
+            fdaEventId: freshMarket.fdaEventId,
+            actorId,
+            runDate,
+            actionSource: resolvedActionSource,
             action: 'HOLD',
             usdAmount: 0,
             sharesDelta: 0,
@@ -553,17 +674,15 @@ export async function runBuyAction({
             priceAfter: freshMarket.priceYes,
             explanation: resolvedExplanation,
             status: 'ok',
-            errorCode: null,
-            errorDetails: null,
-            error: null,
-          },
-        })
+          })
+        : null
 
       return {
         spent: 0,
         shares: 0,
         priceBefore: freshMarket.priceYes,
         priceAfter: freshMarket.priceYes,
+        actionId: actionRecord?.id ?? null,
       }
     }
 
@@ -587,7 +706,7 @@ export async function runBuyAction({
         cashBalance: account.cashBalance - spent,
         updatedAt: new Date(),
       })
-      .where(eq(marketAccounts.modelId, modelId))
+      .where(eq(marketAccounts.actorId, actorId))
 
     await tx.update(marketPositions)
       .set({
@@ -597,43 +716,28 @@ export async function runBuyAction({
       })
       .where(eq(marketPositions.id, position.id))
 
-    await tx.insert(marketActions)
-      .values({
-        runId,
-        marketId: freshMarket.id,
-        fdaEventId: freshMarket.fdaEventId,
-        modelId,
-        runDate,
-        action: side,
-        usdAmount: spent,
-        sharesDelta: trade.shares,
-        priceBefore: trade.priceBefore,
-        priceAfter: trade.priceAfter,
-        explanation: resolvedExplanation,
-        status: 'ok',
-      })
-      .onConflictDoUpdate({
-        target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-        set: {
-          runId,
-          action: side,
-          usdAmount: spent,
-          sharesDelta: trade.shares,
-          priceBefore: trade.priceBefore,
-          priceAfter: trade.priceAfter,
-          explanation: resolvedExplanation,
-          status: 'ok',
-          errorCode: null,
-          errorDetails: null,
-          error: null,
-        },
-      })
+    const actionRecord = await persistMarketAction(tx, {
+      runId,
+      marketId: freshMarket.id,
+      fdaEventId: freshMarket.fdaEventId,
+      actorId,
+      runDate,
+      actionSource: resolvedActionSource,
+      action: side,
+      usdAmount: spent,
+      sharesDelta: trade.shares,
+      priceBefore: trade.priceBefore,
+      priceAfter: trade.priceAfter,
+      explanation: resolvedExplanation,
+      status: 'ok',
+    })
 
     return {
       spent,
       shares: trade.shares,
       priceBefore: trade.priceBefore,
       priceAfter: trade.priceAfter,
+      actionId: actionRecord.id,
     }
   })
 }
@@ -641,25 +745,30 @@ export async function runBuyAction({
 export async function runSellAction({
   runId,
   market,
-  modelId,
+  actorId,
   runDate,
   side,
   requestedUsd,
   explanation,
+  actionSource,
 }: {
   runId?: string
   market: typeof predictionMarkets.$inferSelect
-  modelId: ModelId
+  actorId: string
   runDate: Date
   side: SellMarketAction
   requestedUsd: number
   explanation: string
+  actionSource?: MarketActionSource
 }): Promise<{
   proceeds: number
   shares: number
   priceBefore: number
   priceAfter: number
+  actionId: string | null
 }> {
+  const resolvedActionSource = resolveActionSource(runId, actionSource)
+
   return db.transaction(async (tx) => {
     await tx.execute(sql`
       SELECT 1
@@ -670,14 +779,14 @@ export async function runSellAction({
     await tx.execute(sql`
       SELECT 1
       FROM ${marketAccounts}
-      WHERE ${marketAccounts.modelId} = ${modelId}
+      WHERE ${marketAccounts.actorId} = ${actorId}
       FOR UPDATE
     `)
     await tx.execute(sql`
       SELECT 1
       FROM ${marketPositions}
       WHERE ${marketPositions.marketId} = ${market.id}
-        AND ${marketPositions.modelId} = ${modelId}
+        AND ${marketPositions.actorId} = ${actorId}
       FOR UPDATE
     `)
 
@@ -694,22 +803,22 @@ export async function runSellAction({
     }
 
     const account = await tx.query.marketAccounts.findFirst({
-      where: eq(marketAccounts.modelId, modelId),
+      where: eq(marketAccounts.actorId, actorId),
     })
 
     if (!account) {
-      throw new ConfigurationError(`Missing market account for model ${modelId}`)
+      throw new ConfigurationError(`Missing market account for actor ${actorId}`)
     }
 
     const position = await tx.query.marketPositions.findFirst({
       where: and(
         eq(marketPositions.marketId, freshMarket.id),
-        eq(marketPositions.modelId, modelId)
+        eq(marketPositions.actorId, actorId)
       ),
     })
 
     if (!position) {
-      throw new ConfigurationError(`Missing position for model ${modelId} in market ${freshMarket.id}`)
+      throw new ConfigurationError(`Missing position for actor ${actorId} in market ${freshMarket.id}`)
     }
 
     const heldShares = side === 'SELL_YES' ? Math.max(0, position.yesShares) : Math.max(0, position.noShares)
@@ -721,25 +830,14 @@ export async function runSellAction({
     }
 
     if (heldShares <= 0 || requestedProceeds <= 0) {
-      await tx.insert(marketActions)
-        .values({
-          runId,
-          marketId: freshMarket.id,
-          fdaEventId: freshMarket.fdaEventId,
-          modelId,
-          runDate,
-          action: 'HOLD',
-          usdAmount: 0,
-          sharesDelta: 0,
-          priceBefore: freshMarket.priceYes,
-          priceAfter: freshMarket.priceYes,
-          explanation,
-          status: 'ok',
-        })
-        .onConflictDoUpdate({
-          target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-          set: {
+      const actionRecord = resolvedActionSource === 'cycle'
+        ? await persistMarketAction(tx, {
             runId,
+            marketId: freshMarket.id,
+            fdaEventId: freshMarket.fdaEventId,
+            actorId,
+            runDate,
+            actionSource: resolvedActionSource,
             action: 'HOLD',
             usdAmount: 0,
             sharesDelta: 0,
@@ -747,17 +845,15 @@ export async function runSellAction({
             priceAfter: freshMarket.priceYes,
             explanation,
             status: 'ok',
-            errorCode: null,
-            errorDetails: null,
-            error: null,
-          },
-        })
+          })
+        : null
 
       return {
         proceeds: 0,
         shares: 0,
         priceBefore: freshMarket.priceYes,
         priceAfter: freshMarket.priceYes,
+        actionId: actionRecord?.id ?? null,
       }
     }
 
@@ -765,25 +861,14 @@ export async function runSellAction({
     const proceeds = Math.max(0, Math.min(requestedProceeds, maxSale.proceeds))
 
     if (proceeds <= 0) {
-      await tx.insert(marketActions)
-        .values({
-          runId,
-          marketId: freshMarket.id,
-          fdaEventId: freshMarket.fdaEventId,
-          modelId,
-          runDate,
-          action: 'HOLD',
-          usdAmount: 0,
-          sharesDelta: 0,
-          priceBefore: freshMarket.priceYes,
-          priceAfter: freshMarket.priceYes,
-          explanation,
-          status: 'ok',
-        })
-        .onConflictDoUpdate({
-          target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-          set: {
+      const actionRecord = resolvedActionSource === 'cycle'
+        ? await persistMarketAction(tx, {
             runId,
+            marketId: freshMarket.id,
+            fdaEventId: freshMarket.fdaEventId,
+            actorId,
+            runDate,
+            actionSource: resolvedActionSource,
             action: 'HOLD',
             usdAmount: 0,
             sharesDelta: 0,
@@ -791,17 +876,15 @@ export async function runSellAction({
             priceAfter: freshMarket.priceYes,
             explanation,
             status: 'ok',
-            errorCode: null,
-            errorDetails: null,
-            error: null,
-          },
-        })
+          })
+        : null
 
       return {
         proceeds: 0,
         shares: 0,
         priceBefore: freshMarket.priceYes,
         priceAfter: freshMarket.priceYes,
+        actionId: actionRecord?.id ?? null,
       }
     }
 
@@ -811,25 +894,14 @@ export async function runSellAction({
     const saleProceeds = Math.max(0, sale.proceeds)
 
     if (soldShares <= 0 || saleProceeds <= 0) {
-      await tx.insert(marketActions)
-        .values({
-          runId,
-          marketId: freshMarket.id,
-          fdaEventId: freshMarket.fdaEventId,
-          modelId,
-          runDate,
-          action: 'HOLD',
-          usdAmount: 0,
-          sharesDelta: 0,
-          priceBefore: freshMarket.priceYes,
-          priceAfter: freshMarket.priceYes,
-          explanation,
-          status: 'ok',
-        })
-        .onConflictDoUpdate({
-          target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-          set: {
+      const actionRecord = resolvedActionSource === 'cycle'
+        ? await persistMarketAction(tx, {
             runId,
+            marketId: freshMarket.id,
+            fdaEventId: freshMarket.fdaEventId,
+            actorId,
+            runDate,
+            actionSource: resolvedActionSource,
             action: 'HOLD',
             usdAmount: 0,
             sharesDelta: 0,
@@ -837,17 +909,15 @@ export async function runSellAction({
             priceAfter: freshMarket.priceYes,
             explanation,
             status: 'ok',
-            errorCode: null,
-            errorDetails: null,
-            error: null,
-          },
-        })
+          })
+        : null
 
       return {
         proceeds: 0,
         shares: 0,
         priceBefore: freshMarket.priceYes,
         priceAfter: freshMarket.priceYes,
+        actionId: actionRecord?.id ?? null,
       }
     }
 
@@ -865,7 +935,7 @@ export async function runSellAction({
         cashBalance: account.cashBalance + saleProceeds,
         updatedAt: new Date(),
       })
-      .where(eq(marketAccounts.modelId, modelId))
+      .where(eq(marketAccounts.actorId, actorId))
 
     await tx.update(marketPositions)
       .set({
@@ -875,43 +945,28 @@ export async function runSellAction({
       })
       .where(eq(marketPositions.id, position.id))
 
-    await tx.insert(marketActions)
-      .values({
-        runId,
-        marketId: freshMarket.id,
-        fdaEventId: freshMarket.fdaEventId,
-        modelId,
-        runDate,
-        action: side,
-        usdAmount: saleProceeds,
-        sharesDelta: -soldShares,
-        priceBefore: sale.priceBefore,
-        priceAfter: sale.priceAfter,
-        explanation,
-        status: 'ok',
-      })
-      .onConflictDoUpdate({
-        target: [marketActions.marketId, marketActions.modelId, marketActions.runDate],
-        set: {
-          runId,
-          action: side,
-          usdAmount: saleProceeds,
-          sharesDelta: -soldShares,
-          priceBefore: sale.priceBefore,
-          priceAfter: sale.priceAfter,
-          explanation,
-          status: 'ok',
-          errorCode: null,
-          errorDetails: null,
-          error: null,
-        },
-      })
+    const actionRecord = await persistMarketAction(tx, {
+      runId,
+      marketId: freshMarket.id,
+      fdaEventId: freshMarket.fdaEventId,
+      actorId,
+      runDate,
+      actionSource: resolvedActionSource,
+      action: side,
+      usdAmount: saleProceeds,
+      sharesDelta: -soldShares,
+      priceBefore: sale.priceBefore,
+      priceAfter: sale.priceAfter,
+      explanation,
+      status: 'ok',
+    })
 
     return {
       proceeds: saleProceeds,
       shares: soldShares,
       priceBefore: sale.priceBefore,
       priceAfter: sale.priceAfter,
+      actionId: actionRecord.id,
     }
   })
 }
@@ -951,18 +1006,18 @@ export async function upsertDailySnapshots(runDate: Date): Promise<void> {
     : []
 
   const marketPriceById = new Map(openMarkets.map((market) => [market.id, market.priceYes]))
-  const positionsByModel = new Map<string, typeof allPositions>()
+  const positionsByActor = new Map<string, typeof allPositions>()
 
   for (const position of allPositions) {
-    const current = positionsByModel.get(position.modelId) || []
+    const current = positionsByActor.get(position.actorId) || []
     current.push(position)
-    positionsByModel.set(position.modelId, current)
+    positionsByActor.set(position.actorId, current)
   }
 
   const accounts = await db.query.marketAccounts.findMany()
 
   for (const account of accounts) {
-    const positions = positionsByModel.get(account.modelId) || []
+    const positions = positionsByActor.get(account.actorId) || []
 
     let positionsValue = 0
     for (const position of positions) {
@@ -977,13 +1032,13 @@ export async function upsertDailySnapshots(runDate: Date): Promise<void> {
     await db.insert(marketDailySnapshots)
       .values({
         snapshotDate: normalizedRunDate,
-        modelId: account.modelId,
+        actorId: account.actorId,
         cashBalance: account.cashBalance,
         positionsValue,
         totalEquity,
       })
       .onConflictDoUpdate({
-        target: [marketDailySnapshots.modelId, marketDailySnapshots.snapshotDate],
+        target: [marketDailySnapshots.actorId, marketDailySnapshots.snapshotDate],
         set: {
           cashBalance: account.cashBalance,
           positionsValue,
@@ -1017,7 +1072,7 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
           cashBalance: sql`${marketAccounts.cashBalance} + ${delta}`,
           updatedAt: new Date(),
         })
-        .where(eq(marketAccounts.modelId, position.modelId))
+        .where(eq(marketAccounts.actorId, position.actorId))
     }
 
     await db.update(predictionMarkets)
@@ -1045,7 +1100,7 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
         cashBalance: sql`${marketAccounts.cashBalance} + ${payout}`,
         updatedAt: new Date(),
       })
-      .where(eq(marketAccounts.modelId, position.modelId))
+      .where(eq(marketAccounts.actorId, position.actorId))
   }
 
   await db.update(predictionMarkets)
@@ -1083,7 +1138,7 @@ export async function reopenMarketForEvent(fdaEventId: string): Promise<void> {
         cashBalance: sql`${marketAccounts.cashBalance} - ${previousPayout}`,
         updatedAt: new Date(),
       })
-      .where(eq(marketAccounts.modelId, position.modelId))
+      .where(eq(marketAccounts.actorId, position.actorId))
   }
 
   await db.update(predictionMarkets)

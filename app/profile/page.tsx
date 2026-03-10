@@ -10,7 +10,7 @@ import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { authOptions } from '@/lib/auth'
-import { db, fdaCalendarEvents, marketActions, marketPositions, predictionMarkets, users } from '@/lib/db'
+import { db, fdaCalendarEvents, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
@@ -88,10 +88,6 @@ function toTradeActionLabel(action: ProfileTradeAction): string {
   }
 }
 
-function getHumanActorId(userId: string): string {
-  return `human:${userId}`
-}
-
 function toTicker(symbols: string | null | undefined): string {
   if (!symbols) return '—'
   const first = symbols.split(',')[0]?.trim()
@@ -99,21 +95,37 @@ function toTicker(symbols: string | null | undefined): string {
 }
 
 async function getProfileTradingData(userId: string): Promise<{
+  tradingCashBalance: number
+  positionsValue: number
+  totalEquity: number
   holdings: ProfileHoldingRow[]
   trades: ProfileTradeRow[]
 }> {
-  const actorId = getHumanActorId(userId)
+  const actor = await db.query.marketActors.findFirst({
+    where: and(
+      eq(marketActors.actorType, 'human'),
+      eq(marketActors.userId, userId),
+    ),
+  })
 
-  const [rawPositions, rawActions] = await Promise.all([
+  if (!actor) {
+    return { tradingCashBalance: 0, positionsValue: 0, totalEquity: 0, holdings: [], trades: [] }
+  }
+
+  const [account, rawPositions, rawActions] = await Promise.all([
+    db.query.marketAccounts.findFirst({
+      where: eq(marketAccounts.actorId, actor.id),
+    }),
     db.query.marketPositions.findMany({
       where: and(
-        eq(marketPositions.modelId, actorId),
+        eq(marketPositions.actorId, actor.id),
         or(gt(marketPositions.yesShares, 0), gt(marketPositions.noShares, 0)),
       ),
     }),
     db.query.marketActions.findMany({
       where: and(
-        eq(marketActions.modelId, actorId),
+        eq(marketActions.actorId, actor.id),
+        eq(marketActions.actionSource, 'human'),
         eq(marketActions.status, 'ok'),
         inArray(marketActions.action, [...PROFILE_TRADE_ACTIONS]),
       ),
@@ -204,7 +216,16 @@ async function getProfileTradingData(userId: string): Promise<{
     })
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
 
-  return { holdings, trades }
+  const positionsValue = holdings.reduce((sum, holding) => sum + holding.markValueUsd, 0)
+  const tradingCashBalance = account?.cashBalance ?? 0
+
+  return {
+    tradingCashBalance,
+    positionsValue,
+    totalEquity: tradingCashBalance + positionsValue,
+    holdings,
+    trades,
+  }
 }
 
 async function updateProfileName(formData: FormData) {
@@ -241,7 +262,7 @@ export default async function ProfilePage() {
     redirect('/login?callbackUrl=/profile')
   }
 
-  const [{ holdings, trades }, verificationStatus] = await Promise.all([
+  const [{ tradingCashBalance, positionsValue, totalEquity, holdings, trades }, verificationStatus] = await Promise.all([
     getProfileTradingData(user.id),
     getTwitterVerificationStatusForUser(user.id).catch(() => {
       console.warn('Failed to load Twitter verification status for profile page', { userId: user.id })
@@ -295,7 +316,7 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
                 <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{identity}</p>
@@ -322,9 +343,21 @@ export default async function ProfilePage() {
               </div>
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash Balance</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Trading Cash</p>
                   <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
                     Paper Trading
+                  </div>
+                </div>
+                <p className="mt-4 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
+                <p className="mt-1 text-xs text-[#8a8075]">
+                  Open positions: {formatUsd(positionsValue)} • Total equity: {formatUsd(totalEquity)}
+                </p>
+              </div>
+              <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Rewards Balance</p>
+                  <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
+                    Profile / Refill
                   </div>
                 </div>
                 <ProfilePointsBalance

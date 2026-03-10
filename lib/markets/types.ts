@@ -14,6 +14,7 @@ export type DailyRunPlannedMarket = {
 export type DailyRunResult = {
   marketId: string
   fdaEventId: string
+  actorId: string | null
   modelId: ModelId
   action: string
   amountUsd: number
@@ -57,6 +58,7 @@ export type DailyRunStreamEvent =
       message: string
       marketId?: string
       fdaEventId?: string
+      actorId?: string | null
       modelId?: ModelId
       phase?: DailyRunActivityPhase
     }
@@ -69,6 +71,10 @@ export type DailyRunStreamEvent =
   | {
       type: 'done'
       payload: DailyRunPayload
+    }
+  | {
+      type: 'cancelled'
+      message: string
     }
   | {
       type: 'error'
@@ -90,6 +96,7 @@ export type DailyRunHooks = {
     message: string
     marketId?: string
     fdaEventId?: string
+    actorId?: string | null
     modelId?: ModelId
     phase?: DailyRunActivityPhase
   }) => void

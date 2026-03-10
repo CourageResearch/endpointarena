@@ -45,7 +45,7 @@ export default async function FDACalendarPage() {
     <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
+      <main className="max-w-5xl mx-auto px-4 pb-4 pt-8 sm:px-6 sm:pb-8 sm:pt-16">
         <div className="mb-8 sm:mb-12">
           <div className="flex items-center gap-3 mb-4">
             <h1 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">FDA Calendar</h1>
@@ -57,7 +57,7 @@ export default async function FDACalendarPage() {
         </div>
 
         <FDACalendarTableWithPredictions events={eventsForClient as any} filterOptions={filterOptions} />
-        <FooterGradientRule className="mt-10" />
+        <FooterGradientRule className="mt-4 sm:mt-6" />
       </main>
     </PageFrame>
   )

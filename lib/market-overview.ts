@@ -1,15 +1,14 @@
-import { desc, eq, inArray } from 'drizzle-orm'
-import { db, fdaCalendarEvents, marketAccounts, marketActions, marketDailySnapshots, marketPositions, marketPriceSnapshots, marketRuns, predictionMarkets } from '@/lib/db'
+import { and, desc, eq, inArray } from 'drizzle-orm'
+import { db, fdaCalendarEvents, marketActions, marketDailySnapshots, marketPriceSnapshots, marketRuns } from '@/lib/db'
 import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
-import { MODEL_IDS, type ModelId } from '@/lib/constants'
 import { getMarketDecisionHistoryByMarketIds } from '@/lib/model-decision-snapshots'
 import type { ModelDecisionSnapshot, PredictionHistoryEntry } from '@/lib/types'
-
-const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
-
-function toModelId(value: string): ModelId | null {
-  return MODEL_ID_SET.has(value as ModelId) ? (value as ModelId) : null
-}
+import {
+  buildLatestCycleActionByMarketActor,
+  buildMarketActorKey,
+  loadOpenMarketActorState,
+  toModelId,
+} from '@/lib/market-read-model'
 
 function toRunStatus(value: string): OverviewResponse['recentRuns'][number]['status'] {
   if (value === 'running' || value === 'completed' || value === 'failed') {
@@ -43,34 +42,37 @@ function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, eve
 }
 
 export async function getMarketOverviewData(): Promise<OverviewResponse> {
-  const [accounts, openMarkets, allSnapshots, recentRuns] = await Promise.all([
-    db.query.marketAccounts.findMany(),
-    db.query.predictionMarkets.findMany({
-      where: eq(predictionMarkets.status, 'OPEN'),
-    }),
+  const [openMarketState, allSnapshots, recentRuns] = await Promise.all([
+    loadOpenMarketActorState(),
     db.query.marketDailySnapshots.findMany({
       orderBy: [desc(marketDailySnapshots.snapshotDate)],
+      with: {
+        actor: true,
+      },
     }),
     db.query.marketRuns.findMany({
-      orderBy: [desc(marketRuns.runDate)],
+      orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
       limit: 30,
     }),
   ])
 
-  const openMarketIds = openMarkets.map((market) => market.id)
+  const { accounts, openMarkets, openMarketIds, marketById, positionsByMarketActor, positionsValueByActorId } = openMarketState
   const fdaEventIds = openMarkets.map((market) => market.fdaEventId)
 
-  const [events, positions, actions, marketSnapshots] = await Promise.all([
+  const [events, actions, marketSnapshots] = await Promise.all([
     fdaEventIds.length > 0
       ? db.query.fdaCalendarEvents.findMany({ where: inArray(fdaCalendarEvents.id, fdaEventIds) })
       : Promise.resolve([]),
     openMarketIds.length > 0
-      ? db.query.marketPositions.findMany({ where: inArray(marketPositions.marketId, openMarketIds) })
-      : Promise.resolve([]),
-    openMarketIds.length > 0
       ? db.query.marketActions.findMany({
-          where: inArray(marketActions.marketId, openMarketIds),
+          where: and(
+            inArray(marketActions.marketId, openMarketIds),
+            eq(marketActions.actionSource, 'cycle'),
+          ),
           orderBy: [desc(marketActions.createdAt)],
+          with: {
+            actor: true,
+          },
         })
       : Promise.resolve([]),
     openMarketIds.length > 0
@@ -85,30 +87,21 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
   const decisionHistoryByMarketId = await getMarketDecisionHistoryByMarketIds(openMarketIds, eventOutcomeById)
 
   const eventById = new Map(events.map((event) => [event.id, event]))
-  const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
-  const positionByMarketModel = new Map<string, (typeof positions)[number]>()
-  for (const position of positions) {
-    positionByMarketModel.set(`${position.marketId}:${position.modelId}`, position)
-  }
-
-  const latestActionByMarketModel = new Map<string, (typeof actions)[number]>()
-  const costBasisByMarketModel = new Map<string, number>()
+  const latestCycleActionByMarketActor = buildLatestCycleActionByMarketActor(actions)
+  const costBasisByMarketActor = new Map<string, number>()
   const activityTotalsByMarket = new Map<string, { totalActionsCount: number; totalVolumeUsd: number }>()
   for (const action of actions) {
-    const key = `${action.marketId}:${action.modelId}`
-    if (!latestActionByMarketModel.has(key)) {
-      latestActionByMarketModel.set(key, action)
-    }
+    const key = buildMarketActorKey(action.marketId, action.actorId)
     const marketTotals = activityTotalsByMarket.get(action.marketId) || { totalActionsCount: 0, totalVolumeUsd: 0 }
     marketTotals.totalActionsCount += 1
     marketTotals.totalVolumeUsd += Math.max(0, Math.abs(action.usdAmount || 0))
     activityTotalsByMarket.set(action.marketId, marketTotals)
     if (action.status !== 'error' && action.status !== 'skipped') {
       if (action.action === 'BUY_YES' || action.action === 'BUY_NO') {
-        costBasisByMarketModel.set(key, (costBasisByMarketModel.get(key) || 0) + Math.max(0, action.usdAmount || 0))
+        costBasisByMarketActor.set(key, (costBasisByMarketActor.get(key) || 0) + Math.max(0, action.usdAmount || 0))
       }
       if (action.action === 'SELL_YES' || action.action === 'SELL_NO') {
-        costBasisByMarketModel.set(key, (costBasisByMarketModel.get(key) || 0) - Math.max(0, action.usdAmount || 0))
+        costBasisByMarketActor.set(key, (costBasisByMarketActor.get(key) || 0) - Math.max(0, action.usdAmount || 0))
       }
     }
   }
@@ -122,17 +115,12 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
 
   const accountRows = accounts
     .flatMap((account) => {
-      const modelId = toModelId(account.modelId)
+      const modelId = toModelId(account.actor.modelKey ?? '')
       if (!modelId) return []
 
-      let positionsValue = 0
-      for (const market of openMarkets) {
-        const position = positionByMarketModel.get(`${market.id}:${modelId}`)
-        if (!position) continue
-        positionsValue += (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
-      }
-
+      const positionsValue = positionsValueByActorId.get(account.actorId) ?? 0
       return [{
+        actorId: account.actorId,
         modelId,
         startingCash: account.startingCash,
         cashBalance: account.cashBalance,
@@ -145,9 +133,9 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
   const marketRows = openMarkets.map((market) => {
     const event = eventById.get(market.fdaEventId)
     const modelStates = accountRows.map((account) => {
-      const key = `${market.id}:${account.modelId}`
-      const position = positionByMarketModel.get(key)
-      const latestAction = latestActionByMarketModel.get(key)
+      const key = buildMarketActorKey(market.id, account.actorId)
+      const position = positionsByMarketActor.get(key)
+      const latestAction = latestCycleActionByMarketActor.get(key)
       const decisionHistory = (decisionHistoryByMarketId.get(market.id) || [])
         .filter((entry) => entry.predictorId === account.modelId)
         .map((entry) => toDecisionSnapshot(entry, market.id, market.fdaEventId))
@@ -156,7 +144,7 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
         modelId: account.modelId,
         yesShares: position?.yesShares ?? 0,
         noShares: position?.noShares ?? 0,
-        costBasisUsd: costBasisByMarketModel.get(key) ?? 0,
+        costBasisUsd: costBasisByMarketActor.get(key) ?? 0,
         latestDecision: decisionHistory[0] ?? null,
         decisionHistory,
         latestAction: latestAction
@@ -212,9 +200,11 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
 
   const snapshotByModel = new Map<string, (typeof allSnapshots)>()
   for (const snapshot of allSnapshots) {
-    const current = snapshotByModel.get(snapshot.modelId) || []
+    const modelKey = snapshot.actor.modelKey
+    if (!modelKey) continue
+    const current = snapshotByModel.get(modelKey) || []
     current.push(snapshot)
-    snapshotByModel.set(snapshot.modelId, current)
+    snapshotByModel.set(modelKey, current)
   }
 
   const equityHistory = Array.from(snapshotByModel.entries())
@@ -234,11 +224,11 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
     })
 
   const recentActions = actions.flatMap((action) => {
-    const modelId = toModelId(action.modelId)
+    const modelId = toModelId(action.actor.modelKey ?? '')
     if (!modelId) return []
 
     const event = eventById.get(action.fdaEventId)
-    const market = openMarketById.get(action.marketId)
+    const market = marketById.get(action.marketId)
 
     return [{
       id: action.id,

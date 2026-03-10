@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminMarketConstantsManager, type MarketRuntimeConfigDto } from '@/components/AdminMarketConstantsManager'
+import { AdminModelStartingBankroll } from '@/components/AdminModelStartingBankroll'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { db, users } from '@/lib/db'
 
@@ -50,7 +51,10 @@ export default async function AdminSettingsPage() {
         </p>
       </section>
 
-      <AdminMarketConstantsManager initialConfig={toDto(config)} currentUsersCount={currentUsersCount} />
+      <div className="space-y-4">
+        <AdminMarketConstantsManager initialConfig={toDto(config)} currentUsersCount={currentUsersCount} />
+        <AdminModelStartingBankroll />
+      </div>
     </AdminConsoleLayout>
   )
 }

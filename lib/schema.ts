@@ -1,35 +1,106 @@
-import { pgTable, text, integer, real, timestamp, boolean, uniqueIndex, index, check } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  check,
+  date,
+  index,
+  integer,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
-// FDA Calendar Events table
+const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true })
+const utcDate = (name: string) => date(name, { mode: 'date' })
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  email: text('email').unique(),
+  signupLocation: text('signup_location'),
+  signupState: text('signup_state'),
+  passwordHash: text('password_hash'),
+  emailVerified: utcTimestamp('email_verified'),
+  image: text('image'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  predictions: integer('predictions').default(0),
+  correctPreds: integer('correct_preds').default(0),
+  xUserId: text('x_user_id'),
+  xUsername: text('x_username'),
+  xConnectedAt: utcTimestamp('x_connected_at'),
+  tweetChallengeTokenHash: text('tweet_challenge_token_hash'),
+  tweetChallengeExpiresAt: utcTimestamp('tweet_challenge_expires_at'),
+  tweetVerifiedAt: utcTimestamp('tweet_verified_at'),
+  tweetVerifiedTweetId: text('tweet_verified_tweet_id'),
+  tweetMustStayUntil: utcTimestamp('tweet_must_stay_until'),
+  pointsBalance: integer('points_balance').notNull().default(5),
+  lastPointsRefillAt: utcTimestamp('last_points_refill_at'),
+}, (table) => ({
+  xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
+  displayNameCheck: check(
+    'users_display_name_check',
+    sql`${table.name} ~ '^[A-Za-z0-9]{1,20}$'`
+  ),
+  pointsBalanceCheck: check(
+    'users_points_balance_check',
+    sql`${table.pointsBalance} >= 0`
+  ),
+}))
+
+export const accounts = pgTable('accounts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  provider: text('provider').notNull(),
+  providerAccountId: text('provider_account_id').notNull(),
+  refresh_token: text('refresh_token'),
+  access_token: text('access_token'),
+  expires_at: integer('expires_at'),
+  token_type: text('token_type'),
+  scope: text('scope'),
+  id_token: text('id_token'),
+  session_state: text('session_state'),
+})
+
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionToken: text('session_token').notNull().unique(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expires: utcTimestamp('expires').notNull(),
+})
+
+export const verificationTokens = pgTable('verification_tokens', {
+  identifier: text('identifier').notNull(),
+  token: text('token').notNull().unique(),
+  expires: utcTimestamp('expires').notNull(),
+})
+
 export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  externalKey: text('external_key'),
   companyName: text('company_name').notNull(),
   symbols: text('symbols').notNull(),
   drugName: text('drug_name').notNull(),
   applicationType: text('application_type').notNull(),
-  pdufaDate: timestamp('pdufa_date').notNull(),
+  pdufaDate: utcDate('pdufa_date').notNull(),
   eventDescription: text('event_description').notNull(),
   outcome: text('outcome').notNull().default('Pending'),
-  outcomeDate: timestamp('outcome_date'),
+  outcomeDate: utcTimestamp('outcome_date'),
   dateKind: text('date_kind').notNull().default('public'),
-  cnpvAwardDate: timestamp('cnpv_award_date'),
+  cnpvAwardDate: utcDate('cnpv_award_date'),
   drugStatus: text('drug_status'),
   therapeuticArea: text('therapeutic_area'),
-  rivalDrugs: text('rival_drugs'),
-  marketPotential: text('market_potential'),
-  otherApprovals: text('other_approvals'),
-  newsLinks: text('news_links'),
-  source: text('source'),
-  nctId: text('nct_id'),
-  rttDetailId: text('rtt_detail_id'),
-  metaAnalysis: text('meta_analysis'), // AI-generated comparison of model predictions
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
-  scrapedAt: timestamp('scraped_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+  scrapedAt: utcTimestamp('scraped_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  externalKeyIdx: uniqueIndex('fda_calendar_events_external_key_idx').on(table.externalKey),
+  identityIdx: uniqueIndex('fda_calendar_events_identity_idx').on(
+    table.companyName,
+    table.drugName,
+    table.applicationType,
+    table.pdufaDate,
+  ),
   pdufaDateIdx: index('fda_calendar_events_pdufa_date_idx').on(table.pdufaDate),
   outcomeIdx: index('fda_calendar_events_outcome_idx').on(table.outcome),
   outcomeCheck: check(
@@ -42,77 +113,105 @@ export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   ),
 }))
 
-export const fdaCalendarEventsRelations = relations(fdaCalendarEvents, ({ many }) => ({
-  predictions: many(fdaPredictions),
-}))
-
-// FDA Predictions table
-export const fdaPredictions = pgTable('fda_predictions', {
+export const fdaEventExternalIds = pgTable('fda_event_external_ids', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
-  predictorType: text('predictor_type').notNull(),
-  predictorId: text('predictor_id').notNull(),
-  prediction: text('prediction').notNull(),
-  confidence: real('confidence').notNull(),
-  reasoning: text('reasoning').notNull(),
-  durationMs: integer('duration_ms'),
-  inputTokens: integer('input_tokens'),
-  outputTokens: integer('output_tokens'),
-  totalTokens: integer('total_tokens'),
-  reasoningTokens: integer('reasoning_tokens'),
-  estimatedCostUsd: real('estimated_cost_usd'),
-  costSource: text('cost_source'),
-  cacheCreationInputTokens5m: integer('cache_creation_input_tokens_5m'),
-  cacheCreationInputTokens1h: integer('cache_creation_input_tokens_1h'),
-  cacheReadInputTokens: integer('cache_read_input_tokens'),
-  webSearchRequests: integer('web_search_requests'),
-  inferenceGeo: text('inference_geo'),
-  correct: boolean('correct'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  eventId: text('event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  idType: text('id_type').notNull(),
+  idValue: text('id_value').notNull(),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  fdaEventIdx: index('fda_predictions_fda_event_idx').on(table.fdaEventId),
-  predictorIdx: index('fda_predictions_predictor_idx').on(table.predictorId),
-  eventPredictorUniqueIdx: uniqueIndex('fda_predictions_event_predictor_unique_idx').on(
-    table.fdaEventId,
-    table.predictorType,
-    table.predictorId
-  ),
-  predictionCheck: check(
-    'fda_predictions_prediction_check',
-    sql`${table.prediction} IN ('approved', 'rejected')`
-  ),
-  costSourceCheck: check(
-    'fda_predictions_cost_source_check',
-    sql`${table.costSource} IS NULL OR ${table.costSource} IN ('provider', 'estimated')`
+  eventIdTypeUniqueIdx: uniqueIndex('fda_event_external_ids_event_id_type_idx').on(table.eventId, table.idType),
+  idTypeValueIdx: index('fda_event_external_ids_type_value_idx').on(table.idType, table.idValue),
+  idTypeCheck: check(
+    'fda_event_external_ids_type_check',
+    sql`${table.idType} IN ('external_key', 'nct', 'rtt_detail')`
   ),
 }))
 
-export const fdaPredictionsRelations = relations(fdaPredictions, ({ one }) => ({
-  fdaEvent: one(fdaCalendarEvents, {
-    fields: [fdaPredictions.fdaEventId],
-    references: [fdaCalendarEvents.id],
-  }),
+export const fdaEventSources = pgTable('fda_event_sources', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: text('event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  sourceType: text('source_type').notNull(),
+  label: text('label'),
+  url: text('url').notNull(),
+  displayOrder: integer('display_order').notNull().default(0),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  eventSourceUrlUniqueIdx: uniqueIndex('fda_event_sources_event_source_url_idx').on(table.eventId, table.sourceType, table.url),
+  eventSourceOrderIdx: index('fda_event_sources_event_source_order_idx').on(table.eventId, table.displayOrder),
+  sourceTypeCheck: check(
+    'fda_event_sources_type_check',
+    sql`${table.sourceType} IN ('primary', 'news_link', 'reference')`
+  ),
 }))
 
-// =============================================================================
-// Prediction Market V2 tables
-// =============================================================================
+export const fdaEventContexts = pgTable('fda_event_contexts', {
+  eventId: text('event_id').primaryKey().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  rivalDrugs: text('rival_drugs'),
+  marketPotential: text('market_potential'),
+  otherApprovals: text('other_approvals'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+})
 
-// Each FDA event can have one market that moves over time via LMSR.
+export const fdaEventAnalyses = pgTable('fda_event_analyses', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: text('event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  analysisType: text('analysis_type').notNull(),
+  content: text('content').notNull(),
+  modelKey: text('model_key'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  eventAnalysisUniqueIdx: uniqueIndex('fda_event_analyses_event_type_idx').on(table.eventId, table.analysisType),
+  analysisTypeCheck: check(
+    'fda_event_analyses_type_check',
+    sql`${table.analysisType} IN ('meta_analysis')`
+  ),
+}))
+
+export const marketActors = pgTable('market_actors', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  actorType: text('actor_type').notNull(),
+  modelKey: text('model_key'),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  displayName: text('display_name'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  modelKeyUniqueIdx: uniqueIndex('market_actors_model_key_idx').on(table.modelKey),
+  userIdUniqueIdx: uniqueIndex('market_actors_user_id_idx').on(table.userId),
+  actorTypeIdx: index('market_actors_actor_type_idx').on(table.actorType),
+  actorTypeCheck: check(
+    'market_actors_actor_type_check',
+    sql`${table.actorType} IN ('model', 'human')`
+  ),
+  actorShapeCheck: check(
+    'market_actors_shape_check',
+    sql`(
+      (${table.actorType} = 'model' AND ${table.modelKey} IS NOT NULL AND ${table.userId} IS NULL)
+      OR
+      (${table.actorType} = 'human' AND ${table.userId} IS NOT NULL AND ${table.modelKey} IS NULL)
+    )`
+  ),
+}))
+
 export const predictionMarkets = pgTable('prediction_markets', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
-  status: text('status').notNull().default('OPEN'), // OPEN | RESOLVED
-  openingProbability: real('opening_probability').notNull(), // 0..1 baseline from historical FDA approvals
-  b: real('b').notNull().default(25000), // LMSR liquidity parameter
+  status: text('status').notNull().default('OPEN'),
+  openingProbability: real('opening_probability').notNull(),
+  b: real('b').notNull().default(25000),
   qYes: real('q_yes').notNull().default(0),
   qNo: real('q_no').notNull().default(0),
-  priceYes: real('price_yes').notNull().default(0.5), // cached yes price
-  openedAt: timestamp('opened_at').$defaultFn(() => new Date()),
-  resolvedAt: timestamp('resolved_at'),
-  resolvedOutcome: text('resolved_outcome'), // Approved | Rejected
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
+  priceYes: real('price_yes').notNull().default(0.5),
+  openedAt: utcTimestamp('opened_at').notNull().$defaultFn(() => new Date()),
+  resolvedAt: utcTimestamp('resolved_at'),
+  resolvedOutcome: text('resolved_outcome'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   fdaEventUniqueIdx: uniqueIndex('prediction_markets_fda_event_id_idx').on(table.fdaEventId),
   statusIdx: index('prediction_markets_status_idx').on(table.status),
@@ -148,13 +247,13 @@ export const predictionMarkets = pgTable('prediction_markets', {
 
 export const marketAccounts = pgTable('market_accounts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  modelId: text('model_id').notNull(),
+  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
   startingCash: real('starting_cash').notNull().default(100000),
   cashBalance: real('cash_balance').notNull().default(100000),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  modelUniqueIdx: uniqueIndex('market_accounts_model_id_idx').on(table.modelId),
+  actorUniqueIdx: uniqueIndex('market_accounts_actor_id_idx').on(table.actorId),
   startingCashCheck: check(
     'market_accounts_starting_cash_check',
     sql`${table.startingCash} >= 0`
@@ -168,15 +267,15 @@ export const marketAccounts = pgTable('market_accounts', {
 export const marketPositions = pgTable('market_positions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
-  modelId: text('model_id').notNull(),
+  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
   yesShares: real('yes_shares').notNull().default(0),
   noShares: real('no_shares').notNull().default(0),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  marketModelUniqueIdx: uniqueIndex('market_positions_market_model_idx').on(table.marketId, table.modelId),
+  marketActorUniqueIdx: uniqueIndex('market_positions_market_actor_idx').on(table.marketId, table.actorId),
   marketIdx: index('market_positions_market_idx').on(table.marketId),
-  modelIdx: index('market_positions_model_idx').on(table.modelId),
+  actorIdx: index('market_positions_actor_idx').on(table.actorId),
   yesSharesCheck: check(
     'market_positions_yes_shares_check',
     sql`${table.yesShares} >= 0`
@@ -189,8 +288,8 @@ export const marketPositions = pgTable('market_positions', {
 
 export const marketRuns = pgTable('market_runs', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  runDate: timestamp('run_date').notNull(), // normalized UTC day
-  status: text('status').notNull().default('running'), // running | completed | failed
+  runDate: utcDate('run_date').notNull(),
+  status: text('status').notNull().default('running'),
   openMarkets: integer('open_markets').notNull().default(0),
   totalActions: integer('total_actions').notNull().default(0),
   processedActions: integer('processed_actions').notNull().default(0),
@@ -198,12 +297,13 @@ export const marketRuns = pgTable('market_runs', {
   errorCount: integer('error_count').notNull().default(0),
   skippedCount: integer('skipped_count').notNull().default(0),
   failureReason: text('failure_reason'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
-  completedAt: timestamp('completed_at'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+  completedAt: utcTimestamp('completed_at'),
 }, (table) => ({
-  runDateUniqueIdx: uniqueIndex('market_runs_run_date_idx').on(table.runDate),
+  runDateIdx: index('market_runs_run_date_idx').on(table.runDate),
   statusIdx: index('market_runs_status_idx').on(table.status),
+  createdAtIdx: index('market_runs_created_at_idx').on(table.createdAt),
   statusCheck: check(
     'market_runs_status_check',
     sql`${table.status} IN ('running', 'completed', 'failed')`
@@ -241,24 +341,25 @@ export const marketRuns = pgTable('market_runs', {
 export const marketRunLogs = pgTable('market_run_logs', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   runId: text('run_id').notNull().references(() => marketRuns.id, { onDelete: 'cascade' }),
-  logType: text('log_type').notNull().default('activity'), // system | activity | progress | error
+  logType: text('log_type').notNull().default('activity'),
   message: text('message').notNull(),
   completedActions: integer('completed_actions'),
   totalActions: integer('total_actions'),
   okCount: integer('ok_count'),
   errorCount: integer('error_count'),
   skippedCount: integer('skipped_count'),
-  marketId: text('market_id'),
-  fdaEventId: text('fda_event_id'),
-  modelId: text('model_id'),
+  marketId: text('market_id').references(() => predictionMarkets.id, { onDelete: 'set null' }),
+  fdaEventId: text('fda_event_id').references(() => fdaCalendarEvents.id, { onDelete: 'set null' }),
+  actorId: text('actor_id').references(() => marketActors.id, { onDelete: 'set null' }),
   activityPhase: text('activity_phase'),
   action: text('action'),
-  actionStatus: text('action_status'), // ok | error | skipped
+  actionStatus: text('action_status'),
   amountUsd: real('amount_usd'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   runCreatedIdx: index('market_run_logs_run_created_idx').on(table.runId, table.createdAt),
   createdAtIdx: index('market_run_logs_created_at_idx').on(table.createdAt),
+  actorIdx: index('market_run_logs_actor_idx').on(table.actorId),
   logTypeCheck: check(
     'market_run_logs_log_type_check',
     sql`${table.logType} IN ('system', 'activity', 'progress', 'error')`
@@ -295,26 +396,45 @@ export const marketRunLogs = pgTable('market_run_logs', {
 
 export const marketActions = pgTable('market_actions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  runId: text('run_id').references(() => marketRuns.id, { onDelete: 'set null' }),
+  runId: text('run_id').references(() => marketRuns.id, { onDelete: 'cascade' }),
   marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
   fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
-  modelId: text('model_id').notNull(),
-  runDate: timestamp('run_date').notNull(), // normalized UTC day
-  action: text('action').notNull(), // BUY_YES | BUY_NO | SELL_YES | SELL_NO | HOLD
+  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
+  runDate: utcDate('run_date').notNull(),
+  actionSource: text('action_source').notNull().default('cycle'),
+  action: text('action').notNull(),
   usdAmount: real('usd_amount').notNull().default(0),
   sharesDelta: real('shares_delta').notNull().default(0),
   priceBefore: real('price_before').notNull(),
   priceAfter: real('price_after').notNull(),
   explanation: text('explanation').notNull(),
-  status: text('status').notNull().default('ok'), // ok | error | skipped
+  status: text('status').notNull().default('ok'),
   errorCode: text('error_code'),
   errorDetails: text('error_details'),
   error: text('error'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  marketModelRunUniqueIdx: uniqueIndex('market_actions_market_model_run_idx').on(table.marketId, table.modelId, table.runDate),
+  marketActorRunUniqueIdx: uniqueIndex('market_actions_market_actor_run_idx')
+    .on(table.marketId, table.actorId, table.runDate)
+    .where(sql`${table.actionSource} = 'cycle'`),
   runIdIdx: index('market_actions_run_id_idx').on(table.runId),
+  marketCreatedIdx: index('market_actions_market_created_idx').on(table.marketId, table.createdAt),
+  actorIdx: index('market_actions_actor_idx').on(table.actorId),
+  actorCreatedIdx: index('market_actions_actor_created_idx').on(table.actorId, table.createdAt),
+  actionSourceIdx: index('market_actions_action_source_idx').on(table.actionSource),
   statusIdx: index('market_actions_status_idx').on(table.status),
+  actionSourceCheck: check(
+    'market_actions_action_source_check',
+    sql`${table.actionSource} IN ('cycle', 'human')`
+  ),
+  actionSourceShapeCheck: check(
+    'market_actions_action_source_shape_check',
+    sql`(
+      (${table.actionSource} = 'cycle' AND ${table.runId} IS NOT NULL)
+      OR
+      (${table.actionSource} = 'human' AND ${table.runId} IS NULL)
+    )`
+  ),
   actionCheck: check(
     'market_actions_action_check',
     sql`${table.action} IN ('BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO', 'HOLD')`
@@ -349,9 +469,11 @@ export const marketActions = pgTable('market_actions', {
 
 export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  runId: text('run_id').references(() => marketRuns.id, { onDelete: 'set null' }),
+  runDate: utcDate('run_date').notNull(),
   marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
   fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
-  modelId: text('model_id').notNull(),
+  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
   runSource: text('run_source').notNull(),
   approvalProbability: real('approval_probability').notNull(),
   binaryCall: text('binary_call').notNull(),
@@ -381,22 +503,38 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   webSearchRequests: integer('web_search_requests'),
   inferenceGeo: text('inference_geo'),
   linkedMarketActionId: text('linked_market_action_id').references(() => marketActions.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  eventModelCreatedIdx: index('model_decision_snapshots_event_model_created_idx').on(
+  runIdIdx: index('model_decision_snapshots_run_id_idx').on(table.runId),
+  runDateRunSourceIdx: index('model_decision_snapshots_run_date_run_source_idx').on(table.runDate, table.runSource),
+  eventActorCreatedIdx: index('model_decision_snapshots_event_actor_created_idx').on(
     table.fdaEventId,
-    table.modelId,
+    table.actorId,
     table.createdAt,
   ),
-  marketModelCreatedIdx: index('model_decision_snapshots_market_model_created_idx').on(
+  marketActorCreatedIdx: index('model_decision_snapshots_market_actor_created_idx').on(
     table.marketId,
-    table.modelId,
+    table.actorId,
+    table.createdAt,
+  ),
+  marketActorRunDateCreatedIdx: index('model_decision_snapshots_market_actor_run_date_created_idx').on(
+    table.marketId,
+    table.actorId,
+    table.runDate,
     table.createdAt,
   ),
   runSourceIdx: index('model_decision_snapshots_run_source_idx').on(table.runSource),
   runSourceCheck: check(
     'model_decision_snapshots_run_source_check',
     sql`${table.runSource} IN ('manual', 'cycle')`,
+  ),
+  runShapeCheck: check(
+    'model_decision_snapshots_run_shape_check',
+    sql`(
+      (${table.runSource} = 'cycle' AND ${table.runId} IS NOT NULL)
+      OR
+      (${table.runSource} = 'manual' AND ${table.runId} IS NULL)
+    )`,
   ),
   binaryCallCheck: check(
     'model_decision_snapshots_binary_call_check',
@@ -459,11 +597,11 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
 export const marketPriceSnapshots = pgTable('market_price_snapshots', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
-  snapshotDate: timestamp('snapshot_date').notNull(), // normalized UTC day
+  snapshotDate: utcDate('snapshot_date').notNull(),
   priceYes: real('price_yes').notNull(),
   qYes: real('q_yes').notNull(),
   qNo: real('q_no').notNull(),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   marketDateUniqueIdx: uniqueIndex('market_price_snapshots_market_date_idx').on(table.marketId, table.snapshotDate),
   marketIdx: index('market_price_snapshots_market_idx').on(table.marketId),
@@ -475,15 +613,15 @@ export const marketPriceSnapshots = pgTable('market_price_snapshots', {
 
 export const marketDailySnapshots = pgTable('market_daily_snapshots', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  snapshotDate: timestamp('snapshot_date').notNull(), // normalized UTC day
-  modelId: text('model_id').notNull(),
+  snapshotDate: utcDate('snapshot_date').notNull(),
+  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
   cashBalance: real('cash_balance').notNull(),
   positionsValue: real('positions_value').notNull(),
   totalEquity: real('total_equity').notNull(),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  modelDateUniqueIdx: uniqueIndex('market_daily_snapshots_model_date_idx').on(table.modelId, table.snapshotDate),
-  modelIdx: index('market_daily_snapshots_model_idx').on(table.modelId),
+  actorDateUniqueIdx: uniqueIndex('market_daily_snapshots_actor_date_idx').on(table.actorId, table.snapshotDate),
+  actorIdx: index('market_daily_snapshots_actor_idx').on(table.actorId),
   cashBalanceCheck: check(
     'market_daily_snapshots_cash_balance_check',
     sql`${table.cashBalance} >= 0`
@@ -498,7 +636,6 @@ export const marketDailySnapshots = pgTable('market_daily_snapshots', {
   ),
 }))
 
-// Runtime-tunable market parameters editable in admin.
 export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   id: text('id').primaryKey(),
   warmupRunCount: integer('warmup_run_count').notNull().default(3),
@@ -509,8 +646,8 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   maxPositionPerSideShares: real('max_position_per_side_shares').notNull().default(10000),
   openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
   signupUserLimit: integer('signup_user_limit').notNull().default(56),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  updatedAt: timestamp('updated_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   warmupRunCountCheck: check(
     'market_runtime_configs_warmup_run_count_check',
@@ -546,162 +683,9 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   ),
 }))
 
-export const predictionMarketsRelations = relations(predictionMarkets, ({ one, many }) => ({
-  fdaEvent: one(fdaCalendarEvents, {
-    fields: [predictionMarkets.fdaEventId],
-    references: [fdaCalendarEvents.id],
-  }),
-  positions: many(marketPositions),
-  actions: many(marketActions),
-  decisionSnapshots: many(modelDecisionSnapshots),
-  priceSnapshots: many(marketPriceSnapshots),
-}))
-
-export const marketRunsRelations = relations(marketRuns, ({ many }) => ({
-  actions: many(marketActions),
-  logs: many(marketRunLogs),
-}))
-
-export const marketRunLogsRelations = relations(marketRunLogs, ({ one }) => ({
-  run: one(marketRuns, {
-    fields: [marketRunLogs.runId],
-    references: [marketRuns.id],
-  }),
-}))
-
-export const marketPositionsRelations = relations(marketPositions, ({ one }) => ({
-  market: one(predictionMarkets, {
-    fields: [marketPositions.marketId],
-    references: [predictionMarkets.id],
-  }),
-}))
-
-export const marketActionsRelations = relations(marketActions, ({ one }) => ({
-  run: one(marketRuns, {
-    fields: [marketActions.runId],
-    references: [marketRuns.id],
-  }),
-  market: one(predictionMarkets, {
-    fields: [marketActions.marketId],
-    references: [predictionMarkets.id],
-  }),
-  fdaEvent: one(fdaCalendarEvents, {
-    fields: [marketActions.fdaEventId],
-    references: [fdaCalendarEvents.id],
-  }),
-}))
-
-export const modelDecisionSnapshotsRelations = relations(modelDecisionSnapshots, ({ one }) => ({
-  market: one(predictionMarkets, {
-    fields: [modelDecisionSnapshots.marketId],
-    references: [predictionMarkets.id],
-  }),
-  fdaEvent: one(fdaCalendarEvents, {
-    fields: [modelDecisionSnapshots.fdaEventId],
-    references: [fdaCalendarEvents.id],
-  }),
-  linkedMarketAction: one(marketActions, {
-    fields: [modelDecisionSnapshots.linkedMarketActionId],
-    references: [marketActions.id],
-  }),
-}))
-
-export const marketPriceSnapshotsRelations = relations(marketPriceSnapshots, ({ one }) => ({
-  market: one(predictionMarkets, {
-    fields: [marketPriceSnapshots.marketId],
-    references: [predictionMarkets.id],
-  }),
-}))
-
-// Users table
-export const users = pgTable('users', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  name: text('name').notNull(),
-  email: text('email').unique(),
-  signupLocation: text('signup_location'),
-  signupState: text('signup_state'),
-  passwordHash: text('password_hash'),
-  emailVerified: timestamp('email_verified'),
-  image: text('image'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
-  predictions: integer('predictions').default(0),
-  correctPreds: integer('correct_preds').default(0),
-  xUserId: text('x_user_id'),
-  xUsername: text('x_username'),
-  xConnectedAt: timestamp('x_connected_at'),
-  tweetChallengeTokenHash: text('tweet_challenge_token_hash'),
-  tweetChallengeExpiresAt: timestamp('tweet_challenge_expires_at'),
-  tweetVerifiedAt: timestamp('tweet_verified_at'),
-  tweetVerifiedTweetId: text('tweet_verified_tweet_id'),
-  tweetMustStayUntil: timestamp('tweet_must_stay_until'),
-  pointsBalance: integer('points_balance').notNull().default(5),
-  lastPointsRefillAt: timestamp('last_points_refill_at'),
-}, (table) => ({
-  xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
-  displayNameCheck: check(
-    'users_display_name_check',
-    sql`${table.name} ~ '^[A-Za-z0-9]{1,20}$'`
-  ),
-  pointsBalanceCheck: check(
-    'users_points_balance_check',
-    sql`${table.pointsBalance} >= 0`
-  ),
-}))
-
-export const usersRelations = relations(users, ({ many }) => ({
-  accounts: many(accounts),
-  sessions: many(sessions),
-}))
-
-// Accounts table (for OAuth)
-export const accounts = pgTable('accounts', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  type: text('type').notNull(),
-  provider: text('provider').notNull(),
-  providerAccountId: text('provider_account_id').notNull(),
-  refresh_token: text('refresh_token'),
-  access_token: text('access_token'),
-  expires_at: integer('expires_at'),
-  token_type: text('token_type'),
-  scope: text('scope'),
-  id_token: text('id_token'),
-  session_state: text('session_state'),
-})
-
-export const accountsRelations = relations(accounts, ({ one }) => ({
-  user: one(users, {
-    fields: [accounts.userId],
-    references: [users.id],
-  }),
-}))
-
-// Sessions table
-export const sessions = pgTable('sessions', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  sessionToken: text('session_token').notNull().unique(),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expires: timestamp('expires').notNull(),
-})
-
-export const sessionsRelations = relations(sessions, ({ one }) => ({
-  user: one(users, {
-    fields: [sessions.userId],
-    references: [users.id],
-  }),
-}))
-
-// Verification tokens table
-export const verificationTokens = pgTable('verification_tokens', {
-  identifier: text('identifier').notNull(),
-  token: text('token').notNull().unique(),
-  expires: timestamp('expires').notNull(),
-})
-
-// Analytics Events table
 export const analyticsEvents = pgTable('analytics_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  type: text('type').notNull(), // 'pageview' | 'click'
+  type: text('type').notNull(),
   url: text('url').notNull(),
   referrer: text('referrer'),
   userAgent: text('user_agent'),
@@ -710,10 +694,9 @@ export const analyticsEvents = pgTable('analytics_events', {
   ipAddress: text('ip_address'),
   country: text('country'),
   city: text('city'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 })
 
-// Captured app crash events (SSR/render/runtime failures)
 export const crashEvents = pgTable('crash_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   fingerprint: text('fingerprint').notNull(),
@@ -735,7 +718,7 @@ export const crashEvents = pgTable('crash_events', {
   ipAddress: text('ip_address'),
   country: text('country'),
   city: text('city'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   fingerprintIdx: index('crash_events_fingerprint_idx').on(table.fingerprint),
   createdAtIdx: index('crash_events_created_at_idx').on(table.createdAt),
@@ -744,33 +727,215 @@ export const crashEvents = pgTable('crash_events', {
   sourceIdx: index('crash_events_source_idx').on(table.source),
 }))
 
-// Waitlist signups
 export const waitlistEntries = pgTable('waitlist_entries', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   email: text('email').notNull(),
   name: text('name'),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   emailUniqueIdx: uniqueIndex('waitlist_entries_email_unique_idx').on(table.email),
 }))
 
-// Contact form submissions
 export const contactMessages = pgTable('contact_messages', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   email: text('email').notNull(),
   message: text('message').notNull(),
-  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   createdAtIdx: index('contact_messages_created_at_idx').on(table.createdAt),
 }))
 
-// Type exports
+export const usersRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+  sessions: many(sessions),
+  marketActors: many(marketActors),
+}))
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}))
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}))
+
+export const fdaCalendarEventsRelations = relations(fdaCalendarEvents, ({ many, one }) => ({
+  predictionMarkets: many(predictionMarkets),
+  externalIds: many(fdaEventExternalIds),
+  sources: many(fdaEventSources),
+  analyses: many(fdaEventAnalyses),
+  context: one(fdaEventContexts, {
+    fields: [fdaCalendarEvents.id],
+    references: [fdaEventContexts.eventId],
+  }),
+}))
+
+export const fdaEventExternalIdsRelations = relations(fdaEventExternalIds, ({ one }) => ({
+  event: one(fdaCalendarEvents, {
+    fields: [fdaEventExternalIds.eventId],
+    references: [fdaCalendarEvents.id],
+  }),
+}))
+
+export const fdaEventSourcesRelations = relations(fdaEventSources, ({ one }) => ({
+  event: one(fdaCalendarEvents, {
+    fields: [fdaEventSources.eventId],
+    references: [fdaCalendarEvents.id],
+  }),
+}))
+
+export const fdaEventContextsRelations = relations(fdaEventContexts, ({ one }) => ({
+  event: one(fdaCalendarEvents, {
+    fields: [fdaEventContexts.eventId],
+    references: [fdaCalendarEvents.id],
+  }),
+}))
+
+export const fdaEventAnalysesRelations = relations(fdaEventAnalyses, ({ one }) => ({
+  event: one(fdaCalendarEvents, {
+    fields: [fdaEventAnalyses.eventId],
+    references: [fdaCalendarEvents.id],
+  }),
+}))
+
+export const marketActorsRelations = relations(marketActors, ({ one, many }) => ({
+  user: one(users, {
+    fields: [marketActors.userId],
+    references: [users.id],
+  }),
+  account: one(marketAccounts, {
+    fields: [marketActors.id],
+    references: [marketAccounts.actorId],
+  }),
+  positions: many(marketPositions),
+  actions: many(marketActions),
+  decisionSnapshots: many(modelDecisionSnapshots),
+  dailySnapshots: many(marketDailySnapshots),
+  runLogs: many(marketRunLogs),
+}))
+
+export const predictionMarketsRelations = relations(predictionMarkets, ({ one, many }) => ({
+  fdaEvent: one(fdaCalendarEvents, {
+    fields: [predictionMarkets.fdaEventId],
+    references: [fdaCalendarEvents.id],
+  }),
+  positions: many(marketPositions),
+  actions: many(marketActions),
+  decisionSnapshots: many(modelDecisionSnapshots),
+  priceSnapshots: many(marketPriceSnapshots),
+}))
+
+export const marketAccountsRelations = relations(marketAccounts, ({ one }) => ({
+  actor: one(marketActors, {
+    fields: [marketAccounts.actorId],
+    references: [marketActors.id],
+  }),
+}))
+
+export const marketPositionsRelations = relations(marketPositions, ({ one }) => ({
+  market: one(predictionMarkets, {
+    fields: [marketPositions.marketId],
+    references: [predictionMarkets.id],
+  }),
+  actor: one(marketActors, {
+    fields: [marketPositions.actorId],
+    references: [marketActors.id],
+  }),
+}))
+
+export const marketRunsRelations = relations(marketRuns, ({ many }) => ({
+  actions: many(marketActions),
+  logs: many(marketRunLogs),
+  decisionSnapshots: many(modelDecisionSnapshots),
+}))
+
+export const marketRunLogsRelations = relations(marketRunLogs, ({ one }) => ({
+  run: one(marketRuns, {
+    fields: [marketRunLogs.runId],
+    references: [marketRuns.id],
+  }),
+  actor: one(marketActors, {
+    fields: [marketRunLogs.actorId],
+    references: [marketActors.id],
+  }),
+}))
+
+export const marketActionsRelations = relations(marketActions, ({ one }) => ({
+  run: one(marketRuns, {
+    fields: [marketActions.runId],
+    references: [marketRuns.id],
+  }),
+  market: one(predictionMarkets, {
+    fields: [marketActions.marketId],
+    references: [predictionMarkets.id],
+  }),
+  fdaEvent: one(fdaCalendarEvents, {
+    fields: [marketActions.fdaEventId],
+    references: [fdaCalendarEvents.id],
+  }),
+  actor: one(marketActors, {
+    fields: [marketActions.actorId],
+    references: [marketActors.id],
+  }),
+}))
+
+export const modelDecisionSnapshotsRelations = relations(modelDecisionSnapshots, ({ one }) => ({
+  run: one(marketRuns, {
+    fields: [modelDecisionSnapshots.runId],
+    references: [marketRuns.id],
+  }),
+  market: one(predictionMarkets, {
+    fields: [modelDecisionSnapshots.marketId],
+    references: [predictionMarkets.id],
+  }),
+  fdaEvent: one(fdaCalendarEvents, {
+    fields: [modelDecisionSnapshots.fdaEventId],
+    references: [fdaCalendarEvents.id],
+  }),
+  actor: one(marketActors, {
+    fields: [modelDecisionSnapshots.actorId],
+    references: [marketActors.id],
+  }),
+  linkedMarketAction: one(marketActions, {
+    fields: [modelDecisionSnapshots.linkedMarketActionId],
+    references: [marketActions.id],
+  }),
+}))
+
+export const marketPriceSnapshotsRelations = relations(marketPriceSnapshots, ({ one }) => ({
+  market: one(predictionMarkets, {
+    fields: [marketPriceSnapshots.marketId],
+    references: [predictionMarkets.id],
+  }),
+}))
+
+export const marketDailySnapshotsRelations = relations(marketDailySnapshots, ({ one }) => ({
+  actor: one(marketActors, {
+    fields: [marketDailySnapshots.actorId],
+    references: [marketActors.id],
+  }),
+}))
+
+export type User = typeof users.$inferSelect
+export type FDAEventExternalId = typeof fdaEventExternalIds.$inferSelect
+export type NewFDAEventExternalId = typeof fdaEventExternalIds.$inferInsert
+export type FDAEventSource = typeof fdaEventSources.$inferSelect
+export type NewFDAEventSource = typeof fdaEventSources.$inferInsert
+export type FDAEventContext = typeof fdaEventContexts.$inferSelect
+export type NewFDAEventContext = typeof fdaEventContexts.$inferInsert
+export type FDAEventAnalysis = typeof fdaEventAnalyses.$inferSelect
+export type NewFDAEventAnalysis = typeof fdaEventAnalyses.$inferInsert
 export type FDACalendarEvent = typeof fdaCalendarEvents.$inferSelect
 export type NewFDACalendarEvent = typeof fdaCalendarEvents.$inferInsert
-export type FDAPrediction = typeof fdaPredictions.$inferSelect
-export type NewFDAPrediction = typeof fdaPredictions.$inferInsert
-export type User = typeof users.$inferSelect
+export type MarketActor = typeof marketActors.$inferSelect
+export type NewMarketActor = typeof marketActors.$inferInsert
 export type AnalyticsEvent = typeof analyticsEvents.$inferSelect
 export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert
 export type CrashEvent = typeof crashEvents.$inferSelect

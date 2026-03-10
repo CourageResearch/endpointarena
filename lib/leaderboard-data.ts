@@ -1,8 +1,10 @@
-import { desc, eq, inArray, isNotNull, or } from 'drizzle-orm'
-import { db, fdaCalendarEvents, marketAccounts, marketPositions, predictionMarkets, users } from '@/lib/db'
+import { desc, eq, isNotNull, or } from 'drizzle-orm'
+import { db, fdaCalendarEvents, users } from '@/lib/db'
 import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
 import { attachUnifiedPredictionsToEvents, getUnifiedPredictionHistoriesByEventIds, type LeaderboardPredictionMode, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
 import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-name'
+import { enrichFdaEvents } from '@/lib/fda-event-metadata'
+import { loadOpenMarketActorState } from '@/lib/market-read-model'
 
 export interface ModelLeaderboardEntry {
   id: ModelId
@@ -29,10 +31,6 @@ export interface HumanLeaderboardEntry {
   pnl: number
 }
 
-function getHumanActorId(userId: string): string {
-  return `human:${userId}`
-}
-
 interface ModelStats {
   correct: number
   wrong: number
@@ -44,12 +42,9 @@ interface ModelStats {
 }
 
 export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
-  const [allEvents, accounts, openMarkets, recentDecisionEvents, verifiedUsers] = await Promise.all([
+  const [rawAllEvents, openMarketState, rawRecentDecisionEvents, verifiedUsers] = await Promise.all([
     db.query.fdaCalendarEvents.findMany(),
-    db.query.marketAccounts.findMany(),
-    db.query.predictionMarkets.findMany({
-      where: eq(predictionMarkets.status, 'OPEN'),
-    }),
+    loadOpenMarketActorState(),
     db.query.fdaCalendarEvents.findMany({
       where: or(
         eq(fdaCalendarEvents.outcome, 'Approved'),
@@ -64,40 +59,21 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
         id: true,
         name: true,
         email: true,
-        pointsBalance: true,
       },
     }),
   ])
 
+  const [allEvents, recentDecisionEvents] = await Promise.all([
+    enrichFdaEvents(rawAllEvents),
+    enrichFdaEvents(rawRecentDecisionEvents),
+  ])
   const recentFdaDecisions = await attachUnifiedPredictionsToEvents(recentDecisionEvents)
-
-  const openMarketIds = openMarkets.map((market) => market.id)
-  const positions = openMarketIds.length > 0
-    ? await db.query.marketPositions.findMany({
-        where: inArray(marketPositions.marketId, openMarketIds),
-      })
-    : []
 
   const eventOutcomeById = new Map(allEvents.map((event) => [event.id, event.outcome]))
   const historyByEventId = await getUnifiedPredictionHistoriesByEventIds(
     allEvents.map((event) => event.id),
     eventOutcomeById,
   )
-
-  const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
-  const accountByModelId = new Map(accounts.map((account) => [account.modelId, account]))
-  const positionsValueByModelId = new Map<string, number>()
-
-  for (const position of positions) {
-    const market = openMarketById.get(position.marketId)
-    if (!market) continue
-
-    const markedValue = (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
-    positionsValueByModelId.set(
-      position.modelId,
-      (positionsValueByModelId.get(position.modelId) ?? 0) + markedValue
-    )
-  }
 
   const modelStats = new Map<ModelId, ModelStats>()
   for (const id of MODEL_IDS) {
@@ -145,7 +121,9 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
 
   const leaderboard: ModelLeaderboardEntry[] = Array.from(modelStats.entries())
     .map(([id, stats]) => {
+      const account = openMarketState.accountMaps.byModelKey.get(id)
       const decided = stats.correct + stats.wrong
+      const positionsValue = account ? (openMarketState.positionsValueByActorId.get(account.actorId) ?? 0) : 0
       return {
         id,
         correct: stats.correct,
@@ -157,19 +135,8 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
         avgConfidence: stats.total > 0 ? stats.confidenceSum / stats.total : 0,
         avgConfidenceCorrect: stats.correct > 0 ? stats.confidenceCorrectSum / stats.correct : 0,
         avgConfidenceWrong: stats.wrong > 0 ? stats.confidenceWrongSum / stats.wrong : 0,
-        totalEquity: (() => {
-          const account = accountByModelId.get(id)
-          if (!account) return null
-          const positionsValue = positionsValueByModelId.get(id) ?? 0
-          return account.cashBalance + positionsValue
-        })(),
-        pnl: (() => {
-          const account = accountByModelId.get(id)
-          if (!account) return null
-          const positionsValue = positionsValueByModelId.get(id) ?? 0
-          const totalEquity = account.cashBalance + positionsValue
-          return totalEquity - account.startingCash
-        })(),
+        totalEquity: account ? account.cashBalance + positionsValue : null,
+        pnl: account ? (account.cashBalance + positionsValue - account.startingCash) : null,
       }
     })
     .sort((a, b) => b.accuracy - a.accuracy || b.correct - a.correct)
@@ -184,12 +151,10 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
 
   const humanLeaderboard: HumanLeaderboardEntry[] = verifiedUsers
     .map((user) => {
-      const actorId = getHumanActorId(user.id)
-      const account = accountByModelId.get(actorId)
-      const fallbackBalance = user.pointsBalance
-      const cashBalance = account?.cashBalance ?? fallbackBalance
-      const positionsValue = positionsValueByModelId.get(actorId) ?? 0
-      const startingCash = account?.startingCash ?? fallbackBalance
+      const account = openMarketState.accountMaps.byUserId.get(user.id)
+      const cashBalance = account?.cashBalance ?? 0
+      const positionsValue = account ? (openMarketState.positionsValueByActorId.get(account.actorId) ?? 0) : 0
+      const startingCash = account?.startingCash ?? 0
       const totalEquity = cashBalance + positionsValue
       const pnl = totalEquity - startingCash
       const normalizedName = normalizeDisplayName(user.name)

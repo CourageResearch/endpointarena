@@ -1,7 +1,9 @@
-import { db, fdaCalendarEvents, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
-import { eq, or, desc, asc, inArray } from 'drizzle-orm'
+import { db, fdaCalendarEvents } from '@/lib/db'
+import { eq, or, desc, asc } from 'drizzle-orm'
 import { MODEL_IDS, findPredictionByModelId, isModelId, type ModelId } from '@/lib/constants'
 import { attachUnifiedPredictionsToEvents, getUnifiedPredictionHistoriesByEventIds, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
+import { enrichFdaEvents } from '@/lib/fda-event-metadata'
+import { loadOpenMarketActorState } from '@/lib/market-read-model'
 
 function describeDataError(error: unknown): string {
   if (error instanceof AggregateError) {
@@ -31,7 +33,7 @@ function describeDataError(error: unknown): string {
 
 export async function getHomeData() {
   try {
-    const [upcomingEvents, recentDecisionEvents, allFdaEvents, accounts, openMarkets] = await Promise.all([
+    const [rawUpcomingEvents, rawRecentDecisionEvents, rawAllFdaEvents, openMarketState] = await Promise.all([
       db.query.fdaCalendarEvents.findMany({
         where: eq(fdaCalendarEvents.outcome, 'Pending'),
         orderBy: [asc(fdaCalendarEvents.pdufaDate)],
@@ -46,10 +48,13 @@ export async function getHomeData() {
         limit: 10,
       }),
       db.query.fdaCalendarEvents.findMany(),
-      db.query.marketAccounts.findMany(),
-      db.query.predictionMarkets.findMany({
-        where: eq(predictionMarkets.status, 'OPEN'),
-      }),
+      loadOpenMarketActorState(),
+    ])
+
+    const [upcomingEvents, recentDecisionEvents, allFdaEvents] = await Promise.all([
+      enrichFdaEvents(rawUpcomingEvents),
+      enrichFdaEvents(rawRecentDecisionEvents),
+      enrichFdaEvents(rawAllFdaEvents),
     ])
 
     const [upcomingFdaEvents, recentFdaDecisions] = await Promise.all([
@@ -62,33 +67,6 @@ export async function getHomeData() {
       allFdaEvents.map((event) => event.id),
       eventOutcomeById,
     )
-
-    const openMarketIds = openMarkets.map((market) => market.id)
-    const positions = openMarketIds.length > 0
-      ? await db.query.marketPositions.findMany({
-          where: inArray(marketPositions.marketId, openMarketIds),
-        })
-      : []
-
-    const openMarketById = new Map(openMarkets.map((market) => [market.id, market]))
-    const positionsValueByModelId = new Map<ModelId, number>()
-
-    for (const position of positions) {
-      const market = openMarketById.get(position.marketId)
-      if (!market || !isModelId(position.modelId)) continue
-
-      const markedValue = (position.yesShares * market.priceYes) + (position.noShares * (1 - market.priceYes))
-      positionsValueByModelId.set(
-        position.modelId,
-        (positionsValueByModelId.get(position.modelId) ?? 0) + markedValue
-      )
-    }
-
-    const accountByModelId = new Map<ModelId, { cashBalance: number }>()
-    for (const account of accounts) {
-      if (!isModelId(account.modelId)) continue
-      accountByModelId.set(account.modelId, { cashBalance: account.cashBalance })
-    }
 
     const modelStats = new Map<ModelId, { correct: number; total: number; pending: number; confidenceSum: number }>()
     for (const id of MODEL_IDS) {
@@ -125,8 +103,8 @@ export async function getHomeData() {
     const leaderboard = Array.from(modelStats.entries())
       .map(([id, stats]) => {
         const totalPreds = stats.total + stats.pending
-        const account = accountByModelId.get(id)
-        const positionsValue = positionsValueByModelId.get(id) ?? 0
+        const account = openMarketState.accountMaps.byModelKey.get(id)
+        const positionsValue = account ? (openMarketState.positionsValueByActorId.get(account.actorId) ?? 0) : 0
         return {
           id,
           correct: stats.correct,

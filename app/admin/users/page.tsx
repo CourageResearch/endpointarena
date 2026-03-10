@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { accounts, db, marketAccounts, marketActions, users } from '@/lib/db'
+import { accounts, db, marketAccounts, marketActions, marketActors, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
@@ -71,10 +71,6 @@ function compareText(a: string, b: string): number {
   return a.localeCompare(b, 'en-US', { sensitivity: 'base' })
 }
 
-function getHumanActorId(userId: string): string {
-  return `human:${userId}`
-}
-
 function formatMoney(value: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -133,39 +129,42 @@ async function getUsersData() {
 }
 
 async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
-  const actorIds = userRows.map((user) => getHumanActorId(user.id))
-  if (actorIds.length === 0) {
+  const userIds = userRows.map((user) => user.id)
+  if (userIds.length === 0) {
     return {
-      cashBalanceByActorId: new Map<string, number>(),
-      tradeCountByActorId: new Map<string, number>(),
+      cashBalanceByUserId: new Map<string, number>(),
+      tradeCountByUserId: new Map<string, number>(),
     }
   }
 
   const [accountRows, tradeRows] = await Promise.all([
     db
       .select({
-        modelId: marketAccounts.modelId,
+        userId: marketActors.userId,
         cashBalance: marketAccounts.cashBalance,
       })
       .from(marketAccounts)
-      .where(inArray(marketAccounts.modelId, actorIds)),
+      .innerJoin(marketActors, eq(marketActors.id, marketAccounts.actorId))
+      .where(inArray(marketActors.userId, userIds)),
     db
       .select({
-        modelId: marketActions.modelId,
+        userId: marketActors.userId,
         tradeCount: sql<number>`count(*)`,
       })
       .from(marketActions)
+      .innerJoin(marketActors, eq(marketActors.id, marketActions.actorId))
       .where(and(
-        inArray(marketActions.modelId, actorIds),
+        inArray(marketActors.userId, userIds),
+        eq(marketActions.actionSource, 'human'),
         eq(marketActions.status, 'ok'),
         inArray(marketActions.action, [...TRADE_ACTIONS]),
       ))
-      .groupBy(marketActions.modelId),
+      .groupBy(marketActors.userId),
   ])
 
   return {
-    cashBalanceByActorId: new Map(accountRows.map((row) => [row.modelId, row.cashBalance])),
-    tradeCountByActorId: new Map(tradeRows.map((row) => [row.modelId, Number(row.tradeCount)])),
+    cashBalanceByUserId: new Map(accountRows.flatMap((row) => row.userId ? [[row.userId, row.cashBalance] as const] : [])),
+    tradeCountByUserId: new Map(tradeRows.flatMap((row) => row.userId ? [[row.userId, Number(row.tradeCount)] as const] : [])),
   }
 }
 
@@ -244,7 +243,7 @@ export default async function AdminUsersPage({
   const sortDirection = parseSortDirection(firstSearchParam(resolvedSearchParams.dir), sortKey)
   const { users: userRows, total } = await getUsersData()
   await backfillMissingXUsernames(userRows)
-  const { cashBalanceByActorId, tradeCountByActorId } = await getUserTradingStats(userRows)
+  const { cashBalanceByUserId, tradeCountByUserId } = await getUserTradingStats(userRows)
   const currentAdminEmail = session.user.email.trim().toLowerCase()
   const protectedAdminEmail = ADMIN_EMAIL.toLowerCase()
 
@@ -253,9 +252,8 @@ export default async function AdminUsersPage({
     const country = normalizeUnknownToDash(formatStoredCountry(user.signupLocation))
     const region = normalizeUnknownToDash(formatStoredRegion(user.signupState))
     const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : '—')
-    const actorId = getHumanActorId(user.id)
-    const money = cashBalanceByActorId.get(actorId) ?? user.pointsBalance ?? 0
-    const trades = tradeCountByActorId.get(actorId) ?? 0
+    const money = cashBalanceByUserId.get(user.id) ?? 0
+    const trades = tradeCountByUserId.get(user.id) ?? 0
     const emailLower = user.email?.trim().toLowerCase() ?? null
     const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
     const createdAtMs = user.createdAt ? user.createdAt.getTime() : 0

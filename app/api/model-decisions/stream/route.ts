@@ -8,6 +8,8 @@ import { NotFoundError, ValidationError } from '@/lib/errors'
 import { db, fdaCalendarEvents, marketAccounts, marketPositions, modelDecisionSnapshots, predictionMarkets } from '@/lib/db'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { generateAndStoreModelDecisionSnapshot } from '@/lib/model-decision-snapshots'
+import { getModelActorId } from '@/lib/market-actors'
+import { enrichFdaEvents } from '@/lib/fda-event-metadata'
 
 const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
 
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
     if (!event) {
       throw new NotFoundError('FDA event not found')
     }
+    const [enrichedEvent] = await enrichFdaEvents([event])
 
     if (event.outcome !== 'Pending') {
       throw new ValidationError(`Forward-only policy: cannot create a new snapshot for a resolved event (${event.outcome}).`)
@@ -57,14 +60,15 @@ export async function POST(request: NextRequest) {
       throw new ValidationError('An open market is required before running a combined decision snapshot for this event.')
     }
 
+    const actorId = await getModelActorId(modelId)
     const [account, position, runtimeConfig, openMarkets, marketEvents] = await Promise.all([
       db.query.marketAccounts.findFirst({
-        where: eq(marketAccounts.modelId, modelId),
+        where: eq(marketAccounts.actorId, actorId),
       }),
       db.query.marketPositions.findFirst({
         where: and(
           eq(marketPositions.marketId, market.id),
-          eq(marketPositions.modelId, modelId),
+          eq(marketPositions.actorId, actorId),
         ),
       }),
       getMarketRuntimeConfig(),
@@ -107,8 +111,10 @@ export async function POST(request: NextRequest) {
           const { snapshot, prediction, decision } = await generateAndStoreModelDecisionSnapshot({
             runSource: 'manual',
             modelId,
+            actorId,
             runDate: new Date(),
             event,
+            nctId: enrichedEvent?.nctId ?? null,
             market,
             account,
             position,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   MODEL_IDS,
   MODEL_INFO,
@@ -14,6 +14,7 @@ import {
 } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import type { Prediction, PredictionHistoryEntry } from '@/lib/types'
+import { MetadataInlineInput } from '@/components/MetadataInlineInput'
 
 interface FDAEvent {
   id: string
@@ -87,6 +88,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({})
   const [search, setSearch] = useState('')
   const [globalError, setGlobalError] = useState<string | null>(null)
+  const controllersRef = useRef<Record<string, AbortController>>({})
 
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -158,9 +160,38 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
     }))
   }
 
+  const setPausedProgress = (key: string, message = 'Paused') => {
+    setLoading((prev) => ({ ...prev, [key]: false }))
+    setProgress((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], status: message },
+    }))
+  }
+
+  const pausePrediction = (key: string, message = 'Paused') => {
+    const controller = controllersRef.current[key]
+    if (!controller) return
+    setPausedProgress(key, message)
+    controller.abort()
+    delete controllersRef.current[key]
+  }
+
+  const pauseEventPredictions = (eventId: string) => {
+    const prefix = `${eventId}-`
+    Object.keys(controllersRef.current)
+      .filter((key) => key.startsWith(prefix))
+      .forEach((key) => pausePrediction(key, 'Paused by admin'))
+  }
+
   const runStreamingPrediction = async (eventId: string, modelId: ModelId) => {
     setGlobalError(null)
     const key = getKey(eventId, modelId)
+    const existingController = controllersRef.current[key]
+    if (existingController) {
+      existingController.abort()
+    }
+    const controller = new AbortController()
+    controllersRef.current[key] = controller
     setLoading((prev) => ({ ...prev, [key]: true }))
     setProgress((prev) => ({ ...prev, [key]: { status: 'Starting...' } }))
 
@@ -177,6 +208,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fdaEventId: eventId, modelId }),
+        signal: controller.signal,
       })
 
       if (!response.ok) {
@@ -226,11 +258,18 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
         }
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setPausedProgress(key)
+        return
+      }
       const message = error instanceof Error ? error.message : 'Failed to start model decision'
       setGlobalError(message)
       setProgress((prev) => ({ ...prev, [key]: { status: 'Failed', error: message } }))
     } finally {
       window.clearInterval(updateElapsed)
+      if (controllersRef.current[key] === controller) {
+        delete controllersRef.current[key]
+      }
       setLoading((prev) => ({ ...prev, [key]: false }))
     }
   }
@@ -349,13 +388,13 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                     {event.companyName} · {event.therapeuticArea || 'No area'}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-2">
-                    <InlineInput
+                    <MetadataInlineInput
                       label="Source"
                       initialValue={event.source || ''}
                       placeholder="Source links or notes..."
                       onSave={(value) => updateEventField(event.id, 'source', value)}
                     />
-                    <InlineInput
+                    <MetadataInlineInput
                       label="NCT"
                       initialValue={event.nctId || ''}
                       placeholder="NCT ID..."
@@ -396,6 +435,15 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                   >
                     {isAnyLoading ? 'Running...' : hasSnapshots ? 'Run All Again' : 'Run All'}
                   </button>
+                  {isAnyLoading ? (
+                    <button
+                      type="button"
+                      onClick={() => pauseEventPredictions(event.id)}
+                      className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-1.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                    >
+                      Pause
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -417,15 +465,14 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                           <div className="text-[11px] text-[#8a8075]">{MODEL_INFO[modelId].provider}</div>
                         </div>
                         <button
-                          onClick={() => runStreamingPrediction(event.id, modelId)}
-                          disabled={loading[key]}
+                          onClick={() => (loading[key] ? pausePrediction(key) : runStreamingPrediction(event.id, modelId))}
                           className={`shrink-0 rounded-none px-2.5 py-1 text-xs font-medium transition-colors ${
                             loading[key]
-                              ? 'cursor-not-allowed bg-[#e8ddd0] text-[#b5aa9e]'
+                              ? 'border border-[#d9cdbf] bg-[#fdfbf8] text-[#1a1a1a] hover:bg-[#f5eee5]'
                               : 'border border-[#d9cdbf] bg-[#fdfbf8] text-[#1a1a1a] hover:bg-[#f5eee5]'
                           }`}
                         >
-                          {loading[key] ? 'Running' : prediction ? 'Run Again' : 'Run'}
+                          {loading[key] ? 'Pause' : prediction ? 'Run Again' : 'Run'}
                         </button>
                       </div>
 
@@ -511,42 +558,5 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
         )
       })}
     </div>
-  )
-}
-
-function InlineInput({
-  label,
-  initialValue,
-  placeholder,
-  onSave,
-}: {
-  label: string
-  initialValue: string
-  placeholder: string
-  onSave: (value: string) => Promise<void>
-}) {
-  const [value, setValue] = useState(initialValue)
-  const [saving, setSaving] = useState(false)
-
-  return (
-    <label className="flex min-w-[180px] items-center gap-2 rounded-none border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-1 text-xs text-[#8a8075]">
-      <span className="shrink-0 uppercase tracking-[0.12em]">{label}</span>
-      <input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onBlur={async () => {
-          if (value === initialValue) return
-          setSaving(true)
-          try {
-            await onSave(value)
-          } finally {
-            setSaving(false)
-          }
-        }}
-        placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-[#1a1a1a] outline-none placeholder:text-[#b5aa9e]"
-      />
-      {saving ? <span className="text-[10px] uppercase tracking-[0.12em] text-[#b5aa9e]">Saving</span> : null}
-    </label>
   )
 }

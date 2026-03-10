@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import { eq } from 'drizzle-orm'
 import { CNPV_EVENT_SEEDS, type CNPVEventSeed } from '../lib/cnpv-data'
 
-dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config()
 
 const args = new Set(process.argv.slice(2))
@@ -84,12 +84,24 @@ type PendingMarketAction = {
 }
 
 async function main() {
-  const [{ db, fdaCalendarEvents, predictionMarkets }, { openMarketForEvent }] = await Promise.all([
+  const [
+    { db, fdaCalendarEvents, predictionMarkets },
+    { openMarketForEvent },
+    {
+      enrichFdaEvents,
+      replaceEventNewsLinks,
+      upsertEventContext,
+      upsertEventExternalId,
+      upsertEventPrimarySource,
+    },
+  ] = await Promise.all([
     import('../lib/db'),
     import('../lib/markets/engine'),
+    import('../lib/fda-event-metadata'),
   ])
 
-  const existingEvents = await db.query.fdaCalendarEvents.findMany()
+  const rawExistingEvents = await db.query.fdaCalendarEvents.findMany()
+  const existingEvents = await enrichFdaEvents(rawExistingEvents)
   const existingMarkets = await db.query.predictionMarkets.findMany()
 
   const eventByExternalKey = new Map(
@@ -114,9 +126,8 @@ async function main() {
     const { pdufaDate, dateKind, cnpvAwardDate, outcomeDate } = buildSeedDates(seed)
     const identity = buildIdentity(seed.companyName, seed.drugName)
     const existing = eventByExternalKey.get(seed.externalKey) || eventByIdentity.get(identity) || null
-    const newsLinks = seed.newsLinks?.join('\n') ?? null
-    const nextValues = {
-      externalKey: seed.externalKey,
+    const newsLinks = seed.newsLinks ?? []
+    const nextCoreValues = {
       companyName: seed.companyName,
       symbols: seed.symbols,
       drugName: seed.drugName,
@@ -129,13 +140,29 @@ async function main() {
       cnpvAwardDate,
       drugStatus: buildDrugStatus(seed, dateKind),
       therapeuticArea: seed.therapeuticArea,
-      otherApprovals: seed.otherApprovals ?? existing?.otherApprovals ?? null,
-      newsLinks,
-      source: seed.source,
-      nctId: seed.nctId ?? existing?.nctId ?? null,
       updatedAt: new Date(),
       scrapedAt: new Date(),
     } as const
+
+    const changed =
+      !existing ||
+      existing.companyName !== nextCoreValues.companyName ||
+      existing.symbols !== nextCoreValues.symbols ||
+      existing.drugName !== nextCoreValues.drugName ||
+      existing.applicationType !== nextCoreValues.applicationType ||
+      existing.pdufaDate.getTime() !== nextCoreValues.pdufaDate.getTime() ||
+      existing.eventDescription !== nextCoreValues.eventDescription ||
+      existing.outcome !== nextCoreValues.outcome ||
+      (existing.outcomeDate?.getTime() ?? null) !== (nextCoreValues.outcomeDate?.getTime() ?? null) ||
+      existing.dateKind !== nextCoreValues.dateKind ||
+      (existing.cnpvAwardDate?.getTime() ?? null) !== (nextCoreValues.cnpvAwardDate?.getTime() ?? null) ||
+      existing.drugStatus !== nextCoreValues.drugStatus ||
+      existing.therapeuticArea !== nextCoreValues.therapeuticArea ||
+      existing.externalKey !== seed.externalKey ||
+      existing.otherApprovals !== (seed.otherApprovals ?? null) ||
+      existing.source !== seed.source ||
+      (existing.nctId ?? null) !== (seed.nctId ?? null) ||
+      existing.newsLinks.join('\n') !== newsLinks.join('\n')
 
     if (!existing) {
       counters.inserts += 1
@@ -149,13 +176,25 @@ async function main() {
       }
 
       if (shouldApply) {
-        const [inserted] = await db.insert(fdaCalendarEvents)
+        const [insertedCore] = await db.insert(fdaCalendarEvents)
           .values({
-            ...nextValues,
+            ...nextCoreValues,
             createdAt: new Date(),
           })
           .returning()
 
+        await Promise.all([
+          upsertEventExternalId(insertedCore.id, 'external_key', seed.externalKey),
+          upsertEventExternalId(insertedCore.id, 'nct', seed.nctId ?? null),
+          upsertEventPrimarySource(insertedCore.id, seed.source),
+          replaceEventNewsLinks(insertedCore.id, newsLinks),
+          upsertEventContext({
+            eventId: insertedCore.id,
+            otherApprovals: seed.otherApprovals ?? null,
+          }),
+        ])
+
+        const [inserted] = await enrichFdaEvents([insertedCore])
         eventByExternalKey.set(seed.externalKey, inserted)
         eventByIdentity.set(identity, inserted)
 
@@ -170,25 +209,6 @@ async function main() {
       continue
     }
 
-    const changed =
-      existing.externalKey !== nextValues.externalKey ||
-      existing.companyName !== nextValues.companyName ||
-      existing.symbols !== nextValues.symbols ||
-      existing.drugName !== nextValues.drugName ||
-      existing.applicationType !== nextValues.applicationType ||
-      existing.pdufaDate.getTime() !== nextValues.pdufaDate.getTime() ||
-      existing.eventDescription !== nextValues.eventDescription ||
-      existing.outcome !== nextValues.outcome ||
-      (existing.outcomeDate?.getTime() ?? null) !== (nextValues.outcomeDate?.getTime() ?? null) ||
-      existing.dateKind !== nextValues.dateKind ||
-      (existing.cnpvAwardDate?.getTime() ?? null) !== (nextValues.cnpvAwardDate?.getTime() ?? null) ||
-      existing.drugStatus !== nextValues.drugStatus ||
-      existing.therapeuticArea !== nextValues.therapeuticArea ||
-      existing.otherApprovals !== nextValues.otherApprovals ||
-      existing.newsLinks !== nextValues.newsLinks ||
-      existing.source !== nextValues.source ||
-      (existing.nctId ?? null) !== (nextValues.nctId ?? null)
-
     if (!changed) {
       counters.unchanged += 1
       console.log(`SKIP   ${seed.drugName} (${seed.companyName})`)
@@ -197,11 +217,23 @@ async function main() {
       console.log(`UPDATE ${seed.drugName} (${seed.companyName}) [${dateKind}]`)
 
       if (shouldApply) {
-        const [updated] = await db.update(fdaCalendarEvents)
-          .set(nextValues)
+        const [updatedCore] = await db.update(fdaCalendarEvents)
+          .set(nextCoreValues)
           .where(eq(fdaCalendarEvents.id, existing.id))
           .returning()
 
+        await Promise.all([
+          upsertEventExternalId(updatedCore.id, 'external_key', seed.externalKey),
+          upsertEventExternalId(updatedCore.id, 'nct', seed.nctId ?? null),
+          upsertEventPrimarySource(updatedCore.id, seed.source),
+          replaceEventNewsLinks(updatedCore.id, newsLinks),
+          upsertEventContext({
+            eventId: updatedCore.id,
+            otherApprovals: seed.otherApprovals ?? null,
+          }),
+        ])
+
+        const [updated] = await enrichFdaEvents([updatedCore])
         eventByExternalKey.set(seed.externalKey, updated)
         eventByIdentity.set(identity, updated)
       }

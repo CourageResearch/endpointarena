@@ -19,6 +19,7 @@ import {
   getMarketSubtitle,
   getPriceMoveFromHistory,
   useMarketOverview,
+  type OverviewResponse,
   type OpenMarketRow,
   type RecentMarketActionRow,
 } from '@/components/markets/marketOverviewShared'
@@ -188,6 +189,18 @@ function formatDateTimeLocalCompact(value: string | null | undefined): string {
   return `${datePart}, ${timePart}`
 }
 
+function formatDateUtcCompact(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    year: '2-digit',
+    month: 'numeric',
+    day: 'numeric',
+  })
+}
+
 function getActionBadge(action: RecentMarketActionRow):
   | { kind: 'trade'; verb: 'buy' | 'sell'; outcome: 'Yes' | 'No'; outcomeTone: 'approve' | 'reject' }
   | { kind: 'status'; label: 'Hold' | 'Error' | 'Skipped'; tone: 'neutral' | 'warning' | 'muted' } {
@@ -312,7 +325,7 @@ function CommentCard({
       </span>
     )
   return (
-    <article data-reasoning-card="true" className="w-full rounded-none p-[0.5px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+    <article data-reasoning-card="true" className="w-full rounded-none p-px" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
       <div className="rounded-none bg-white/95 p-3 sm:p-3.5">
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-2">
@@ -401,18 +414,22 @@ function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentM
 
 type MarketDashboardConcept5Props = {
   initialMarketId?: string | null
+  initialData?: OverviewResponse | null
   showMarketList?: boolean
   detailLayout?: 'default' | 'reason-under-graph' | 'stacked'
+  viewMode?: 'full' | 'decision-snapshots'
 }
 
 export function MarketDashboardConcept5({
   initialMarketId = null,
+  initialData = null,
   showMarketList = true,
   detailLayout = 'default',
+  viewMode = 'full',
 }: MarketDashboardConcept5Props = {}) {
   const pathname = usePathname()
   const { status: sessionStatus } = useSession()
-  const { data, error, loading, reload } = useMarketOverview()
+  const { data, error, loading, reload } = useMarketOverview(initialData)
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialMarketId)
   const [marketSearch, setMarketSearch] = useState('')
   const [commentModelFilter, setCommentModelFilter] = useState<CommentModelFilter>('all')
@@ -676,7 +693,7 @@ export function MarketDashboardConcept5({
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
   const isTradeVerified = Boolean(verificationStatus?.verified)
-  const showTradeSidebar = useStackedLayout && sessionStatus === 'authenticated'
+  const showTradeSidebar = useStackedLayout
   const pdufaDateText = formatDateUtc(selectedMarket.event?.pdufaDate)
   const pdufaCountdownText = pdufaDays == null
     ? 'No date'
@@ -690,7 +707,19 @@ export function MarketDashboardConcept5({
     : null
   const drugDescriptionText = selectedMarket.event?.eventDescription?.trim() || '-'
   const companyNameText = selectedMarket.event?.companyName || selectedEntry.subtitle
+  const placeholderNctId = `NCT${selectedMarket.marketId.replace(/\D/g, '').slice(0, 8).padStart(8, '0')}`
+  const activityFilterModelIds = useMemo(
+    () =>
+      Array.from(MODEL_IDS).sort((left, right) => {
+        const leftModel = MODEL_INFO[left]
+        const rightModel = MODEL_INFO[right]
+        return leftModel.fullName.localeCompare(rightModel.fullName)
+      }),
+    [],
+  )
   const selectedTradeSide = toHumanTradeSide(tradeDirection, tradeOutcome)
+  const marketDetailHref = `/markets/${encodeURIComponent(selectedMarket.marketId)}`
+  const decisionSnapshotsHref = `${marketDetailHref}/decision-snapshots`
   const yesPriceCents = Math.round(selectedMarket.priceYes * 100)
   const noPriceCents = Math.round((1 - selectedMarket.priceYes) * 100)
   const selectedOutcomePrice = tradeOutcome === 'yes' ? selectedMarket.priceYes : (1 - selectedMarket.priceYes)
@@ -883,7 +912,7 @@ export function MarketDashboardConcept5({
       </div>
 
       <div className="space-y-2">
-        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-6">
 
           <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
             <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
@@ -896,9 +925,9 @@ export function MarketDashboardConcept5({
 
           <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
             <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Decision Date</dt>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Date</dt>
               <dd className={cn('mt-2 tabular-nums', DETAILS_TOP_VALUE_CLASS)}>
-                {pdufaDateText}
+                {formatDateUtcCompact(selectedMarket.event?.pdufaDate)}
               </dd>
             </div>
           </div>
@@ -954,6 +983,22 @@ export function MarketDashboardConcept5({
             </div>
           </div>
 
+          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
+            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>NCT</dt>
+              <dd className="mt-2 space-y-1">
+                <a
+                  href={`https://clinicaltrials.gov/study/${encodeURIComponent(placeholderNctId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[13px] leading-snug text-[#7c7267] underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
+                >
+                  {placeholderNctId}
+                </a>
+              </dd>
+            </div>
+          </div>
+
         </dl>
 
         <dl className="grid grid-cols-1 gap-2">
@@ -978,6 +1023,19 @@ export function MarketDashboardConcept5({
           <HeaderDots />
         </div>
       </div>
+
+      {sessionStatus === 'unauthenticated' ? (
+        <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
+          <p className="font-medium text-[#1a1a1a]">Create an account to trade.</p>
+          <p className="mt-1">Create your account to place paper trades and track your points.</p>
+          <Link
+            href={`/signup?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
+            className="mt-2 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
+          >
+            Create account
+          </Link>
+        </div>
+      ) : null}
 
       {sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified ? (
         <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
@@ -1156,7 +1214,7 @@ export function MarketDashboardConcept5({
           No decision snapshots recorded for this market yet.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
           {decisionRows.map(({ state, model, latestDecision, history, callLabel, callToneClass }) => (
             <div key={`${selectedMarket.marketId}-decision-${state.modelId}`} className="mx-1 rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
               <div className="h-full rounded-md bg-white/95 p-4">
@@ -1173,6 +1231,7 @@ export function MarketDashboardConcept5({
                     <div className={cn('mt-2 text-sm font-medium', callToneClass)}>
                       {callLabel}
                       {latestDecision?.forecast.approvalProbability != null ? ` · p=${Math.round(latestDecision.forecast.approvalProbability * 100)}%` : ''}
+                      {latestDecision?.forecast.confidence != null ? ` · conf=${Math.round(latestDecision.forecast.confidence)}%` : ''}
                     </div>
                   </div>
                   <div className="shrink-0 text-right text-[11px] text-[#8a8075]">
@@ -1183,27 +1242,16 @@ export function MarketDashboardConcept5({
 
                 <div className="mt-3 space-y-2 text-sm text-[#7c7267]">
                   <div>
-                    <span className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Latest Action</span>
-                    <div className="mt-1">
-                      {latestDecision?.action
-                        ? `${latestDecision.action.type} ${formatCompactMoney(latestDecision.action.amountUsd)}`
-                        : 'No proposed action'}
-                    </div>
-                    <div className="mt-1 text-xs text-[#8a8075]">
-                      {clipText(latestDecision?.action?.explanation, 160)}
-                    </div>
-                  </div>
-                  <div>
                     <span className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Latest Thesis</span>
-                    <div className="mt-1 text-xs leading-relaxed text-[#8a8075]">
-                      {clipText(latestDecision?.forecast.reasoning, 220)}
+                    <div className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#8a8075]">
+                      {latestDecision?.forecast.reasoning?.trim() || 'No thesis provided'}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 border-t border-[#e8ddd0] pt-3">
                   <div className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">History</div>
-                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
+                  <div className="reasoning-scrollbox mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
                     {history.length > 0 ? history.map((snapshot) => {
                       const snapshotCallClass =
                         snapshot.forecast.binaryCall === 'approved'
@@ -1217,6 +1265,7 @@ export function MarketDashboardConcept5({
                             <span className={cn('font-medium', snapshotCallClass)}>
                               {snapshot.forecast.binaryCall === 'approved' ? 'Approve' : 'Reject'}
                               {` · p=${Math.round(snapshot.forecast.approvalProbability * 100)}%`}
+                              {snapshot.forecast.confidence != null ? ` · conf=${Math.round(snapshot.forecast.confidence)}%` : ''}
                             </span>
                             <span className="text-[#8a8075]">{formatDateTimeLocalCompact(snapshot.createdAt)}</span>
                           </div>
@@ -1242,7 +1291,7 @@ export function MarketDashboardConcept5({
     </section>
   )
 
-	  const renderReasoningPanel = ({
+  const renderReasoningPanel = ({
 	    className,
 	    compactHeight = false,
 	  }: {
@@ -1269,29 +1318,25 @@ export function MarketDashboardConcept5({
 
         <div className="mt-3 flex items-start gap-3">
           <div className="min-w-0 flex flex-1 flex-col gap-1.5">
-            <div className="min-w-0 flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex flex-wrap items-center gap-0.5">
               <button
-              type="button"
-              onClick={() => startTransition(() => setCommentModelFilter('all'))}
-              aria-pressed={allModelsSelected}
-              aria-label="All Models"
-              title="All Models"
-              className={cn(
-                'inline-flex h-7 w-7 items-center justify-center border-b transition',
-                allModelsSelected
-                  ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                  : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
-              )}
+                type="button"
+                onClick={() => startTransition(() => setCommentModelFilter('all'))}
+                aria-pressed={allModelsSelected}
+                aria-label="All Models"
+                title="All Models"
+                style={{ fontSize: '12px', lineHeight: 1.1 }}
+                className={cn(
+                  'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-1 font-medium transition',
+                  allModelsSelected
+                    ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                    : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
+                )}
               >
-                <svg viewBox="0 0 12 12" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-                  <circle cx="3" cy="3" r="1.25" />
-                  <circle cx="9" cy="3" r="1.25" />
-                  <circle cx="3" cy="9" r="1.25" />
-                  <circle cx="9" cy="9" r="1.25" />
-                </svg>
+                <span>All</span>
               </button>
 
-              {MODEL_IDS.map((modelId) => {
+              {activityFilterModelIds.map((modelId) => {
                 const active = commentModelFilter !== 'all' && commentModelFilter.includes(modelId)
                 const model = MODEL_INFO[modelId]
                 return (
@@ -1314,16 +1359,15 @@ export function MarketDashboardConcept5({
                     aria-label={model.fullName}
                     title={model.fullName}
                     aria-pressed={active}
+                    style={{ fontSize: '12px', lineHeight: 1.1 }}
                     className={cn(
-                      'inline-flex h-7 w-7 items-center justify-center border-b transition',
+                      'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-1 font-medium transition',
                       active
                         ? 'border-[#1a1a1a] text-[#1a1a1a]'
                         : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
                     )}
                   >
-                    <span className="inline-flex h-4 w-4 items-center justify-center" aria-hidden="true">
-                      <ModelIcon id={modelId} className="h-3.5 w-3.5" />
-                    </span>
+                    <span>{model.fullName}</span>
                   </button>
                 )
               })}
@@ -1377,9 +1421,37 @@ export function MarketDashboardConcept5({
     </section>
   )
 
+  if (viewMode === 'decision-snapshots') {
+    return (
+      <div className="space-y-6">
+        <section className="space-y-3 px-1">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Decision Snapshots</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[#171717]">
+                {selectedMarket.event?.drugName || selectedEntry.question}
+              </h2>
+              <p className="mt-2 text-sm text-[#7c7267]">
+                Full model-by-model snapshot history for this market.
+              </p>
+            </div>
+            <Link
+              href={marketDetailHref}
+              className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/90 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
+            >
+              Back to market
+            </Link>
+          </div>
+        </section>
+
+        {renderDecisionSnapshotsPanel({ className: 'px-1' })}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
-      {sessionStatus === 'unauthenticated' ? (
+      {sessionStatus === 'unauthenticated' && !useStackedLayout ? (
         <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
           <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
           <p className="mt-1">Browsing is open, but trading and personal points unlock after one-time X verification.</p>
@@ -1710,7 +1782,6 @@ export function MarketDashboardConcept5({
 	              </div>
 	            </div>
 	            </div>
-	            {renderDecisionSnapshotsPanel({ className: cn('mt-10 px-1', useStackedLayout && '-mt-2') })}
 	            {!useMarkets2Layout ? renderReasoningPanel({ className: 'px-1' }) : null}
 	            {!useMarkets2Layout ? (
 	              <div className="mt-10 px-1">
@@ -1844,6 +1915,16 @@ export function MarketDashboardConcept5({
 	                </div>
 	              </div>
 	            ) : null}
+              <div className="mt-10 px-1">
+                <div className="mx-1 flex justify-start">
+                  <Link
+                    href={decisionSnapshotsHref}
+                    className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
+                  >
+                    View Snapshot History
+                  </Link>
+                </div>
+              </div>
 	          </section>
 
         </section>

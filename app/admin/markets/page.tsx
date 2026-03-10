@@ -81,11 +81,6 @@ export default async function AdminMarketsPage() {
         </div>
       </section>
 
-      <section className="mb-4">
-        <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Manage Markets</h2>
-        <p className="text-sm text-[#8a8075] mt-1">Run the cycle first, then open missing markets for pending events.</p>
-      </section>
-
       <AdminMarketManager events={events} initialRunSnapshot={initialRunSnapshot} />
     </AdminConsoleLayout>
   )

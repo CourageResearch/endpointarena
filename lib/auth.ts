@@ -13,6 +13,7 @@ import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
 import { DEFAULT_SIGNUP_USER_LIMIT } from '@/lib/markets/runtime-config'
+import { isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
@@ -647,7 +648,7 @@ export async function ensureAdmin(): Promise<void> {
     throw new UnauthorizedError('Unauthorized - not logged in')
   }
 
-  if (session.user.email !== ADMIN_EMAIL) {
+  if (session.user.email !== ADMIN_EMAIL && !isLocalDevBypassEmail(session.user.email)) {
     throw new ForbiddenError('Forbidden - admin access required')
   }
 }

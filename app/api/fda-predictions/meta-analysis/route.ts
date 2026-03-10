@@ -7,6 +7,7 @@ import { MODEL_NAMES, type ModelId } from '@/lib/constants'
 import { getLatestPredictionsForEvent } from '@/lib/model-decision-snapshots'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
+import { enrichFdaEvents, upsertEventMetaAnalysis } from '@/lib/fda-event-metadata'
 
 type MetaAnalysisBody = {
   fdaEventId?: string
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
     if (!event) {
       throw new NotFoundError('FDA event not found')
     }
+    const [enrichedEvent] = await enrichFdaEvents([event])
 
     const modelPredictions = await getLatestPredictionsForEvent(event.id, event.outcome)
     if (modelPredictions.length < 2) {
@@ -51,15 +53,13 @@ export async function POST(request: NextRequest) {
       therapeuticArea: event.therapeuticArea,
       eventDescription: event.eventDescription,
       drugStatus: event.drugStatus,
-      rivalDrugs: event.rivalDrugs,
-      marketPotential: event.marketPotential,
-      otherApprovals: event.otherApprovals,
-      source: event.source,
+      rivalDrugs: enrichedEvent?.rivalDrugs ?? null,
+      marketPotential: enrichedEvent?.marketPotential ?? null,
+      otherApprovals: enrichedEvent?.otherApprovals ?? null,
+      source: enrichedEvent?.source ?? null,
     }, predictionSummaries)
 
-    await db.update(fdaCalendarEvents)
-      .set({ metaAnalysis })
-      .where(eq(fdaCalendarEvents.id, fdaEventId))
+    await upsertEventMetaAnalysis(fdaEventId, metaAnalysis)
 
     return successResponse({
       success: true,
@@ -93,9 +93,10 @@ export async function GET(request: NextRequest) {
     if (!event) {
       throw new NotFoundError('FDA event not found')
     }
+    const [enrichedEvent] = await enrichFdaEvents([event])
 
     return successResponse({
-      metaAnalysis: event.metaAnalysis || null,
+      metaAnalysis: enrichedEvent?.metaAnalysis || null,
     }, {
       headers: {
         'X-Request-Id': requestId,

@@ -1,24 +1,21 @@
-import { db, fdaCalendarEvents, fdaPredictions, modelDecisionSnapshots } from '@/lib/db'
+import { db, fdaCalendarEvents, modelDecisionSnapshots } from '@/lib/db'
 import { eq, sql } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 3600
 
 async function getData() {
-  const [fdaEventCount, legacyPredictionCount, snapshotCount] = await Promise.all([
+  const [fdaEventCount, snapshotCount] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(fdaCalendarEvents),
-    db.select({ count: sql<number>`count(*)` })
-      .from(fdaPredictions)
-      .where(eq(fdaPredictions.predictorType, 'model')),
     db.select({ count: sql<number>`count(*)` }).from(modelDecisionSnapshots),
   ])
 
   return {
     fdaEventCount: fdaEventCount[0]?.count ?? 0,
-    predictionCount: (legacyPredictionCount[0]?.count ?? 0) + (snapshotCount[0]?.count ?? 0),
+    predictionCount: snapshotCount[0]?.count ?? 0,
     snapshotCount: snapshotCount[0]?.count ?? 0,
   }
 }

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { db, fdaCalendarEvents, marketActions, predictionMarkets, users } from '@/lib/db'
+import { db, fdaCalendarEvents, marketActions, marketActors, predictionMarkets, users } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +72,10 @@ function buildFilters({
   fromDate: Date | null
   toDateEnd: Date | null
 }): SQL[] {
-  const conditions: SQL[] = [sql`${marketActions.modelId} like 'human:%'`]
+  const conditions: SQL[] = [
+    eq(marketActors.actorType, 'human'),
+    eq(marketActions.actionSource, 'human'),
+  ]
 
   if (action !== 'ALL') {
     conditions.push(eq(marketActions.action, action))
@@ -96,7 +99,8 @@ function buildFilters({
       ${users.email} ILIKE ${pattern}
       OR ${users.xUsername} ILIKE ${pattern}
       OR ${users.name} ILIKE ${pattern}
-      OR ${marketActions.modelId} ILIKE ${pattern}
+      OR ${marketActions.actorId} ILIKE ${pattern}
+      OR ${marketActors.displayName} ILIKE ${pattern}
       OR ${fdaCalendarEvents.drugName} ILIKE ${pattern}
       OR ${fdaCalendarEvents.companyName} ILIKE ${pattern}
     )`)
@@ -155,32 +159,38 @@ export default async function AdminHumanTradesPage({
     ? new Date(toDateStart.getTime() + (24 * 60 * 60 * 1000) - 1)
     : null
 
-  const userJoinCondition = sql`${users.id} = substring(${marketActions.modelId} from 7)`
   const where = and(...buildFilters({ q, action, status, fromDate, toDateEnd }))
 
   const [summaryRows, weeklyRows, totalRows] = await Promise.all([
     db
       .select({
         totalTrades: sql<number>`count(*)`,
-        uniqueTraders: sql<number>`count(distinct ${marketActions.modelId})`,
+        uniqueTraders: sql<number>`count(distinct ${marketActions.actorId})`,
         totalVolumeUsd: sql<number>`coalesce(sum(abs(${marketActions.usdAmount})), 0)`,
       })
       .from(marketActions)
-      .where(sql`${marketActions.modelId} like 'human:%'`),
+      .leftJoin(marketActors, eq(marketActors.id, marketActions.actorId))
+      .where(and(
+        eq(marketActors.actorType, 'human'),
+        eq(marketActions.actionSource, 'human'),
+      )),
     db
       .select({
         weeklyTrades: sql<number>`count(*)`,
         weeklyVolumeUsd: sql<number>`coalesce(sum(abs(${marketActions.usdAmount})), 0)`,
       })
       .from(marketActions)
+      .leftJoin(marketActors, eq(marketActors.id, marketActions.actorId))
       .where(and(
-        sql`${marketActions.modelId} like 'human:%'`,
+        eq(marketActors.actorType, 'human'),
+        eq(marketActions.actionSource, 'human'),
         gte(marketActions.createdAt, new Date(Date.now() - (7 * 24 * 60 * 60 * 1000))),
       )),
     db
       .select({ count: sql<number>`count(*)` })
       .from(marketActions)
-      .leftJoin(users, userJoinCondition)
+      .leftJoin(marketActors, eq(marketActors.id, marketActions.actorId))
+      .leftJoin(users, eq(users.id, marketActors.userId))
       .leftJoin(fdaCalendarEvents, eq(fdaCalendarEvents.id, marketActions.fdaEventId))
       .where(where),
   ])
@@ -194,7 +204,7 @@ export default async function AdminHumanTradesPage({
     .select({
       id: marketActions.id,
       createdAt: marketActions.createdAt,
-      modelId: marketActions.modelId,
+      actorId: marketActions.actorId,
       action: marketActions.action,
       status: marketActions.status,
       usdAmount: marketActions.usdAmount,
@@ -206,13 +216,15 @@ export default async function AdminHumanTradesPage({
       userEmail: users.email,
       userName: users.name,
       userXUsername: users.xUsername,
+      actorDisplayName: marketActors.displayName,
       drugName: fdaCalendarEvents.drugName,
       companyName: fdaCalendarEvents.companyName,
       pdufaDate: fdaCalendarEvents.pdufaDate,
       marketStatus: predictionMarkets.status,
     })
     .from(marketActions)
-    .leftJoin(users, userJoinCondition)
+    .leftJoin(marketActors, eq(marketActors.id, marketActions.actorId))
+    .leftJoin(users, eq(users.id, marketActors.userId))
     .leftJoin(fdaCalendarEvents, eq(fdaCalendarEvents.id, marketActions.fdaEventId))
     .leftJoin(predictionMarkets, eq(predictionMarkets.id, marketActions.marketId))
     .where(where)
@@ -388,7 +400,7 @@ export default async function AdminHumanTradesPage({
                       <td className="px-3 py-2 text-[#1a1a1a]">
                         <p>{row.userEmail ?? row.userName ?? 'Unknown user'}</p>
                         <p className="text-xs text-[#8a8075] mt-0.5">
-                          {row.userXUsername ? `@${row.userXUsername}` : row.modelId}
+                          {row.userXUsername ? `@${row.userXUsername}` : row.actorDisplayName ?? row.actorId}
                         </p>
                       </td>
                       <td className="px-3 py-2 text-[#1a1a1a]">

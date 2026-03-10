@@ -1,7 +1,8 @@
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db, fdaCalendarEvents, marketAccounts, marketActions, marketPositions, marketRuns, predictionMarkets } from '@/lib/db'
 import { MODEL_INFO, type ModelId } from '@/lib/constants'
 import {
+  calculateExecutableTradeCaps,
   ensureMarketAccounts,
   ensureMarketPositions,
   normalizeRunDate,
@@ -14,16 +15,17 @@ import {
 } from '@/lib/markets/engine'
 import { ConflictError } from '@/lib/errors'
 import type { DailyRunHooks, DailyRunPayload, DailyRunPlannedMarket, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
-import { getMarketRuntimeConfig, type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
+import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { MARKET_MODEL_RESPONSE_TIMEOUT_MS, MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
 import {
   generateAndStoreModelDecisionSnapshot,
-  getMarketActionIdForRun,
   linkSnapshotToMarketAction,
 } from '@/lib/model-decision-snapshots'
+import { DAILY_RUN_STOPPED_REASON, throwIfDailyRunStopRequested } from '@/lib/markets/run-control'
 import { MODEL_DECISION_GENERATORS } from '@/lib/predictions/model-decision-generators'
-
-const DAY_MS = 24 * 60 * 60 * 1000
+import { getModelActorIds } from '@/lib/market-actors'
+import { enrichFdaEvents } from '@/lib/fda-event-metadata'
+import { appendMarketRunLog } from '@/lib/market-run-logs'
 
 function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
   return results.reduce<DailyRunSummary>((acc, result) => {
@@ -59,25 +61,22 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, context: s
   }
 }
 
-function getMarketAgeInRuns(openedAt: Date, runDate: Date): number {
-  const openedRunDate = normalizeRunDate(openedAt)
-  return Math.floor((runDate.getTime() - openedRunDate.getTime()) / DAY_MS)
-}
-
 function applyRiskCap({
   action,
   requestedUsd,
-  accountCash,
-  marketOpenedAt,
+  market,
+  account,
+  position,
   runDate,
   config,
 }: {
   action: string
   requestedUsd: number
-  accountCash: number
-  marketOpenedAt: Date
+  market: typeof predictionMarkets.$inferSelect
+  account: typeof marketAccounts.$inferSelect
+  position: typeof marketPositions.$inferSelect
   runDate: Date
-  config: MarketRuntimeConfig
+  config: Awaited<ReturnType<typeof getMarketRuntimeConfig>>
 }): {
   amountUsd: number
   capApplied: boolean
@@ -92,13 +91,26 @@ function applyRiskCap({
     }
   }
 
-  const runAge = getMarketAgeInRuns(marketOpenedAt, runDate)
-  const inWarmupWindow = config.warmupRunCount > 0 && runAge >= 0 && runAge < config.warmupRunCount
-  const maxTradeUsd = inWarmupWindow ? config.warmupMaxTradeUsd : config.steadyMaxTradeUsd
-  const buyCashFraction = inWarmupWindow ? config.warmupBuyCashFraction : config.steadyBuyCashFraction
-  const tradeCapUsd = action === 'BUY_YES' || action === 'BUY_NO'
-    ? Math.min(maxTradeUsd, Math.max(0, accountCash * buyCashFraction))
-    : maxTradeUsd
+  const tradeCaps = calculateExecutableTradeCaps({
+    state: {
+      qYes: market.qYes,
+      qNo: market.qNo,
+      b: market.b,
+    },
+    accountCash: account.cashBalance,
+    yesSharesHeld: position.yesShares,
+    noSharesHeld: position.noShares,
+    marketOpenedAt: market.openedAt,
+    runDate,
+    config,
+  })
+  const tradeCapUsd = action === 'BUY_YES'
+    ? tradeCaps.maxBuyYesUsd
+    : action === 'BUY_NO'
+      ? tradeCaps.maxBuyNoUsd
+      : action === 'SELL_YES'
+        ? tradeCaps.maxSellYesUsd
+        : tradeCaps.maxSellNoUsd
 
   const cappedAmount = Math.max(0, Math.min(requested, tradeCapUsd))
   if (cappedAmount >= requested - 1e-9) {
@@ -112,8 +124,27 @@ function applyRiskCap({
   return {
     amountUsd: cappedAmount,
     capApplied: true,
-    note: `${inWarmupWindow ? 'Warm-up' : 'Steady-state'} cap reduced request to $${cappedAmount.toFixed(2)}.`,
+    note: `${tradeCaps.inWarmupWindow ? 'Warm-up' : 'Steady-state'} cap reduced request to $${cappedAmount.toFixed(2)}.`,
   }
+}
+
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength - 1)}...`
+}
+
+function formatProgressLog(result: DailyRunResult): string {
+  const modelName = MODEL_INFO[result.modelId].fullName
+  const amountPart = result.amountUsd > 0 ? ` ${formatMoney(result.amountUsd)}` : ''
+  return `${modelName} ${result.action}${amountPart} (${result.status}) - ${truncateText(result.detail, 110)}`
 }
 
 async function startRunRecord({
@@ -128,6 +159,7 @@ async function startRunRecord({
   const now = new Date()
   const activeRun = await db.query.marketRuns.findFirst({
     where: eq(marketRuns.status, 'running'),
+    orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],
   })
 
   if (activeRun) {
@@ -166,22 +198,6 @@ async function startRunRecord({
       updatedAt: now,
       completedAt: null,
     })
-    .onConflictDoUpdate({
-      target: marketRuns.runDate,
-      set: {
-        createdAt: now,
-        status: 'running',
-        openMarkets,
-        totalActions,
-        processedActions: 0,
-        okCount: 0,
-        errorCount: 0,
-        skippedCount: 0,
-        failureReason: null,
-        updatedAt: now,
-        completedAt: null,
-      },
-    })
     .returning()
 
   return runRecord
@@ -200,11 +216,12 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   ])
 
   const openMarketEventIds = Array.from(new Set(openMarkets.map((market) => market.fdaEventId)))
-  const openMarketEvents = openMarketEventIds.length > 0
+  const rawOpenMarketEvents = openMarketEventIds.length > 0
     ? await db.query.fdaCalendarEvents.findMany({
         where: inArray(fdaCalendarEvents.id, openMarketEventIds),
       })
     : []
+  const openMarketEvents = await enrichFdaEvents(rawOpenMarketEvents)
   const eventById = new Map(openMarketEvents.map((event) => [event.id, event]))
   const orderedOpenMarkets = [...openMarkets].sort((a, b) => {
     const aEvent = eventById.get(a.fdaEventId)
@@ -256,6 +273,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   // Ensure newly-added models always have account + position state for existing open markets.
   await ensureMarketAccounts()
   await Promise.all(orderedOpenMarkets.map((market) => ensureMarketPositions(market.id)))
+  const actorIdByModelId = await getModelActorIds(modelOrder)
 
   const totalActions = orderedOpenMarkets.length * modelOrder.length
   const runRecord = await startRunRecord({
@@ -272,13 +290,87 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
     openMarkets: orderedOpenMarkets.length,
     totalActions,
   })
+  await appendMarketRunLog({
+    runId: runRecord.id,
+    logType: 'system',
+    message: 'Starting daily market cycle...',
+    completedActions: 0,
+    totalActions,
+    okCount: 0,
+    errorCount: 0,
+    skippedCount: 0,
+  })
 
   const results: DailyRunResult[] = []
   let processedActions = 0
+  let okCount = 0
+  let errorCount = 0
+  let skippedCount = 0
 
-  const pushResult = (result: DailyRunResult): void => {
+  const persistRunHeartbeat = async (): Promise<void> => {
+    await db.update(marketRuns)
+      .set({
+        totalActions,
+        processedActions,
+        okCount,
+        errorCount,
+        skippedCount,
+        updatedAt: new Date(),
+      })
+      .where(eq(marketRuns.id, runRecord.id))
+  }
+
+  const emitActivity = async (input: {
+    completedActions: number
+    totalActions: number
+    message: string
+    marketId?: string
+    fdaEventId?: string
+    actorId?: string | null
+    modelId?: ModelId
+    phase?: 'running' | 'waiting'
+  }): Promise<void> => {
+    await appendMarketRunLog({
+      runId: runRecord.id,
+      logType: 'activity',
+      message: input.message,
+      completedActions: input.completedActions,
+      totalActions: input.totalActions,
+      okCount,
+      errorCount,
+      skippedCount,
+      marketId: input.marketId ?? null,
+      fdaEventId: input.fdaEventId ?? null,
+      actorId: input.actorId ?? null,
+      activityPhase: input.phase ?? null,
+    })
+    await persistRunHeartbeat()
+    hooks?.onActivity?.(input)
+  }
+
+  const pushResult = async (result: DailyRunResult): Promise<void> => {
     results.push(result)
     processedActions += 1
+    if (result.status === 'ok') okCount += 1
+    if (result.status === 'error') errorCount += 1
+    if (result.status === 'skipped') skippedCount += 1
+    await appendMarketRunLog({
+      runId: runRecord.id,
+      logType: result.status === 'error' ? 'error' : 'progress',
+      message: formatProgressLog(result),
+      completedActions: processedActions,
+      totalActions,
+      okCount,
+      errorCount,
+      skippedCount,
+      marketId: result.marketId,
+      fdaEventId: result.fdaEventId,
+      actorId: result.actorId,
+      action: result.action,
+      actionStatus: result.status,
+      amountUsd: result.amountUsd,
+    })
+    await persistRunHeartbeat()
     hooks?.onProgress?.({
       completedActions: processedActions,
       totalActions,
@@ -287,7 +379,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   }
 
   try {
+    await throwIfDailyRunStopRequested(runRecord.id)
+
     for (const [marketIndex, market] of orderedOpenMarkets.entries()) {
+      await throwIfDailyRunStopRequested(runRecord.id)
       const marketEvent = eventById.get(market.fdaEventId)
 
       if (!marketEvent) {
@@ -296,9 +391,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           throw new Error(`Halting daily run: FDA event is missing for market ${market.id} and no models are configured`)
         }
         const message = 'FDA event no longer exists for this market'
-        pushResult({
+        await pushResult({
           marketId: market.id,
           fdaEventId: market.fdaEventId,
+          actorId: null,
           modelId,
           action: 'HOLD',
           amountUsd: 0,
@@ -309,11 +405,17 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
       }
 
       for (const modelId of modelOrder) {
+        await throwIfDailyRunStopRequested(runRecord.id)
+        const actorId = actorIdByModelId.get(modelId)
+        if (!actorId) {
+          throw new Error(`Halting daily run: market actor is missing for model ${modelId}`)
+        }
         const existing = await db.query.marketActions.findFirst({
           where: and(
             eq(marketActions.marketId, market.id),
-            eq(marketActions.modelId, modelId),
-            eq(marketActions.runDate, normalizedRunDate)
+            eq(marketActions.actorId, actorId),
+            eq(marketActions.runDate, normalizedRunDate),
+            eq(marketActions.actionSource, 'cycle'),
           ),
         })
 
@@ -321,9 +423,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           if (existing.status === 'error') {
             await db.delete(marketActions).where(eq(marketActions.id, existing.id))
           } else {
-            pushResult({
+            await pushResult({
               marketId: market.id,
               fdaEventId: market.fdaEventId,
+              actorId,
               modelId,
               action: existing.action,
               amountUsd: existing.usdAmount,
@@ -336,12 +439,12 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
 
         const [account, position] = await Promise.all([
           db.query.marketAccounts.findFirst({
-            where: eq(marketAccounts.modelId, modelId),
+            where: eq(marketAccounts.actorId, actorId),
           }),
           db.query.marketPositions.findFirst({
             where: and(
               eq(marketPositions.marketId, market.id),
-              eq(marketPositions.modelId, modelId)
+              eq(marketPositions.actorId, actorId)
             ),
           }),
         ])
@@ -352,7 +455,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             runId: runRecord.id,
             marketId: market.id,
             fdaEventId: market.fdaEventId,
-            modelId,
+            actorId,
             runDate: normalizedRunDate,
             priceYes: market.priceYes,
             message,
@@ -360,9 +463,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           })
 
           const modelName = MODEL_INFO[modelId].fullName
-          pushResult({
+          await pushResult({
             marketId: market.id,
             fdaEventId: market.fdaEventId,
+            actorId,
             modelId,
             action: 'HOLD',
             amountUsd: 0,
@@ -379,7 +483,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             runId: runRecord.id,
             marketId: market.id,
             fdaEventId: market.fdaEventId,
-            modelId,
+            actorId,
             runDate: normalizedRunDate,
             priceYes: market.priceYes,
             message,
@@ -387,9 +491,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           })
 
           const modelName = MODEL_INFO[modelId].fullName
-          pushResult({
+          await pushResult({
             marketId: market.id,
             fdaEventId: market.fdaEventId,
+            actorId,
             modelId,
             action: 'HOLD',
             amountUsd: 0,
@@ -403,12 +508,13 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
         try {
           const modelName = MODEL_INFO[modelId].fullName
           const marketOrdinal = marketIndex + 1
-          hooks?.onActivity?.({
+          await emitActivity({
             completedActions: processedActions,
             totalActions,
             message: `Running ${modelName} on ${marketEvent.drugName} (${marketOrdinal}/${orderedOpenMarkets.length} markets)`,
             marketId: market.id,
             fdaEventId: market.fdaEventId,
+            actorId,
             modelId,
             phase: 'running',
           })
@@ -418,9 +524,10 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           })
 
           if (!latestMarket || latestMarket.status !== 'OPEN') {
-            pushResult({
+            await pushResult({
               marketId: market.id,
               fdaEventId: market.fdaEventId,
+              actorId,
               modelId,
               action: 'HOLD',
               amountUsd: 0,
@@ -436,23 +543,25 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           const marketsRemainingThisRun = Math.max(0, orderedOpenMarkets.length - (marketIndex + 1))
 
           const waitStartedAtMs = Date.now()
-          hooks?.onActivity?.({
+          await emitActivity({
             completedActions: processedActions,
             totalActions,
             message: `Waiting for ${modelName} response... 0s`,
             marketId: market.id,
             fdaEventId: market.fdaEventId,
+            actorId,
             modelId,
             phase: 'waiting',
           })
           const waitHeartbeat = setInterval(() => {
             const waitSeconds = Math.max(1, Math.round((Date.now() - waitStartedAtMs) / 1000))
-            hooks?.onActivity?.({
+            void emitActivity({
               completedActions: processedActions,
               totalActions,
               message: `Waiting for ${modelName} response... ${waitSeconds}s`,
               marketId: market.id,
               fdaEventId: market.fdaEventId,
+              actorId,
               modelId,
               phase: 'waiting',
             })
@@ -461,9 +570,12 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           const generatedDecision = await withTimeout(
             generateAndStoreModelDecisionSnapshot({
               runSource: 'cycle',
+              runId: runRecord.id,
               modelId,
+              actorId,
               runDate: normalizedRunDate,
               event: marketEvent,
+              nctId: marketEvent.nctId ?? null,
               market: latestMarket,
               account,
               position,
@@ -480,18 +592,16 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           ).finally(() => {
             clearInterval(waitHeartbeat)
           })
+          await throwIfDailyRunStopRequested(runRecord.id)
           generatedSnapshotId = generatedDecision.snapshot.id
           const decision = generatedDecision.decision
-
-          if (!latestMarket.openedAt) {
-            throw new Error(`Market ${latestMarket.id} is missing openedAt`)
-          }
 
           const cappedDecision = applyRiskCap({
             action: decision.action.type,
             requestedUsd: decision.action.amountUsd,
-            accountCash: account.cashBalance,
-            marketOpenedAt: latestMarket.openedAt,
+            market: latestMarket,
+            account,
+            position,
             runDate: normalizedRunDate,
             config: runtimeConfig,
           })
@@ -500,27 +610,21 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             : decision.action.explanation
 
           if (decision.action.type === 'HOLD' || cappedDecision.amountUsd <= 0) {
-            await runHoldAction({
+            const actionRecord = await runHoldAction({
               runId: runRecord.id,
               marketId: latestMarket.id,
               fdaEventId: latestMarket.fdaEventId,
-              modelId,
+              actorId,
               runDate: normalizedRunDate,
               explanation,
               priceYes: latestMarket.priceYes,
             })
-            await linkSnapshotToMarketAction(
-              generatedDecision.snapshot.id,
-              await getMarketActionIdForRun({
-                marketId: latestMarket.id,
-                modelId,
-                runDate: normalizedRunDate,
-              })
-            )
+            await linkSnapshotToMarketAction(generatedDecision.snapshot.id, actionRecord.id)
 
-            pushResult({
+            await pushResult({
               marketId: latestMarket.id,
               fdaEventId: latestMarket.fdaEventId,
+              actorId,
               modelId,
               action: 'HOLD',
               amountUsd: 0,
@@ -534,26 +638,20 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             const buyResult = await runBuyAction({
               runId: runRecord.id,
               market: latestMarket,
-              modelId,
+              actorId,
               runDate: normalizedRunDate,
               side: decision.action.type,
               requestedUsd: cappedDecision.amountUsd,
               explanation,
               maxPositionPerSideShares: runtimeConfig.maxPositionPerSideShares,
             })
-            await linkSnapshotToMarketAction(
-              generatedDecision.snapshot.id,
-              await getMarketActionIdForRun({
-                marketId: latestMarket.id,
-                modelId,
-                runDate: normalizedRunDate,
-              })
-            )
+            await linkSnapshotToMarketAction(generatedDecision.snapshot.id, buyResult.actionId)
             const action = buyResult.spent > 0 ? decision.action.type : 'HOLD'
 
-            pushResult({
+            await pushResult({
               marketId: latestMarket.id,
               fdaEventId: latestMarket.fdaEventId,
+              actorId,
               modelId,
               action,
               amountUsd: action === 'HOLD' ? 0 : buyResult.spent,
@@ -571,25 +669,19 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           const sellResult = await runSellAction({
             runId: runRecord.id,
             market: latestMarket,
-            modelId,
+            actorId,
             runDate: normalizedRunDate,
             side: decision.action.type,
             requestedUsd: cappedDecision.amountUsd,
             explanation,
           })
-          await linkSnapshotToMarketAction(
-            generatedDecision.snapshot.id,
-            await getMarketActionIdForRun({
-              marketId: latestMarket.id,
-              modelId,
-              runDate: normalizedRunDate,
-            })
-          )
+          await linkSnapshotToMarketAction(generatedDecision.snapshot.id, sellResult.actionId)
           const action = sellResult.proceeds > 0 && sellResult.shares > 0 ? decision.action.type : 'HOLD'
 
-          pushResult({
+          await pushResult({
             marketId: latestMarket.id,
             fdaEventId: latestMarket.fdaEventId,
+            actorId,
             modelId,
             action,
             amountUsd: action === 'HOLD' ? 0 : sellResult.proceeds,
@@ -609,31 +701,25 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           const message = error instanceof Error ? error.message : 'Unknown error'
           const errorCode = inferErrorCode(message)
 
-          await recordMarketActionError({
+          const errorAction = await recordMarketActionError({
             runId: runRecord.id,
             marketId: market.id,
             fdaEventId: market.fdaEventId,
-            modelId,
+            actorId,
             runDate: normalizedRunDate,
             priceYes: price,
             message,
             code: errorCode,
           })
           if (typeof generatedSnapshotId === 'string') {
-            await linkSnapshotToMarketAction(
-              generatedSnapshotId,
-              await getMarketActionIdForRun({
-                marketId: market.id,
-                modelId,
-                runDate: normalizedRunDate,
-              })
-            )
+            await linkSnapshotToMarketAction(generatedSnapshotId, errorAction.id)
           }
 
           const modelName = MODEL_INFO[modelId].fullName
-          pushResult({
+          await pushResult({
             marketId: market.id,
             fdaEventId: market.fdaEventId,
+            actorId,
             modelId,
             action: 'HOLD',
             amountUsd: 0,
@@ -661,6 +747,17 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
       results,
     }
 
+    await appendMarketRunLog({
+      runId: runRecord.id,
+      logType: 'system',
+      message: 'Daily market cycle completed',
+      completedActions: processedActions,
+      totalActions,
+      okCount: summary.ok,
+      errorCount: summary.error,
+      skippedCount: summary.skipped,
+    })
+
     await db.update(marketRuns)
       .set({
         status: 'completed',
@@ -678,6 +775,16 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Daily run failed'
     const summary = summarizeResults(results)
+    await appendMarketRunLog({
+      runId: runRecord.id,
+      logType: message === DAILY_RUN_STOPPED_REASON ? 'system' : 'error',
+      message: message === DAILY_RUN_STOPPED_REASON ? message : `RUN FAILED - ${message}`,
+      completedActions: processedActions,
+      totalActions,
+      okCount: summary.ok,
+      errorCount: summary.error,
+      skippedCount: summary.skipped,
+    })
     await db.update(marketRuns)
       .set({
         status: 'failed',
@@ -685,7 +792,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
         okCount: summary.ok,
         errorCount: summary.error,
         skippedCount: summary.skipped,
-        failureReason: message,
+        failureReason: message === DAILY_RUN_STOPPED_REASON ? DAILY_RUN_STOPPED_REASON : message,
         completedAt: new Date(),
         updatedAt: new Date(),
       })

@@ -1,18 +1,17 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { estimateCostFromTokenUsage, estimateTextGenerationCost, getCostEstimationProfileForModel, type AICostSource } from '@/lib/ai-costs'
 import { type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import {
   db,
   fdaCalendarEvents,
-  fdaPredictions,
   marketAccounts,
-  marketActions,
   marketPositions,
   modelDecisionSnapshots,
   predictionMarkets,
 } from '@/lib/db'
 import { type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
+import { calculateExecutableTradeCaps, normalizeRunDate } from '@/lib/markets/engine'
 import { type Prediction, type PredictionHistoryEntry } from '@/lib/types'
 import { MODEL_DECISION_GENERATORS, type ModelDecisionGeneration } from '@/lib/predictions/model-decision-generators'
 import { buildModelDecisionPrompt, type ModelDecisionInput, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
@@ -35,28 +34,14 @@ function computeCorrectness(prediction: string, eventOutcome: string): boolean |
   )
 }
 
-function mapLegacyPrediction(row: typeof fdaPredictions.$inferSelect, eventOutcome: string): PredictionHistoryEntry {
+function mapSnapshotPrediction(
+  row: typeof modelDecisionSnapshots.$inferSelect,
+  predictorId: string,
+  eventOutcome: string,
+): PredictionHistoryEntry {
   return {
     id: row.id,
-    predictorId: row.predictorId,
-    prediction: row.prediction,
-    confidence: row.confidence,
-    reasoning: row.reasoning,
-    durationMs: row.durationMs,
-    correct: row.correct ?? computeCorrectness(row.prediction, eventOutcome),
-    createdAt: row.createdAt?.toISOString(),
-    source: 'legacy',
-    runSource: 'legacy',
-    approvalProbability: undefined,
-    action: null,
-    linkedMarketActionId: null,
-  }
-}
-
-function mapSnapshotPrediction(row: typeof modelDecisionSnapshots.$inferSelect, eventOutcome: string): PredictionHistoryEntry {
-  return {
-    id: row.id,
-    predictorId: row.modelId,
+    predictorId,
     prediction: row.binaryCall,
     confidence: row.confidence,
     reasoning: row.reasoning,
@@ -113,17 +98,13 @@ export async function getUnifiedPredictionHistoriesByEventIds(
     return new Map()
   }
 
-  const [snapshotRows, legacyRows] = await Promise.all([
+  const [snapshotRows] = await Promise.all([
     db.query.modelDecisionSnapshots.findMany({
       where: inArray(modelDecisionSnapshots.fdaEventId, eventIds),
       orderBy: [desc(modelDecisionSnapshots.createdAt)],
-    }),
-    db.query.fdaPredictions.findMany({
-      where: and(
-        inArray(fdaPredictions.fdaEventId, eventIds),
-        eq(fdaPredictions.predictorType, 'model'),
-      ),
-      orderBy: [desc(fdaPredictions.createdAt)],
+      with: {
+        actor: true,
+      },
     }),
   ])
 
@@ -138,18 +119,11 @@ export async function getUnifiedPredictionHistoriesByEventIds(
   }
 
   for (const row of snapshotRows) {
+    const predictorId = row.actor.modelKey ?? row.actorId
     pushHistory(
       row.fdaEventId,
-      row.modelId,
-      mapSnapshotPrediction(row, eventOutcomeById.get(row.fdaEventId) || 'Pending'),
-    )
-  }
-
-  for (const row of legacyRows) {
-    pushHistory(
-      row.fdaEventId,
-      row.predictorId,
-      mapLegacyPrediction(row, eventOutcomeById.get(row.fdaEventId) || 'Pending'),
+      predictorId,
+      mapSnapshotPrediction(row, predictorId, eventOutcomeById.get(row.fdaEventId) || 'Pending'),
     )
   }
 
@@ -203,12 +177,21 @@ export async function getMarketDecisionHistoryByMarketIds(
   const snapshotRows = await db.query.modelDecisionSnapshots.findMany({
     where: inArray(modelDecisionSnapshots.marketId, marketIds),
     orderBy: [desc(modelDecisionSnapshots.createdAt)],
+    with: {
+      actor: true,
+    },
   })
 
   const historyByMarketId = new Map<string, PredictionHistoryEntry[]>()
   for (const row of snapshotRows) {
     const current = historyByMarketId.get(row.marketId) || []
-    current.push(mapSnapshotPrediction(row, eventOutcomeById.get(row.fdaEventId) || 'Pending'))
+    current.push(
+      mapSnapshotPrediction(
+        row,
+        row.actor.modelKey ?? row.actorId,
+        eventOutcomeById.get(row.fdaEventId) || 'Pending',
+      ),
+    )
     historyByMarketId.set(row.marketId, current)
   }
 
@@ -230,36 +213,6 @@ export function selectPredictionFromHistory(
     return aTime - bTime
   })
   return mode === 'first' ? sorted[0] ?? null : sorted[sorted.length - 1] ?? null
-}
-
-function getTradeCaps(args: {
-  accountCash: number
-  yesSharesHeld: number
-  noSharesHeld: number
-  marketPriceYes: number
-  marketPriceNo: number
-  marketOpenedAt: Date | null | undefined
-  runDate: Date
-  config: MarketRuntimeConfig
-}): {
-  maxBuyUsd: number
-  maxSellYesUsd: number
-  maxSellNoUsd: number
-} {
-  const openedAt = args.marketOpenedAt ?? args.runDate
-  const normalizedOpenedAt = new Date(Date.UTC(openedAt.getUTCFullYear(), openedAt.getUTCMonth(), openedAt.getUTCDate()))
-  const normalizedRunDate = new Date(Date.UTC(args.runDate.getUTCFullYear(), args.runDate.getUTCMonth(), args.runDate.getUTCDate()))
-  const dayMs = 24 * 60 * 60 * 1000
-  const runAge = Math.floor((normalizedRunDate.getTime() - normalizedOpenedAt.getTime()) / dayMs)
-  const inWarmupWindow = args.config.warmupRunCount > 0 && runAge >= 0 && runAge < args.config.warmupRunCount
-  const maxTradeUsd = inWarmupWindow ? args.config.warmupMaxTradeUsd : args.config.steadyMaxTradeUsd
-  const buyCashFraction = inWarmupWindow ? args.config.warmupBuyCashFraction : args.config.steadyBuyCashFraction
-
-  return {
-    maxBuyUsd: Math.max(0, Math.min(args.accountCash, maxTradeUsd, args.accountCash * buyCashFraction)),
-    maxSellYesUsd: Math.max(0, Math.min(args.yesSharesHeld * args.marketPriceYes, maxTradeUsd)),
-    maxSellNoUsd: Math.max(0, Math.min(args.noSharesHeld * args.marketPriceNo, maxTradeUsd)),
-  }
 }
 
 type ProviderUsage = NonNullable<ModelDecisionGeneration['usage']>
@@ -356,9 +309,12 @@ function resolveUsageForStorage(args: {
 
 export async function generateAndStoreModelDecisionSnapshot(args: {
   runSource: DecisionRunSource
+  runId?: string | null
   modelId: ModelId
+  actorId: string
   runDate: Date
   event: typeof fdaCalendarEvents.$inferSelect
+  nctId?: string | null
   market: typeof predictionMarkets.$inferSelect
   account: typeof marketAccounts.$inferSelect
   position: typeof marketPositions.$inferSelect
@@ -380,14 +336,18 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
     throw new Error(`${args.modelId} generator is disabled because its API key is not configured`)
   }
 
-  const tradeCaps = getTradeCaps({
+  const normalizedRunDate = normalizeRunDate(args.runDate)
+  const tradeCaps = calculateExecutableTradeCaps({
+    state: {
+      qYes: args.market.qYes,
+      qNo: args.market.qNo,
+      b: args.market.b,
+    },
     accountCash: args.account.cashBalance,
     yesSharesHeld: args.position.yesShares,
     noSharesHeld: args.position.noShares,
-    marketPriceYes: args.market.priceYes,
-    marketPriceNo: 1 - args.market.priceYes,
     marketOpenedAt: args.market.openedAt,
-    runDate: args.runDate,
+    runDate: normalizedRunDate,
     config: args.runtimeConfig,
   })
 
@@ -405,10 +365,10 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
       symbols: args.event.symbols || null,
       applicationType: args.event.applicationType,
       pdufaDate: args.event.pdufaDate.toISOString(),
-      daysToDecision: getDaysUntilUtc(args.event.pdufaDate),
+      daysToDecision: getDaysUntilUtc(args.event.pdufaDate, normalizedRunDate),
       eventDescription: args.event.eventDescription,
       drugStatus: args.event.drugStatus,
-      nctId: args.event.nctId ?? null,
+      nctId: args.nctId ?? null,
     },
     market: {
       yesPrice: args.market.priceYes,
@@ -441,9 +401,11 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   })
 
   const [snapshot] = await db.insert(modelDecisionSnapshots).values({
+    runId: args.runSource === 'cycle' ? args.runId ?? null : null,
+    runDate: normalizedRunDate,
     marketId: args.market.id,
     fdaEventId: args.event.id,
-    modelId: args.modelId,
+    actorId: args.actorId,
     runSource: args.runSource,
     approvalProbability: generated.result.forecast.approvalProbability,
     binaryCall: generated.result.forecast.binaryCall,
@@ -495,7 +457,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
         explanation: generated.result.action.explanation,
       },
       linkedMarketActionId: null,
-      history: [mapSnapshotPrediction(snapshot, args.event.outcome)],
+      history: [mapSnapshotPrediction(snapshot, args.modelId, args.event.outcome)],
     },
   }
 }
@@ -504,19 +466,4 @@ export async function linkSnapshotToMarketAction(snapshotId: string, marketActio
   await db.update(modelDecisionSnapshots)
     .set({ linkedMarketActionId: marketActionId })
     .where(eq(modelDecisionSnapshots.id, snapshotId))
-}
-
-export async function getMarketActionIdForRun(args: {
-  marketId: string
-  modelId: string
-  runDate: Date
-}): Promise<string | null> {
-  const action = await db.query.marketActions.findFirst({
-    where: and(
-      eq(marketActions.marketId, args.marketId),
-      eq(marketActions.modelId, args.modelId),
-      eq(marketActions.runDate, args.runDate),
-    ),
-  })
-  return action?.id ?? null
 }
