@@ -5,7 +5,7 @@ import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 async function getData() {
   const [fdaEventCount, snapshotCount] = await Promise.all([
