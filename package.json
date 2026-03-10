@@ -47,7 +47,9 @@
     "db:seed": "npx tsx scripts/seed.ts",
     "db:import-cnpv:dry-run": "npx tsx scripts/import-cnpv.ts --dry-run",
     "db:import-cnpv": "npx tsx scripts/import-cnpv.ts --apply",
-    "db:seed-fda": "npm run db:import-cnpv"
+    "db:seed-fda": "npm run db:import-cnpv",
+    "ops:check-prod-cutover": "npx tsx scripts/ops-check-prod-cutover.ts",
+    "ops:check-prod-alerts": "npx tsx scripts/ops-check-prod-alerts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
