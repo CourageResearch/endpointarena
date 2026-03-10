@@ -1,7 +1,6 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "healthcheckPath": "/api/health",
-    "preDeployCommand": "npm run db:push"
+    "healthcheckPath": "/api/health"
   }
 }
