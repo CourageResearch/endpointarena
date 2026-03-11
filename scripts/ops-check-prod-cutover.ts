@@ -40,6 +40,18 @@ const GREEN_DB_SERVICE = process.env.RAILWAY_GREEN_DB_SERVICE?.trim() || 'postgr
 const EXPECT_DB_TARGET = (process.env.EXPECT_DB_TARGET?.trim().toLowerCase() || 'green')
 const EXPECT_MAINTENANCE_MODE = (process.env.EXPECT_MAINTENANCE_MODE?.trim().toLowerCase() || 'false')
 const HEALTH_URL = process.env.APP_HEALTH_URL?.trim() || 'https://endpointarena.com/api/health'
+const REQUIRED_APP_VARS = ['DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL'] as const
+const PREDICTION_PROVIDER_VARS = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'XAI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GROQ_API_KEY',
+  'BASETEN_DEEPSEEK_API_KEY',
+  'BASETEN_GLM_API_KEY',
+  'BASETEN_KIMI_API_KEY',
+  'MINIMAX_API_KEY',
+] as const
 
 function resolveRailwayBin(): string {
   const override = process.env.RAILWAY_BIN?.trim()
@@ -70,6 +82,55 @@ const MIN_MARKETS = Number(process.env.MIN_MARKETS ?? 1)
 const MIN_ACTIONS = Number(process.env.MIN_MARKET_ACTIONS ?? 0)
 const MIN_RUNS = Number(process.env.MIN_MARKET_RUNS ?? 0)
 const MIN_SNAPSHOTS = Number(process.env.MIN_MODEL_SNAPSHOTS ?? 1)
+
+function hasNonEmptyVar(vars: Record<string, string>, key: string): boolean {
+  const value = vars[key]
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function describeAppEnvAudit(appVars: Record<string, string>): {
+  failures: string[]
+  warnings: string[]
+  providerKeysPresent: string[]
+} {
+  const failures: string[] = []
+  const warnings: string[] = []
+
+  for (const key of REQUIRED_APP_VARS) {
+    if (!hasNonEmptyVar(appVars, key)) {
+      failures.push(`Missing required app variable on ${APP_SERVICE}: ${key}`)
+    }
+  }
+
+  const providerKeysPresent = PREDICTION_PROVIDER_VARS.filter((key) => hasNonEmptyVar(appVars, key))
+  if (providerKeysPresent.length === 0) {
+    failures.push(
+      `No prediction provider API keys are configured on ${APP_SERVICE}; set at least one of ${PREDICTION_PROVIDER_VARS.join(', ')}`,
+    )
+  }
+
+  if (!hasNonEmptyVar(appVars, 'MAINTENANCE_MODE')) {
+    warnings.push('MAINTENANCE_MODE is unset; writes default to enabled unless explicitly frozen')
+  }
+
+  const hasTwitterId = hasNonEmptyVar(appVars, 'TWITTER_CLIENT_ID')
+  const hasTwitterSecret = hasNonEmptyVar(appVars, 'TWITTER_CLIENT_SECRET')
+  if (hasTwitterId !== hasTwitterSecret) {
+    warnings.push('Twitter OAuth is partially configured; set both TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET or neither')
+  } else if (!hasTwitterId) {
+    warnings.push('Twitter OAuth is not configured; Twitter sign-in/linking is disabled')
+  }
+
+  if (!hasNonEmptyVar(appVars, 'RESEND_API_KEY')) {
+    warnings.push('RESEND_API_KEY is not configured; email auth, contact, waitlist, and crash alert emails are disabled')
+  }
+
+  return {
+    failures,
+    warnings,
+    providerKeysPresent,
+  }
+}
 
 function runRailway(args: string[]): string {
   try {
@@ -177,13 +238,30 @@ async function main(): Promise<void> {
   }
 
   const appVars = runRailwayJson<Record<string, string>>(['variable', 'list', '--service', APP_SERVICE, '--json'])
-  const dbTarget = resolveDbTarget(appVars)
+  const envAudit = describeAppEnvAudit(appVars)
+  const dbTarget = hasNonEmptyVar(appVars, 'DATABASE_URL') ? resolveDbTarget(appVars) : 'custom'
   const maintenanceMode = (appVars.MAINTENANCE_MODE ?? '').trim().toLowerCase()
+
+  failures.push(...envAudit.failures)
+
+  console.log('- App env audit:')
+  console.log(`  - Required vars present: ${REQUIRED_APP_VARS.filter((key) => hasNonEmptyVar(appVars, key)).length}/${REQUIRED_APP_VARS.length}`)
+  console.log(
+    `  - Prediction provider keys present: ${envAudit.providerKeysPresent.length > 0 ? envAudit.providerKeysPresent.join(', ') : '(none)'}`,
+  )
+  if (envAudit.warnings.length > 0) {
+    console.log('  - Non-blocking warnings:')
+    for (const warning of envAudit.warnings) {
+      console.log(`    - ${warning}`)
+    }
+  } else {
+    console.log('  - Non-blocking warnings: none')
+  }
 
   console.log(`- DATABASE_URL target: ${dbTarget}`)
   console.log(`- MAINTENANCE_MODE: ${maintenanceMode || '(unset)'}`)
 
-  if (dbTarget !== EXPECT_DB_TARGET) {
+  if (hasNonEmptyVar(appVars, 'DATABASE_URL') && dbTarget !== EXPECT_DB_TARGET) {
     failures.push(`DATABASE_URL target mismatch (expected ${EXPECT_DB_TARGET}, got ${dbTarget})`)
   }
   if (maintenanceMode !== EXPECT_MAINTENANCE_MODE) {

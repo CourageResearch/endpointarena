@@ -45,6 +45,7 @@ tmp/
 tmp/backups/
 tmp-*.dump
 tmp-dev-server*.log
+tmp-start*.log
 tmp-*.json
 
 # TypeScript

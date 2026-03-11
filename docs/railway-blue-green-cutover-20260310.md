@@ -30,6 +30,40 @@
 - Alert-signal check (health + DB connectivity + auth callback signals):
   - `npm run ops:check-prod-alerts`
 
+## Normal app-only release path (GitHub -> Railway)
+- Push the reviewed `master` commit to `origin/master`.
+- Railway auto-deploys `endpoint-arena-app` from `CourageResearch/endpointarena`; no GitHub Actions deploy workflow is required for the normal release path.
+- Normal app releases do not change `DATABASE_URL`, do not freeze writes, and do not use the cutover steps below.
+- Only use the cutover / rollback sections below if `npm run ops:check-prod-cutover` shows the app DB target changed unexpectedly or you are intentionally switching between blue and green.
+
+## Preflight before push
+1. Run `npm run lint`.
+2. Run `npm run build`.
+3. Run `railway status --json` and confirm `endpoint-arena-app` is still linked to `CourageResearch/endpointarena`.
+4. Run `npm run ops:check-prod-cutover` and make sure:
+   - the app deployment is healthy
+   - `DATABASE_URL` still points at the expected target
+   - the required app env vars exist
+   - at least one prediction provider key is present
+
+## Post-deploy validation
+1. Wait for the Railway deployment for `endpoint-arena-app` to finish successfully.
+2. Re-run `npm run ops:check-prod-cutover`.
+3. Run `npm run ops:check-prod-alerts`.
+4. Smoke-check:
+   - `GET /api/health`
+   - login
+   - `/markets`
+   - one market detail page
+   - `/admin`
+   - `/admin/resources`
+
+## App-only rollback
+1. Redeploy the previous successful deployment for `endpoint-arena-app`.
+2. Re-run `npm run ops:check-prod-cutover`.
+3. Re-run `npm run ops:check-prod-alerts`.
+4. Only use the blue/green DB rollback checklist below if the app is pointed at the wrong DB target or a DB cutover was part of the release.
+
 ## Cutover / re-cutover checklist (green target)
 1. Enable write freeze:
    - `railway variable set MAINTENANCE_MODE=true --service endpoint-arena-app`
