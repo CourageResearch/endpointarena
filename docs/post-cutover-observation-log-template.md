@@ -13,4 +13,4 @@ Use one row per day for routine production checks.
 4. Log any failures and whether rollback criteria were met.
 
 ## Escalation
-- If rollback thresholds in `docs/railway-blue-green-cutover-20260310.md` are met, execute rollback checklist immediately and note exact timestamp + reason in this log.
+- If rollback thresholds in `docs/railway-production-db-runbook-20260311.md` are met, execute rollback checklist immediately and note exact timestamp + reason in this log.
