@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'crypto'
 import { ExternalServiceError, ValidationError, isAppError } from '@/lib/errors'
 
-export const TWITTER_CHALLENGE_TTL_MINUTES = 10
-export const TWEET_MUST_STAY_LIVE_HOURS = 12
-export const X_CONNECTION_EXPIRED_REASON = 'x_connection_expired'
-export const X_CREDITS_DEPLETED_REASON = 'x_credits_depleted'
+const TWITTER_CHALLENGE_TTL_MINUTES = 10
+const TWEET_MUST_STAY_LIVE_HOURS = 12
+const X_CONNECTION_EXPIRED_REASON = 'x_connection_expired'
+const X_CREDITS_DEPLETED_REASON = 'x_credits_depleted'
 
 type TwitterUserMeResponse = {
   data?: {
@@ -29,7 +29,7 @@ type TwitterProblemResponse = {
   type?: string
 }
 
-export type VerifiedTweet = {
+type VerifiedTweet = {
   id: string
   text: string
   authorId: string
@@ -90,7 +90,7 @@ export function isXConnectionExpiredError(error: unknown): boolean {
     && error.message === 'Your X connection expired. Reconnect your X account and retry.'
 }
 
-export function isXCreditsDepletedError(error: unknown): boolean {
+function isXCreditsDepletedError(error: unknown): boolean {
   if (hasReason(error, X_CREDITS_DEPLETED_REASON)) return true
   return error instanceof ValidationError
     && error.message === 'X API credits are depleted. Add credits in X Developer Console, then try again.'
@@ -146,7 +146,7 @@ async function fetchFromTwitter<T>(
   return await response.json() as T
 }
 
-export async function fetchTwitterMe(accessToken: string): Promise<{ id: string; username: string | null; name: string | null }> {
+async function fetchTwitterMe(accessToken: string): Promise<{ id: string; username: string | null; name: string | null }> {
   const payload = await fetchFromTwitter<TwitterUserMeResponse>(
     'https://api.twitter.com/2/users/me?user.fields=username',
     accessToken,

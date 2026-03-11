@@ -12,7 +12,7 @@ interface ModelPricingEstimate {
 
 export const AI_COST_SOURCES = ['provider', 'estimated'] as const
 export type AICostSource = (typeof AI_COST_SOURCES)[number]
-export type AICostEstimationProfile =
+type AICostEstimationProfile =
   | 'default'
   | 'claude-deep-research'
   | 'gpt-deep-research'
@@ -20,6 +20,7 @@ export type AICostEstimationProfile =
   | 'gemini-deep-research'
   | 'gemini3-deep-research'
   | 'deepseek-reasoning'
+  | 'glm-reasoning'
   | 'llama4-reasoning'
   | 'kimi-thinking'
   | 'minimax-reasoning'
@@ -47,13 +48,14 @@ const GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS = 1
 const GEMINI_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS = 1
 const GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS = 1
 const DEEPSEEK_ESTIMATED_SEARCH_REQUESTS = 0
+const GLM_ESTIMATED_SEARCH_REQUESTS = 0
 const LLAMA4_ESTIMATED_SEARCH_REQUESTS = 0
 const KIMI_ESTIMATED_SEARCH_REQUESTS = 0
 const MINIMAX_ESTIMATED_SEARCH_REQUESTS = 0
 
 // Approximate public model pricing in USD per 1M tokens.
 // Keep this updated if provider pricing changes.
-export const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEstimate> = {
+const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEstimate> = {
   'claude-opus': {
     inputUsdPer1MTokens: 5,
     outputUsdPer1MTokens: 25,
@@ -97,11 +99,15 @@ export const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPri
     inputUsdPer1MTokens: 0.55,
     outputUsdPer1MTokens: 1.68,
   },
+  'glm-5': {
+    inputUsdPer1MTokens: 1,
+    outputUsdPer1MTokens: 4,
+  },
   'llama-4': {
     inputUsdPer1MTokens: 0.15,
     outputUsdPer1MTokens: 0.6,
   },
-  'kimi-k2': {
+  'kimi-k2.5': {
     inputUsdPer1MTokens: 2,
     outputUsdPer1MTokens: 8,
   },
@@ -132,7 +138,7 @@ function isUSOnlyInferenceGeo(value: unknown): boolean {
   return normalized === 'us' || normalized === 'usa' || normalized === 'united_states' || normalized === 'united-states'
 }
 
-export function estimateTokenCount(text: string): number {
+function estimateTokenCount(text: string): number {
   const normalized = text.trim()
   if (!normalized) {
     return 0
@@ -160,10 +166,13 @@ export function getCostEstimationProfileForModel(modelId: ModelId): AICostEstima
   if (modelId === 'deepseek-v3.2') {
     return 'deepseek-reasoning'
   }
+  if (modelId === 'glm-5') {
+    return 'glm-reasoning'
+  }
   if (modelId === 'llama-4') {
     return 'llama4-reasoning'
   }
-  if (modelId === 'kimi-k2') {
+  if (modelId === 'kimi-k2.5') {
     return 'kimi-thinking'
   }
   if (modelId === 'minimax-m2.5') {
@@ -277,9 +286,11 @@ export function estimateTextGenerationCost(args: {
     webSearchRequests = GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS
   } else if (args.profile === 'deepseek-reasoning' && args.modelId === 'deepseek-v3.2') {
     webSearchRequests = DEEPSEEK_ESTIMATED_SEARCH_REQUESTS
+  } else if (args.profile === 'glm-reasoning' && args.modelId === 'glm-5') {
+    webSearchRequests = GLM_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'llama4-reasoning' && args.modelId === 'llama-4') {
     webSearchRequests = LLAMA4_ESTIMATED_SEARCH_REQUESTS
-  } else if (args.profile === 'kimi-thinking' && args.modelId === 'kimi-k2') {
+  } else if (args.profile === 'kimi-thinking' && args.modelId === 'kimi-k2.5') {
     webSearchRequests = KIMI_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'minimax-reasoning' && args.modelId === 'minimax-m2.5') {
     webSearchRequests = MINIMAX_ESTIMATED_SEARCH_REQUESTS

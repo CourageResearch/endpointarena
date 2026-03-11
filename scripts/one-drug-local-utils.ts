@@ -3,7 +3,7 @@ export const ONE_DRUG_DATABASE_NAME = 'endpointarena_one_drug_local'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const PROHIBITED_HOST_SNIPPETS = ['railway', 'rlwy', 'amazonaws', 'render', 'supabase', 'neon']
 
-export function assertLocalOneDrugDatabaseUrl(connectionString: string): URL {
+function assertLocalDatabaseUrl(connectionString: string): URL {
   const trimmed = connectionString.trim()
   if (!trimmed) {
     throw new Error('DATABASE_URL is not set')
@@ -19,9 +19,33 @@ export function assertLocalOneDrugDatabaseUrl(connectionString: string): URL {
     throw new Error(`Refusing to run against non-local host: ${hostname}`)
   }
 
-  const databaseName = url.pathname.replace(/^\//, '')
+  return url
+}
+
+export function getDatabaseName(url: URL): string {
+  return url.pathname.replace(/^\//, '')
+}
+
+export function assertLocalOneDrugDatabaseUrl(connectionString: string): URL {
+  const url = assertLocalDatabaseUrl(connectionString)
+  const databaseName = getDatabaseName(url)
+
   if (databaseName !== ONE_DRUG_DATABASE_NAME) {
     throw new Error(`Refusing to run against database "${databaseName}". Expected "${ONE_DRUG_DATABASE_NAME}".`)
+  }
+
+  return url
+}
+
+export function assertLocalSourceDatabaseUrl(connectionString: string): URL {
+  const url = assertLocalDatabaseUrl(connectionString)
+  const databaseName = getDatabaseName(url)
+
+  if (!databaseName) {
+    throw new Error('SOURCE_DATABASE_URL must include a database name.')
+  }
+  if (databaseName === ONE_DRUG_DATABASE_NAME) {
+    throw new Error(`SOURCE_DATABASE_URL must not point to "${ONE_DRUG_DATABASE_NAME}".`)
   }
 
   return url

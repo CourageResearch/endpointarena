@@ -2,10 +2,10 @@ import { and, desc, eq, inArray } from 'drizzle-orm'
 import { isModelId, type ModelId } from '@/lib/constants'
 import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets } from '@/lib/db'
 
-export type AccountWithActor = typeof marketAccounts.$inferSelect & { actor: typeof marketActors.$inferSelect }
-export type PositionWithActor = typeof marketPositions.$inferSelect & { actor: typeof marketActors.$inferSelect }
-export type MarketActionWithActor = typeof marketActions.$inferSelect & { actor: typeof marketActors.$inferSelect }
-export type OpenMarket = typeof predictionMarkets.$inferSelect
+type AccountWithActor = typeof marketAccounts.$inferSelect & { actor: typeof marketActors.$inferSelect }
+type PositionWithActor = typeof marketPositions.$inferSelect & { actor: typeof marketActors.$inferSelect }
+type MarketActionWithActor = typeof marketActions.$inferSelect & { actor: typeof marketActors.$inferSelect }
+type OpenMarket = typeof predictionMarkets.$inferSelect
 
 export function toModelId(value: string | null | undefined): ModelId | null {
   return isModelId(value) ? value : null
@@ -44,7 +44,7 @@ export function buildActorAccountMaps(accounts: AccountWithActor[]): {
   }
 }
 
-export function buildPositionsByMarketActor(positions: PositionWithActor[]): Map<string, PositionWithActor> {
+function buildPositionsByMarketActor(positions: PositionWithActor[]): Map<string, PositionWithActor> {
   const positionsByMarketActor = new Map<string, PositionWithActor>()
   for (const position of positions) {
     positionsByMarketActor.set(buildMarketActorKey(position.marketId, position.actorId), position)
@@ -63,7 +63,7 @@ export function buildLatestCycleActionByMarketActor(actions: MarketActionWithAct
   return latestCycleActionByMarketActor
 }
 
-export function buildPositionsValueByActorId(args: {
+function buildPositionsValueByActorId(args: {
   positions: PositionWithActor[]
   marketById: Map<string, OpenMarket>
 }): Map<string, number> {
@@ -129,21 +129,4 @@ export async function loadOpenMarketActorState(): Promise<{
       marketById,
     }),
   }
-}
-
-export async function loadCycleActionsForOpenMarkets(openMarketIds: string[]): Promise<MarketActionWithActor[]> {
-  if (openMarketIds.length === 0) {
-    return []
-  }
-
-  return db.query.marketActions.findMany({
-    where: and(
-      inArray(marketActions.marketId, openMarketIds),
-      eq(marketActions.actionSource, 'cycle'),
-    ),
-    orderBy: [desc(marketActions.createdAt)],
-    with: {
-      actor: true,
-    },
-  })
 }

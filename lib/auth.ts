@@ -652,24 +652,3 @@ export async function ensureAdmin(): Promise<void> {
     throw new ForbiddenError('Forbidden - admin access required')
   }
 }
-
-// Check if the current request is from an admin user
-// Returns null if authorized, or a Response object if unauthorized
-export async function requireAdmin(): Promise<Response | null> {
-  try {
-    await ensureAdmin()
-    return null
-  } catch (error) {
-    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: error.status,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    return new Response(JSON.stringify({ error: 'Authentication check failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-}

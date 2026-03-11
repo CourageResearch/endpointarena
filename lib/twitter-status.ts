@@ -13,7 +13,7 @@ function trimOrNull(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-export type TwitterVerificationStatus = {
+type TwitterVerificationStatus = {
   connected: boolean
   verified: boolean
   requiresReconnect: boolean

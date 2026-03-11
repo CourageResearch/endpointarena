@@ -1,6 +1,6 @@
 export type HeaderCollection = Headers | Record<string, string | string[] | undefined> | null | undefined
 
-export type InferredGeo = {
+type InferredGeo = {
   country: string | null
   state: string | null
 }
@@ -27,7 +27,7 @@ function getObjectString(record: Record<string, unknown>, keys: string[]): strin
   return null
 }
 
-export function normalizeCountryName(value: unknown): string | null {
+function normalizeCountryName(value: unknown): string | null {
   const raw = toNonEmptyString(value)
   if (!raw) return null
 
@@ -44,7 +44,7 @@ export function normalizeCountryName(value: unknown): string | null {
   return raw
 }
 
-export function normalizeStateName(value: unknown): string | null {
+function normalizeStateName(value: unknown): string | null {
   const raw = toNonEmptyString(value)
   if (!raw) return null
   return raw
@@ -325,7 +325,7 @@ export async function inferGeoFromHeaders(
   }
 }
 
-export async function inferCountryFromHeaders(
+async function inferCountryFromHeaders(
   headers: HeaderCollection,
   options?: { fallbackCountry?: unknown; preferFallbackCountry?: boolean },
 ): Promise<string | null> {
@@ -363,6 +363,6 @@ export function formatStoredRegion(rawState: string | null | undefined): string 
   return normalized ?? 'Unknown'
 }
 
-export function formatStoredState(rawState: string | null | undefined): string {
+function formatStoredState(rawState: string | null | undefined): string {
   return formatStoredRegion(rawState)
 }

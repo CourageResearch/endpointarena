@@ -5,24 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
-import { detectGeoFromClient } from '@/lib/client-country'
-
-function normalizeCallbackUrl(raw: string | null): string {
-  if (!raw) return '/markets'
-  if (!raw.startsWith('/')) return '/markets'
-  if (raw.startsWith('//')) return '/markets'
-  return raw
-}
-
-function resolveDestination(url: string | null | undefined, fallback: string): string {
-  if (!url) return fallback
-  try {
-    const parsed = new URL(url, window.location.origin)
-    return normalizeCallbackUrl(`${parsed.pathname}${parsed.search}${parsed.hash}`)
-  } catch {
-    return fallback
-  }
-}
+import { buildProfileCallbackUrl, ensureAuthGeo, normalizeCallbackUrl, resolveDestination } from '@/lib/auth/client-navigation'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -63,7 +46,7 @@ export default function LoginPage() {
       window.history.replaceState(null, '', nextUrl)
     }
 
-    detectGeoFromClient().then((detectedGeo) => {
+    ensureAuthGeo({ country: '', state: '' }).then((detectedGeo) => {
       if (!cancelled && (detectedGeo.country || detectedGeo.state)) {
         setGeo(detectedGeo)
       }
@@ -82,10 +65,12 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const detectedGeo = geo.country || geo.state ? geo : await detectGeoFromClient()
+      const detectedGeo = await ensureAuthGeo(geo)
       if (!geo.country && !geo.state && (detectedGeo.country || detectedGeo.state)) {
         setGeo(detectedGeo)
       }
+
+      const profileCallbackUrl = buildProfileCallbackUrl(callbackUrl)
 
       const result = await signIn('credentials', {
         email,
@@ -95,11 +80,11 @@ export default function LoginPage() {
         state: detectedGeo.state,
         region: detectedGeo.state,
         redirect: false,
-        callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        callbackUrl: profileCallbackUrl,
       })
 
       if (result?.ok) {
-        router.push(resolveDestination(result.url, `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`))
+        router.push(resolveDestination(result.url, profileCallbackUrl))
         router.refresh()
       } else {
         if (result?.error === 'CredentialsSignin') {

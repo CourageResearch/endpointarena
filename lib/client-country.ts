@@ -1,4 +1,4 @@
-export type DetectedClientGeo = {
+type DetectedClientGeo = {
   country: string
   state: string
 }
@@ -31,7 +31,3 @@ export async function detectGeoFromClient(timeoutMs = 1500): Promise<DetectedCli
   }
 }
 
-export async function detectCountryFromClient(timeoutMs = 1500): Promise<string> {
-  const geo = await detectGeoFromClient(timeoutMs)
-  return geo.country
-}

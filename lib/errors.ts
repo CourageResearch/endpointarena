@@ -1,4 +1,4 @@
-export type ErrorCode =
+type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
@@ -14,7 +14,7 @@ type AppErrorOptions = {
   expose?: boolean
 }
 
-export class AppError extends Error {
+class AppError extends Error {
   readonly code: ErrorCode
   readonly status: number
   readonly details?: Record<string, unknown>

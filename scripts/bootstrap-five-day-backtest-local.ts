@@ -72,8 +72,9 @@ function getModelProbability(priceYes: number, modelId: ModelId, dayIndex: numbe
     'gemini-2.5': 0.02,
     'gemini-3-pro': 0.01,
     'deepseek-v3.2': -0.03,
+    'glm-5': 0.015,
     'llama-4': -0.02,
-    'kimi-k2': 0.04,
+    'kimi-k2.5': 0.04,
     'minimax-m2.5': 0.0,
   }
 
@@ -97,8 +98,9 @@ function getActionAmountUsd(actionType: 'BUY_YES' | 'BUY_NO' | 'HOLD', modelId: 
     'gemini-2.5': 60,
     'gemini-3-pro': 55,
     'deepseek-v3.2': 35,
+    'glm-5': 50,
     'llama-4': 30,
-    'kimi-k2': 80,
+    'kimi-k2.5': 80,
     'minimax-m2.5': 40,
   }
 

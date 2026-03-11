@@ -74,8 +74,9 @@ const COMPARISON_COMPANY_LABELS: Record<ModelId, string> = {
   'gemini-2.5': 'Google',
   'gemini-3-pro': 'Google',
   'deepseek-v3.2': 'DeepSeek',
+  'glm-5': 'Z.ai',
   'llama-4': 'Meta',
-  'kimi-k2': 'Moonshot',
+  'kimi-k2.5': 'Moonshot',
   'minimax-m2.5': 'MiniMax',
 }
 

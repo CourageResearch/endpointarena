@@ -3,7 +3,7 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { db, fdaCalendarEvents } from '@/lib/db'
 import { attachUnifiedPredictionsToEvents } from '@/lib/model-decision-snapshots'
-import { FDACalendarTableWithPredictions } from '@/app/fda-calendar2/FDACalendarTableWithPredictions'
+import { FDACalendarTableWithPredictions } from './FDACalendarTableWithPredictions'
 
 export const dynamic = 'force-dynamic'
 

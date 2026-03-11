@@ -6,7 +6,7 @@ function normalizeEmail(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-export function isLocalDevBypassEnabled(): boolean {
+function isLocalDevBypassEnabled(): boolean {
   return process.env.LOCAL_DEV_ADMIN_BYPASS === '1'
 }
 

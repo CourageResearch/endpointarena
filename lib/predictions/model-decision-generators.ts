@@ -29,8 +29,9 @@ interface ModelDecisionGeneratorConfig {
 
 const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
 const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
+const GLM_MODEL = 'zai-org/GLM-5'
 const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
-const KIMI_MODEL = 'moonshotai/Kimi-K2-Thinking'
+const KIMI_MODEL = 'moonshotai/Kimi-K2.5'
 const MINIMAX_MODEL = 'MiniMax-M2.5'
 const DEFAULT_USAGE: ProviderUsageSnapshot = {
   inputTokens: null,
@@ -315,16 +316,28 @@ async function generateLlama4Decision(input: ModelDecisionInput): Promise<ModelD
   })
 }
 
+async function generateGlm5Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+  return generateOpenAICompatibleDecision({
+    apiKey: process.env.BASETEN_GLM_API_KEY,
+    baseURL: BASETEN_BASE_URL,
+    model: GLM_MODEL,
+    input,
+    errorLabel: 'GLM 5',
+    maxTokens: 16000,
+    temperature: 0.6,
+  })
+}
+
 async function generateKimiDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
   return generateOpenAICompatibleDecision({
     apiKey: process.env.BASETEN_KIMI_API_KEY,
     baseURL: BASETEN_BASE_URL,
     model: KIMI_MODEL,
     input,
-    errorLabel: 'Kimi K2 Thinking',
+    errorLabel: 'Kimi K2.5 Thinking',
     maxTokens: 16000,
     temperature: 1.0,
-    extraBody: { reasoning_effort: 'high' },
+    extraBody: { chat_template_args: { enable_thinking: true } },
   })
 }
 
@@ -365,11 +378,15 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
     generator: generateDeepSeekDecision,
     enabled: () => !!process.env.BASETEN_DEEPSEEK_API_KEY,
   },
+  'glm-5': {
+    generator: generateGlm5Decision,
+    enabled: () => !!process.env.BASETEN_GLM_API_KEY,
+  },
   'llama-4': {
     generator: generateLlama4Decision,
     enabled: () => !!process.env.GROQ_API_KEY,
   },
-  'kimi-k2': {
+  'kimi-k2.5': {
     generator: generateKimiDecision,
     enabled: () => !!process.env.BASETEN_KIMI_API_KEY,
   },

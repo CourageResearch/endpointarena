@@ -1,4 +1,4 @@
-export type EventDateKind = 'public' | 'synthetic'
+type EventDateKind = 'public' | 'synthetic'
 
 export function isSyntheticEventDate(dateKind: string | null | undefined): dateKind is 'synthetic' {
   return dateKind === 'synthetic'

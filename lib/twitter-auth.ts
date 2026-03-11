@@ -30,7 +30,7 @@ type TwitterTokenRefreshPayload = {
   error?: string
 }
 
-export type TwitterTokenResolution = {
+type TwitterTokenResolution = {
   account: TwitterAccountRow | null
   accessToken: string | null
   requiresReconnect: boolean

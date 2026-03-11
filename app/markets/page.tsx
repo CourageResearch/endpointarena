@@ -2,7 +2,7 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { MarketBrowseHomepage } from '@/components/MarketBrowseHomepage'
 import { FooterGradientRule, PageFrame } from '@/components/site/chrome'
 import { getMarketOverviewData } from '@/lib/market-overview'
-import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
+import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 export const dynamic = 'force-dynamic'
 

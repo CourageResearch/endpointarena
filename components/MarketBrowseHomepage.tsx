@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, type KeyboardEvent, type MouseEvent } from 'react'
 import { EventDateBadge } from '@/components/EventDateBadge'
+import { useMarketOverview } from '@/components/markets/useMarketOverview'
 import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
 import {
   daysUntilUtc,
@@ -11,11 +12,10 @@ import {
   getMarketQuestion,
   getMarketSubtitle,
   getPriceMoveFromHistory,
-  useMarketOverview,
   type OverviewResponse,
   type OpenMarketRow,
   type RecentMarketActionRow,
-} from '@/components/markets/marketOverviewShared'
+} from '@/lib/markets/overview-shared'
 import { HeaderDots } from '@/components/site/chrome'
 
 type SortMode = 'trending' | 'endingSoon' | 'recentActivity' | 'bigMovers'

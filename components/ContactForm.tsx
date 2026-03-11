@@ -3,8 +3,15 @@
 import type { FormEvent } from 'react'
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import {
+  EMAIL_PATTERN,
+  FORM_ERROR_TEXT_CLASS,
+  FORM_FIELD_LABEL_CLASS,
+  FORM_INPUT_CLASS,
+  FORM_TEXTAREA_CLASS,
+  PRIMARY_FORM_BUTTON_CLASS,
+  getFormFeedbackClassName,
+} from '@/components/forms/shared'
 const MAX_MESSAGE_LENGTH = 5000
 
 type FormStatus = 'idle' | 'submitting' | 'success' | 'error'
@@ -115,7 +122,7 @@ export function ContactForm() {
     <form className="space-y-4" onSubmit={handleSubmit} noValidate>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label htmlFor="contact-name" className="text-xs uppercase tracking-[0.16em] text-[#8a8075]">
+          <label htmlFor="contact-name" className={FORM_FIELD_LABEL_CLASS}>
             Name
           </label>
           <input
@@ -131,15 +138,15 @@ export function ContactForm() {
             onBlur={() => setNameTouched(true)}
             placeholder="Ada Lovelace"
             aria-invalid={showNameError}
-            className="h-11 w-full rounded-md border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] focus:ring-2 focus:ring-[#d3b891]/30"
+            className={FORM_INPUT_CLASS}
           />
           {showNameError ? (
-            <p className="text-sm text-[#c24f45]">Name is required.</p>
+            <p className={FORM_ERROR_TEXT_CLASS}>Name is required.</p>
           ) : null}
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="contact-email" className="text-xs uppercase tracking-[0.16em] text-[#8a8075]">
+          <label htmlFor="contact-email" className={FORM_FIELD_LABEL_CLASS}>
             Email
           </label>
           <input
@@ -156,16 +163,16 @@ export function ContactForm() {
             placeholder="you@company.com"
             required
             aria-invalid={showEmailError}
-            className="h-11 w-full rounded-md border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] focus:ring-2 focus:ring-[#d3b891]/30"
+            className={FORM_INPUT_CLASS}
           />
           {showEmailError ? (
-            <p className="text-sm text-[#c24f45]">Enter a valid email address.</p>
+            <p className={FORM_ERROR_TEXT_CLASS}>Enter a valid email address.</p>
           ) : null}
         </div>
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="contact-message" className="text-xs uppercase tracking-[0.16em] text-[#8a8075]">
+        <label htmlFor="contact-message" className={FORM_FIELD_LABEL_CLASS}>
           Message
         </label>
         <textarea
@@ -180,11 +187,11 @@ export function ContactForm() {
           placeholder="What do you need help with?"
           rows={6}
           aria-invalid={showMessageError}
-          className="w-full rounded-md border border-[#e8ddd0] bg-white px-3 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] focus:ring-2 focus:ring-[#d3b891]/30"
+          className={FORM_TEXTAREA_CLASS}
         />
         <div className="flex items-center justify-between">
           {showMessageError ? (
-            <p className="text-sm text-[#c24f45]">
+            <p className={FORM_ERROR_TEXT_CLASS}>
               {messageTooLong ? `Message must be at most ${MAX_MESSAGE_LENGTH} characters.` : 'Message is required.'}
             </p>
           ) : (
@@ -200,7 +207,7 @@ export function ContactForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="ml-auto inline-flex h-11 items-center justify-center rounded-md bg-[#1a1a1a] px-5 text-sm font-medium text-white transition hover:bg-[#2d2d2d] disabled:cursor-not-allowed disabled:bg-[#b5aa9e]"
+          className={PRIMARY_FORM_BUTTON_CLASS}
         >
           {isSubmitting ? 'Sending...' : 'Send Message'}
         </button>
@@ -210,7 +217,7 @@ export function ContactForm() {
         <p
           role="status"
           aria-live="polite"
-          className={`text-sm ${status === 'error' ? 'text-[#c24f45]' : 'text-[#5d8e60]'}`}
+          className={getFormFeedbackClassName(status === 'error')}
         >
           {feedback}
         </p>

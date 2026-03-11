@@ -7,7 +7,7 @@ import type { HomeData } from '@/lib/home-data'
 import { FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
 import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
 import { HomeMarketsClient } from '@/components/HomeMarketsClient'
-import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
+import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 const HOMEPAGE_RANK_COLORS = ['#EF6F67', '#5DBB63', '#D39D2E', '#5BA5ED'] as const
 const UPCOMING_TABLE_FIXED_COLUMNS = 5

@@ -16,12 +16,12 @@ import { type Prediction, type PredictionHistoryEntry } from '@/lib/types'
 import { MODEL_DECISION_GENERATORS, type ModelDecisionGeneration } from '@/lib/predictions/model-decision-generators'
 import { buildModelDecisionPrompt, type ModelDecisionInput, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
 
-export type DecisionRunSource = 'manual' | 'cycle'
+type DecisionRunSource = 'manual' | 'cycle'
 export type LeaderboardPredictionMode = 'first' | 'final'
 
-export type UnifiedPredictionRecord = Prediction
+type UnifiedPredictionRecord = Prediction
 
-export type UnifiedPredictionHistoryMap = Map<string, Map<string, PredictionHistoryEntry[]>>
+type UnifiedPredictionHistoryMap = Map<string, Map<string, PredictionHistoryEntry[]>>
 
 function computeCorrectness(prediction: string, eventOutcome: string): boolean | null {
   if (eventOutcome !== 'Approved' && eventOutcome !== 'Rejected') {

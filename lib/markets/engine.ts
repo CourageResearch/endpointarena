@@ -10,7 +10,7 @@ const OPENING_PROBABILITY_FLOOR = 0.05
 const OPENING_PROBABILITY_CEIL = 0.95
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export type MarketState = {
+type MarketState = {
   qYes: number
   qNo: number
   b: number
@@ -28,8 +28,8 @@ type TradeCapConfig = Pick<
 
 type BuyMarketAction = Extract<MarketActionType, 'BUY_YES' | 'BUY_NO'>
 type SellMarketAction = Extract<MarketActionType, 'SELL_YES' | 'SELL_NO'>
-export type MarketActionSource = 'cycle' | 'human'
-export type ExecutableTradeCaps = {
+type MarketActionSource = 'cycle' | 'human'
+type ExecutableTradeCaps = {
   maxBuyUsd: number
   maxBuyYesUsd: number
   maxBuyNoUsd: number
@@ -160,11 +160,11 @@ function logSubExp(x: number, y: number): number {
   return x + Math.log1p(-Math.exp(y - x))
 }
 
-export function lmsrCost({ qYes, qNo, b }: MarketState): number {
+function lmsrCost({ qYes, qNo, b }: MarketState): number {
   return b * logSumExp(qYes / b, qNo / b)
 }
 
-export function lmsrPriceYes({ qYes, qNo, b }: MarketState): number {
+function lmsrPriceYes({ qYes, qNo, b }: MarketState): number {
   const z = (qNo - qYes) / b
   if (z > 40) return 0
   if (z < -40) return 1
@@ -181,7 +181,7 @@ export function createInitialMarketState(openingProbability: number, b: number =
   }
 }
 
-export function executeLmsrBudgetTrade(
+function executeLmsrBudgetTrade(
   state: MarketState,
   side: BuyMarketAction,
   budgetUsd: number
@@ -281,7 +281,7 @@ export function calculateExecutableTradeCaps(args: {
   }
 }
 
-export function executeLmsrShareSale(
+function executeLmsrShareSale(
   state: MarketState,
   side: SellMarketAction,
   sharesToSell: number
@@ -372,7 +372,7 @@ function solveConstrainedSaleForProceeds(
   return lowSale
 }
 
-export async function calculateHistoricalApprovalRate(): Promise<number> {
+async function calculateHistoricalApprovalRate(): Promise<number> {
   // Use an external historical benchmark instead of local DB composition.
   return clampProbability(HISTORICAL_PDUFA_APPROVAL_BASELINE)
 }
@@ -471,7 +471,7 @@ export async function openMarketForEvent(fdaEventId: string) {
   return market
 }
 
-export async function getOpenMarkets() {
+async function getOpenMarkets() {
   return db.query.predictionMarkets.findMany({
     where: eq(predictionMarkets.status, 'OPEN'),
   })

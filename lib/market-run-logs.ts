@@ -109,7 +109,7 @@ export async function appendMarketRunLog(input: {
   })
 }
 
-export async function getRunningMarketRunId(): Promise<string | null> {
+async function getRunningMarketRunId(): Promise<string | null> {
   const activeRun = await db.query.marketRuns.findFirst({
     where: eq(marketRuns.status, 'running'),
     orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],

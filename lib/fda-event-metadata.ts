@@ -7,7 +7,7 @@ import {
   fdaEventSources,
 } from '@/lib/db'
 
-export type EnrichedFDAEventMetadata = {
+type EnrichedFDAEventMetadata = {
   externalKey: string | null
   source: string | null
   newsLinks: string[]

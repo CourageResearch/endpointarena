@@ -5,24 +5,36 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { ModelIcon } from '@/components/ModelIcon'
+import { MarketActivityFeed } from '@/components/markets/dashboard/activity-feed'
+import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
+import { MarketDetailsPanel } from '@/components/markets/dashboard/details-panel'
+import {
+  APPROVE_TEXT_CLASS,
+  REJECT_TEXT_CLASS,
+  type ActivityFilterOption,
+  type HumanTradeDirection,
+  type HumanTradeOutcome,
+  type MarketDashboardDecisionRow,
+  type TraderSnapshot,
+  type TweetVerificationStatus,
+} from '@/components/markets/dashboard/shared'
+import { MarketTradePanel } from '@/components/markets/dashboard/trade-panel'
+import { MarketDetailChart, TinyPriceSparkline } from '@/components/markets/marketOverviewCharts'
+import { useMarketOverview } from '@/components/markets/useMarketOverview'
 import { HeaderDots } from '@/components/site/chrome'
 import {
-  MarketDetailChart,
-  TinyPriceSparkline,
   daysUntilUtc,
   formatCompactMoney,
-  formatDateUtc,
   formatPercent,
   formatSignedPercent,
   formatShortDateUtc,
   getMarketQuestion,
   getMarketSubtitle,
   getPriceMoveFromHistory,
-  useMarketOverview,
   type OverviewResponse,
   type OpenMarketRow,
   type RecentMarketActionRow,
-} from '@/components/markets/marketOverviewShared'
+} from '@/lib/markets/overview-shared'
 import { getApiErrorMessage } from '@/lib/client-api'
 import { MODEL_IDS, MODEL_INFO, abbreviateType, type ModelId } from '@/lib/constants'
 import { cn } from '@/lib/utils'
@@ -32,15 +44,6 @@ type CommentSort = 'newest' | 'oldest'
 type PositionSortKey = 'model' | 'netStance' | 'yesShares' | 'noShares' | 'position' | 'pnl'
 type PositionSortDirection = 'asc' | 'desc'
 type PositionSortState = { key: PositionSortKey; direction: PositionSortDirection }
-const APPROVE_TEXT_CLASS = 'text-[#2f7b63]'
-const REJECT_TEXT_CLASS = 'text-[#b3566b]'
-const DETAILS_CARD_SHELL_CLASS = 'rounded-sm p-[1px]'
-const DETAILS_CARD_INNER_CLASS = 'h-full rounded-sm bg-white/95 px-3 py-2'
-const DETAILS_CARD_BORDER_STYLE = { background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' } as const
-const DETAILS_TOP_LABEL_CLASS = 'text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]'
-const DETAILS_TOP_VALUE_CLASS = 'text-sm leading-snug text-[#7c7267]'
-const DETAILS_TOP_SUBVALUE_CLASS = 'text-base leading-snug text-[#8b8176]'
-const DETAILS_BODY_TEXT_CLASS = 'text-sm leading-snug text-[#7c7267]'
 
 type MarketEntry = {
   market: OpenMarketRow
@@ -53,27 +56,7 @@ type MarketEntry = {
   absMove: number
 }
 
-type TweetVerificationStatus = {
-  authenticated: boolean
-  connected: boolean
-  verified: boolean
-  username: string | null
-  mustStayUntil: string | null
-  profile: {
-    pointsBalance: number
-    rank: number
-  } | null
-}
-
 type HumanTradeSide = 'BUY_YES' | 'BUY_NO' | 'SELL_YES' | 'SELL_NO'
-type HumanTradeDirection = 'buy' | 'sell'
-type HumanTradeOutcome = 'yes' | 'no'
-
-type TraderSnapshot = {
-  cashBalance: number
-  yesShares: number
-  noShares: number
-}
 
 type TradeExecutionResponse = {
   success: boolean
@@ -176,76 +159,10 @@ function toUtcDayKey(value: string | null | undefined): string | null {
   return date.toISOString().slice(0, 10)
 }
 
-function formatDateTimeLocalCompact(value: string | null | undefined): string {
-  if (!value) return 'Unknown time'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Unknown time'
-  const datePart = `${date.getMonth() + 1}/${date.getDate()}`
-  const timePart = date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-  return `${datePart}, ${timePart}`
-}
-
-function formatDateUtcCompact(value: string | null | undefined): string {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    year: '2-digit',
-    month: 'numeric',
-    day: 'numeric',
-  })
-}
-
-function getActionBadge(action: RecentMarketActionRow):
-  | { kind: 'trade'; verb: 'buy' | 'sell'; outcome: 'Yes' | 'No'; outcomeTone: 'approve' | 'reject' }
-  | { kind: 'status'; label: 'Hold' | 'Error' | 'Skipped'; tone: 'neutral' | 'warning' | 'muted' } {
-  if (action.status === 'error') {
-    return { kind: 'status', label: 'Error', tone: 'warning' }
-  }
-  if (action.status === 'skipped') {
-    return { kind: 'status', label: 'Skipped', tone: 'muted' }
-  }
-  if (action.action === 'BUY_YES') {
-    return { kind: 'trade', verb: 'buy', outcome: 'Yes', outcomeTone: 'approve' }
-  }
-  if (action.action === 'BUY_NO') {
-    return { kind: 'trade', verb: 'buy', outcome: 'No', outcomeTone: 'reject' }
-  }
-  if (action.action === 'SELL_YES') {
-    return { kind: 'trade', verb: 'sell', outcome: 'Yes', outcomeTone: 'approve' }
-  }
-  if (action.action === 'SELL_NO') {
-    return { kind: 'trade', verb: 'sell', outcome: 'No', outcomeTone: 'reject' }
-  }
-  return { kind: 'status', label: 'Hold', tone: 'neutral' }
-}
-
-function getReasonText(action: RecentMarketActionRow): string {
-  if (action.status === 'error') {
-    return action.error || action.errorDetails || action.explanation || 'Action failed without details'
-  }
-  if (action.status === 'skipped') {
-    return action.explanation || 'Skipped this market in the run'
-  }
-  return action.explanation || 'No explanation provided'
-}
-
 function formatShares(value: number): string {
   const abs = Math.abs(value)
   const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2
   return value.toFixed(digits).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
-}
-
-function clipText(value: string | null | undefined, maxChars: number): string {
-  const normalized = (value || '').replace(/\s+/g, ' ').trim()
-  if (!normalized) return 'No details'
-  if (normalized.length <= maxChars) return normalized
-  return `${normalized.slice(0, maxChars).replace(/[ ,;:]+$/, '')}...`
 }
 
 function getSignedMoneyClass(value: number): string {
@@ -269,109 +186,6 @@ function getPositionModelLabel(modelId: ModelId, fullName: string): string {
     default:
       return fullName
   }
-}
-
-function CommentCard({
-  action,
-}: {
-  action: RecentMarketActionRow
-}) {
-  const model = MODEL_INFO[action.modelId]
-  const badge = getActionBadge(action)
-  const reason = getReasonText(action)
-  const priceMove = action.priceAfter - action.priceBefore
-  const hasPriceMove = Math.abs(priceMove) >= 0.0001
-  const moveTone = priceMove > 0.0001 ? 'up' : priceMove < -0.0001 ? 'down' : 'default'
-  const changeText = hasPriceMove ? formatSignedPercent(priceMove, 1) : 'No change'
-  const changeClass =
-    moveTone === 'up'
-      ? APPROVE_TEXT_CLASS
-      : moveTone === 'down'
-        ? REJECT_TEXT_CLASS
-        : 'text-[#6d645a]'
-  const probabilityRangeText = `${formatPercent(action.priceBefore, 1)} → ${formatPercent(action.priceAfter, 1)}`
-  const sizeText = action.usdAmount > 0 ? formatCompactMoney(action.usdAmount) : '—'
-  const deltaText = changeText
-  const deltaClass = hasPriceMove ? changeClass : 'text-[#6d645a]'
-  const actionValue =
-    badge.kind === 'trade' ? (
-      <span className="inline-flex flex-wrap items-baseline gap-1.5 font-medium text-[#6d645a]">
-        <span
-          className={cn(
-            'text-[12px] leading-none',
-            badge.verb === 'buy' ? APPROVE_TEXT_CLASS : REJECT_TEXT_CLASS,
-          )}
-          aria-hidden="true"
-        >
-          {badge.verb === 'buy' ? '↗' : '↘'}
-        </span>
-        <span className="capitalize">{badge.verb}</span>
-        <span className={badge.outcomeTone === 'approve' ? APPROVE_TEXT_CLASS : REJECT_TEXT_CLASS}>
-          {badge.outcome}
-        </span>
-      </span>
-    ) : (
-      <span
-        className={cn(
-          'font-medium',
-          badge.tone === 'warning'
-            ? 'text-amber-600'
-            : badge.tone === 'muted'
-              ? 'text-zinc-500'
-              : 'text-[#5f79a6]',
-        )}
-      >
-        {badge.label}
-      </span>
-    )
-  return (
-    <article data-reasoning-card="true" className="w-full rounded-none p-px" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-      <div className="rounded-none bg-white/95 p-3 sm:p-3.5">
-        <div className="min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 flex flex-1 items-center gap-2">
-              <div
-                className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-[#9a9084]"
-                aria-hidden="true"
-              >
-                <ModelIcon id={action.modelId} className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0 flex items-baseline gap-3 sm:gap-4">
-                <div className="min-w-0 truncate text-[14px] leading-tight font-medium text-[#2f2a24]" title={model.fullName}>
-                  {model.fullName}
-                </div>
-                <div className="shrink-0 text-[13px] leading-[1.3]">
-                  {actionValue}
-                </div>
-              </div>
-            </div>
-            <div className="shrink-0 text-right text-[12px] leading-tight font-medium tabular-nums text-[#8f8478]">
-              {formatDateTimeLocalCompact(action.createdAt || action.runDate)}
-            </div>
-          </div>
-
-          <dl className="mt-1.5 grid grid-cols-1 gap-y-1.5 text-[13px] leading-[1.35]">
-            <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <dt className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Size:</dt>
-              <dd className="shrink-0 break-words font-medium tabular-nums text-[#6d645a]">{sizeText}</dd>
-              <dt className="ml-2 shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Delta:</dt>
-              <dd className="min-w-0 flex-1 break-words font-medium tabular-nums">
-                <span className={cn('font-medium tabular-nums', deltaClass)}>{deltaText}</span>
-                <span className="text-[#6d645a]"> ({probabilityRangeText})</span>
-              </dd>
-            </div>
-          </dl>
-
-          <div className="mt-2">
-            <div className="mb-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">
-              {action.status === 'error' ? 'Error Note' : action.status === 'skipped' ? 'Skip Note' : 'Reasoning'}
-            </div>
-            <p className="truncate-wrap text-[13px] leading-[1.45] text-[#3f392f] whitespace-pre-wrap">{reason}</p>
-          </div>
-        </div>
-      </div>
-    </article>
-  )
 }
 
 function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentMarketActionRow[]): MarketEntry[] {
@@ -694,7 +508,6 @@ export function MarketDashboardConcept5({
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
   const isTradeVerified = Boolean(verificationStatus?.verified)
   const showTradeSidebar = useStackedLayout
-  const pdufaDateText = formatDateUtc(selectedMarket.event?.pdufaDate)
   const pdufaCountdownText = pdufaDays == null
     ? 'No date'
     : pdufaDays < 0
@@ -706,8 +519,6 @@ export function MarketDashboardConcept5({
     ? abbreviateType(selectedMarket.event.applicationType)
     : null
   const drugDescriptionText = selectedMarket.event?.eventDescription?.trim() || '-'
-  const companyNameText = selectedMarket.event?.companyName || selectedEntry.subtitle
-  const placeholderNctId = `NCT${selectedMarket.marketId.replace(/\D/g, '').slice(0, 8).padStart(8, '0')}`
   const activityFilterModelIds = useMemo(
     () =>
       Array.from(MODEL_IDS).sort((left, right) => {
@@ -716,6 +527,14 @@ export function MarketDashboardConcept5({
         return leftModel.fullName.localeCompare(rightModel.fullName)
       }),
     [],
+  )
+  const activityFilterOptions: ActivityFilterOption[] = useMemo(
+    () => activityFilterModelIds.map((modelId) => ({
+      id: modelId,
+      label: MODEL_INFO[modelId].fullName,
+      active: commentModelFilter !== 'all' && commentModelFilter.includes(modelId),
+    })),
+    [activityFilterModelIds, commentModelFilter],
   )
   const selectedTradeSide = toHumanTradeSide(tradeDirection, tradeOutcome)
   const marketDetailHref = `/markets/${encodeURIComponent(selectedMarket.marketId)}`
@@ -812,7 +631,7 @@ export function MarketDashboardConcept5({
         return a.index - b.index
       })
 
-  const decisionRows = selectedMarket.modelStates.map((state) => {
+  const decisionRows: MarketDashboardDecisionRow[] = selectedMarket.modelStates.map((state) => {
     const model = MODEL_INFO[state.modelId]
     const latestDecision = state.latestDecision
     const history = state.decisionHistory
@@ -838,6 +657,34 @@ export function MarketDashboardConcept5({
       callToneClass,
     }
   })
+
+  const handleSelectAllCommentModels = () => {
+    startTransition(() => setCommentModelFilter('all'))
+  }
+
+  const handleToggleCommentModel = (modelId: ModelId) => {
+    startTransition(() => {
+      setCommentModelFilter((current) => {
+        if (current === 'all') {
+          return [modelId]
+        }
+        if (current.includes(modelId)) {
+          if (current.length === 1) return 'all'
+          return current.filter((id) => id !== modelId)
+        }
+        const next = MODEL_IDS.filter((id) => id === modelId || current.includes(id))
+        return next.length === MODEL_IDS.length ? 'all' : next
+      })
+    })
+  }
+
+  const handleToggleCommentSort = () => {
+    startTransition(() => setCommentSort(commentSort === 'newest' ? 'oldest' : 'newest'))
+  }
+
+  const handleTradeAmountChange = (value: string) => {
+    setTradeAmountUsd(value.replace(/[^0-9.]/g, ''))
+  }
 
   const handlePositionSort = (key: PositionSortKey) => {
     startTransition(() => {
@@ -897,529 +744,10 @@ export function MarketDashboardConcept5({
       await reload()
     } catch (err) {
       setTradeError(err instanceof Error ? err.message : 'Failed to execute trade')
-    } finally {
+  } finally {
       setTradeSubmitting(false)
     }
   }
-
-  const renderDetailsPanel = ({ className }: { className?: string } = {}) => (
-    <section className={cn('space-y-3', className)}>
-      <div className="px-1">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#aa9d8d]">Details</div>
-          <HeaderDots />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-6">
-
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Countdown</dt>
-              <dd className="mt-2 space-y-1">
-                <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS)}>{pdufaCountdownText}</div>
-              </dd>
-            </div>
-          </div>
-
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Date</dt>
-              <dd className={cn('mt-2 tabular-nums', DETAILS_TOP_VALUE_CLASS)}>
-                {formatDateUtcCompact(selectedMarket.event?.pdufaDate)}
-              </dd>
-            </div>
-          </div>
-
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Volume</dt>
-              <dd className="mt-2 space-y-1">
-                <div className={cn('tabular-nums whitespace-nowrap', DETAILS_TOP_VALUE_CLASS)}>
-                  {formatCompactMoney(selectedStats.totalVolumeUsd)}
-                </div>
-              </dd>
-            </div>
-          </div>
-
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Type</dt>
-              <dd className="mt-2 space-y-1">
-                <div className={DETAILS_BODY_TEXT_CLASS}>
-                  {applicationTypeMeta
-                    ? (
-                      <Link
-                        href={`/glossary#term-${applicationTypeMeta.anchor}`}
-                        className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                      >
-                        {applicationTypeMeta.display}
-                      </Link>
-                    )
-                    : '-'}
-                </div>
-              </dd>
-            </div>
-          </div>
-
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Ticker</dt>
-              <dd className="mt-2 space-y-1">
-                <div className={DETAILS_BODY_TEXT_CLASS}>
-                  {primaryTicker ? (
-                    <a
-                      href={`https://finance.yahoo.com/quote/${encodeURIComponent(primaryTicker)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                    >
-                      ${primaryTicker}
-                    </a>
-                  ) : '-'}
-                </div>
-              </dd>
-            </div>
-          </div>
-
-          <div className={DETAILS_CARD_SHELL_CLASS} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className={DETAILS_TOP_LABEL_CLASS}>NCT</dt>
-              <dd className="mt-2 space-y-1">
-                <a
-                  href={`https://clinicaltrials.gov/study/${encodeURIComponent(placeholderNctId)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-[13px] leading-snug text-[#7c7267] underline decoration-dotted decoration-[#ddd2c5] decoration-[1px] underline-offset-4 hover:text-[#1a1a1a] hover:decoration-[#b5aa9e]"
-                >
-                  {placeholderNctId}
-                </a>
-              </dd>
-            </div>
-          </div>
-
-        </dl>
-
-        <dl className="grid grid-cols-1 gap-2">
-          <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
-            <div className={cn('flex h-full flex-col', DETAILS_CARD_INNER_CLASS)}>
-              <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Drug Description</dt>
-              <dd className={cn('mt-2', DETAILS_BODY_TEXT_CLASS)}>
-                {drugDescriptionText}
-              </dd>
-            </div>
-          </div>
-        </dl>
-      </div>
-    </section>
-  )
-
-  const renderTradePanel = ({ className }: { className?: string } = {}) => (
-    <section className={cn('space-y-3', className)}>
-      <div className="px-1">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#aa9d8d]">Trade</div>
-          <HeaderDots />
-        </div>
-      </div>
-
-      {sessionStatus === 'unauthenticated' ? (
-        <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
-          <p className="font-medium text-[#1a1a1a]">Create an account to trade.</p>
-          <p className="mt-1">Create your account to place paper trades and track your points.</p>
-          <Link
-            href={`/signup?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
-            className="mt-2 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
-          >
-            Create account
-          </Link>
-        </div>
-      ) : null}
-
-      {sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified ? (
-        <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
-          <p className="font-medium text-[#1a1a1a]">Complete one-time X verification to trade.</p>
-          <p className="mt-1">
-            {verificationStatus.connected
-              ? 'Post one verification tweet to unlock trading.'
-              : 'Connect your X account and post one verification tweet to unlock trading.'}
-          </p>
-          <Link
-            href={`/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
-            className="mt-2 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
-          >
-            Complete verification
-          </Link>
-        </div>
-      ) : null}
-
-      <div className="rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
-        <div className="rounded-md bg-white/95 p-4">
-          <div className="-mx-4 -mt-4 mb-4 border-b border-[#e8ddd0] bg-[#f8f3ec]/45 px-4">
-            <div className="flex items-center gap-0">
-              <button
-                type="button"
-                disabled={!isTradeVerified}
-                onClick={() => setTradeDirection('buy')}
-                style={{ transform: 'scale(0.58)', transformOrigin: 'left bottom' }}
-                className={cn(
-                  'inline-flex items-end border-b px-0 pb-0.5 pt-2 text-xs font-medium uppercase tracking-[0.16em] leading-none font-sans transition-colors focus-visible:outline-none disabled:cursor-not-allowed',
-                  tradeDirection === 'buy'
-                    ? isTradeVerified
-                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                      : 'border-[#b5aa9e] text-[#b5aa9e]'
-                    : isTradeVerified
-                      ? 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]'
-                      : 'border-transparent text-[#b5aa9e]',
-                )}
-              >
-                Buy
-              </button>
-              <button
-                type="button"
-                disabled={!isTradeVerified}
-                onClick={() => setTradeDirection('sell')}
-                style={{ transform: 'scale(0.58)', transformOrigin: 'left bottom' }}
-                className={cn(
-                  'inline-flex items-end border-b px-0 pb-0.5 pt-2 text-xs font-medium uppercase tracking-[0.16em] leading-none font-sans transition-colors focus-visible:outline-none disabled:cursor-not-allowed',
-                  tradeDirection === 'sell'
-                    ? isTradeVerified
-                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                      : 'border-[#b5aa9e] text-[#b5aa9e]'
-                    : isTradeVerified
-                      ? 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]'
-                      : 'border-transparent text-[#b5aa9e]',
-                )}
-              >
-                Sell
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={!isTradeVerified}
-              onClick={() => setTradeOutcome('yes')}
-              className={cn(
-                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-65',
-                tradeOutcome === 'yes'
-                  ? tradeDirection === 'buy'
-                    ? 'border-[#5DBB63] bg-[#5DBB63]/15 text-[#2f7b40]'
-                    : 'border-[#EF6F67] bg-[#EF6F67]/15 text-[#9b3028]'
-                  : 'border-[#e8ddd0] bg-[#f7f2eb] text-[#8a8075] hover:bg-[#f3ebe0]',
-              )}
-            >
-              Yes {yesPriceCents}¢
-            </button>
-            <button
-              type="button"
-              disabled={!isTradeVerified}
-              onClick={() => setTradeOutcome('no')}
-              className={cn(
-                'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-65',
-                tradeOutcome === 'no'
-                  ? 'border-[#EF6F67] bg-[#EF6F67]/15 text-[#9b3028]'
-                  : 'border-[#e8ddd0] bg-[#f7f2eb] text-[#8a8075] hover:bg-[#f3ebe0]',
-              )}
-            >
-              No {noPriceCents}¢
-            </button>
-          </div>
-
-          <form className="mt-3 space-y-3" onSubmit={handleTradeSubmit}>
-            <label className="block">
-              <span className={cn(
-                'mb-1 block text-[11px] uppercase tracking-[0.16em]',
-                isTradeVerified ? 'text-[#8a8075]' : 'text-[#b5aa9e]',
-              )}>
-                Amount (USD)
-              </span>
-              <input
-                value={tradeAmountUsd}
-                onChange={(event) => setTradeAmountUsd(event.target.value.replace(/[^0-9.]/g, ''))}
-                inputMode="decimal"
-                disabled={!isTradeVerified}
-                className="h-10 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e] disabled:placeholder:text-[#cfc4b7]"
-                placeholder="1"
-              />
-            </label>
-
-            <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
-              Paper Trading
-            </div>
-
-            <button
-              type="submit"
-              disabled={!canSubmitTrade}
-              className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[#d9ccbc] bg-[#f7f2eb] px-4 text-sm font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e]"
-            >
-              {tradeSubmitting ? 'Submitting...' : `Trade ${tradeDirection === 'buy' ? 'Buy' : 'Sell'}`}
-            </button>
-          </form>
-
-          {tradeError ? (
-            <p className="mt-3 rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
-              {tradeError}
-            </p>
-          ) : null}
-
-          {tradeNotice ? (
-            <p className="mt-3 rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 px-3 py-2 text-sm text-[#2f7b40]">
-              {tradeNotice}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {isTradeVerified ? (
-        <>
-          <dl className="px-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#7c7267]">
-            <div className="inline-flex items-baseline gap-1.5">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">Cash</dt>
-              <dd className="text-[13px] font-normal text-[#6d645a]">{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
-            </div>
-            <div className="inline-flex items-baseline gap-1.5">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">YES Shares</dt>
-              <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
-            </div>
-            <div className="inline-flex items-baseline gap-1.5">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">NO Shares</dt>
-              <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.noShares ?? 0)}</dd>
-            </div>
-          </dl>
-          {traderSnapshotLoading ? (
-            <p className="px-1 text-[11px] text-[#8a8075]">Refreshing balances...</p>
-          ) : null}
-        </>
-      ) : null}
-      </section>
-    )
-
-  const renderDecisionSnapshotsPanel = ({ className }: { className?: string } = {}) => (
-    <section className={cn('space-y-4', className)}>
-      <div className="px-1">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Decision Snapshots</div>
-          <HeaderDots />
-        </div>
-        <p className="mt-2 text-sm text-[#7c7267]">
-          Latest forecast per model, plus full snapshot history before trade guardrails and execution.
-        </p>
-      </div>
-
-      {decisionRows.length === 0 ? (
-        <div className="mx-1 rounded-xl border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
-          No decision snapshots recorded for this market yet.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-          {decisionRows.map(({ state, model, latestDecision, history, callLabel, callToneClass }) => (
-            <div key={`${selectedMarket.marketId}-decision-${state.modelId}`} className="mx-1 rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
-              <div className="h-full rounded-md bg-white/95 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]" aria-hidden="true">
-                        <ModelIcon id={state.modelId} className="h-4 w-4 grayscale" />
-                      </span>
-                      <span className="truncate text-sm font-medium text-[#1a1a1a]" title={model.fullName}>
-                        {model.fullName}
-                      </span>
-                    </div>
-                    <div className={cn('mt-2 text-sm font-medium', callToneClass)}>
-                      {callLabel}
-                      {latestDecision?.forecast.approvalProbability != null ? ` · p=${Math.round(latestDecision.forecast.approvalProbability * 100)}%` : ''}
-                      {latestDecision?.forecast.confidence != null ? ` · conf=${Math.round(latestDecision.forecast.confidence)}%` : ''}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right text-[11px] text-[#8a8075]">
-                    <div>{history.length} snapshot{history.length === 1 ? '' : 's'}</div>
-                    <div>{formatDateTimeLocalCompact(latestDecision?.createdAt)}</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-2 text-sm text-[#7c7267]">
-                  <div>
-                    <span className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Latest Thesis</span>
-                    <div className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#8a8075]">
-                      {latestDecision?.forecast.reasoning?.trim() || 'No thesis provided'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 border-t border-[#e8ddd0] pt-3">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">History</div>
-                  <div className="reasoning-scrollbox mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
-                    {history.length > 0 ? history.map((snapshot) => {
-                      const snapshotCallClass =
-                        snapshot.forecast.binaryCall === 'approved'
-                          ? APPROVE_TEXT_CLASS
-                          : snapshot.forecast.binaryCall === 'rejected'
-                            ? REJECT_TEXT_CLASS
-                            : 'text-[#7c7267]'
-                      return (
-                        <div key={snapshot.id} className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-                          <div className="flex items-center justify-between gap-3 text-[11px]">
-                            <span className={cn('font-medium', snapshotCallClass)}>
-                              {snapshot.forecast.binaryCall === 'approved' ? 'Approve' : 'Reject'}
-                              {` · p=${Math.round(snapshot.forecast.approvalProbability * 100)}%`}
-                              {snapshot.forecast.confidence != null ? ` · conf=${Math.round(snapshot.forecast.confidence)}%` : ''}
-                            </span>
-                            <span className="text-[#8a8075]">{formatDateTimeLocalCompact(snapshot.createdAt)}</span>
-                          </div>
-                          <div className="mt-1 text-[11px] text-[#7c7267]">
-                            {snapshot.action
-                              ? `${snapshot.action.type} ${formatCompactMoney(snapshot.action.amountUsd)} · ${clipText(snapshot.action.explanation, 110)}`
-                              : 'No proposed action'}
-                          </div>
-                        </div>
-                      )
-                    }) : (
-                      <div className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-xs text-[#8a8075]">
-                        No snapshot history yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-
-  const renderReasoningPanel = ({
-	    className,
-	    compactHeight = false,
-	  }: {
-	    className?: string
-	    compactHeight?: boolean
-	  } = {}) => (
-    <section className={cn('min-w-0 space-y-2', className)}>
-      <div className="px-1 py-1">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Activity Feed</div>
-          <HeaderDots />
-          <span
-            className={cn(
-              'inline-flex h-6 w-[10.5rem] items-center justify-center rounded-full border bg-white/85 px-2.5 text-[11px] text-[#7c7267] transition-opacity',
-              scrubbedChartDayKey && scrubbedChartDayLabel
-                ? 'border-[#d9ccbc] opacity-100'
-                : 'border-transparent opacity-0',
-            )}
-            aria-hidden={!scrubbedChartDayKey || !scrubbedChartDayLabel}
-          >
-            {scrubbedChartDayKey && scrubbedChartDayLabel ? `Chart day: ${scrubbedChartDayLabel}` : 'Chart day: --'}
-          </span>
-        </div>
-
-        <div className="mt-3 flex items-start gap-3">
-          <div className="min-w-0 flex flex-1 flex-col gap-1.5">
-            <div className="min-w-0 flex flex-wrap items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => startTransition(() => setCommentModelFilter('all'))}
-                aria-pressed={allModelsSelected}
-                aria-label="All Models"
-                title="All Models"
-                style={{ fontSize: '12px', lineHeight: 1.1 }}
-                className={cn(
-                  'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-1 font-medium transition',
-                  allModelsSelected
-                    ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                    : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
-                )}
-              >
-                <span>All</span>
-              </button>
-
-              {activityFilterModelIds.map((modelId) => {
-                const active = commentModelFilter !== 'all' && commentModelFilter.includes(modelId)
-                const model = MODEL_INFO[modelId]
-                return (
-                  <button
-                    key={`${selectedMarket.marketId}-${modelId}`}
-                    type="button"
-                    onClick={() => startTransition(() => {
-                      setCommentModelFilter((current) => {
-                        if (current === 'all') {
-                          return [modelId]
-                        }
-                        if (current.includes(modelId)) {
-                          if (current.length === 1) return 'all'
-                          return current.filter((id) => id !== modelId)
-                        }
-                        const next = MODEL_IDS.filter((id) => id === modelId || current.includes(id))
-                        return next.length === MODEL_IDS.length ? 'all' : next
-                      })
-                    })}
-                    aria-label={model.fullName}
-                    title={model.fullName}
-                    aria-pressed={active}
-                    style={{ fontSize: '12px', lineHeight: 1.1 }}
-                    className={cn(
-                      'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-1 font-medium transition',
-                      active
-                        ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                        : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
-                    )}
-                  >
-                    <span>{model.fullName}</span>
-                  </button>
-                )
-              })}
-              <button
-                type="button"
-                onClick={() => startTransition(() => setCommentSort(commentSort === 'newest' ? 'oldest' : 'newest'))}
-                aria-label={commentSort === 'newest' ? 'Sort newest first' : 'Sort oldest first'}
-                title={commentSort === 'newest' ? 'Sorting: newest first' : 'Sorting: oldest first'}
-                className="ml-auto inline-flex h-7 w-7 items-center justify-center text-sm font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
-              >
-                <span className="text-sm leading-none" aria-hidden="true">
-                  {commentSort === 'newest' ? '↓' : '↑'}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-2">
-	        {selectedMarketActions.length === 0 ? (
-	          <div className="rounded-xl border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
-	            No activity entries match the current filters
-	            {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
-	            {' '}for this market.
-	          </div>
-	        ) : (
-	          <>
-	            <div className="space-y-2">
-	              {visibleActivityActions.map((action) => (
-                  <CommentCard
-                    key={action.id}
-                    action={action}
-                  />
-                ))}
-	            </div>
-              {hasMoreActivity ? (
-                <div className="mt-3 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowAllActivity((current) => !current)}
-                    className="inline-flex items-center justify-center rounded-md border border-[#dfd3c3] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#8a8075] transition-colors hover:border-[#c8b7a2] hover:text-[#1a1a1a]"
-                  >
-                    {showAllActivity ? 'Show less' : `Show more (${selectedMarketActions.length - visibleActivityActions.length})`}
-                  </button>
-                </div>
-              ) : null}
-	          </>
-        )}
-      </div>
-    </section>
-  )
 
   if (viewMode === 'decision-snapshots') {
     return (
@@ -1444,7 +772,11 @@ export function MarketDashboardConcept5({
           </div>
         </section>
 
-        {renderDecisionSnapshotsPanel({ className: 'px-1' })}
+        <MarketDecisionSnapshotsPanel
+          className="px-1"
+          selectedMarketId={selectedMarket.marketId}
+          decisionRows={decisionRows}
+        />
       </div>
     )
   }
@@ -1616,9 +948,34 @@ export function MarketDashboardConcept5({
 		                  />
 
 		                  <div className={cn(useMarkets2Layout ? 'py-3' : 'py-1')} aria-hidden="true" />
-		                  {useStackedLayout ? renderDetailsPanel() : null}
+		                  {useStackedLayout ? (
+                        <MarketDetailsPanel
+                          selectedMarket={selectedMarket}
+                          totalVolumeUsd={selectedStats.totalVolumeUsd}
+                          pdufaCountdownText={pdufaCountdownText}
+                          applicationTypeMeta={applicationTypeMeta}
+                          primaryTicker={primaryTicker}
+                          drugDescriptionText={drugDescriptionText}
+                        />
+                      ) : null}
 		                  {useStackedLayout ? <div className="py-2" aria-hidden="true" /> : null}
-		                  {useMarkets2Layout ? renderReasoningPanel({ compactHeight: true }) : null}
+		                  {useMarkets2Layout ? (
+                        <MarketActivityFeed
+                          scrubbedChartDayKey={scrubbedChartDayKey}
+                          scrubbedChartDayLabel={scrubbedChartDayLabel}
+                          allModelsSelected={allModelsSelected}
+                          filterOptions={activityFilterOptions}
+                          commentSort={commentSort}
+                          selectedMarketActions={selectedMarketActions}
+                          visibleActivityActions={visibleActivityActions}
+                          hasMoreActivity={hasMoreActivity}
+                          showAllActivity={showAllActivity}
+                          onSelectAllModels={handleSelectAllCommentModels}
+                          onToggleModel={handleToggleCommentModel}
+                          onToggleSort={handleToggleCommentSort}
+                          onToggleShowAll={() => setShowAllActivity((current) => !current)}
+                        />
+                      ) : null}
 		                  </div>
 
 				                  {(!useStackedLayout || showTradeSidebar) ? (
@@ -1628,7 +985,39 @@ export function MarketDashboardConcept5({
 				                      useStackedLayout && 'px-1',
 				                      useMarkets2Layout && 'xl:col-start-2 xl:row-start-1 xl:space-y-6 xl:sticky xl:top-20',
 				                    )}>
-				                    {useStackedLayout ? renderTradePanel({ className: 'lg:sticky lg:top-20' }) : renderDetailsPanel()}
+				                    {useStackedLayout ? (
+                              <MarketTradePanel
+                                className="lg:sticky lg:top-20"
+                                sessionStatus={sessionStatus}
+                                verificationStatus={verificationStatus}
+                                safeCallbackUrl={safeCallbackUrl}
+                                isTradeVerified={isTradeVerified}
+                                tradeDirection={tradeDirection}
+                                tradeOutcome={tradeOutcome}
+                                yesPriceCents={yesPriceCents}
+                                noPriceCents={noPriceCents}
+                                tradeAmountUsd={tradeAmountUsd}
+                                canSubmitTrade={canSubmitTrade}
+                                tradeSubmitting={tradeSubmitting}
+                                tradeError={tradeError}
+                                tradeNotice={tradeNotice}
+                                traderSnapshot={traderSnapshot}
+                                traderSnapshotLoading={traderSnapshotLoading}
+                                onTradeDirectionChange={setTradeDirection}
+                                onTradeOutcomeChange={setTradeOutcome}
+                                onTradeAmountChange={handleTradeAmountChange}
+                                onSubmit={handleTradeSubmit}
+                              />
+                            ) : (
+                              <MarketDetailsPanel
+                                selectedMarket={selectedMarket}
+                                totalVolumeUsd={selectedStats.totalVolumeUsd}
+                                pdufaCountdownText={pdufaCountdownText}
+                                applicationTypeMeta={applicationTypeMeta}
+                                primaryTicker={primaryTicker}
+                                drugDescriptionText={drugDescriptionText}
+                              />
+                            )}
 
 	                  {useMarkets2Layout ? (
 	                    <>
@@ -1782,7 +1171,24 @@ export function MarketDashboardConcept5({
 	              </div>
 	            </div>
 	            </div>
-	            {!useMarkets2Layout ? renderReasoningPanel({ className: 'px-1' }) : null}
+	            {!useMarkets2Layout ? (
+                <MarketActivityFeed
+                  className="px-1"
+                  scrubbedChartDayKey={scrubbedChartDayKey}
+                  scrubbedChartDayLabel={scrubbedChartDayLabel}
+                  allModelsSelected={allModelsSelected}
+                  filterOptions={activityFilterOptions}
+                  commentSort={commentSort}
+                  selectedMarketActions={selectedMarketActions}
+                  visibleActivityActions={visibleActivityActions}
+                  hasMoreActivity={hasMoreActivity}
+                  showAllActivity={showAllActivity}
+                  onSelectAllModels={handleSelectAllCommentModels}
+                  onToggleModel={handleToggleCommentModel}
+                  onToggleSort={handleToggleCommentSort}
+                  onToggleShowAll={() => setShowAllActivity((current) => !current)}
+                />
+              ) : null}
 	            {!useMarkets2Layout ? (
 	              <div className="mt-10 px-1">
 	                <div className="mb-2 px-1">

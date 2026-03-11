@@ -191,7 +191,7 @@ export async function AdminConsoleLayout({
             </div>
           </div>
           <div className="mt-1">
-            <nav className="flex overflow-x-auto border-b border-[#d8ccb9]">
+            <nav className="admin-tabs-scroll flex overflow-x-auto border-b border-[#d8ccb9]">
               {ADMIN_TABS.map((tab) => renderTabLink(tab.id))}
             </nav>
             {topActions ? (

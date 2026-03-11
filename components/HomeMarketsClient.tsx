@@ -1,7 +1,7 @@
 'use client'
 
 import { MarketBrowseHomepage } from '@/components/MarketBrowseHomepage'
-import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
+import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 export function HomeMarketsClient({
   detailBasePath,

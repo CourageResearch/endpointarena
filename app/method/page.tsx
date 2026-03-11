@@ -79,6 +79,14 @@ export default async function MethodPage() {
       reasoningDetail: 'extra_body.reasoning_effort = high',
       maxTokens: '16,000 output',
     },
+    'glm-5': {
+      version: 'zai-org/GLM-5',
+      internet: false,
+      internetDetail: 'No web-search tool configured in the combined decision generator',
+      reasoning: 'Provider default',
+      reasoningDetail: 'No explicit reasoning parameter configured',
+      maxTokens: '16,000 output',
+    },
     'llama-4': {
       version: 'meta-llama/llama-4-scout-17b-16e-instruct',
       internet: false,
@@ -87,12 +95,12 @@ export default async function MethodPage() {
       reasoningDetail: 'No explicit reasoning parameter configured',
       maxTokens: '8,192 output',
     },
-    'kimi-k2': {
-      version: 'moonshotai/Kimi-K2-Thinking',
+    'kimi-k2.5': {
+      version: 'moonshotai/Kimi-K2.5',
       internet: false,
       internetDetail: 'No web-search tool configured in the combined decision generator',
       reasoning: 'Thinking',
-      reasoningDetail: 'extra_body.reasoning_effort = high',
+      reasoningDetail: 'extra_body.chat_template_args.enable_thinking = true',
       maxTokens: '16,000 output',
     },
     'minimax-m2.5': {

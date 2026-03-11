@@ -20,14 +20,14 @@ export interface CNPVEventSeed {
   matchDrugNames?: string[]
 }
 
-export const FDA_CNPV_PROGRAM_URL = 'https://www.fda.gov/industry/commissioners-national-priority-voucher-cnpv-pilot-program'
-export const FDA_CNPV_FIRST_BATCH_URL = 'https://www.fda.gov/news-events/press-announcements/fda-awards-first-ever-national-priority-vouchers-nine-sponsors'
-export const FDA_CNPV_SECOND_BATCH_URL = 'https://www.fda.gov/news-events/press-announcements/fda-awards-second-batch-national-priority-vouchers'
-export const FDA_CNPV_FIRST_APPROVAL_URL = 'https://www.fda.gov/news-events/press-announcements/first-approval-commissioners-national-priority-voucher-pilot-program-strengthens-domestic-antibiotic'
-export const FDA_CNPV_PROACTIVE_AWARD_URL = 'https://www.fda.gov/news-events/press-announcements/fda-proactively-awards-national-priority-voucher-based-strong-phase-3-study-results'
-export const FDA_CNPV_TWO_VOUCHERS_URL = 'https://www.fda.gov/news-events/press-announcements/fda-grants-two-national-priority-vouchers'
-export const FDA_CNPV_SECOND_APPROVAL_URL = 'https://www.fda.gov/news-events/press-announcements/fda-grants-second-approval-under-national-priority-voucher-pilot-program'
-export const FDA_CNPV_THIRD_APPROVAL_URL = 'https://www.fda.gov/news-events/press-announcements/fda-grants-third-approval-under-national-priority-voucher-program'
+const FDA_CNPV_PROGRAM_URL = 'https://www.fda.gov/industry/commissioners-national-priority-voucher-cnpv-pilot-program'
+const FDA_CNPV_FIRST_BATCH_URL = 'https://www.fda.gov/news-events/press-announcements/fda-awards-first-ever-national-priority-vouchers-nine-sponsors'
+const FDA_CNPV_SECOND_BATCH_URL = 'https://www.fda.gov/news-events/press-announcements/fda-awards-second-batch-national-priority-vouchers'
+const FDA_CNPV_FIRST_APPROVAL_URL = 'https://www.fda.gov/news-events/press-announcements/first-approval-commissioners-national-priority-voucher-pilot-program-strengthens-domestic-antibiotic'
+const FDA_CNPV_PROACTIVE_AWARD_URL = 'https://www.fda.gov/news-events/press-announcements/fda-proactively-awards-national-priority-voucher-based-strong-phase-3-study-results'
+const FDA_CNPV_TWO_VOUCHERS_URL = 'https://www.fda.gov/news-events/press-announcements/fda-grants-two-national-priority-vouchers'
+const FDA_CNPV_SECOND_APPROVAL_URL = 'https://www.fda.gov/news-events/press-announcements/fda-grants-second-approval-under-national-priority-voucher-pilot-program'
+const FDA_CNPV_THIRD_APPROVAL_URL = 'https://www.fda.gov/news-events/press-announcements/fda-grants-third-approval-under-national-priority-voucher-program'
 
 export const CNPV_EVENT_SEEDS: CNPVEventSeed[] = [
   {

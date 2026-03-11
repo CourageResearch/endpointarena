@@ -6,24 +6,7 @@ import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
 import { STARTER_POINTS } from '@/lib/constants'
-import { detectGeoFromClient } from '@/lib/client-country'
-
-function normalizeCallbackUrl(raw: string | null): string {
-  if (!raw) return '/markets'
-  if (!raw.startsWith('/')) return '/markets'
-  if (raw.startsWith('//')) return '/markets'
-  return raw
-}
-
-function resolveDestination(url: string | null | undefined, fallback: string): string {
-  if (!url) return fallback
-  try {
-    const parsed = new URL(url, window.location.origin)
-    return normalizeCallbackUrl(`${parsed.pathname}${parsed.search}${parsed.hash}`)
-  } catch {
-    return fallback
-  }
-}
+import { buildProfileCallbackUrl, ensureAuthGeo, normalizeCallbackUrl, resolveDestination } from '@/lib/auth/client-navigation'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -47,7 +30,7 @@ export default function SignupPage() {
       setErrorCode('SIGNUPS_CLOSED')
     }
 
-    detectGeoFromClient().then((detectedGeo) => {
+    ensureAuthGeo({ country: '', state: '' }).then((detectedGeo) => {
       if (!cancelled && (detectedGeo.country || detectedGeo.state)) {
         setGeo(detectedGeo)
       }
@@ -78,10 +61,12 @@ export default function SignupPage() {
     setErrorCode('')
 
     try {
-      const detectedGeo = geo.country || geo.state ? geo : await detectGeoFromClient()
+      const detectedGeo = await ensureAuthGeo(geo)
       if (!geo.country && !geo.state && (detectedGeo.country || detectedGeo.state)) {
         setGeo(detectedGeo)
       }
+
+      const profileCallbackUrl = buildProfileCallbackUrl(callbackUrl)
 
       const result = await signIn('credentials', {
         email,
@@ -91,14 +76,14 @@ export default function SignupPage() {
         state: detectedGeo.state,
         region: detectedGeo.state,
         redirect: false,
-        callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        callbackUrl: profileCallbackUrl,
       })
 
       if (result?.ok) {
         // Trigger first-account points celebration on profile load.
         sessionStorage.setItem('ea-points-award', String(STARTER_POINTS))
         localStorage.setItem('ea-points-award-pending', String(STARTER_POINTS))
-        const destination = resolveDestination(result.url, `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+        const destination = resolveDestination(result.url, profileCallbackUrl)
         const [pathname, queryString = ''] = destination.split('?')
         const params = new URLSearchParams(queryString)
         params.set('signupAward', String(STARTER_POINTS))

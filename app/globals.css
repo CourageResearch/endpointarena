@@ -118,6 +118,29 @@ textarea {
   display: none;
 }
 
+/* Thinner, neutral scrollbar for admin tab strip */
+.admin-tabs-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #b5aa9e transparent;
+}
+
+.admin-tabs-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.admin-tabs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-tabs-scroll::-webkit-scrollbar-thumb {
+  background: #b5aa9e;
+  border-radius: 9999px;
+}
+
+.admin-tabs-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9e907f;
+}
+
 /* Visible, subtle scrollbar for reasoning feed panel */
 .reasoning-scrollbox {
   scrollbar-width: thin;

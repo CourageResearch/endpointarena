@@ -22,6 +22,7 @@
     "db:migrate": "drizzle-kit generate",
     "db:ensure-market-schema": "node scripts/ensure-market-schema.js",
     "db:create-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/create-one-drug-local-db.ts",
+    "db:reset-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/reset-one-drug-local-db.ts",
     "db:create-local-v2": "node scripts/run-with-env.js .env.local.v2 -- npx tsx scripts/create-local-v2-db.ts",
     "db:bootstrap-one-drug-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/bootstrap-one-drug-local.ts",
     "db:bootstrap-local-v2": "node scripts/run-with-env.js .env.local.v2 -- npx tsx scripts/bootstrap-local-v2.ts",
@@ -30,6 +31,7 @@
     "db:check-local-v2-fixture": "node scripts/run-with-env.js .env.local.v2 -- npx tsx scripts/check-local-v2-fixture.ts",
     "db:import-prod-clone-to-local-v2": "node scripts/run-with-env.js .env.local.v2 -- npx tsx scripts/import-prod-clone-to-local-v2.ts",
     "db:validate-local-v2": "node scripts/run-with-env.js .env.local.v2 -- npx tsx scripts/validate-local-v2-pipeline.ts",
+    "db:rebuild-one-drug-local": "npm run db:reset-one-drug-local && npm run db:push-one-drug-local && npm run db:bootstrap-one-drug-local && npm run db:check-one-drug-local",
     "db:bootstrap-five-day-backtest-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/bootstrap-five-day-backtest-local.ts",
     "db:check-five-day-backtest-local": "node scripts/run-with-env.js .env.one-drug.local -- npx tsx scripts/check-five-day-backtest-local.ts",
     "db:add-market-runtime-config": "npx tsx scripts/add-market-runtime-config.ts",
@@ -44,7 +46,7 @@
     "db:shorten-twitter-hold-12h": "npx tsx scripts/shorten-twitter-hold-to-12h.ts",
     "db:audit-market": "npx tsx scripts/audit-market-db.ts",
     "db:audit-market-v2": "node scripts/run-with-env.js .env.local.v2 -- npx tsx scripts/audit-market-db-v2.ts",
-    "db:seed": "npx tsx scripts/seed.ts",
+    "db:seed": "npm run db:import-cnpv",
     "db:import-cnpv:dry-run": "npx tsx scripts/import-cnpv.ts --dry-run",
     "db:import-cnpv": "npx tsx scripts/import-cnpv.ts --apply",
     "db:seed-fda": "npm run db:import-cnpv",
@@ -66,8 +68,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "resend": "^6.9.2",
-    "tailwind-merge": "^3.5.0",
-    "three": "^0.183.1"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",

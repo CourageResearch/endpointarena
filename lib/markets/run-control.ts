@@ -1,12 +1,12 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db, marketRuns } from '@/lib/db'
 
-export const DAILY_RUN_STOP_REQUEST_REASON =
+const DAILY_RUN_STOP_REQUEST_REASON =
   'Stop requested by admin. Finish the current in-flight model step, then halt the run.'
 export const DAILY_RUN_STOPPED_REASON =
   'Daily market cycle stopped by admin after the current in-flight model step.'
 
-export class DailyRunStoppedError extends Error {
+class DailyRunStoppedError extends Error {
   constructor(message: string = DAILY_RUN_STOPPED_REASON) {
     super(message)
     this.name = 'DailyRunStoppedError'

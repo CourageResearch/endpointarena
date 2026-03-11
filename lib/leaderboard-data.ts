@@ -6,7 +6,7 @@ import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-nam
 import { enrichFdaEvents } from '@/lib/fda-event-metadata'
 import { loadOpenMarketActorState } from '@/lib/market-read-model'
 
-export interface ModelLeaderboardEntry {
+interface ModelLeaderboardEntry {
   id: ModelId
   correct: number
   wrong: number
@@ -21,7 +21,7 @@ export interface ModelLeaderboardEntry {
   pnl: number | null
 }
 
-export interface HumanLeaderboardEntry {
+interface HumanLeaderboardEntry {
   userId: string
   displayName: string
   cashBalance: number

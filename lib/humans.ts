@@ -2,8 +2,8 @@ import { and, eq, gt, isNotNull, sql } from 'drizzle-orm'
 import { db, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
 
-export const DAILY_REFILL_POINTS = 5
-export const DAILY_REFILL_BALANCE_CAP = 12000
+const DAILY_REFILL_POINTS = 5
+const DAILY_REFILL_BALANCE_CAP = 12000
 
 function toUtcDayStamp(value: Date): string {
   return value.toISOString().slice(0, 10)

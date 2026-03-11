@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { db, fdaCalendarEvents, marketActions, marketDailySnapshots, marketPriceSnapshots, marketRuns } from '@/lib/db'
-import type { OverviewResponse } from '@/components/markets/marketOverviewShared'
+import type { OverviewResponse } from '@/lib/markets/overview-shared'
 import { getMarketDecisionHistoryByMarketIds } from '@/lib/model-decision-snapshots'
 import type { ModelDecisionSnapshot, PredictionHistoryEntry } from '@/lib/types'
 import {

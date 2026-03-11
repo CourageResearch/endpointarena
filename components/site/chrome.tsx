@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
-export const SITE_BG_CLASS = 'bg-[#F5F2ED]'
-export const SITE_TEXT_CLASS = 'text-[#1a1a1a]'
+const SITE_BG_CLASS = 'bg-[#F5F2ED]'
+const SITE_TEXT_CLASS = 'text-[#1a1a1a]'
 export const BRAND_DOT_COLORS = {
   coral: '#EF6F67',
   green: '#5DBB63',

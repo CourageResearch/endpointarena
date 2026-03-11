@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { NextRequest } from 'next/server'
-import { type ModelId, MODEL_IDS } from '@/lib/constants'
+import { DEPRECATED_MODEL_IDS, type ModelId, MODEL_IDS } from '@/lib/constants'
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
@@ -15,7 +15,7 @@ const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
 
 type StreamRequestBody = {
   fdaEventId?: string
-  modelId?: ModelId
+  modelId?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -26,15 +26,20 @@ export async function POST(request: NextRequest) {
 
     const body = await parseJsonBody<StreamRequestBody>(request)
     const fdaEventId = typeof body.fdaEventId === 'string' ? body.fdaEventId : ''
-    const modelId = body.modelId
+    const modelIdRaw = typeof body.modelId === 'string' ? body.modelId.trim() : ''
 
-    if (!fdaEventId || !modelId) {
+    if (!fdaEventId || !modelIdRaw) {
       throw new ValidationError('fdaEventId and modelId are required')
     }
 
-    if (!MODEL_ID_SET.has(modelId)) {
-      throw new ValidationError(`Unknown modelId: ${modelId}`)
+    if (DEPRECATED_MODEL_IDS.includes(modelIdRaw as (typeof DEPRECATED_MODEL_IDS)[number])) {
+      throw new ValidationError(`Model ${modelIdRaw} is deprecated. Use kimi-k2.5 instead.`)
     }
+
+    if (!MODEL_ID_SET.has(modelIdRaw as ModelId)) {
+      throw new ValidationError(`Unknown modelId: ${modelIdRaw}`)
+    }
+    const modelId = modelIdRaw as ModelId
 
     const event = await db.query.fdaCalendarEvents.findFirst({
       where: eq(fdaCalendarEvents.id, fdaEventId),
@@ -127,8 +132,6 @@ export async function POST(request: NextRequest) {
           revalidatePath('/markets')
           revalidatePath('/admin')
           revalidatePath('/fda-calendar')
-          revalidatePath('/fda-calendar2')
-          revalidatePath('/fda-calendar3')
           revalidatePath(`/markets/${encodeURIComponent(market.id)}`)
 
           send({
