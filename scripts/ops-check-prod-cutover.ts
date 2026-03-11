@@ -167,16 +167,31 @@ function resolveServiceInstance(status: RailwayStatus, service: string): Service
   return match
 }
 
-function resolveDbTarget(appVars: Record<string, string>): 'green' | 'blue' | 'custom' {
-  const active = appVars.DATABASE_URL?.trim()
-  const green = appVars.GREEN_DATABASE_URL?.trim()
-  const blue = appVars.BLUE_DATABASE_URL?.trim()
+function extractDatabaseHost(databaseUrl: string | undefined): string | null {
+  const value = databaseUrl?.trim()
+  if (!value) return null
+  try {
+    return new URL(value).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
 
+function resolveDbTarget(appVars: Record<string, string>, greenDbVars: Record<string, string>): 'green' | 'custom' {
+  const active = appVars.DATABASE_URL?.trim()
   if (!active) {
     throw new Error('DATABASE_URL is missing on endpoint-arena-app')
   }
-  if (green && active === green) return 'green'
-  if (blue && active === blue) return 'blue'
+  const activeHost = extractDatabaseHost(active)
+  if (!activeHost) return 'custom'
+
+  const greenHosts = new Set<string>()
+  const privateHost = extractDatabaseHost(greenDbVars.DATABASE_URL)
+  const publicHost = extractDatabaseHost(greenDbVars.DATABASE_PUBLIC_URL)
+  if (privateHost) greenHosts.add(privateHost)
+  if (publicHost) greenHosts.add(publicHost)
+
+  if (greenHosts.has(activeHost)) return 'green'
   return 'custom'
 }
 
@@ -238,8 +253,15 @@ async function main(): Promise<void> {
   }
 
   const appVars = runRailwayJson<Record<string, string>>(['variable', 'list', '--service', APP_SERVICE, '--json'])
+  const greenDbVars = runRailwayJson<Record<string, string>>([
+    'variable',
+    'list',
+    '--service',
+    GREEN_DB_SERVICE,
+    '--json',
+  ])
   const envAudit = describeAppEnvAudit(appVars)
-  const dbTarget = hasNonEmptyVar(appVars, 'DATABASE_URL') ? resolveDbTarget(appVars) : 'custom'
+  const dbTarget = hasNonEmptyVar(appVars, 'DATABASE_URL') ? resolveDbTarget(appVars, greenDbVars) : 'custom'
   const maintenanceMode = (appVars.MAINTENANCE_MODE ?? '').trim().toLowerCase()
 
   failures.push(...envAudit.failures)
@@ -276,13 +298,6 @@ async function main(): Promise<void> {
     failures.push(`Health endpoint returned ${healthStatus}`)
   }
 
-  const greenDbVars = runRailwayJson<Record<string, string>>([
-    'variable',
-    'list',
-    '--service',
-    GREEN_DB_SERVICE,
-    '--json',
-  ])
   const greenDbPublicUrl = greenDbVars.DATABASE_PUBLIC_URL?.trim()
   if (!greenDbPublicUrl) {
     failures.push(`DATABASE_PUBLIC_URL is missing on ${GREEN_DB_SERVICE}`)
