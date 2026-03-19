@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import dotenv from 'dotenv'
 import { eq } from 'drizzle-orm'
+import postgres from 'postgres'
 import { CNPV_EVENT_SEEDS, type CNPVEventSeed } from '../lib/cnpv-data'
 
 dotenv.config({ path: '.env.local', quiet: true })
@@ -83,6 +85,203 @@ type PendingMarketAction = {
   drugName: string
 }
 
+type LegacyDecisionSchema = 'legacy_and_new' | 'new_only'
+
+type EventCoreValues = {
+  companyName: string
+  symbols: string
+  drugName: string
+  applicationType: string
+  decisionDate: Date
+  eventDescription: string
+  outcome: 'Pending' | 'Approved' | 'Rejected'
+  outcomeDate: Date | null
+  decisionDateKind: 'hard' | 'soft'
+  cnpvAwardDate: Date | null
+  drugStatus: string
+  therapeuticArea: string
+  updatedAt: Date
+  scrapedAt: Date
+}
+
+function toLegacyDateKind(decisionDateKind: 'hard' | 'soft'): 'public' | 'synthetic' {
+  return decisionDateKind === 'soft' ? 'synthetic' : 'public'
+}
+
+async function detectLegacyDecisionSchema(sql: postgres.Sql): Promise<LegacyDecisionSchema> {
+  const columns = await sql<{ column_name: string }[]>`
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'fda_calendar_events'
+      and column_name in ('pdufa_date', 'date_kind')
+  `
+
+  const names = new Set(columns.map((column) => column.column_name))
+  const hasPdufaDate = names.has('pdufa_date')
+  const hasDateKind = names.has('date_kind')
+
+  if (hasPdufaDate && hasDateKind) {
+    return 'legacy_and_new'
+  }
+
+  if (!hasPdufaDate && !hasDateKind) {
+    return 'new_only'
+  }
+
+  throw new Error('Unexpected partial legacy decision schema on fda_calendar_events.')
+}
+
+async function insertEventCore(args: {
+  sql: postgres.Sql
+  schemaMode: LegacyDecisionSchema
+  values: EventCoreValues & { createdAt: Date }
+}): Promise<string> {
+  const id = randomUUID()
+  const { sql, schemaMode, values } = args
+
+  if (schemaMode === 'legacy_and_new') {
+    await sql`
+      insert into fda_calendar_events (
+        id,
+        company_name,
+        symbols,
+        drug_name,
+        application_type,
+        pdufa_date,
+        decision_date,
+        event_description,
+        outcome,
+        outcome_date,
+        date_kind,
+        decision_date_kind,
+        cnpv_award_date,
+        drug_status,
+        therapeutic_area,
+        created_at,
+        updated_at,
+        scraped_at
+      ) values (
+        ${id},
+        ${values.companyName},
+        ${values.symbols},
+        ${values.drugName},
+        ${values.applicationType},
+        ${values.decisionDate},
+        ${values.decisionDate},
+        ${values.eventDescription},
+        ${values.outcome},
+        ${values.outcomeDate},
+        ${toLegacyDateKind(values.decisionDateKind)},
+        ${values.decisionDateKind},
+        ${values.cnpvAwardDate},
+        ${values.drugStatus},
+        ${values.therapeuticArea},
+        ${values.createdAt},
+        ${values.updatedAt},
+        ${values.scrapedAt}
+      )
+    `
+
+    return id
+  }
+
+  await sql`
+    insert into fda_calendar_events (
+      id,
+      company_name,
+      symbols,
+      drug_name,
+      application_type,
+      decision_date,
+      event_description,
+      outcome,
+      outcome_date,
+      decision_date_kind,
+      cnpv_award_date,
+      drug_status,
+      therapeutic_area,
+      created_at,
+      updated_at,
+      scraped_at
+    ) values (
+      ${id},
+      ${values.companyName},
+      ${values.symbols},
+      ${values.drugName},
+      ${values.applicationType},
+      ${values.decisionDate},
+      ${values.eventDescription},
+      ${values.outcome},
+      ${values.outcomeDate},
+      ${values.decisionDateKind},
+      ${values.cnpvAwardDate},
+      ${values.drugStatus},
+      ${values.therapeuticArea},
+      ${values.createdAt},
+      ${values.updatedAt},
+      ${values.scrapedAt}
+    )
+  `
+
+  return id
+}
+
+async function updateEventCore(args: {
+  sql: postgres.Sql
+  schemaMode: LegacyDecisionSchema
+  eventId: string
+  values: EventCoreValues
+}): Promise<void> {
+  const { sql, schemaMode, eventId, values } = args
+
+  if (schemaMode === 'legacy_and_new') {
+    await sql`
+      update fda_calendar_events
+      set
+        company_name = ${values.companyName},
+        symbols = ${values.symbols},
+        drug_name = ${values.drugName},
+        application_type = ${values.applicationType},
+        pdufa_date = ${values.decisionDate},
+        decision_date = ${values.decisionDate},
+        event_description = ${values.eventDescription},
+        outcome = ${values.outcome},
+        outcome_date = ${values.outcomeDate},
+        date_kind = ${toLegacyDateKind(values.decisionDateKind)},
+        decision_date_kind = ${values.decisionDateKind},
+        cnpv_award_date = ${values.cnpvAwardDate},
+        drug_status = ${values.drugStatus},
+        therapeutic_area = ${values.therapeuticArea},
+        updated_at = ${values.updatedAt},
+        scraped_at = ${values.scrapedAt}
+      where id = ${eventId}
+    `
+
+    return
+  }
+
+  await sql`
+    update fda_calendar_events
+    set
+      company_name = ${values.companyName},
+      symbols = ${values.symbols},
+      drug_name = ${values.drugName},
+      application_type = ${values.applicationType},
+      decision_date = ${values.decisionDate},
+      event_description = ${values.eventDescription},
+      outcome = ${values.outcome},
+      outcome_date = ${values.outcomeDate},
+      decision_date_kind = ${values.decisionDateKind},
+      cnpv_award_date = ${values.cnpvAwardDate},
+      drug_status = ${values.drugStatus},
+      therapeutic_area = ${values.therapeuticArea},
+      updated_at = ${values.updatedAt},
+      scraped_at = ${values.scrapedAt}
+    where id = ${eventId}
+  `
+}
+
 async function main() {
   const [
     { db, fdaCalendarEvents, predictionMarkets },
@@ -99,185 +298,220 @@ async function main() {
     import('../lib/markets/engine'),
     import('../lib/fda-event-metadata'),
   ])
+  const connectionString = process.env.DATABASE_URL?.trim()
 
-  const rawExistingEvents = await db.query.fdaCalendarEvents.findMany()
-  const existingEvents = await enrichFdaEvents(rawExistingEvents)
-  const existingMarkets = await db.query.predictionMarkets.findMany()
-
-  const eventByExternalKey = new Map(
-    existingEvents
-      .filter((event) => event.externalKey)
-      .map((event) => [event.externalKey as string, event]),
-  )
-  const eventByIdentity = new Map(existingEvents.map((event) => [buildIdentity(event.companyName, event.drugName), event]))
-  const marketByEventId = new Map(existingMarkets.map((market) => [market.fdaEventId, market]))
-
-  const counters: SummaryCounters = {
-    inserts: 0,
-    updates: 0,
-    unchanged: 0,
-    marketsOpened: 0,
-    marketsExisting: 0,
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required to import CNPV data.')
   }
 
-  const pendingMarketActions: PendingMarketAction[] = []
+  const rawSql = postgres(connectionString, {
+    prepare: false,
+    max: 1,
+  })
 
-  for (const seed of CNPV_EVENT_SEEDS) {
-    const { decisionDate, decisionDateKind, cnpvAwardDate, outcomeDate } = buildSeedDates(seed)
-    const identity = buildIdentity(seed.companyName, seed.drugName)
-    const existing = eventByExternalKey.get(seed.externalKey) || eventByIdentity.get(identity) || null
-    const newsLinks = seed.newsLinks ?? []
-    const nextCoreValues = {
-      companyName: seed.companyName,
-      symbols: seed.symbols,
-      drugName: seed.drugName,
-      applicationType: seed.applicationType,
-      decisionDate,
-      eventDescription: seed.eventDescription,
-      outcome: seed.outcome,
-      outcomeDate,
-      decisionDateKind,
-      cnpvAwardDate,
-      drugStatus: buildDrugStatus(seed, decisionDateKind),
-      therapeuticArea: seed.therapeuticArea,
-      updatedAt: new Date(),
-      scrapedAt: new Date(),
-    } as const
+  try {
+    const schemaMode = await detectLegacyDecisionSchema(rawSql)
+    const rawExistingEvents = await db.query.fdaCalendarEvents.findMany()
+    const existingEvents = await enrichFdaEvents(rawExistingEvents)
+    const existingMarkets = await db.query.predictionMarkets.findMany()
 
-    const changed =
-      !existing ||
-      existing.companyName !== nextCoreValues.companyName ||
-      existing.symbols !== nextCoreValues.symbols ||
-      existing.drugName !== nextCoreValues.drugName ||
-      existing.applicationType !== nextCoreValues.applicationType ||
-      existing.decisionDate.getTime() !== nextCoreValues.decisionDate.getTime() ||
-      existing.eventDescription !== nextCoreValues.eventDescription ||
-      existing.outcome !== nextCoreValues.outcome ||
-      (existing.outcomeDate?.getTime() ?? null) !== (nextCoreValues.outcomeDate?.getTime() ?? null) ||
-      existing.decisionDateKind !== nextCoreValues.decisionDateKind ||
-      (existing.cnpvAwardDate?.getTime() ?? null) !== (nextCoreValues.cnpvAwardDate?.getTime() ?? null) ||
-      existing.drugStatus !== nextCoreValues.drugStatus ||
-      existing.therapeuticArea !== nextCoreValues.therapeuticArea ||
-      existing.externalKey !== seed.externalKey ||
-      existing.otherApprovals !== (seed.otherApprovals ?? null) ||
-      existing.source !== seed.source ||
-      (existing.nctId ?? null) !== (seed.nctId ?? null) ||
-      existing.newsLinks.join('\n') !== newsLinks.join('\n')
+    const eventByExternalKey = new Map(
+      existingEvents
+        .filter((event) => event.externalKey)
+        .map((event) => [event.externalKey as string, event]),
+    )
+    const eventByIdentity = new Map(existingEvents.map((event) => [buildIdentity(event.companyName, event.drugName), event]))
+    const marketByEventId = new Map(existingMarkets.map((market) => [market.fdaEventId, market]))
 
-    if (!existing) {
-      counters.inserts += 1
-      console.log(`INSERT ${seed.drugName} (${seed.companyName}) [${decisionDateKind}]`)
+    const counters: SummaryCounters = {
+      inserts: 0,
+      updates: 0,
+      unchanged: 0,
+      marketsOpened: 0,
+      marketsExisting: 0,
+    }
 
-      if (seed.outcome === 'Pending') {
-        pendingMarketActions.push({
-          eventId: null,
-          drugName: seed.drugName,
-        })
-      }
+    const pendingMarketActions: PendingMarketAction[] = []
 
-      if (shouldApply) {
-        const [insertedCore] = await db.insert(fdaCalendarEvents)
-          .values({
-            ...nextCoreValues,
-            createdAt: new Date(),
-          })
-          .returning()
+    for (const seed of CNPV_EVENT_SEEDS) {
+      const { decisionDate, decisionDateKind, cnpvAwardDate, outcomeDate } = buildSeedDates(seed)
+      const identity = buildIdentity(seed.companyName, seed.drugName)
+      const existing = eventByExternalKey.get(seed.externalKey) || eventByIdentity.get(identity) || null
+      const newsLinks = seed.newsLinks ?? []
+      const nextCoreValues = {
+        companyName: seed.companyName,
+        symbols: seed.symbols,
+        drugName: seed.drugName,
+        applicationType: seed.applicationType,
+        decisionDate,
+        eventDescription: seed.eventDescription,
+        outcome: seed.outcome,
+        outcomeDate,
+        decisionDateKind,
+        cnpvAwardDate,
+        drugStatus: buildDrugStatus(seed, decisionDateKind),
+        therapeuticArea: seed.therapeuticArea,
+        updatedAt: new Date(),
+        scrapedAt: new Date(),
+      } as const
 
-        await Promise.all([
-          upsertEventExternalId(insertedCore.id, 'external_key', seed.externalKey),
-          upsertEventExternalId(insertedCore.id, 'nct', seed.nctId ?? null),
-          upsertEventPrimarySource(insertedCore.id, seed.source),
-          replaceEventNewsLinks(insertedCore.id, newsLinks),
-          upsertEventContext({
-            eventId: insertedCore.id,
-            otherApprovals: seed.otherApprovals ?? null,
-          }),
-        ])
+      const changed =
+        !existing ||
+        existing.companyName !== nextCoreValues.companyName ||
+        existing.symbols !== nextCoreValues.symbols ||
+        existing.drugName !== nextCoreValues.drugName ||
+        existing.applicationType !== nextCoreValues.applicationType ||
+        existing.decisionDate.getTime() !== nextCoreValues.decisionDate.getTime() ||
+        existing.eventDescription !== nextCoreValues.eventDescription ||
+        existing.outcome !== nextCoreValues.outcome ||
+        (existing.outcomeDate?.getTime() ?? null) !== (nextCoreValues.outcomeDate?.getTime() ?? null) ||
+        existing.decisionDateKind !== nextCoreValues.decisionDateKind ||
+        (existing.cnpvAwardDate?.getTime() ?? null) !== (nextCoreValues.cnpvAwardDate?.getTime() ?? null) ||
+        existing.drugStatus !== nextCoreValues.drugStatus ||
+        existing.therapeuticArea !== nextCoreValues.therapeuticArea ||
+        existing.externalKey !== seed.externalKey ||
+        existing.otherApprovals !== (seed.otherApprovals ?? null) ||
+        existing.source !== seed.source ||
+        (existing.nctId ?? null) !== (seed.nctId ?? null) ||
+        existing.newsLinks.join('\n') !== newsLinks.join('\n')
 
-        const [inserted] = await enrichFdaEvents([insertedCore])
-        eventByExternalKey.set(seed.externalKey, inserted)
-        eventByIdentity.set(identity, inserted)
+      if (!existing) {
+        counters.inserts += 1
+        console.log(`INSERT ${seed.drugName} (${seed.companyName}) [${decisionDateKind}]`)
 
         if (seed.outcome === 'Pending') {
-          pendingMarketActions[pendingMarketActions.length - 1] = {
-            eventId: inserted.id,
-            drugName: inserted.drugName,
+          pendingMarketActions.push({
+            eventId: null,
+            drugName: seed.drugName,
+          })
+        }
+
+        if (shouldApply) {
+          const insertedId = await insertEventCore({
+            sql: rawSql,
+            schemaMode,
+            values: {
+              ...nextCoreValues,
+              createdAt: new Date(),
+            },
+          })
+
+          const insertedCore = await db.query.fdaCalendarEvents.findFirst({
+            where: eq(fdaCalendarEvents.id, insertedId),
+          })
+
+          if (!insertedCore) {
+            throw new Error(`Failed to reload inserted CNPV event ${seed.drugName}.`)
           }
+
+          await Promise.all([
+            upsertEventExternalId(insertedCore.id, 'external_key', seed.externalKey),
+            upsertEventExternalId(insertedCore.id, 'nct', seed.nctId ?? null),
+            upsertEventPrimarySource(insertedCore.id, seed.source),
+            replaceEventNewsLinks(insertedCore.id, newsLinks),
+            upsertEventContext({
+              eventId: insertedCore.id,
+              otherApprovals: seed.otherApprovals ?? null,
+            }),
+          ])
+
+          const [inserted] = await enrichFdaEvents([insertedCore])
+          eventByExternalKey.set(seed.externalKey, inserted)
+          eventByIdentity.set(identity, inserted)
+
+          if (seed.outcome === 'Pending') {
+            pendingMarketActions[pendingMarketActions.length - 1] = {
+              eventId: inserted.id,
+              drugName: inserted.drugName,
+            }
+          }
+        }
+
+        continue
+      }
+
+      if (!changed) {
+        counters.unchanged += 1
+        console.log(`SKIP   ${seed.drugName} (${seed.companyName})`)
+      } else {
+        counters.updates += 1
+        console.log(`UPDATE ${seed.drugName} (${seed.companyName}) [${decisionDateKind}]`)
+
+        if (shouldApply) {
+          await updateEventCore({
+            sql: rawSql,
+            schemaMode,
+            eventId: existing.id,
+            values: nextCoreValues,
+          })
+
+          const updatedCore = await db.query.fdaCalendarEvents.findFirst({
+            where: eq(fdaCalendarEvents.id, existing.id),
+          })
+
+          if (!updatedCore) {
+            throw new Error(`Failed to reload updated CNPV event ${seed.drugName}.`)
+          }
+
+          await Promise.all([
+            upsertEventExternalId(updatedCore.id, 'external_key', seed.externalKey),
+            upsertEventExternalId(updatedCore.id, 'nct', seed.nctId ?? null),
+            upsertEventPrimarySource(updatedCore.id, seed.source),
+            replaceEventNewsLinks(updatedCore.id, newsLinks),
+            upsertEventContext({
+              eventId: updatedCore.id,
+              otherApprovals: seed.otherApprovals ?? null,
+            }),
+          ])
+
+          const [updated] = await enrichFdaEvents([updatedCore])
+          eventByExternalKey.set(seed.externalKey, updated)
+          eventByIdentity.set(identity, updated)
         }
       }
 
-      continue
-    }
-
-    if (!changed) {
-      counters.unchanged += 1
-      console.log(`SKIP   ${seed.drugName} (${seed.companyName})`)
-    } else {
-      counters.updates += 1
-      console.log(`UPDATE ${seed.drugName} (${seed.companyName}) [${decisionDateKind}]`)
-
-      if (shouldApply) {
-        const [updatedCore] = await db.update(fdaCalendarEvents)
-          .set(nextCoreValues)
-          .where(eq(fdaCalendarEvents.id, existing.id))
-          .returning()
-
-        await Promise.all([
-          upsertEventExternalId(updatedCore.id, 'external_key', seed.externalKey),
-          upsertEventExternalId(updatedCore.id, 'nct', seed.nctId ?? null),
-          upsertEventPrimarySource(updatedCore.id, seed.source),
-          replaceEventNewsLinks(updatedCore.id, newsLinks),
-          upsertEventContext({
-            eventId: updatedCore.id,
-            otherApprovals: seed.otherApprovals ?? null,
-          }),
-        ])
-
-        const [updated] = await enrichFdaEvents([updatedCore])
-        eventByExternalKey.set(seed.externalKey, updated)
-        eventByIdentity.set(identity, updated)
+      const eventId = existing.id
+      if (seed.outcome === 'Pending') {
+        pendingMarketActions.push({ eventId, drugName: seed.drugName })
       }
     }
 
-    const eventId = existing.id
-    if (seed.outcome === 'Pending') {
-      pendingMarketActions.push({ eventId, drugName: seed.drugName })
-    }
-  }
+    for (const { eventId, drugName } of pendingMarketActions) {
+      if (!eventId) {
+        counters.marketsOpened += 1
+        console.log(`MARKET would open for ${drugName}`)
+        continue
+      }
 
-  for (const { eventId, drugName } of pendingMarketActions) {
-    if (!eventId) {
+      const existingMarket = marketByEventId.get(eventId)
+      if (existingMarket) {
+        counters.marketsExisting += 1
+        console.log(`MARKET ${drugName} already has a market`)
+        continue
+      }
+
+      if (!shouldApply) {
+        counters.marketsOpened += 1
+        console.log(`MARKET would open for ${drugName}`)
+        continue
+      }
+
+      const market = await openMarketForEvent(eventId)
+      marketByEventId.set(eventId, market)
       counters.marketsOpened += 1
-      console.log(`MARKET would open for ${drugName}`)
-      continue
+      console.log(`MARKET opened for ${drugName}`)
     }
 
-    const existingMarket = marketByEventId.get(eventId)
-    if (existingMarket) {
-      counters.marketsExisting += 1
-      console.log(`MARKET ${drugName} already has a market`)
-      continue
-    }
-
-    if (!shouldApply) {
-      counters.marketsOpened += 1
-      console.log(`MARKET would open for ${drugName}`)
-      continue
-    }
-
-    const market = await openMarketForEvent(eventId)
-    marketByEventId.set(eventId, market)
-    counters.marketsOpened += 1
-    console.log(`MARKET opened for ${drugName}`)
+    console.log('\nSummary')
+    console.log(`- Mode: ${shouldApply ? 'apply' : 'dry-run'}`)
+    console.log(`- Inserts: ${counters.inserts}`)
+    console.log(`- Updates: ${counters.updates}`)
+    console.log(`- Unchanged: ${counters.unchanged}`)
+    console.log(`- Markets opened${shouldApply ? '' : ' (would open)'}: ${counters.marketsOpened}`)
+    console.log(`- Markets already present: ${counters.marketsExisting}`)
+  } finally {
+    await rawSql.end()
   }
-
-  console.log('\nSummary')
-  console.log(`- Mode: ${shouldApply ? 'apply' : 'dry-run'}`)
-  console.log(`- Inserts: ${counters.inserts}`)
-  console.log(`- Updates: ${counters.updates}`)
-  console.log(`- Unchanged: ${counters.unchanged}`)
-  console.log(`- Markets opened${shouldApply ? '' : ' (would open)'}: ${counters.marketsOpened}`)
-  console.log(`- Markets already present: ${counters.marketsExisting}`)
 }
 
 main().catch((error) => {
