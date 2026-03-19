@@ -322,7 +322,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   otherOpenMarkets: Array<{
     drugName: string
     companyName: string
-    pdufaDate: string
+    decisionDate: string
     yesPrice: number
   }>
 }): Promise<{
@@ -364,8 +364,8 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
       companyName: args.event.companyName,
       symbols: args.event.symbols || null,
       applicationType: args.event.applicationType,
-      pdufaDate: args.event.pdufaDate.toISOString(),
-      daysToDecision: getDaysUntilUtc(args.event.pdufaDate, normalizedRunDate),
+      decisionDate: args.event.decisionDate.toISOString(),
+      daysToDecision: getDaysUntilUtc(args.event.decisionDate, normalizedRunDate),
       eventDescription: args.event.eventDescription,
       drugStatus: args.event.drugStatus,
       nctId: args.nctId ?? null,

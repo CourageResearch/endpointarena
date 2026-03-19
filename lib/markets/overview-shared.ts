@@ -1,7 +1,7 @@
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
-import { formatEventDateLabel, isSyntheticEventDate } from '@/lib/event-dates'
-import type { ModelDecisionSnapshot } from '@/lib/types'
+import { formatEventDateLabel, isSoftDecisionDate } from '@/lib/event-dates'
+import type { DecisionDateKind, ModelDecisionSnapshot } from '@/lib/types'
 
 export interface AccountRow {
   modelId: ModelId
@@ -36,8 +36,8 @@ export interface OpenMarketEventRow {
   companyName: string
   symbols: string
   applicationType: string
-  pdufaDate: string
-  dateKind: 'public' | 'synthetic'
+  decisionDate: string
+  decisionDateKind: DecisionDateKind
   cnpvAwardDate: string | null
   eventDescription: string
   outcome: string
@@ -96,8 +96,8 @@ export interface RecentMarketActionRow {
     drugName: string
     companyName: string
     symbols: string
-    pdufaDate: string
-    dateKind: 'public' | 'synthetic'
+    decisionDate: string
+    decisionDateKind: DecisionDateKind
   } | null
 }
 
@@ -210,14 +210,14 @@ export function daysUntilUtc(dateLike: string | null | undefined): number | null
 }
 
 export function getMarketQuestion(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return 'Will this FDA event be approved by the PDUFA date?'
+  if (!market.event) return 'Will this FDA event be approved by the decision date?'
   const date = formatEventDateLabel(
-    market.event.pdufaDate,
-    market.event.dateKind,
+    market.event.decisionDate,
+    market.event.decisionDateKind,
     { timeZone: 'UTC', month: 'short', day: 'numeric' },
   )
-  return isSyntheticEventDate(market.event.dateKind)
-    ? `Will ${market.event.drugName} be approved by the estimated CNPV action date (${date})?`
+  return isSoftDecisionDate(market.event.decisionDateKind)
+    ? `Will ${market.event.drugName} be approved by the expected decision date (${date})?`
     : `Will ${market.event.drugName} be approved by ${date}?`
 }
 

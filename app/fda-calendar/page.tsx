@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 async function getFDAEvents() {
   const events = await db.query.fdaCalendarEvents.findMany({
-    orderBy: [asc(fdaCalendarEvents.pdufaDate)],
+    orderBy: [asc(fdaCalendarEvents.decisionDate)],
   })
   return attachUnifiedPredictionsToEvents(events)
 }
@@ -36,8 +36,8 @@ export default async function FDACalendarPage() {
 
   const eventsForClient = events.map((event) => ({
     ...event,
-    pdufaDate: event.pdufaDate.toISOString(),
-    dateKind: event.dateKind as 'public' | 'synthetic',
+    decisionDate: event.decisionDate.toISOString(),
+    decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
     cnpvAwardDate: event.cnpvAwardDate ? event.cnpvAwardDate.toISOString() : null,
   }))
 
@@ -52,7 +52,7 @@ export default async function FDACalendarPage() {
             <HeaderDots />
           </div>
           <p className="text-[#8a8075] text-sm sm:text-base max-w-lg">
-            Upcoming PDUFA dates with the latest decision snapshot for each model and full history on expansion.
+            Upcoming decision dates with the latest decision snapshot for each model and full history on expansion.
           </p>
         </div>
 

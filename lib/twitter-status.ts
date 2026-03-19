@@ -3,7 +3,7 @@ import { db, accounts, users } from '@/lib/db'
 import { applyDailyRefillIfEligible, getVerifiedHumansRank } from '@/lib/humans'
 import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
 import { fetchTweetById, isXConnectionExpiredError } from '@/lib/twitter-verification'
-import { buildLocalDevVerificationStatus, isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
+import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
 
 type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
 
@@ -46,8 +46,8 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
     return null
   }
 
-  if (isLocalDevBypassEmail(user.email)) {
-    return buildLocalDevVerificationStatus()
+  if (canUseLocalDevVerificationBypass(user.email)) {
+    return buildLocalDevVerificationStatus(user.email)
   }
 
   const resolvedXUserId = user.xUserId ?? twitterAccount?.providerAccountId ?? null

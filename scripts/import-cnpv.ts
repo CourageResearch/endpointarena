@@ -30,8 +30,8 @@ function buildIdentity(companyName: string, drugName: string): string {
 }
 
 function buildSeedDates(seed: CNPVEventSeed): {
-  pdufaDate: Date
-  dateKind: 'public' | 'synthetic'
+  decisionDate: Date
+  decisionDateKind: 'hard' | 'soft'
   cnpvAwardDate: Date | null
   outcomeDate: Date | null
 } {
@@ -39,14 +39,14 @@ function buildSeedDates(seed: CNPVEventSeed): {
   const publicActionDate = seed.publicActionDate ? parseUtcDate(seed.publicActionDate) : null
 
   return {
-    pdufaDate: publicActionDate ?? addUtcDays(cnpvAwardDate!, 60),
-    dateKind: publicActionDate ? 'public' : 'synthetic',
+    decisionDate: publicActionDate ?? addUtcDays(cnpvAwardDate!, 60),
+    decisionDateKind: publicActionDate ? 'hard' : 'soft',
     cnpvAwardDate,
     outcomeDate: seed.outcomeDate ? parseUtcDate(seed.outcomeDate) : null,
   }
 }
 
-function buildDrugStatus(seed: CNPVEventSeed, dateKind: 'public' | 'synthetic'): string {
+function buildDrugStatus(seed: CNPVEventSeed, decisionDateKind: 'hard' | 'soft'): string {
   if (seed.outcome === 'Approved' && seed.outcomeDate) {
     return `Approved under FDA CNPV on ${seed.outcomeDate}.`
   }
@@ -59,8 +59,8 @@ function buildDrugStatus(seed: CNPVEventSeed, dateKind: 'public' | 'synthetic'):
     return `Pending under FDA CNPV (public action date ${seed.publicActionDate}).`
   }
 
-  if (dateKind === 'synthetic' && seed.cnpvAwardDate) {
-    return `Synthetic CNPV action date (award date + 60 days from ${seed.cnpvAwardDate}) until FDA publishes a public action date.`
+  if (decisionDateKind === 'soft' && seed.cnpvAwardDate) {
+    return `Expected CNPV action date (award date + 60 days from ${seed.cnpvAwardDate}) until FDA publishes a confirmed public action date.`
   }
 
   if (seed.cnpvAwardDate) {
@@ -123,7 +123,7 @@ async function main() {
   const pendingMarketActions: PendingMarketAction[] = []
 
   for (const seed of CNPV_EVENT_SEEDS) {
-    const { pdufaDate, dateKind, cnpvAwardDate, outcomeDate } = buildSeedDates(seed)
+    const { decisionDate, decisionDateKind, cnpvAwardDate, outcomeDate } = buildSeedDates(seed)
     const identity = buildIdentity(seed.companyName, seed.drugName)
     const existing = eventByExternalKey.get(seed.externalKey) || eventByIdentity.get(identity) || null
     const newsLinks = seed.newsLinks ?? []
@@ -132,13 +132,13 @@ async function main() {
       symbols: seed.symbols,
       drugName: seed.drugName,
       applicationType: seed.applicationType,
-      pdufaDate,
+      decisionDate,
       eventDescription: seed.eventDescription,
       outcome: seed.outcome,
       outcomeDate,
-      dateKind,
+      decisionDateKind,
       cnpvAwardDate,
-      drugStatus: buildDrugStatus(seed, dateKind),
+      drugStatus: buildDrugStatus(seed, decisionDateKind),
       therapeuticArea: seed.therapeuticArea,
       updatedAt: new Date(),
       scrapedAt: new Date(),
@@ -150,11 +150,11 @@ async function main() {
       existing.symbols !== nextCoreValues.symbols ||
       existing.drugName !== nextCoreValues.drugName ||
       existing.applicationType !== nextCoreValues.applicationType ||
-      existing.pdufaDate.getTime() !== nextCoreValues.pdufaDate.getTime() ||
+      existing.decisionDate.getTime() !== nextCoreValues.decisionDate.getTime() ||
       existing.eventDescription !== nextCoreValues.eventDescription ||
       existing.outcome !== nextCoreValues.outcome ||
       (existing.outcomeDate?.getTime() ?? null) !== (nextCoreValues.outcomeDate?.getTime() ?? null) ||
-      existing.dateKind !== nextCoreValues.dateKind ||
+      existing.decisionDateKind !== nextCoreValues.decisionDateKind ||
       (existing.cnpvAwardDate?.getTime() ?? null) !== (nextCoreValues.cnpvAwardDate?.getTime() ?? null) ||
       existing.drugStatus !== nextCoreValues.drugStatus ||
       existing.therapeuticArea !== nextCoreValues.therapeuticArea ||
@@ -166,7 +166,7 @@ async function main() {
 
     if (!existing) {
       counters.inserts += 1
-      console.log(`INSERT ${seed.drugName} (${seed.companyName}) [${dateKind}]`)
+      console.log(`INSERT ${seed.drugName} (${seed.companyName}) [${decisionDateKind}]`)
 
       if (seed.outcome === 'Pending') {
         pendingMarketActions.push({
@@ -214,7 +214,7 @@ async function main() {
       console.log(`SKIP   ${seed.drugName} (${seed.companyName})`)
     } else {
       counters.updates += 1
-      console.log(`UPDATE ${seed.drugName} (${seed.companyName}) [${dateKind}]`)
+      console.log(`UPDATE ${seed.drugName} (${seed.companyName}) [${decisionDateKind}]`)
 
       if (shouldApply) {
         const [updatedCore] = await db.update(fdaCalendarEvents)

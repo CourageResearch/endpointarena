@@ -226,9 +226,9 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   const orderedOpenMarkets = [...openMarkets].sort((a, b) => {
     const aEvent = eventById.get(a.fdaEventId)
     const bEvent = eventById.get(b.fdaEventId)
-    const aPdufaTime = aEvent?.pdufaDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-    const bPdufaTime = bEvent?.pdufaDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-    if (aPdufaTime !== bPdufaTime) return aPdufaTime - bPdufaTime
+    const aDecisionTime = aEvent?.decisionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
+    const bDecisionTime = bEvent?.decisionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
+    if (aDecisionTime !== bDecisionTime) return aDecisionTime - bDecisionTime
 
     const aOpenedTime = a.openedAt?.getTime() ?? 0
     const bOpenedTime = b.openedAt?.getTime() ?? 0
@@ -241,7 +241,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
     fdaEventId: string
     drugName: string
     companyName: string
-    pdufaDate: string
+    decisionDate: string
     marketPriceYes: number
   }>()
   for (const market of orderedOpenMarkets) {
@@ -252,7 +252,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
       fdaEventId: market.fdaEventId,
       drugName: event.drugName,
       companyName: event.companyName,
-      pdufaDate: event.pdufaDate.toISOString(),
+      decisionDate: event.decisionDate.toISOString(),
       marketPriceYes: market.priceYes,
     })
   }
@@ -265,7 +265,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
         fdaEventId: market.fdaEventId,
         drugName: event.drugName,
         companyName: event.companyName,
-        pdufaDate: event.pdufaDate.toISOString(),
+        decisionDate: event.decisionDate.toISOString(),
       }
     })
     .filter((entry): entry is DailyRunPlannedMarket => entry !== null)
@@ -539,7 +539,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
 
           const otherOpenMarkets = Array.from(openMarketContextById.values())
             .filter((entry) => entry.marketId !== latestMarket.id)
-            .sort((a, b) => a.pdufaDate.localeCompare(b.pdufaDate))
+            .sort((a, b) => a.decisionDate.localeCompare(b.decisionDate))
           const marketsRemainingThisRun = Math.max(0, orderedOpenMarkets.length - (marketIndex + 1))
 
           const waitStartedAtMs = Date.now()
@@ -583,7 +583,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
               otherOpenMarkets: otherOpenMarkets.map((entry) => ({
                 drugName: entry.drugName,
                 companyName: entry.companyName,
-                pdufaDate: entry.pdufaDate,
+                decisionDate: entry.decisionDate,
                 yesPrice: entry.marketPriceYes,
               })),
             }),

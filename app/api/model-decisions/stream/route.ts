@@ -96,12 +96,12 @@ export async function POST(request: NextRequest) {
         return {
           drugName: otherEvent.drugName,
           companyName: otherEvent.companyName,
-          pdufaDate: otherEvent.pdufaDate.toISOString(),
+          decisionDate: otherEvent.decisionDate.toISOString(),
           yesPrice: row.priceYes,
         }
       })
       .filter((row): row is NonNullable<typeof row> => row != null)
-      .sort((a, b) => a.pdufaDate.localeCompare(b.pdufaDate))
+      .sort((a, b) => a.decisionDate.localeCompare(b.decisionDate))
 
     const encoder = new TextEncoder()
     const stream = new ReadableStream({

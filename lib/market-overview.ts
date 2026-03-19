@@ -180,8 +180,8 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
             companyName: event.companyName,
             symbols: event.symbols,
             applicationType: event.applicationType,
-            pdufaDate: event.pdufaDate.toISOString(),
-            dateKind: event.dateKind as 'public' | 'synthetic',
+            decisionDate: event.decisionDate.toISOString(),
+            decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
             cnpvAwardDate: toIsoString(event.cnpvAwardDate),
             eventDescription: event.eventDescription,
             outcome: event.outcome,
@@ -255,8 +255,8 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
             drugName: event.drugName,
             companyName: event.companyName,
             symbols: event.symbols,
-            pdufaDate: event.pdufaDate.toISOString(),
-            dateKind: event.dateKind as 'public' | 'synthetic',
+            decisionDate: event.decisionDate.toISOString(),
+            decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
           }
         : null,
     }]

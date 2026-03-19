@@ -719,7 +719,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                         {market.marketSequence}. {market.drugName}
                       </p>
                       <p className="mt-1 text-xs text-[#8a8075]">
-                        {market.companyName} • PDUFA {formatDate(market.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {market.companyName} • Decision {formatDate(market.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
                     </div>
                     <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
@@ -881,7 +881,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
               </div>
             ) : openEvents.map((event) => {
               const statusTone = getMarketStatusTone(event.marketStatus)
-              const days = getDaysUntil(event.pdufaDate)
+              const days = getDaysUntil(event.decisionDate)
 
               return (
                 <div key={event.id} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
@@ -889,7 +889,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
                       <div className="mt-1 text-xs text-[#8a8075]">
-                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • Decision {formatDate(event.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -906,7 +906,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                         <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
                           {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
                         </div>
-                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.pdufaDate)}</div>
+                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.decisionDate)}</div>
                       </div>
 
                       <select
@@ -947,7 +947,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
                         <div className="mt-1 text-xs text-[#8a8075]">
-                          {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • Decision {formatDate(event.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -985,7 +985,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                 No resolved markets match the current filter.
               </div>
             ) : adjudicationEvents.map((event) => {
-              const days = getDaysUntil(event.pdufaDate)
+              const days = getDaysUntil(event.decisionDate)
               const statusTone = getMarketStatusTone(event.marketStatus)
 
               return (
@@ -1002,7 +1002,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                         ) : null}
                       </div>
                       <div className="mt-1 text-xs text-[#8a8075]">
-                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • PDUFA {formatDate(event.pdufaDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • Decision {formatDate(event.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                     </div>
 
@@ -1011,7 +1011,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                         <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
                           {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
                         </div>
-                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.pdufaDate)}</div>
+                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.decisionDate)}</div>
                       </div>
 
                       <select

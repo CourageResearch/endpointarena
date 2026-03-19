@@ -7,7 +7,7 @@ import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { ensureCrashEventsSchema } from '@/lib/crash-events'
 
-type AdminTab = 'predictions' | 'metadata' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs' | 'crashes'
+type AdminTab = 'predictions' | 'metadata' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs' | 'crashes' | 'outcomes'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -19,6 +19,7 @@ interface AdminConsoleLayoutProps {
 
 const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'markets', href: '/admin/markets', label: 'Markets' },
+  { id: 'outcomes', href: '/admin/outcomes', label: 'Outcomes' },
   { id: 'humanTrades', href: '/admin/human-trades', label: 'Human Trades' },
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },

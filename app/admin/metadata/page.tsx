@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 async function getData() {
   const rawEvents = await db.query.fdaCalendarEvents.findMany({
-    orderBy: [asc(fdaCalendarEvents.pdufaDate), asc(fdaCalendarEvents.drugName)],
+    orderBy: [asc(fdaCalendarEvents.decisionDate), asc(fdaCalendarEvents.drugName)],
   })
   const events = await enrichFdaEvents(rawEvents)
 
@@ -78,7 +78,8 @@ export default async function AdminMetadataPage() {
           companyName: event.companyName,
           symbols: event.symbols,
           applicationType: event.applicationType,
-          pdufaDate: event.pdufaDate.toISOString().slice(0, 10),
+          decisionDate: event.decisionDate.toISOString().slice(0, 10),
+          decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
           outcome: event.outcome,
           source: event.source,
           nctId: event.nctId,

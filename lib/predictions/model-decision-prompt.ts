@@ -3,7 +3,7 @@ import { MARKET_ACTIONS, type MarketActionType } from '@/lib/markets/constants'
 export interface ModelDecisionOtherMarketInput {
   drugName: string
   companyName: string
-  pdufaDate: string
+  decisionDate: string
   yesPrice: number
 }
 
@@ -20,7 +20,7 @@ export interface ModelDecisionInput {
     companyName: string
     symbols: string | null
     applicationType: string
-    pdufaDate: string
+    decisionDate: string
     daysToDecision: number | null
     eventDescription: string
     drugStatus: string | null

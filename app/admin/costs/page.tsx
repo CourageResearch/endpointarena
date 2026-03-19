@@ -113,7 +113,7 @@ async function getCostData() {
           companyName: event.companyName,
           symbols: event.symbols || null,
           applicationType: event.applicationType,
-          pdufaDate: event.pdufaDate.toISOString(),
+          decisionDate: event.decisionDate.toISOString(),
           daysToDecision: 0,
           eventDescription: event.eventDescription,
           drugStatus: event.drugStatus,

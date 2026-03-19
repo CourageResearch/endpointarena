@@ -210,7 +210,7 @@ function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentM
         market,
         question: getMarketQuestion(market),
         subtitle: getMarketSubtitle(market),
-        daysUntil: daysUntilUtc(market.event?.pdufaDate),
+        daysUntil: daysUntilUtc(market.event?.decisionDate),
         latestActionAt,
         actionCount: market.totalActionsCount ?? actions.length,
         moveDelta: move.delta,

@@ -56,13 +56,15 @@ export interface Prediction {
   history?: PredictionHistoryEntry[]
 }
 
+export type DecisionDateKind = 'hard' | 'soft'
+
 export interface FDAEvent {
   id: string
   drugName: string
   companyName: string
   symbols: string | null
-  pdufaDate: Date | string
-  dateKind?: 'public' | 'synthetic'
+  decisionDate: Date | string
+  decisionDateKind?: DecisionDateKind
   cnpvAwardDate?: Date | string | null
   therapeuticArea: string | null
   applicationType: string

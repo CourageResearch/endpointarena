@@ -30,7 +30,7 @@ type ProfileHoldingRow = {
   priceYes: number
   priceNo: number
   markValueUsd: number
-  pdufaDate: Date | null
+  decisionDate: Date | null
 }
 
 type ProfileTradeRow = {
@@ -187,7 +187,7 @@ async function getProfileTradingData(userId: string): Promise<{
         priceYes,
         priceNo,
         markValueUsd,
-        pdufaDate: event?.pdufaDate ?? null,
+        decisionDate: event?.decisionDate ?? null,
       }]
     })
     .sort((a, b) => b.markValueUsd - a.markValueUsd)

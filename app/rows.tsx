@@ -52,9 +52,9 @@ ${reasoning}`
 }
 
 function buildClipboardTextForEvent(event: FDAEvent): string {
-  const pdufaDate = formatEventDateLabel(
-    event.pdufaDate,
-    event.dateKind,
+  const decisionDate = formatEventDateLabel(
+    event.decisionDate,
+    event.decisionDateKind,
     { month: 'numeric', day: 'numeric', year: 'numeric' },
   )
   const primaryTicker = event.symbols?.split(',')[0]?.trim() || '—'
@@ -63,7 +63,7 @@ function buildClipboardTextForEvent(event: FDAEvent): string {
   const header = [
     `Drug: ${event.drugName}`,
     `Company: ${event.companyName}`,
-    `PDUFA: ${pdufaDate}`,
+    `Decision Date: ${decisionDate}`,
     `Type: ${abbreviateType(event.applicationType).display}`,
     `Ticker: ${primaryTicker}`,
     `FDA Status: ${event.outcome.toUpperCase()}`,
@@ -80,11 +80,11 @@ function buildClipboardTextForEvent(event: FDAEvent): string {
   return `${header.join('\n')}\n\n${modelBlocks}`
 }
 
-function formatRowDate(event: Pick<FDAEvent, 'pdufaDate' | 'dateKind'>, options: Intl.DateTimeFormatOptions = {
+function formatRowDate(event: Pick<FDAEvent, 'decisionDate' | 'decisionDateKind'>, options: Intl.DateTimeFormatOptions = {
   month: 'numeric',
   day: 'numeric',
 }) {
-  return formatEventDateLabel(event.pdufaDate, event.dateKind, options)
+  return formatEventDateLabel(event.decisionDate, event.decisionDateKind, options)
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -784,7 +784,7 @@ export function BW2MobileUpcomingCard({ event }: { event: FDAEvent }) {
             {formatRowDate(event)}
           </div>
           <EventDateBadge
-            dateKind={event.dateKind}
+            decisionDateKind={event.decisionDateKind}
             className="mt-1 inline-flex rounded-full border border-[#D39D2E]/30 bg-[#D39D2E]/10 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-[#a66a17]"
           />
           {ticker && (
@@ -878,7 +878,7 @@ export function BW2MobilePastCard({ event }: { event: FDAEvent }) {
             {formatRowDate(event)}
           </div>
           <EventDateBadge
-            dateKind={event.dateKind}
+            decisionDateKind={event.decisionDateKind}
             className="mt-1 inline-flex rounded-full border border-[#D39D2E]/30 bg-[#D39D2E]/10 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-[#a66a17]"
           />
           {ticker && (

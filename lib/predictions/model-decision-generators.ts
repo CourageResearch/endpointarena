@@ -27,6 +27,11 @@ interface ModelDecisionGeneratorConfig {
   enabled: () => boolean
 }
 
+interface OpenAICompatibleResponseFormat {
+  type: 'json_object' | 'json_schema'
+  json_schema?: Record<string, unknown>
+}
+
 const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
 const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
 const GLM_MODEL = 'zai-org/GLM-5'
@@ -264,6 +269,7 @@ async function generateOpenAICompatibleDecision(args: {
   maxTokens?: number
   temperature?: number
   extraBody?: Record<string, unknown>
+  responseFormat?: OpenAICompatibleResponseFormat
 }): Promise<ModelDecisionGeneration> {
   const client = new OpenAI({
     apiKey: args.apiKey,
@@ -280,6 +286,10 @@ async function generateOpenAICompatibleDecision(args: {
 
   if (args.extraBody && Object.keys(args.extraBody).length > 0) {
     completionRequest.extra_body = args.extraBody
+  }
+
+  if (args.responseFormat) {
+    completionRequest.response_format = args.responseFormat
   }
 
   const completion = await client.chat.completions.create(completionRequest)
@@ -312,7 +322,8 @@ async function generateLlama4Decision(input: ModelDecisionInput): Promise<ModelD
     input,
     errorLabel: 'Llama 4 Scout',
     maxTokens: 8192,
-    temperature: 0.4,
+    temperature: 0.2,
+    responseFormat: { type: 'json_object' },
   })
 }
 

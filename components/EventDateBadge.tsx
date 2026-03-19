@@ -13,15 +13,15 @@ function BadgeRocket() {
 }
 
 export function EventDateBadge({
-  dateKind,
+  decisionDateKind,
   className = '',
   variant = 'pill',
 }: {
-  dateKind?: string | null
+  decisionDateKind?: string | null
   className?: string
   variant?: 'pill' | 'cornerCard'
 }) {
-  const label = getEventDateBadgeLabel(dateKind)
+  const label = getEventDateBadgeLabel(decisionDateKind)
   if (!label) return null
 
   if (variant === 'cornerCard') {
@@ -31,7 +31,7 @@ export function EventDateBadge({
         style={{
           backgroundImage: 'linear-gradient(180deg, rgba(255, 249, 239, 0.98), rgba(248, 239, 223, 0.94))',
         }}
-        title={getEventDateBadgeTitle(dateKind) ?? undefined}
+        title={getEventDateBadgeTitle(decisionDateKind) ?? undefined}
       >
         <span className="inline-flex items-center gap-1.5 text-[9px] font-semibold uppercase leading-none tracking-[0.14em]">
           <BadgeRocket />
@@ -44,7 +44,7 @@ export function EventDateBadge({
   return (
     <span
       className={className}
-      title={getEventDateBadgeTitle(dateKind) ?? undefined}
+      title={getEventDateBadgeTitle(decisionDateKind) ?? undefined}
     >
       {label}
     </span>

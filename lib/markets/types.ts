@@ -8,7 +8,7 @@ export type DailyRunPlannedMarket = {
   fdaEventId: string
   drugName: string
   companyName: string
-  pdufaDate: string
+  decisionDate: string
 }
 
 export type DailyRunResult = {

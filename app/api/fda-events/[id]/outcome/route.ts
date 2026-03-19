@@ -12,7 +12,8 @@ type PatchBody = {
   outcome?: 'Pending' | 'Approved' | 'Rejected'
   source?: string | null
   nctId?: string | null
-  pdufaDate?: string
+  decisionDate?: string
+  decisionDateKind?: 'hard' | 'soft'
   applicationType?: string
 }
 
@@ -29,26 +30,37 @@ export async function PATCH(
 
     const { id } = await params
     const body = await parseJsonBody<PatchBody>(request)
-    const { outcome, source, nctId, pdufaDate, applicationType } = body
+    const { outcome, source, nctId, decisionDate, decisionDateKind, applicationType } = body
 
-    if (!outcome && source === undefined && nctId === undefined && pdufaDate === undefined && applicationType === undefined) {
-      throw new ValidationError('Must provide outcome, source, nctId, pdufaDate, or applicationType')
+    if (
+      !outcome &&
+      source === undefined &&
+      nctId === undefined &&
+      decisionDate === undefined &&
+      decisionDateKind === undefined &&
+      applicationType === undefined
+    ) {
+      throw new ValidationError('Must provide outcome, source, nctId, decisionDate, decisionDateKind, or applicationType')
     }
 
     if (outcome && !VALID_OUTCOMES.has(outcome)) {
       throw new ValidationError('Invalid outcome. Must be Pending, Approved, or Rejected')
     }
 
-    let parsedPdufaDate: Date | undefined
-    if (pdufaDate !== undefined) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(pdufaDate)) {
-        throw new ValidationError('Invalid pdufaDate. Must use YYYY-MM-DD')
+    let parsedDecisionDate: Date | undefined
+    if (decisionDate !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(decisionDate)) {
+        throw new ValidationError('Invalid decisionDate. Must use YYYY-MM-DD')
       }
 
-      parsedPdufaDate = new Date(`${pdufaDate}T00:00:00.000Z`)
-      if (Number.isNaN(parsedPdufaDate.getTime())) {
-        throw new ValidationError('Invalid pdufaDate. Must be a real date')
+      parsedDecisionDate = new Date(`${decisionDate}T00:00:00.000Z`)
+      if (Number.isNaN(parsedDecisionDate.getTime())) {
+        throw new ValidationError('Invalid decisionDate. Must be a real date')
       }
+    }
+
+    if (decisionDateKind !== undefined && decisionDateKind !== 'hard' && decisionDateKind !== 'soft') {
+      throw new ValidationError('decisionDateKind must be hard or soft')
     }
 
     const normalizedApplicationType = applicationType?.trim()
@@ -69,8 +81,11 @@ export async function PATCH(
       updateData.outcome = outcome
       updateData.outcomeDate = outcome !== 'Pending' ? new Date() : null
     }
-    if (parsedPdufaDate) {
-      updateData.pdufaDate = parsedPdufaDate
+    if (parsedDecisionDate) {
+      updateData.decisionDate = parsedDecisionDate
+    }
+    if (decisionDateKind) {
+      updateData.decisionDateKind = decisionDateKind
     }
     if (normalizedApplicationType) {
       updateData.applicationType = normalizedApplicationType
@@ -103,6 +118,7 @@ export async function PATCH(
     revalidatePath('/admin')
     revalidatePath('/admin/markets')
     revalidatePath('/admin/metadata')
+    revalidatePath('/admin/outcomes')
     revalidatePath('/admin/predictions')
 
     const [enrichedUpdated] = await enrichFdaEvents(updated ? [updated] : [])

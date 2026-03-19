@@ -36,7 +36,7 @@ export async function getHomeData() {
     const [rawUpcomingEvents, rawRecentDecisionEvents, rawAllFdaEvents, openMarketState] = await Promise.all([
       db.query.fdaCalendarEvents.findMany({
         where: eq(fdaCalendarEvents.outcome, 'Pending'),
-        orderBy: [asc(fdaCalendarEvents.pdufaDate)],
+        orderBy: [asc(fdaCalendarEvents.decisionDate)],
         limit: 5,
       }),
       db.query.fdaCalendarEvents.findMany({

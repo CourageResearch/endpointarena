@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, type KeyboardEvent, type MouseEvent } from 'react'
+import { useMemo } from 'react'
 import { EventDateBadge } from '@/components/EventDateBadge'
 import { useMarketOverview } from '@/components/markets/useMarketOverview'
 import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
@@ -68,7 +68,7 @@ function buildMarketCardEntries(openMarkets: OpenMarketRow[], recentActions: Rec
       description: market.event?.eventDescription?.trim() || getMarketQuestion(market),
       yesPrice: market.priceYes,
       noPrice: 1 - market.priceYes,
-      daysUntil: daysUntilUtc(market.event?.pdufaDate),
+      daysUntil: daysUntilUtc(market.event?.decisionDate),
       commentsCount: market.totalActionsCount ?? actions.length,
       volumeUsd: market.totalVolumeUsd ?? actions.reduce((sum, action) => sum + Math.max(0, Math.abs(action.usdAmount || 0)), 0),
       latestActivityAt,
@@ -116,12 +116,12 @@ function sortEntries(entries: MarketCardEntry[], mode: SortMode): MarketCardEntr
   })
 }
 
-function getDaysBadge(daysUntil: number | null, dateKind?: string | null): { label: string } {
+function getDaysBadge(daysUntil: number | null, decisionDateKind?: string | null): { label: string } {
   if (daysUntil === null) {
     return { label: 'No date' }
   }
   const dayWord = Math.abs(daysUntil) === 1 ? 'day' : 'days'
-  if (dateKind === 'synthetic') {
+  if (decisionDateKind === 'soft') {
     if (daysUntil < 0) {
       return { label: `~${Math.abs(daysUntil)} ${dayWord} past` }
     }
@@ -139,28 +139,12 @@ function getDaysBadge(daysUntil: number | null, dateKind?: string | null): { lab
   return { label: `${daysUntil} ${dayWord} left` }
 }
 
-function SyntheticDateInfoButton() {
-  const handleClick = (event: MouseEvent<HTMLSpanElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    window.location.assign('/glossary#term-cnpv')
-  }
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    event.preventDefault()
-    event.stopPropagation()
-    window.location.assign('/glossary#term-cnpv')
-  }
-
+function ExpectedDateInfoButton() {
   return (
     <span
-      role="link"
-      tabIndex={0}
-      aria-label="Learn about estimated CNPV dates"
-      title="Learn about estimated CNPV dates"
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
+      role="note"
+      aria-label="Expected date info"
+      title="Expected dates are approximate and may move if no final decision is announced."
       className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#d9cdbf] text-[9px] font-medium leading-none text-[#b8893f] transition-colors hover:border-[#c99b4d] hover:text-[#a66a17] focus-visible:outline-none focus-visible:border-[#c99b4d] focus-visible:text-[#a66a17]"
     >
       ?
@@ -194,7 +178,7 @@ function MarketCard({
 }) {
   const marketHref = `${detailBasePath}/${encodeURIComponent(entry.market.marketId)}`
   const drugName = entry.market.event?.drugName || entry.question
-  const daysBadge = getDaysBadge(entry.daysUntil, entry.market.event?.dateKind)
+  const daysBadge = getDaysBadge(entry.daysUntil, entry.market.event?.decisionDateKind)
   const modelDecisions = getModelDecisionMap(entry)
   const approveModelIds = MODEL_IDS.filter((modelId) => (modelDecisions.get(modelId) || 'PENDING') === 'APPROVE')
   const rejectModelIds = MODEL_IDS.filter((modelId) => (modelDecisions.get(modelId) || 'PENDING') === 'REJECT')
@@ -211,7 +195,7 @@ function MarketCard({
     >
       <div className="relative flex h-full flex-col overflow-hidden rounded-sm bg-white/95 p-4 transition-colors duration-150 group-hover:bg-[#fffdfa] group-focus-visible:bg-[#fffdfa] sm:p-5">
         <EventDateBadge
-          dateKind={entry.market.event?.dateKind}
+          decisionDateKind={entry.market.event?.decisionDateKind}
           variant="cornerCard"
           className="absolute right-0 top-0 z-10"
         />
@@ -227,7 +211,7 @@ function MarketCard({
           <div className="mt-2 text-[11px]">
             <span className="inline-flex items-center gap-1.5 font-medium text-[#3f5f86]">
               <span>{daysBadge.label}</span>
-              {entry.market.event?.dateKind === 'synthetic' ? <SyntheticDateInfoButton /> : null}
+              {entry.market.event?.decisionDateKind === 'soft' ? <ExpectedDateInfoButton /> : null}
             </span>
           </div>
 

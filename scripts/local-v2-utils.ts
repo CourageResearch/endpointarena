@@ -1,5 +1,5 @@
-export const LOCAL_V2_DATABASE_NAME = 'endpointarena_local_v2'
-export const LOCAL_RAW_CLONE_DATABASE_NAME = 'endpointarena_prod_clone_raw'
+export const LOCAL_V2_DATABASE_NAME = 'endpointarena_local_main'
+export const LOCAL_RAW_CLONE_DATABASE_NAME = 'endpointarena_local_source_clone'
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const PROHIBITED_HOST_SNIPPETS = ['railway', 'rlwy', 'amazonaws', 'render', 'supabase', 'neon']

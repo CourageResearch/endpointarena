@@ -95,7 +95,7 @@ export function MarketDetailsPanel({
 
           <DetailValue label="Date">
             <div className={cn('tabular-nums', DETAILS_TOP_VALUE_CLASS)}>
-              {formatDateUtcCompact(selectedMarket.event?.pdufaDate)}
+              {formatDateUtcCompact(selectedMarket.event?.decisionDate)}
             </div>
           </DetailValue>
 

@@ -11,7 +11,8 @@ interface DrugMetadataEvent {
   companyName: string
   symbols: string
   applicationType: string
-  pdufaDate: string
+  decisionDate: string
+  decisionDateKind: 'hard' | 'soft'
   outcome: string
   source: string | null
   nctId: string | null
@@ -41,7 +42,7 @@ export function AdminDrugMetadataManager({ events: initialEvents }: AdminDrugMet
 
   const updateEventField = async (
     eventId: string,
-    field: 'source' | 'nctId' | 'pdufaDate' | 'applicationType',
+    field: 'source' | 'nctId' | 'decisionDate' | 'decisionDateKind' | 'applicationType',
     value: string
   ) => {
     setGlobalError(null)
@@ -126,18 +127,26 @@ export function AdminDrugMetadataManager({ events: initialEvents }: AdminDrugMet
                   {event.outcome}
                 </p>
                 <p className="mt-0 text-sm leading-[1.15] text-[#b5aa9e]">
-                  {formatDate(`${event.pdufaDate}T00:00:00.000Z`, { month: 'short', day: 'numeric' })}
+                  {event.decisionDateKind === 'soft' ? 'Expected ' : ''}
+                  {formatDate(`${event.decisionDate}T00:00:00.000Z`, { month: 'short', day: 'numeric' })}
                 </p>
               </div>
 
               <div className="grid gap-2 md:grid-cols-2">
                 <MetadataInlineInput
                   label="Date"
-                  initialValue={event.pdufaDate}
+                  initialValue={event.decisionDate}
                   placeholder="YYYY-MM-DD"
-                  onSave={(value) => updateEventField(event.id, 'pdufaDate', value)}
+                  onSave={(value) => updateEventField(event.id, 'decisionDate', value)}
                   className="w-full min-w-0"
                   inputType="date"
+                />
+                <MetadataInlineInput
+                  label="Date Kind"
+                  initialValue={event.decisionDateKind}
+                  placeholder="hard or soft"
+                  onSave={(value) => updateEventField(event.id, 'decisionDateKind', value)}
+                  className="w-full min-w-0"
                 />
                 <MetadataInlineInput
                   label="Type"

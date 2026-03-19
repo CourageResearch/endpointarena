@@ -1,12 +1,12 @@
 import { config } from 'dotenv'
 import postgres from 'postgres'
 
-config({ path: '.env.local.v2', quiet: true })
+config({ path: '.env.local', quiet: true })
 
 const connectionString = process.env.DATABASE_URL?.trim()
 
 if (!connectionString) {
-  console.error('DATABASE_URL is not set. Add it to .env.local.v2 before running this audit.')
+  console.error('DATABASE_URL is not set. Add it to .env.local before running this audit.')
   process.exit(1)
 }
 

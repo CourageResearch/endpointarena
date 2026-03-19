@@ -23,7 +23,7 @@ async function getData() {
           inArray(fdaCalendarEvents.id, eventIds),
           eq(fdaCalendarEvents.outcome, 'Pending'),
         ),
-        orderBy: [asc(fdaCalendarEvents.pdufaDate)],
+        orderBy: [asc(fdaCalendarEvents.decisionDate)],
       })
     : []
   const events = await enrichFdaEvents(rawEvents)
@@ -66,7 +66,8 @@ export default async function AdminPredictionsPage() {
     companyName: event.companyName,
     therapeuticArea: event.therapeuticArea,
     applicationType: event.applicationType,
-    pdufaDate: event.pdufaDate.toISOString(),
+    decisionDate: event.decisionDate.toISOString(),
+    decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
     outcome: event.outcome,
     source: event.source,
     nctId: event.nctId,

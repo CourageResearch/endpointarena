@@ -1,4 +1,4 @@
-# Railway Production DB Runbook (Updated March 11, 2026)
+# Railway Production DB Runbook (Updated March 19, 2026)
 
 ## Service mapping (production)
 - App (`endpoint-arena-app`): `b4686f24-2027-44b9-b03b-dad503b60812`
@@ -14,13 +14,32 @@
 - `DATABASE_URL` is now the only app DB connection variable and must point to `postgres-green`.
 
 ## Current known-good release
-- Active production commit: `5ccd047ceed6d016623f0b4dad39e0843ac47f9a`
-- Active production deployment: `ea44a38d-1063-4023-b395-1bb66cd0038f`
+- Active production commit: `97bd46b2c79b621602248d234913a2bf40e5822a`
+- Active production deployment: `b02b2291-b34d-45fb-971b-77bb6fc97541`
 
 ## Freeze controls
-- Set `MAINTENANCE_MODE=true` to block non-auth API write methods.
-- Set `MAINTENANCE_MODE=false` to reopen writes.
+- Set `MAINTENANCE_MODE=true` to rewrite public page traffic to the maintenance page and return `503` from non-auth, non-admin public APIs.
+- Set `MAINTENANCE_MODE=false` to reopen normal traffic.
 - Current expected value in normal operations: `MAINTENANCE_MODE=false`.
+
+## Manual-first event monitor rollout
+- `EVENT_MONITOR_CRON_SECRET` should be provisioned on `endpoint-arena-app` before the outcome-monitor release, even though no scheduler is attached in the first rollout.
+- Manual-first means:
+  - `/api/admin/event-monitor/run` is used for controlled smoke tests from `/admin/outcomes`
+  - `/api/internal/event-monitor/run` exists but should not be wired to Railway cron or GitHub Actions yet
+- The manual outcome monitor requires `OPENAI_API_KEY`.
+
+## Production DB access from a local shell
+- When running DB scripts from a local machine, do not use the app service `DATABASE_URL`; it points at the Railway private hostname.
+- Use the DB service public connection string instead:
+  - `export DATABASE_URL="$(railway variables --service postgres-green --json | jq -r '.DATABASE_PUBLIC_URL')"`
+- `npm run db:add-event-monitoring` is additive: it backfills `decision_date` and `decision_date_kind` while leaving `pdufa_date` and `date_kind` in place for staged rollout safety.
+- `npm run db:rollback-event-monitoring` backfills `pdufa_date` and `date_kind` from the new columns so the pre-monitor app can be redeployed safely.
+- Then run the relevant script, for example:
+  - `npm run db:add-event-monitoring`
+  - `npm run db:rollback-event-monitoring`
+  - `npm run db:import-cnpv:dry-run`
+  - `npm run db:import-cnpv`
 
 ## Ops checks
 - Full production checklist:
@@ -32,6 +51,35 @@
 - Push the reviewed `master` commit to `origin/master`.
 - Railway auto-deploys `endpoint-arena-app` from `CourageResearch/endpointarena`; no GitHub Actions deploy workflow is required for the normal release path.
 - Normal app releases do not change `DATABASE_URL` and do not freeze writes.
+
+## Outcome monitor + CNPV release path
+1. Run `npm run lint`.
+2. Run `npm run build`.
+3. Run `npm run ops:check-prod-cutover`.
+4. Run `npm run ops:check-prod-alerts`.
+5. Ensure `EVENT_MONITOR_CRON_SECRET` exists on `endpoint-arena-app`.
+6. Export `DATABASE_URL` from `postgres-green` `DATABASE_PUBLIC_URL` and run `npm run db:add-event-monitoring`.
+7. Push the reviewed `master` commit and wait for Railway to finish the deploy.
+8. Set `MAINTENANCE_MODE=true` and wait for the maintenance deployment to become active.
+9. Confirm:
+   - `/api/health` returns `200`
+   - public routes rewrite to the maintenance page
+   - `/login` and `/admin` remain reachable for release validation
+10. Validate:
+   - `/api/health`
+   - login
+   - `/admin`
+   - `/admin/outcomes`
+   - one manual monitor run from `/admin/outcomes`
+11. Run `npm run db:import-cnpv:dry-run` against production and review the output.
+12. If the dry-run is correct, run `npm run db:import-cnpv`.
+13. Set `MAINTENANCE_MODE=false` and wait for the normal traffic deployment to become active.
+14. Smoke-check:
+   - `/fda-calendar`
+   - `/markets`
+   - one newly opened or updated market detail page
+15. Re-run `npm run ops:check-prod-cutover`.
+16. Re-run `npm run ops:check-prod-alerts`.
 
 ## Preflight before push
 1. Run `npm run lint`.
@@ -66,6 +114,20 @@
    - `GET /api/health` returns `200`
    - Login succeeds
    - Market list/detail and `/admin/markets` render
+
+## Outcome monitor rollback
+1. Set `MAINTENANCE_MODE=true`.
+2. Export `DATABASE_URL` from `postgres-green` `DATABASE_PUBLIC_URL`.
+3. Run `npm run db:rollback-event-monitoring`.
+4. Redeploy the previous successful app deployment.
+5. Re-run `npm run ops:check-prod-cutover`.
+6. Re-run `npm run ops:check-prod-alerts`.
+7. Validate:
+   - `/api/health`
+   - login
+   - `/markets`
+   - `/admin`
+8. Set `MAINTENANCE_MODE=false` after validation passes.
 
 ## Rollback trigger thresholds
 Trigger rollback if any of the following persist after a rapid recheck:

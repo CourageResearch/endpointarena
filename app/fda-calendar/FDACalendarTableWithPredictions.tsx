@@ -2,8 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { FDAIcon, ModelIcon } from '@/components/ModelIcon'
-import { BrandDirectionMark } from '@/components/site/BrandDirectionMark'
+import { FDAIcon } from '@/components/ModelIcon'
 import { BRAND_DOT_COLORS } from '@/components/site/chrome'
 import { abbreviateType, findPredictionByModelId, MODEL_DISPLAY_NAMES, MODEL_IDS, type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
@@ -30,7 +29,8 @@ interface FDAEvent {
   symbols: string | null
   drugName: string
   applicationType: string
-  pdufaDate: string
+  decisionDate: string
+  decisionDateKind: 'hard' | 'soft'
   eventDescription: string
   outcome: string
   drugStatus: string | null
@@ -47,23 +47,13 @@ interface FDACalendarTableWithPredictionsProps {
   }
 }
 
-type SortField = 'pdufaDate' | 'companyName' | 'drugName' | 'applicationType' | 'outcome'
+type SortField = 'decisionDate' | 'companyName' | 'drugName' | 'applicationType' | 'outcome'
 type SortDirection = 'asc' | 'desc'
 const MODEL_ORDER: ModelId[] = [...MODEL_IDS]
-const TABLE_FIXED_COLUMNS = 6
-const TABLE_MODEL_COLUMN_WIDTH = 40
-const TABLE_FIXED_WIDTH = 594
-const TABLE_MIN_WIDTH = TABLE_FIXED_WIDTH + (MODEL_ORDER.length * TABLE_MODEL_COLUMN_WIDTH)
-const TABLE_EXPANDED_COLSPAN = TABLE_FIXED_COLUMNS + MODEL_ORDER.length
-
-function PredictionDirectionIcon({ prediction }: { prediction: string }) {
-  return (
-    <BrandDirectionMark
-      direction={prediction === 'approved' ? 'up' : 'down'}
-      className="h-4 w-4"
-    />
-  )
-}
+const TABLE_FIXED_COLUMNS = 7
+const TABLE_FIXED_WIDTH = 682
+const TABLE_MIN_WIDTH = TABLE_FIXED_WIDTH
+const TABLE_EXPANDED_COLSPAN = TABLE_FIXED_COLUMNS
 
 function buildFallbackHistory(prediction: PredictionRow): PredictionHistoryEntry {
   return {
@@ -126,9 +116,61 @@ function getCountdownStyle(daysUntil: number | null, resolved: boolean) {
   return undefined
 }
 
-function renderCountdown(daysUntil: number | null, outcome: string): string | null {
+function renderCountdown(daysUntil: number | null, outcome: string, decisionDateKind: 'hard' | 'soft'): string | null {
   if (daysUntil == null || isResolvedOutcome(outcome)) return null
-  return formatEventCountdown(daysUntil, 'public')
+  return formatEventCountdown(daysUntil, decisionDateKind)
+}
+
+function getOrderedPredictions(predictions: PredictionRow[]): Array<{ modelId: ModelId; prediction: PredictionRow }> {
+  return MODEL_ORDER.flatMap((modelId) => {
+    const prediction = findPredictionByModelId(predictions, modelId)
+    return prediction ? [{ modelId, prediction }] : []
+  })
+}
+
+function summarizePredictions(predictions: PredictionRow[]) {
+  const orderedPredictions = getOrderedPredictions(predictions)
+  const total = orderedPredictions.length
+  const approveCount = orderedPredictions.filter(({ prediction }) => prediction.prediction === 'approved').length
+  const rejectCount = total - approveCount
+
+  if (total === 0) {
+    return {
+      orderedPredictions,
+      total,
+      label: '—',
+      detail: 'Awaiting runs',
+      direction: 'none' as const,
+    }
+  }
+
+  if (approveCount === rejectCount) {
+    return {
+      orderedPredictions,
+      total,
+      label: `${approveCount}/${total}`,
+      detail: 'Split',
+      direction: 'split' as const,
+    }
+  }
+
+  if (approveCount > rejectCount) {
+    return {
+      orderedPredictions,
+      total,
+      label: `${approveCount}/${total}`,
+      detail: 'Approve',
+      direction: 'approved' as const,
+    }
+  }
+
+  return {
+    orderedPredictions,
+    total,
+    label: `${rejectCount}/${total}`,
+    detail: 'Reject',
+    direction: 'rejected' as const,
+  }
 }
 
 function PredictionPanel({
@@ -190,9 +232,9 @@ function PredictionPanel({
 }
 
 export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACalendarTableWithPredictionsProps) {
-  const [sortField, setSortField] = useState<SortField>('pdufaDate')
+  const [sortField, setSortField] = useState<SortField>('decisionDate')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [expanded, setExpanded] = useState<{ eventId: string; modelId: ModelId } | null>(null)
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     applicationType: '',
     therapeuticArea: '',
@@ -220,9 +262,9 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
       let aVal: string | Date = a[sortField] || ''
       let bVal: string | Date = b[sortField] || ''
 
-      if (sortField === 'pdufaDate') {
-        aVal = new Date(a.pdufaDate)
-        bVal = new Date(b.pdufaDate)
+      if (sortField === 'decisionDate') {
+        aVal = new Date(a.decisionDate)
+        bVal = new Date(b.decisionDate)
       }
 
       if (sortField === 'applicationType') {
@@ -383,16 +425,27 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
         {filteredAndSortedEvents.length} of {events.length} events
       </div>
       <div className="text-xs text-[#8a8075]">
-        Click the model icons on the right side of each row to view that model&apos;s prediction and reasoning.
+        Click the consensus score on the right side of each row to view the model-by-model predictions and reasoning.
       </div>
 
       <div className="sm:hidden space-y-3">
         {filteredAndSortedEvents.map((event) => {
-          const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
+          const daysUntil = getDaysUntilUtc(event.decisionDate) ?? 0
           const symbol = event.symbols?.split(', ')[0]
-          const isOpen = expanded?.eventId === event.id
-          const expandedPrediction = isOpen && expanded ? findPredictionByModelId(event.predictions, expanded.modelId) : null
-          const countdownLabel = renderCountdown(daysUntil, event.outcome)
+          const summary = summarizePredictions(event.predictions)
+          const isOpen = expandedEventId === event.id
+          const countdownLabel = renderCountdown(daysUntil, event.outcome, event.decisionDateKind)
+          const summaryColorClass =
+            summary.direction === 'approved'
+              ? 'text-[#4f8d49]'
+              : summary.direction === 'rejected'
+                ? ''
+                : 'text-[#8a8075]'
+          const summaryStyle =
+            summary.direction === 'rejected'
+              ? { color: BRAND_DOT_COLORS.coral }
+              : undefined
+
           return (
             <div key={event.id} className="rounded-sm bg-white/95 p-4">
               <div className="mb-2 flex items-start justify-between">
@@ -401,7 +454,7 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                   <div className="truncate-wrap mt-0.5 text-xs text-[#8a8075]">{event.companyName}</div>
                 </div>
                 <div className="ml-3 shrink-0 text-right">
-                  <div className="text-xs text-[#8a8075]">{formatDate(event.pdufaDate)}</div>
+                  <div className="text-xs text-[#8a8075]">{formatDate(event.decisionDate)}</div>
                   <div
                     className={`text-xs ${getCountdownTone(daysUntil, isResolvedOutcome(event.outcome))}`}
                     style={getCountdownStyle(daysUntil, isResolvedOutcome(event.outcome))}
@@ -437,41 +490,38 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                 ) : null}
               </div>
 
-              <div className="mt-3 overflow-x-auto">
-                <div
-                  className="grid min-w-[38rem] gap-2"
-                  style={{ gridTemplateColumns: `repeat(${MODEL_ORDER.length}, minmax(4.25rem, 1fr))` }}
-                >
-                  {MODEL_ORDER.map((modelId) => {
-                    const pred = findPredictionByModelId(event.predictions, modelId)
-                    const selected = expanded?.eventId === event.id && expanded.modelId === modelId
-                    if (!pred) {
-                      return (
-                        <div key={modelId} className="flex items-center justify-center rounded-md bg-[#f8f5f1] px-2 py-2 text-xs text-[#cfc3b5]">
-                          —
-                        </div>
-                      )
-                    }
-                    return (
-                      <button
-                        key={modelId}
-                        type="button"
-                        onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
-                        className={`rounded-md px-2 py-2 transition-all ${selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'}`}
-                        aria-label={`Show ${MODEL_DISPLAY_NAMES[modelId]} prediction`}
-                      >
-                        <div className="mx-auto w-4 h-4">
-                          <PredictionDirectionIcon prediction={pred.prediction} />
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+              <div className="mt-3">
+                {summary.total > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedEventId(isOpen ? null : event.id)}
+                    className={`w-full rounded-md border border-[#e8ddd0] bg-[#fcfbf8] px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
+                      isOpen ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
+                    }`}
+                    aria-label={`Show all ${summary.total} model predictions for ${event.drugName}`}
+                  >
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Consensus</div>
+                    <div className="mt-1 flex items-baseline justify-between gap-3">
+                      <span className={`text-lg font-semibold tabular-nums ${summaryColorClass}`} style={summaryStyle}>
+                        {summary.label}
+                      </span>
+                      <span className="text-xs uppercase tracking-[0.12em] text-[#8a8075]">{summary.detail}</span>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="rounded-md border border-[#e8ddd0] bg-[#faf7f2] px-3 py-3 text-xs text-[#b5aa9e]">
+                    Awaiting model runs
+                  </div>
+                )}
               </div>
 
-              {expandedPrediction && expanded && (
+              {isOpen && summary.orderedPredictions.length > 0 && (
                 <div className="mt-3">
-                  <PredictionPanel modelId={expanded.modelId} prediction={expandedPrediction} />
+                  <div className="space-y-3">
+                    {summary.orderedPredictions.map(({ modelId, prediction }) => (
+                      <PredictionPanel key={`${event.id}-${modelId}`} modelId={modelId} prediction={prediction} />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -490,14 +540,12 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                 <col style={{ width: '74px' }} />
                 <col style={{ width: '88px' }} />
                 <col style={{ width: '62px' }} />
-                {MODEL_ORDER.map((modelId) => (
-                  <col key={`calendar2-col-${modelId}`} style={{ width: `${TABLE_MODEL_COLUMN_WIDTH}px` }} />
-                ))}
+                <col style={{ width: '92px' }} />
               </colgroup>
               <thead>
                 <tr className="border-b border-[#e8ddd0] text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">
-                  <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('pdufaDate')}>
-                    Date <SortIcon field="pdufaDate" />
+                  <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('decisionDate')}>
+                    Date <SortIcon field="decisionDate" />
                   </th>
                   <th className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left font-medium first:pl-5 last:pr-7 hover:text-[#1a1a1a]" onClick={() => handleSort('drugName')}>
                     Drug <SortIcon field="drugName" />
@@ -519,29 +567,36 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                       <SortIcon field="outcome" />
                     </span>
                   </th>
-                  {MODEL_ORDER.map((modelId) => (
-                    <th key={modelId} className="px-1.5 py-2.5 text-center">
-                      <div className="mx-auto h-4 w-4 text-[#8a8075]" title={MODEL_DISPLAY_NAMES[modelId]}>
-                        <ModelIcon id={modelId} />
-                      </div>
-                    </th>
-                  ))}
+                  <th className="px-3 py-2.5 text-center font-medium text-[#b5aa9e]">
+                    Consensus
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAndSortedEvents.map((event) => {
-                  const daysUntil = getDaysUntilUtc(event.pdufaDate) ?? 0
+                  const daysUntil = getDaysUntilUtc(event.decisionDate) ?? 0
                   const symbol = event.symbols?.split(', ')[0]
-                  const expandedPrediction = expanded?.eventId === event.id ? findPredictionByModelId(event.predictions, expanded.modelId) : null
+                  const summary = summarizePredictions(event.predictions)
+                  const isExpanded = expandedEventId === event.id
                   const rowDescription = event.eventDescription?.trim() || null
                   const resolvedOutcome = isResolvedOutcome(event.outcome)
-                  const countdownLabel = renderCountdown(daysUntil, event.outcome)
+                  const countdownLabel = renderCountdown(daysUntil, event.outcome, event.decisionDateKind)
+                  const summaryColorClass =
+                    summary.direction === 'approved'
+                      ? 'text-[#4f8d49]'
+                      : summary.direction === 'rejected'
+                        ? ''
+                        : 'text-[#8a8075]'
+                  const summaryStyle =
+                    summary.direction === 'rejected'
+                      ? { color: BRAND_DOT_COLORS.coral }
+                      : undefined
 
                   return (
                     <Fragment key={event.id}>
                       <tr className={`${rowDescription ? '' : 'border-b border-[#e8ddd0]'} align-top hover:bg-[#f3ebe0]/30`}>
                         <td className="whitespace-nowrap px-3 py-1.5 text-sm text-[#8a8075] first:pl-5 last:pr-7">
-                          <div className="leading-none">{formatDate(event.pdufaDate)}</div>
+                          <div className="leading-none">{formatDate(event.decisionDate)}</div>
                         </td>
                         <td className="px-3 py-1.5 text-sm first:pl-5 last:pr-7">
                           <div className="truncate-wrap leading-tight">{event.drugName}</div>
@@ -577,40 +632,43 @@ export function FDACalendarTableWithPredictions({ events, filterOptions }: FDACa
                             {event.outcome.toUpperCase()}
                           </span>
                         </td>
-                        {MODEL_ORDER.map((modelId) => {
-                          const pred = findPredictionByModelId(event.predictions, modelId)
-                          const selected = expanded?.eventId === event.id && expanded.modelId === modelId
-                          return (
-                            <td key={modelId} className="px-1.5 py-1.5 text-center">
-                              {pred ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setExpanded(selected ? null : { eventId: event.id, modelId })}
-                                  className={`rounded-md px-1.5 py-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
-                                    selected ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
-                                  }`}
-                                  aria-label={`Show ${MODEL_DISPLAY_NAMES[modelId]} prediction`}
-                                >
-                                  <PredictionDirectionIcon prediction={pred.prediction} />
-                                </button>
-                              ) : (
-                                <span className="text-[#d4c9bc]">—</span>
-                              )}
-                            </td>
-                          )
-                        })}
+                        <td className="px-3 py-1.5 text-center">
+                          {summary.total > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+                              className={`min-w-[4.5rem] rounded-md px-2 py-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 ${
+                                isExpanded ? 'ring-2 ring-black/10' : 'hover:ring-2 hover:ring-black/10'
+                              }`}
+                              aria-label={`Show all ${summary.total} model predictions for ${event.drugName}`}
+                            >
+                              <div className={`text-sm font-semibold tabular-nums ${summaryColorClass}`} style={summaryStyle}>
+                                {summary.label}
+                              </div>
+                              <div className="text-[9px] uppercase tracking-[0.14em] text-[#b5aa9e]">
+                                {summary.detail}
+                              </div>
+                            </button>
+                          ) : (
+                            <span className="text-[#d4c9bc]">—</span>
+                          )}
+                        </td>
                       </tr>
                       {rowDescription ? (
-                        <tr className={`${expandedPrediction ? '' : 'border-b border-[#e8ddd0]'} hover:bg-[#f3ebe0]/30`}>
+                        <tr className={`${isExpanded && summary.orderedPredictions.length > 0 ? '' : 'border-b border-[#e8ddd0]'} hover:bg-[#f3ebe0]/30`}>
                           <td colSpan={TABLE_EXPANDED_COLSPAN} className="px-3 pb-1.5 pt-0 text-sm text-[#8a8075] first:pl-5 last:pr-7">
                             <div className="truncate-wrap leading-tight">{rowDescription}</div>
                           </td>
                         </tr>
                       ) : null}
-                      {expandedPrediction && expanded?.eventId === event.id ? (
+                      {isExpanded && summary.orderedPredictions.length > 0 ? (
                         <tr className="border-b border-[#e8ddd0]">
                           <td colSpan={TABLE_EXPANDED_COLSPAN} className="px-3 py-5 first:pl-5 last:pr-7">
-                            <PredictionPanel modelId={expanded.modelId} prediction={expandedPrediction} />
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              {summary.orderedPredictions.map(({ modelId, prediction }) => (
+                                <PredictionPanel key={`${event.id}-${modelId}`} modelId={modelId} prediction={prediction} />
+                              ))}
+                            </div>
                           </td>
                         </tr>
                       ) : null}

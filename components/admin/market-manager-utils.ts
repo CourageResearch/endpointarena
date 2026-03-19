@@ -13,7 +13,7 @@ export interface AdminMarketEvent {
   drugName: string
   companyName: string
   symbols: string
-  pdufaDate: string
+  decisionDate: string
   outcome: string
   marketId: string | null
   marketStatus: 'OPEN' | 'RESOLVED' | null
@@ -72,7 +72,7 @@ export interface ExecutionPlanMarket {
   fdaEventId: string
   drugName: string
   companyName: string
-  pdufaDate: string
+  decisionDate: string
   marketSequence: number
   steps: ExecutionPlanStep[]
 }
@@ -109,9 +109,9 @@ function sortCycleEvents(
   return [...events]
     .filter((event) => event.marketId && allowedStatuses.includes(event.marketStatus))
     .sort((a, b) => {
-      const aPdufaTime = new Date(a.pdufaDate).getTime()
-      const bPdufaTime = new Date(b.pdufaDate).getTime()
-      if (aPdufaTime !== bPdufaTime) return aPdufaTime - bPdufaTime
+      const aDecisionTime = new Date(a.decisionDate).getTime()
+      const bDecisionTime = new Date(b.decisionDate).getTime()
+      if (aDecisionTime !== bDecisionTime) return aDecisionTime - bDecisionTime
 
       const aOpenedTime = a.marketOpenedAt ? new Date(a.marketOpenedAt).getTime() : 0
       const bOpenedTime = b.marketOpenedAt ? new Date(b.marketOpenedAt).getTime() : 0
@@ -145,7 +145,7 @@ export function buildExecutionPlan(input: {
         fdaEventId: event.id,
         drugName: event.drugName,
         companyName: event.companyName,
-        pdufaDate: event.pdufaDate,
+        decisionDate: event.decisionDate,
       }))
 
   let globalSequence = 0
@@ -172,7 +172,7 @@ export function buildExecutionPlan(input: {
       fdaEventId: market.fdaEventId,
       drugName: event?.drugName ?? market.drugName,
       companyName: event?.companyName ?? market.companyName,
-      pdufaDate: event?.pdufaDate ?? market.pdufaDate,
+      decisionDate: event?.decisionDate ?? market.decisionDate,
       marketSequence: marketIndex + 1,
       steps,
     } satisfies ExecutionPlanMarket

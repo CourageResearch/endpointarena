@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 async function getMarketAdminData() {
   const [events, markets] = await Promise.all([
     db.query.fdaCalendarEvents.findMany({
-      orderBy: [asc(fdaCalendarEvents.pdufaDate)],
+      orderBy: [asc(fdaCalendarEvents.decisionDate)],
     }),
     db.query.predictionMarkets.findMany(),
   ])
@@ -31,7 +31,7 @@ async function getMarketAdminData() {
       drugName: event.drugName,
       companyName: event.companyName,
       symbols: event.symbols,
-      pdufaDate: event.pdufaDate.toISOString(),
+      decisionDate: event.decisionDate.toISOString(),
       outcome: event.outcome,
       marketId: market?.id ?? null,
       marketStatus,

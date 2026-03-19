@@ -26,13 +26,13 @@ import { assertLocalOneDrugDatabaseUrl } from './one-drug-local-utils'
 
 type BacktestFixture = {
   externalKey: string
-  pdufaDate: string
+  decisionDate: string
   history: [number, number, number, number, number]
 }
 
 const BACKTEST_FIXTURE: BacktestFixture = {
   externalKey: 'cnpv/cytisinicline',
-  pdufaDate: '2026-06-20',
+  decisionDate: '2026-06-20',
   history: [0.71, 0.74, 0.76, 0.78, 0.796],
 }
 
@@ -115,7 +115,7 @@ function buildReasoning(modelId: ModelId, probability: number, dayIndex: number)
       ? 'constructive approval setup'
       : 'mixed approval setup'
 
-  return `${modelName} sees ${confidencePhrase} on day ${dayIndex + 1} of the local backtest. Cytisinicline has late-stage smoking cessation efficacy data, a visible PDUFA date, and no adjudication signal yet, so the model keeps leaning on regulatory continuity rather than surprise downside.`
+  return `${modelName} sees ${confidencePhrase} on day ${dayIndex + 1} of the local backtest. Cytisinicline has late-stage smoking cessation efficacy data, a visible decision date, and no adjudication signal yet, so the model keeps leaning on regulatory continuity rather than surprise downside.`
 }
 
 function buildActionExplanation(actionType: 'BUY_YES' | 'BUY_NO' | 'HOLD', probability: number, dayIndex: number): string {
@@ -343,14 +343,14 @@ async function seedFixture(fixture: BacktestFixture) {
     symbols: seed.symbols,
     drugName: seed.drugName,
     applicationType: seed.applicationType,
-    pdufaDate: parseUtcDate(fixture.pdufaDate),
-    dateKind: seed.publicActionDate === fixture.pdufaDate ? 'public' : 'synthetic',
+    decisionDate: parseUtcDate(fixture.decisionDate),
+    decisionDateKind: seed.publicActionDate === fixture.decisionDate ? 'hard' : 'soft',
     cnpvAwardDate: seed.cnpvAwardDate ? parseUtcDate(seed.cnpvAwardDate) : null,
     eventDescription: seed.eventDescription,
     outcome: 'Pending',
     outcomeDate: null,
     drugStatus: seed.publicActionDate && seed.cnpvAwardDate
-      ? `Pending under FDA CNPV (award date ${seed.cnpvAwardDate}; preview action date ${fixture.pdufaDate}).`
+      ? `Pending under FDA CNPV (award date ${seed.cnpvAwardDate}; expected decision date ${fixture.decisionDate}).`
       : 'Pending under FDA CNPV preview testing.',
     therapeuticArea: seed.therapeuticArea,
     scrapedAt: now,
@@ -448,7 +448,7 @@ async function main() {
   ])
 
   console.log(`Seeded 1 open-market fixture with ${BACKTEST_FIXTURE.history.length} days of price history.`)
-  console.log(`- ${seeded.event.drugName} (${seeded.event.companyName}) -> ${seeded.event.pdufaDate.toISOString().slice(0, 10)} | YES ${(seeded.market.priceYes * 100).toFixed(1)}%`)
+  console.log(`- ${seeded.event.drugName} (${seeded.event.companyName}) -> ${seeded.event.decisionDate.toISOString().slice(0, 10)} | YES ${(seeded.market.priceYes * 100).toFixed(1)}%`)
   console.log(`FDA events in DB: ${eventCountRows[0]?.count ?? 0}`)
   console.log(`Open markets in DB: ${marketCountRows[0]?.count ?? 0}`)
   console.log(`Price snapshots in DB: ${snapshotCountRows[0]?.count ?? 0}`)

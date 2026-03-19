@@ -17,7 +17,6 @@ prisma/dev.db
 .env
 .env.local
 .env.*.local
-.env.local.v2
 
 # Debug
 npm-debug.log*

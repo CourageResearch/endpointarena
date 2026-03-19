@@ -23,7 +23,8 @@ interface FDAEvent {
   companyName: string
   therapeuticArea: string | null
   applicationType: string
-  pdufaDate: string
+  decisionDate: string
+  decisionDateKind: 'hard' | 'soft'
   outcome: string
   source: string | null
   nctId: string | null
@@ -364,7 +365,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
       </div>
 
       {filteredEvents.map((event) => {
-        const days = getDaysUntil(event.pdufaDate)
+        const days = getDaysUntil(event.decisionDate)
         const isAnyLoading = MODEL_IDS.some((modelId) => loading[getKey(event.id, modelId)])
         const hasSnapshots = event.predictions.length > 0
 
@@ -408,7 +409,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                     <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
                       {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
                     </div>
-                    <div className="text-xs text-[#b5aa9e]">{formatDate(event.pdufaDate)}</div>
+                    <div className="text-xs text-[#b5aa9e]">{formatDate(event.decisionDate)}</div>
                   </div>
 
                   <select

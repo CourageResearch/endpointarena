@@ -42,11 +42,11 @@ type SourceEventRow = {
   symbols: string
   drug_name: string
   application_type: string
-  pdufa_date: unknown
+  decision_date: unknown
   event_description: string
   outcome: string
   outcome_date: unknown
-  date_kind: string | null
+  decision_date_kind: string | null
   cnpv_award_date: unknown
   drug_status: string | null
   therapeutic_area: string | null
@@ -219,7 +219,7 @@ async function loadSourceEvent(sourceSql: SourceSqlClient): Promise<SourceEventR
       on external_key.event_id = e.id
      and external_key.id_type = 'external_key'
      and external_key.id_value = ${CYTISINICLINE_EXTERNAL_KEY}
-    order by e.pdufa_date asc, e.id asc
+    order by e.decision_date asc, e.id asc
   `
 
   if (byExternalKey.length > 1) {
@@ -233,7 +233,7 @@ async function loadSourceEvent(sourceSql: SourceSqlClient): Promise<SourceEventR
     select e.*
     from fda_calendar_events e
     where lower(e.drug_name) = lower(${CYTISINICLINE_DRUG_NAME})
-    order by e.pdufa_date asc, e.id asc
+    order by e.decision_date asc, e.id asc
   `
 
   if (byDrugName.length !== 1) {
@@ -426,11 +426,11 @@ async function main() {
         symbols: sourceEvent.symbols,
         drugName: sourceEvent.drug_name,
         applicationType: sourceEvent.application_type,
-        pdufaDate: normalizeUtcDate(sourceEvent.pdufa_date),
+        decisionDate: normalizeUtcDate(sourceEvent.decision_date),
         eventDescription: sourceEvent.event_description,
         outcome: 'Pending',
         outcomeDate: sourceEvent.outcome_date ? normalizeTimestamp(sourceEvent.outcome_date) : null,
-        dateKind: sourceEvent.date_kind === 'synthetic' ? 'synthetic' : 'public',
+        decisionDateKind: sourceEvent.decision_date_kind === 'soft' ? 'soft' : 'hard',
         cnpvAwardDate: sourceEvent.cnpv_award_date ? normalizeUtcDate(sourceEvent.cnpv_award_date) : null,
         drugStatus: normalizeNonEmpty(sourceEvent.drug_status),
         therapeuticArea: normalizeNonEmpty(sourceEvent.therapeutic_area),

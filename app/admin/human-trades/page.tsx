@@ -219,7 +219,7 @@ export default async function AdminHumanTradesPage({
       actorDisplayName: marketActors.displayName,
       drugName: fdaCalendarEvents.drugName,
       companyName: fdaCalendarEvents.companyName,
-      pdufaDate: fdaCalendarEvents.pdufaDate,
+      decisionDate: fdaCalendarEvents.decisionDate,
       marketStatus: predictionMarkets.status,
     })
     .from(marketActions)
@@ -406,7 +406,7 @@ export default async function AdminHumanTradesPage({
                       <td className="px-3 py-2 text-[#1a1a1a]">
                         <p>{row.drugName ?? 'Unknown event'}</p>
                         <p className="text-xs text-[#8a8075] mt-0.5">
-                          {row.companyName ?? '—'} {row.pdufaDate ? `• PDUFA ${row.pdufaDate.toLocaleDateString('en-US', { timeZone: 'UTC' })}` : ''}
+                          {row.companyName ?? '—'} {row.decisionDate ? `• Decision ${row.decisionDate.toLocaleDateString('en-US', { timeZone: 'UTC' })}` : ''}
                         </p>
                       </td>
                       <td className="px-3 py-2 text-[#1a1a1a] whitespace-nowrap">{row.action}</td>

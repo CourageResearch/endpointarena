@@ -12,5 +12,10 @@ Use one row per day for routine production checks.
 3. Confirm `DATABASE_URL` still resolves to the `postgres-green` host.
 4. Log any failures and whether rollback criteria were met.
 
+## Release-day extras
+1. If the outcome monitor release shipped that day, note whether `EVENT_MONITOR_CRON_SECRET` was provisioned.
+2. Record whether `npm run db:import-cnpv:dry-run` and `npm run db:import-cnpv` were executed.
+3. Note any new or updated markets opened by the CNPV import.
+
 ## Escalation
 - If rollback thresholds in `docs/railway-production-db-runbook-20260311.md` are met, execute rollback checklist immediately and note exact timestamp + reason in this log.
