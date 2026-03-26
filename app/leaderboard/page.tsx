@@ -7,7 +7,7 @@ import { FooterGradientRule, HeaderDots } from '@/components/site/chrome'
 import { getLeaderboardData } from '@/lib/leaderboard-data'
 import { buildPageMetadata } from '@/lib/seo'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
 
 export const metadata: Metadata = buildPageMetadata({

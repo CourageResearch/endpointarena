@@ -7,7 +7,7 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { buildPageMetadata } from '@/lib/seo'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Methodology',

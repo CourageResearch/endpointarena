@@ -7,7 +7,7 @@ import { db, phase2Trials, predictionMarkets, trialQuestions } from '@/lib/db'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import { buildPageMetadata } from '@/lib/seo'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'February 2026 Phase 2 Trials',
