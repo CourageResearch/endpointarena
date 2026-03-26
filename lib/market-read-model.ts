@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import { isModelId, type ModelId } from '@/lib/constants'
-import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets } from '@/lib/db'
+import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions } from '@/lib/db'
+import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
 
 type AccountWithActor = typeof marketAccounts.$inferSelect & { actor: typeof marketActors.$inferSelect }
 type PositionWithActor = typeof marketPositions.$inferSelect & { actor: typeof marketActors.$inferSelect }
@@ -83,7 +84,10 @@ function buildPositionsValueByActorId(args: {
   return positionsValueByActorId
 }
 
-export async function loadOpenMarketActorState(): Promise<{
+export async function loadOpenMarketActorState(input: {
+  includeMarketIds?: string[]
+  includeResolved?: boolean
+} = {}): Promise<{
   accounts: AccountWithActor[]
   openMarkets: OpenMarket[]
   openMarketIds: string[]
@@ -93,16 +97,59 @@ export async function loadOpenMarketActorState(): Promise<{
   positionsByMarketActor: Map<string, PositionWithActor>
   positionsValueByActorId: Map<string, number>
 }> {
-  const [accounts, openMarkets] = await Promise.all([
+  const includeMarketIds = Array.from(new Set(
+    (input.includeMarketIds ?? []).filter((value): value is string => typeof value === 'string' && value.length > 0),
+  ))
+  const includeResolved = input.includeResolved === true
+
+  const marketWhere = includeMarketIds.length > 0
+    ? and(
+        isNotNull(predictionMarkets.trialQuestionId),
+        or(
+          includeResolved
+            ? or(eq(predictionMarkets.status, 'OPEN'), eq(predictionMarkets.status, 'RESOLVED'))
+            : eq(predictionMarkets.status, 'OPEN'),
+          inArray(predictionMarkets.id, includeMarketIds),
+        ),
+      )
+    : and(
+        includeResolved
+          ? or(eq(predictionMarkets.status, 'OPEN'), eq(predictionMarkets.status, 'RESOLVED'))
+          : eq(predictionMarkets.status, 'OPEN'),
+        isNotNull(predictionMarkets.trialQuestionId),
+      )
+
+  const [accounts, rawVisibleMarkets] = await Promise.all([
     db.query.marketAccounts.findMany({
       with: {
         actor: true,
       },
     }),
     db.query.predictionMarkets.findMany({
-      where: eq(predictionMarkets.status, 'OPEN'),
+      where: marketWhere,
     }),
   ])
+
+  const questionIds = Array.from(new Set(
+    rawVisibleMarkets
+      .map((market) => market.trialQuestionId)
+      .filter((value): value is string => Boolean(value)),
+  ))
+  const supportedQuestionIds = new Set(
+    questionIds.length > 0
+      ? filterSupportedTrialQuestions(await db.query.trialQuestions.findMany({
+          where: inArray(trialQuestions.id, questionIds),
+          columns: {
+            id: true,
+            slug: true,
+          },
+        })).map((question) => question.id)
+      : [],
+  )
+  const openMarkets = rawVisibleMarkets.filter((market) => (
+    typeof market.trialQuestionId === 'string' && supportedQuestionIds.has(market.trialQuestionId)
+  ))
+  const actuallyOpenMarkets = openMarkets.filter((market) => market.status === 'OPEN')
 
   const openMarketIds = openMarkets.map((market) => market.id)
   const positions = openMarketIds.length > 0
@@ -115,6 +162,7 @@ export async function loadOpenMarketActorState(): Promise<{
     : []
 
   const marketById = new Map(openMarkets.map((market) => [market.id, market]))
+  const actuallyOpenMarketById = new Map(actuallyOpenMarkets.map((market) => [market.id, market]))
 
   return {
     accounts,
@@ -126,7 +174,7 @@ export async function loadOpenMarketActorState(): Promise<{
     positionsByMarketActor: buildPositionsByMarketActor(positions),
     positionsValueByActorId: buildPositionsValueByActorId({
       positions,
-      marketById,
+      marketById: actuallyOpenMarketById,
     }),
   }
 }

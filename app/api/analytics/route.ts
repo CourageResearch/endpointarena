@@ -2,8 +2,23 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
 import { extractClientIp, isPrivateIp } from '@/lib/geo-country'
+import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
 
 const BOT_PATTERN = /bot|crawler|spider|headless|phantom|selenium/i
+
+function normalizeSearchQuery(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim().replace(/\s+/g, ' ')
+  if (trimmed.length < 2) return null
+  return trimmed.slice(0, 160)
+}
+
+function normalizeResultCount(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  return Math.max(0, Math.min(100000, Math.round(parsed)))
+}
 
 async function computeSessionHash(userAgent: string): Promise<string> {
   const date = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
@@ -43,6 +58,8 @@ async function geolocateIp(ip: string): Promise<{ country: string; city: string 
 
 export async function POST(request: Request) {
   try {
+    await ensureAnalyticsEventsSchema()
+
     const body = await request.json()
     const events: unknown[] = body?.events
 
@@ -64,21 +81,48 @@ export async function POST(request: Request) {
     const geo = clientIp ? await geolocateIp(clientIp) : null
 
     // Cap at 50 events, filter valid types
-    const validTypes = new Set(['pageview', 'click'])
+    const validTypes = new Set(['pageview', 'click', 'market_search'])
     const rows = events
       .slice(0, 50)
-      .filter((e: any) => validTypes.has(e?.type))
-      .map((e: any) => ({
-        type: e.type as string,
-        url: String(e.url || '').slice(0, 500),
-        referrer: e.referrer ? String(e.referrer).slice(0, 500) : null,
-        userAgent,
-        sessionHash,
-        elementId: e.elementId ? String(e.elementId).slice(0, 200) : null,
-        ipAddress: clientIp,
-        country: geo?.country ?? null,
-        city: geo?.city ?? null,
-      }))
+      .map((event: any) => {
+        if (!validTypes.has(event?.type)) return null
+
+        const type = String(event.type)
+        const url = String(event.url || '').slice(0, 500)
+        const searchQuery = type === 'market_search'
+          ? normalizeSearchQuery(event.searchQuery)
+          : null
+
+        if (!url) return null
+        if (type === 'market_search' && !searchQuery) return null
+
+        return {
+          type,
+          url,
+          referrer: event.referrer ? String(event.referrer).slice(0, 500) : null,
+          userAgent,
+          sessionHash,
+          elementId: event.elementId ? String(event.elementId).slice(0, 200) : null,
+          ipAddress: clientIp,
+          country: geo?.country ?? null,
+          city: geo?.city ?? null,
+          searchQuery,
+          resultCount: type === 'market_search' ? normalizeResultCount(event.resultCount) : null,
+        }
+      })
+      .filter((row): row is {
+        type: string
+        url: string
+        referrer: string | null
+        userAgent: string
+        sessionHash: string
+        elementId: string | null
+        ipAddress: string | null
+        country: string | null
+        city: string | null
+        searchQuery: string | null
+        resultCount: number | null
+      } => row !== null)
 
     if (rows.length > 0) {
       await db.insert(analyticsEvents).values(rows)

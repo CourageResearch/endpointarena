@@ -10,9 +10,11 @@ export const DETAILS_CARD_INNER_CLASS = 'h-full rounded-sm bg-white/95 px-3 py-2
 export const DETAILS_CARD_BORDER_STYLE = {
   background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)',
 } as const
-export const DETAILS_TOP_LABEL_CLASS = 'text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]'
-export const DETAILS_TOP_VALUE_CLASS = 'text-sm leading-snug text-[#7c7267]'
-export const DETAILS_BODY_TEXT_CLASS = 'text-sm leading-snug text-[#7c7267]'
+export const DASHBOARD_SECTION_LABEL_CLASS = 'text-[11px] font-medium uppercase tracking-[0.18em] text-[#aa9d8d]'
+export const DETAILS_TOP_LABEL_CLASS = 'text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]'
+export const DETAILS_TOP_VALUE_CLASS = 'text-[1rem] font-normal leading-[1.4] text-[#675d52] sm:text-[1.08rem]'
+export const DETAILS_BODY_TEXT_CLASS = 'text-[0.97rem] font-normal leading-[1.55] text-[#675d52] sm:text-[1rem]'
+export const DASHBOARD_META_TEXT_CLASS = 'text-[12px] font-normal leading-[1.4] text-[#7c7267]'
 
 export type TweetVerificationStatus = {
   authenticated: boolean
@@ -62,19 +64,6 @@ export function formatDateUtcCompact(value: string | null | undefined): string {
     month: 'numeric',
     day: 'numeric',
   })
-}
-
-export function formatDateTimeLocalCompact(value: string | null | undefined): string {
-  if (!value) return 'Unknown time'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Unknown time'
-  const datePart = `${date.getMonth() + 1}/${date.getDate()}`
-  const timePart = date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-  return `${datePart}, ${timePart}`
 }
 
 export function clipText(value: string | null | undefined, maxChars: number): string {

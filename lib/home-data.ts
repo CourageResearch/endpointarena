@@ -1,9 +1,8 @@
-import { db, fdaCalendarEvents } from '@/lib/db'
-import { eq, or, desc, asc } from 'drizzle-orm'
-import { MODEL_IDS, findPredictionByModelId, isModelId, type ModelId } from '@/lib/constants'
-import { attachUnifiedPredictionsToEvents, getUnifiedPredictionHistoriesByEventIds, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
-import { enrichFdaEvents } from '@/lib/fda-event-metadata'
+import { db, trialQuestions } from '@/lib/db'
+import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
+import { getUnifiedPredictionHistoriesByEventIds, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
 import { loadOpenMarketActorState } from '@/lib/market-read-model'
+import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
 
 function describeDataError(error: unknown): string {
   if (error instanceof AggregateError) {
@@ -33,39 +32,16 @@ function describeDataError(error: unknown): string {
 
 export async function getHomeData() {
   try {
-    const [rawUpcomingEvents, rawRecentDecisionEvents, rawAllFdaEvents, openMarketState] = await Promise.all([
-      db.query.fdaCalendarEvents.findMany({
-        where: eq(fdaCalendarEvents.outcome, 'Pending'),
-        orderBy: [asc(fdaCalendarEvents.decisionDate)],
-        limit: 5,
-      }),
-      db.query.fdaCalendarEvents.findMany({
-        where: or(
-          eq(fdaCalendarEvents.outcome, 'Approved'),
-          eq(fdaCalendarEvents.outcome, 'Rejected')
-        ),
-        orderBy: [desc(fdaCalendarEvents.outcomeDate)],
-        limit: 10,
-      }),
-      db.query.fdaCalendarEvents.findMany(),
+    const [rawQuestions, openMarketState] = await Promise.all([
+      db.query.trialQuestions.findMany(),
       loadOpenMarketActorState(),
     ])
+    const questions = filterSupportedTrialQuestions(rawQuestions)
 
-    const [upcomingEvents, recentDecisionEvents, allFdaEvents] = await Promise.all([
-      enrichFdaEvents(rawUpcomingEvents),
-      enrichFdaEvents(rawRecentDecisionEvents),
-      enrichFdaEvents(rawAllFdaEvents),
-    ])
-
-    const [upcomingFdaEvents, recentFdaDecisions] = await Promise.all([
-      attachUnifiedPredictionsToEvents(upcomingEvents),
-      attachUnifiedPredictionsToEvents(recentDecisionEvents),
-    ])
-
-    const eventOutcomeById = new Map(allFdaEvents.map((event) => [event.id, event.outcome]))
-    const historyByEventId = await getUnifiedPredictionHistoriesByEventIds(
-      allFdaEvents.map((event) => event.id),
-      eventOutcomeById,
+    const questionOutcomeById = new Map(questions.map((question) => [question.id, question.outcome]))
+    const historyByQuestionId = await getUnifiedPredictionHistoriesByEventIds(
+      questions.map((question) => question.id),
+      questionOutcomeById,
     )
 
     const modelStats = new Map<ModelId, { correct: number; total: number; pending: number; confidenceSum: number }>()
@@ -74,11 +50,11 @@ export async function getHomeData() {
     }
 
     let totalPredictionHistoryEntries = 0
-    for (const event of allFdaEvents) {
-      const eventHistory = historyByEventId.get(event.id)
-      if (!eventHistory) continue
+    for (const question of questions) {
+      const questionHistory = historyByQuestionId.get(question.id)
+      if (!questionHistory) continue
 
-      for (const [predictorId, history] of eventHistory.entries()) {
+      for (const [predictorId, history] of questionHistory.entries()) {
         if (!isModelId(predictorId)) continue
         totalPredictionHistoryEntries += history.length
 
@@ -90,7 +66,7 @@ export async function getHomeData() {
 
         stats.confidenceSum += selected.confidence
 
-        const isDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
+        const isDecided = question.outcome === 'YES' || question.outcome === 'NO'
         if (!isDecided) {
           stats.pending++
         } else {
@@ -102,7 +78,6 @@ export async function getHomeData() {
 
     const leaderboard = Array.from(modelStats.entries())
       .map(([id, stats]) => {
-        const totalPreds = stats.total + stats.pending
         const account = openMarketState.accountMaps.byModelKey.get(id)
         const positionsValue = account ? (openMarketState.positionsValueByActorId.get(account.actorId) ?? 0) : 0
         return {
@@ -111,7 +86,7 @@ export async function getHomeData() {
           total: stats.total,
           pending: stats.pending,
           accuracy: stats.total > 0 ? (stats.correct / stats.total) * 100 : 0,
-          avgConfidence: totalPreds > 0 ? stats.confidenceSum / totalPreds : 0,
+          avgConfidence: (stats.total + stats.pending) > 0 ? stats.confidenceSum / (stats.total + stats.pending) : 0,
           totalEquity: account ? account.cashBalance + positionsValue : null,
         }
       })
@@ -125,32 +100,12 @@ export async function getHomeData() {
       return b.correct - a.correct
     })
 
-    const nextFdaEvent = upcomingFdaEvents[0] || null
-
-    const gridScatterData = recentFdaDecisions.map((event) => ({
-      id: event.id,
-      drugName: event.drugName,
-      outcome: event.outcome as 'Approved' | 'Rejected',
-      predictions: MODEL_IDS.map((modelId) => {
-        const pred = findPredictionByModelId(event.predictions, modelId)
-        if (!pred) return { model: modelId, predicted: null, correct: null }
-        return {
-          model: modelId,
-          predicted: pred.prediction as 'approved' | 'rejected',
-          correct: pred.correct,
-        }
-      }),
-    }))
-
     return {
       leaderboard,
       moneyLeaderboard,
-      upcomingFdaEvents,
-      recentFdaDecisions,
-      nextFdaEvent,
-      gridScatterData,
+      gridScatterData: [],
       stats: {
-        fdaEventsTracked: allFdaEvents.length,
+        fdaEventsTracked: questions.length,
         predictions: totalPredictionHistoryEntries,
         modelsCompared: MODEL_IDS.length,
       },

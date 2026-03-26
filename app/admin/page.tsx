@@ -11,5 +11,5 @@ export default async function AdminPage() {
     redirect('/login')
   }
 
-  redirect('/admin/markets')
+  redirect('/admin/ai')
 }

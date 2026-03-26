@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { formatDate, getDaysUntil, MODEL_INFO } from '@/lib/constants'
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { getDaysUntil, MODEL_INFO } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
+import { formatUtcDate } from '@/lib/date'
 import {
   applyActivityToExecutionPlan,
   applyProgressToExecutionPlan,
@@ -41,13 +43,61 @@ import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
 
 interface Props {
   events: AdminMarketEvent[]
-  initialRunSnapshot: AdminMarketRunSnapshot | null
+  initialRunSnapshot?: AdminMarketRunSnapshot | null
+  sections?: AdminMarketManagerSection[]
+  labels?: Partial<AdminMarketManagerLabels>
 }
 
-export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }: Props) {
+interface AdminMarketManagerLabels {
+  searchPlaceholder: string
+  openMarketsTitle: string
+  openMarketsDescription: string
+  openMarketsEmptyState: string
+  needsMarketTitle: string
+  needsMarketDescription: string
+  resolvedMarketsTitle: string
+  resolvedMarketsDescription: string
+  resolvedMarketsEmptyState: string
+}
+
+export type AdminMarketManagerSection =
+  | 'dailyCycle'
+  | 'search'
+  | 'openMarkets'
+  | 'needsMarket'
+  | 'resolvedMarkets'
+
+const DEFAULT_SECTIONS: AdminMarketManagerSection[] = [
+  'dailyCycle',
+  'search',
+  'openMarkets',
+  'needsMarket',
+  'resolvedMarkets',
+]
+
+const DEFAULT_LABELS: AdminMarketManagerLabels = {
+  searchPlaceholder: 'Search trial, sponsor, ticker, endpoint',
+  openMarketsTitle: 'Open Markets',
+  openMarketsDescription: 'Markets that are currently live.',
+  openMarketsEmptyState: 'No open markets match the current filter.',
+  needsMarketTitle: 'Needs Market',
+  needsMarketDescription: 'Live Phase 2 endpoint questions that still need a market opened.',
+  resolvedMarketsTitle: 'Resolved Markets',
+  resolvedMarketsDescription: 'Primary-endpoint markets that have already been resolved.',
+  resolvedMarketsEmptyState: 'No resolved markets match the current filter.',
+}
+
+export function AdminMarketManager({
+  events: initialEvents,
+  initialRunSnapshot = null,
+  sections = DEFAULT_SECTIONS,
+  labels,
+}: Props) {
+  const router = useRouter()
   const [events, setEvents] = useState(initialEvents)
   const [search, setSearch] = useState('')
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null)
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
   const [updatingOutcome, setUpdatingOutcome] = useState<Record<string, boolean>>({})
   const [runningDaily, setRunningDaily] = useState(initialRunSnapshot?.status === 'running')
   const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(() => buildRunSummaryFromSnapshot(initialRunSnapshot))
@@ -67,6 +117,28 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
   const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
+  const enabledSections = new Set(sections)
+  const showDailyCycle = enabledSections.has('dailyCycle')
+  const showSearch = enabledSections.has('search')
+  const showOpenMarkets = enabledSections.has('openMarkets')
+  const showNeedsMarket = enabledSections.has('needsMarket')
+  const showResolvedMarkets = enabledSections.has('resolvedMarkets')
+  const sectionLabels = { ...DEFAULT_LABELS, ...labels }
+
+  const navigateToMarket = (marketId: string | null) => {
+    if (!marketId) return
+    router.push(`/trials/${marketId}`)
+  }
+
+  const handleMarketRowKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    marketId: string | null
+  ) => {
+    if (event.target !== event.currentTarget) return
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    navigateToMarket(marketId)
+  }
 
   useEffect(() => {
     if (!runningDaily || runStartedAtMs === null) return
@@ -119,7 +191,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   }, [events, preserveExecutionPlan, runningDaily])
 
   useEffect(() => {
-    if (!runningDaily || isStreamingRun) return
+    if (!showDailyCycle || !runningDaily || isStreamingRun) return
 
     let cancelled = false
 
@@ -143,15 +215,16 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [isStreamingRun, runningDaily])
+  }, [isStreamingRun, runningDaily, showDailyCycle])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return events
     return events.filter((event) =>
-      event.drugName.toLowerCase().includes(q) ||
-      event.companyName.toLowerCase().includes(q) ||
-      event.symbols.toLowerCase().includes(q)
+      event.shortTitle.toLowerCase().includes(q) ||
+      event.sponsorName.toLowerCase().includes(q) ||
+      event.sponsorTicker.toLowerCase().includes(q) ||
+      event.questionPrompt.toLowerCase().includes(q)
     )
   }, [events, search])
 
@@ -170,21 +243,21 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     [filtered],
   )
 
-  const openMarket = async (fdaEventId: string) => {
+  const openMarket = async (trialQuestionId: string) => {
     setUiError(null)
-    setLoadingEventId(fdaEventId)
+    setLoadingEventId(trialQuestionId)
     try {
       const response = await fetch('/api/markets/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fdaEventId }),
+        body: JSON.stringify({ trialQuestionId }),
       })
 
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open market'))
 
       setEvents((prev) => prev.map((event) => (
-        event.id === fdaEventId
+        event.id === trialQuestionId
           ? {
               ...event,
               marketId: data.market.id,
@@ -201,12 +274,12 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     }
   }
 
-  const updateOutcome = async (eventId: string, outcome: string) => {
+  const updateOutcome = async (trialQuestionId: string, outcome: string) => {
     setUiError(null)
-    setUpdatingOutcome((prev) => ({ ...prev, [eventId]: true }))
+    setUpdatingOutcome((prev) => ({ ...prev, [trialQuestionId]: true }))
 
     try {
-      const response = await fetch(`/api/fda-events/${eventId}/outcome`, {
+      const response = await fetch(`/api/trial-questions/${trialQuestionId}/outcome`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ outcome }),
@@ -216,7 +289,7 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
       if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to update outcome'))
 
       setEvents((prev) => prev.map((event) => (
-        event.id === eventId
+        event.id === trialQuestionId
           ? {
               ...event,
               outcome,
@@ -229,7 +302,30 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to update outcome')
     } finally {
-      setUpdatingOutcome((prev) => ({ ...prev, [eventId]: false }))
+      setUpdatingOutcome((prev) => ({ ...prev, [trialQuestionId]: false }))
+    }
+  }
+
+  const deleteDrug = async (trialQuestionId: string, shortTitle: string) => {
+    const confirmed = window.confirm(`Delete "${shortTitle}" from admin? This removes the drug/question and any linked market data.`)
+    if (!confirmed) return
+
+    setUiError(null)
+    setDeletingEventId(trialQuestionId)
+
+    try {
+      const response = await fetch(`/api/admin/trial-questions/${trialQuestionId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to delete drug'))
+
+      setEvents((prev) => prev.filter((event) => event.id !== trialQuestionId))
+    } catch (error) {
+      setUiError(error instanceof Error ? error.message : 'Failed to delete drug')
+    } finally {
+      setDeletingEventId(null)
     }
   }
 
@@ -563,6 +659,25 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
   const currentExecutionMarket = currentExecutionStep
     ? executionPlan.find((market) => market.marketId === currentExecutionStep.marketId) ?? null
     : null
+  const executionModelOrder = executionPlan[0]?.steps.map((step) => step.modelId) ?? runProgress?.modelOrder ?? []
+  const getExecutionStepFallbackDetail = (status: 'queued' | 'running' | 'waiting' | 'ok' | 'error' | 'skipped') => {
+    switch (status) {
+      case 'queued':
+        return null
+      case 'running':
+        return 'In progress'
+      case 'waiting':
+        return 'Waiting on turn'
+      case 'ok':
+        return 'Completed'
+      case 'error':
+        return 'Needs review'
+      case 'skipped':
+        return 'Skipped'
+      default:
+        return null
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -571,13 +686,9 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
           {uiError}
         </div>
       )}
-      <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Market Cycle</h3>
-            <p className="text-xs text-[#8a8075] mt-1">Runs model actions for every OPEN market. Target schedule: 6:00 AM ET.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      {showDailyCycle ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-start gap-2">
             <button
               onClick={runDailyCycle}
               disabled={runningDaily}
@@ -588,451 +699,576 @@ export function AdminMarketManager({ events: initialEvents, initialRunSnapshot }
                 : 'Run Daily Cycle Now'}
             </button>
             {runningDaily ? (
-                <button
-                  type="button"
-                  onClick={pauseDailyCycle}
-                  disabled={isStoppingDaily}
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
-                >
-                  {isStoppingDaily ? 'Stopping...' : 'Pause'}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={pauseDailyCycle}
+                disabled={isStoppingDaily}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+              >
+                {isStoppingDaily ? 'Stopping...' : 'Pause'}
+              </button>
+            ) : null}
           </div>
-        </div>
-        {runProgress && (
-          <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
-            <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Run Overview</p>
-              <p className="text-xs text-[#8a8075]">
-                {runProgress.runDate
-                  ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
-                  : 'Initializing run'} • {runProgress.openMarkets} open market{runProgress.openMarkets === 1 ? '' : 's'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
-              </p>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Market Cycle</h3>
+              <p className="mt-1 text-xs text-[#8a8075]">Target schedule: 6:00 AM ET.</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Completed</p>
-                <p className="text-sm font-semibold text-[#1a1a1a]">{runProgress.completedActions}</p>
+          {runProgress && (
+            <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Run Overview</p>
+                <p className="text-xs text-[#8a8075]">
+                  {runProgress.runDate
+                    ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
+                    : 'Initializing run'} • {runProgress.openMarkets} open market{runProgress.openMarkets === 1 ? '' : 's'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
+                </p>
               </div>
-              <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#2f6f24]">Worked</p>
-                <p className="text-sm font-semibold text-[#2f6f24]">{runProgress.okCount}</p>
-              </div>
-              <div className="rounded-none border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8d2c22]">Failed</p>
-                <p className="text-sm font-semibold text-[#8d2c22]">{runProgress.errorCount}</p>
-              </div>
-              <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Skipped</p>
-                <p className="text-sm font-semibold text-[#6f665b]">{runProgress.skippedCount}</p>
-              </div>
-              <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Remaining</p>
-                <p className="text-sm font-semibold text-[#1a1a1a]">{pendingActions}</p>
-              </div>
-            </div>
-            <div className="h-2 rounded-none bg-[#e8ddd0] overflow-hidden">
-              <div
-                className="h-full bg-[#1a1a1a] transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              {runProgress.currentActivity && (
-                <div className="rounded-none border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#265f8f]">Current Step</p>
-                  <p className="mt-1 text-xs text-[#2e5a7a]">{runProgress.currentActivity}</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Completed</p>
+                  <p className="text-sm font-semibold text-[#1a1a1a]">{runProgress.completedActions}</p>
                 </div>
-              )}
-              {runProgress.latestResult && (
-                <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Latest Result</p>
-                  <p className="mt-1 text-xs text-[#5f564c]">
-                    {statusLabel(runProgress.latestResult.status)}: {formatProgressLog(runProgress.latestResult)}
-                  </p>
+                <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#2f6f24]">Worked</p>
+                  <p className="text-sm font-semibold text-[#2f6f24]">{runProgress.okCount}</p>
                 </div>
-              )}
-            </div>
-            {runProgress.errorCount > 0 && runProgress.latestError && (
-              <div className="rounded-none border border-[#c43a2b]/35 bg-[#c43a2b]/10 px-2 py-1.5">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Latest Failure</p>
-                <p className="mt-1 text-xs text-[#8d2c22]">{formatProgressLog(runProgress.latestError)}</p>
+                <div className="rounded-none border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8d2c22]">Failed</p>
+                  <p className="text-sm font-semibold text-[#8d2c22]">{runProgress.errorCount}</p>
+                </div>
+                <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Skipped</p>
+                  <p className="text-sm font-semibold text-[#6f665b]">{runProgress.skippedCount}</p>
+                </div>
+                <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Remaining</p>
+                  <p className="text-sm font-semibold text-[#1a1a1a]">{pendingActions}</p>
+                </div>
               </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">{executionPlanHeading}</p>
-              <p className="text-xs text-[#8a8075]">
-                {executionPlan.length} drug{executionPlan.length === 1 ? '' : 's'} • {executionPlanStepCount} model step{executionPlanStepCount === 1 ? '' : 's'}
-                {!runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 ? ` • ${queuedExecutionSteps} queued for the next run` : ''}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {(['queued', 'waiting', 'running', 'ok', 'skipped', 'error'] as const).map((status) => {
-                const tone = getExecutionStepTone(status)
-                return (
-                  <span
-                    key={status}
-                    className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}
-                  >
-                    {getExecutionStatusLabel(status)}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-
-          {currentExecutionStep && currentExecutionMarket && (
-            <div className="mt-3 rounded-none border border-[#2d7cf6]/35 bg-[#2d7cf6]/10 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#1f5cb9]">Now In Flight</p>
-              <p className="mt-1 text-sm text-[#1f5cb9]">
-                {MODEL_INFO[currentExecutionStep.modelId].fullName} on {currentExecutionMarket.drugName}
-              </p>
-              <p className="mt-1 text-xs text-[#265f8f]">
-                Drug {currentExecutionMarket.marketSequence} of {executionPlan.length} • model {currentExecutionStep.modelSequence} of {currentExecutionMarket.steps.length}
-              </p>
-            </div>
-          )}
-
-          {!currentExecutionStep && !runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 && (
-            <div className="mt-3 rounded-none border border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queued Next</p>
-              <p className="mt-1 text-sm text-[#5f564c]">
-                {MODEL_INFO[executionPlan[0].steps[0].modelId].fullName} on {executionPlan[0].drugName}
-              </p>
-            </div>
-          )}
-
-          <div className="mt-3 space-y-3">
-            {executionPlan.length > 0 ? executionPlan.map((market) => {
-              const marketDoneCount = market.steps.filter((step) => step.status === 'ok' || step.status === 'skipped' || step.status === 'error').length
-
-              return (
-                <div key={market.marketId} className="rounded-none border border-[#e8ddd0] bg-white p-3">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-[#1a1a1a]">
-                        {market.marketSequence}. {market.drugName}
-                      </p>
-                      <p className="mt-1 text-xs text-[#8a8075]">
-                        {market.companyName} • Decision {formatDate(market.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                    </div>
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
-                      {marketDoneCount}/{market.steps.length} step{market.steps.length === 1 ? '' : 's'} closed
+              <div className="h-2 rounded-none bg-[#e8ddd0] overflow-hidden">
+                <div
+                  className="h-full bg-[#1a1a1a] transition-all duration-300"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {runProgress.currentActivity && (
+                  <div className="rounded-none border border-[#5BA5ED]/35 bg-[#5BA5ED]/10 px-2 py-1.5">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#265f8f]">Current Step</p>
+                    <p className="mt-1 text-xs text-[#2e5a7a]">{runProgress.currentActivity}</p>
+                  </div>
+                )}
+                {runProgress.latestResult && (
+                  <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1.5">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Latest Result</p>
+                    <p className="mt-1 text-xs text-[#5f564c]">
+                      {statusLabel(runProgress.latestResult.status)}: {formatProgressLog(runProgress.latestResult)}
                     </p>
                   </div>
+                )}
+              </div>
+              {runProgress.errorCount > 0 && runProgress.latestError && (
+                <div className="rounded-none border border-[#c43a2b]/35 bg-[#c43a2b]/10 px-2 py-1.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Latest Failure</p>
+                  <p className="mt-1 text-xs text-[#8d2c22]">{formatProgressLog(runProgress.latestError)}</p>
+                </div>
+              )}
+            </div>
+          )}
 
-                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {market.steps.map((step) => {
-                      const tone = getExecutionStepTone(step.status)
-                      const detail = step.detail
-                        ? truncateText(step.detail, 120)
-                        : `Run slot ${step.globalSequence} of ${executionPlanStepCount}`
+          <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">{executionPlanHeading}</p>
+                <p className="text-xs text-[#8a8075]">
+                  {executionPlan.length} trial{executionPlan.length === 1 ? '' : 's'} • {executionPlanStepCount} model step{executionPlanStepCount === 1 ? '' : 's'}
+                  {!runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 ? ` • ${queuedExecutionSteps} queued for the next run` : ''}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(['queued', 'waiting', 'running', 'ok', 'skipped', 'error'] as const).map((status) => {
+                  const tone = getExecutionStepTone(status)
+                  return (
+                    <span
+                      key={status}
+                      className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}
+                    >
+                      {getExecutionStatusLabel(status)}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
 
-                      return (
-                        <div
-                          key={step.key}
-                          className={`rounded-none border px-3 py-2 ${tone.container}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Model {step.modelSequence}</p>
-                              <p className="mt-1 text-sm font-medium text-[#1a1a1a]">
-                                {MODEL_INFO[step.modelId].fullName}
+            {!currentExecutionStep && !runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 && (
+              <div className="mt-3 rounded-none border border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queued Next</p>
+                <p className="mt-1 text-sm text-[#5f564c]">
+                  {MODEL_INFO[executionPlan[0].steps[0].modelId].fullName} on {executionPlan[0].shortTitle}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-3">
+              {executionPlan.length > 0 ? (
+                <div className="overflow-x-auto rounded-none border border-[#e8ddd0] bg-white">
+                  <table className="min-w-[1700px] w-full border-collapse">
+                    <thead>
+                      <tr className="bg-[#f8f4ee]">
+                        <th className="border-b border-[#e8ddd0] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
+                          Trial
+                        </th>
+                        <th className="border-b border-l border-[#e8ddd0] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
+                          Progress
+                        </th>
+                        {executionModelOrder.map((modelId, index) => (
+                          <th
+                            key={modelId}
+                            className="border-b border-l border-[#e8ddd0] px-3 py-2 text-left align-top"
+                          >
+                            <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">
+                              Model {index + 1}
+                            </p>
+                            <p className="mt-1 text-xs font-medium text-[#1a1a1a]">
+                              {MODEL_INFO[modelId].fullName}
+                            </p>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {executionPlan.map((market) => {
+                        const marketDoneCount = market.steps.filter((step) => step.status === 'ok' || step.status === 'skipped' || step.status === 'error').length
+                        const stepByModel = new Map(market.steps.map((step) => [step.modelId, step] as const))
+                        const isCurrentMarket = currentExecutionMarket?.marketId === market.marketId
+
+                        return (
+                          <tr key={market.marketId} className="align-top">
+                            <td className="border-t border-[#e8ddd0] px-3 py-3">
+                              <p className="text-sm font-medium text-[#1a1a1a]">
+                                {market.marketSequence}. {market.shortTitle}
                               </p>
+                              <p className="mt-1 text-xs text-[#8a8075]">
+                                {formatUtcDate(market.decisionDate, { month: '2-digit', day: '2-digit', year: '2-digit' })}
+                                {market.nctNumber ? ` • ${market.nctNumber}` : ''}
+                              </p>
+                            </td>
+                            <td className="border-l border-t border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3">
+                              <p className="text-sm font-medium text-[#1a1a1a]">
+                                {marketDoneCount}/{market.steps.length}
+                              </p>
+                              <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
+                                steps closed
+                              </p>
+                              {isCurrentMarket && currentExecutionStep && (
+                                <p className="mt-2 text-xs text-[#1f5cb9]">
+                                  Live on {MODEL_INFO[currentExecutionStep.modelId].name}
+                                </p>
+                              )}
+                            </td>
+                            {executionModelOrder.map((modelId) => {
+                              const step = stepByModel.get(modelId)
+
+                              if (!step) {
+                                return (
+                                  <td
+                                    key={`${market.marketId}:${modelId}`}
+                                    className="border-l border-t border-[#e8ddd0] bg-white px-3 py-3"
+                                  >
+                                    <p className="text-xs text-[#8a8075]">Not scheduled</p>
+                                  </td>
+                                )
+                              }
+
+                              const tone = getExecutionStepTone(step.status)
+                              const detail = step.detail
+                                ? truncateText(step.detail, 88)
+                                : getExecutionStepFallbackDetail(step.status)
+
+                              return (
+                                <td
+                                  key={step.key}
+                                  className={`border-l border-t px-3 py-3 align-top ${tone.container}`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}>
+                                      {getExecutionStatusLabel(step.status)}
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">
+                                      {step.globalSequence}/{executionPlanStepCount}
+                                    </span>
+                                  </div>
+                                  {detail ? (
+                                    <p className={`mt-2 text-xs leading-5 ${tone.label}`}>
+                                      {detail}
+                                    </p>
+                                  ) : null}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#8a8075]">
+                  No open markets are queued for the next daily cycle yet.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {(runLog.length > 0 || errorConsole.length > 0) && (
+            <div className={`mt-3 grid gap-3 ${runLog.length > 0 && errorConsole.length > 0 ? 'lg:grid-cols-2' : ''}`}>
+              {runLog.length > 0 && (
+                <div className="rounded-none border border-[#e8ddd0] bg-white/70 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
+                    {runningDaily ? 'Live Activity Feed' : 'Recent Activity Feed'}
+                  </p>
+                  <div className="reasoning-scrollbox mt-2 max-h-44 overflow-y-auto space-y-1">
+                    {runLog.map((line, index) => (
+                      <p key={`${line}-${index}`} className="text-xs text-[#6f665b]">{line}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {errorConsole.length > 0 && (
+                <div className="rounded-none border border-[#c43a2b]/40 bg-[#2a1311] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#f5b5ae]">
+                      {runningDaily ? 'Error Feed (Live)' : 'Error Feed (Last Run)'}
+                    </p>
+                    <p className="text-[11px] text-[#f5b5ae]/80">
+                      {errorConsole.length} issue{errorConsole.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="reasoning-scrollbox mt-2 max-h-44 overflow-y-auto space-y-1">
+                    {errorConsole.map((entry) => (
+                      <p key={entry.id} className="text-xs text-[#ffd1cb]">
+                        {entry.utcTime} UTC {entry.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {lastRunSummary && (
+            <div className={`mt-3 rounded-none border px-3 py-3 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className={`text-[11px] uppercase tracking-[0.08em] ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
+                  Run Recap
+                </p>
+                <p className={`text-xs ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
+                  {lastRunSummary.runDateLabel} UTC
+                </p>
+              </div>
+              <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Duration</p>
+                  <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.durationSeconds}s</p>
+                </div>
+                <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Open Markets</p>
+                  <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.openMarkets}</p>
+                </div>
+                <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Total Non-OK Models</p>
+                  <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.nonOkModels.length}</p>
+                </div>
+              </div>
+              {lastRunSummary.nonOkModels.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Model Issues</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {lastRunSummary.nonOkModels.map((entry, index) => (
+                      (() => {
+                        const normalized = entry.toLowerCase()
+                        const isSkipped = normalized.includes('skipped')
+                        const chipClass = isSkipped
+                          ? 'rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-0.5 text-xs text-[#6f665b]'
+                          : 'rounded-none border border-[#c43a2b]/30 bg-[#fff3f1] px-2 py-0.5 text-xs text-[#8d2c22]'
+
+                        return (
+                          <span key={`${entry}-${index}`} className={chipClass}>
+                            {entry}
+                          </span>
+                        )
+                      })()
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        </div>
+      ) : null}
+
+      {showSearch ? (
+        <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
+          <input
+            type="text"
+            placeholder={sectionLabels.searchPlaceholder}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full border border-[#e8ddd0] bg-white/90 px-3 py-2 text-sm placeholder-[#b5aa9e] focus:border-[#8a8075] focus:outline-none"
+          />
+        </div>
+      ) : null}
+
+      {showOpenMarkets || showNeedsMarket || showResolvedMarkets ? (
+        <div className="space-y-5">
+          {showOpenMarkets ? (
+            <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  {sectionLabels.openMarketsTitle ? (
+                    <h3 className="text-sm font-semibold text-[#1a1a1a]">{sectionLabels.openMarketsTitle}</h3>
+                  ) : null}
+                  {sectionLabels.openMarketsDescription ? (
+                    <p className="mt-1 text-xs text-[#8a8075]">{sectionLabels.openMarketsDescription}</p>
+                  ) : null}
+                </div>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{openEvents.length} shown</p>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                {openEvents.length === 0 ? (
+                  <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
+                    {sectionLabels.openMarketsEmptyState}
+                  </div>
+                ) : openEvents.map((event) => {
+                  const statusTone = getMarketStatusTone(event.marketStatus)
+                  const days = getDaysUntil(event.decisionDate)
+                  const isClickable = Boolean(event.marketId)
+
+                  return (
+                    <div
+                      key={event.id}
+                      role={isClickable ? 'link' : undefined}
+                      tabIndex={isClickable ? 0 : undefined}
+                      onClick={isClickable ? () => navigateToMarket(event.marketId) : undefined}
+                      onKeyDown={isClickable ? (input) => handleMarketRowKeyDown(input, event.marketId) : undefined}
+                      className={`rounded-none border border-[#e8ddd0] bg-white/80 p-4 ${isClickable ? 'cursor-pointer transition-colors hover:bg-[#fdfbf8] focus:outline-none focus:ring-1 focus:ring-[#8a8075]' : ''}`}
+                    >
+                      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[#1a1a1a]">{event.shortTitle}</div>
+                          {event.nctNumber ? (
+                            <div className="mt-1 text-xs text-[#8a8075]">{event.nctNumber}</div>
+                          ) : null}
+                        </div>
+                        <div
+                          className="grid grid-flow-col auto-cols-max items-center justify-end gap-3"
+                          onClick={(input) => input.stopPropagation()}
+                        >
+                          <span className={`rounded-none px-2 py-1 text-xs ${statusTone}`}>
+                            {event.marketStatus || 'NO MARKET'}
+                          </span>
+                          <div className="min-w-[56px] text-right">
+                            <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
+                              {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
                             </div>
-                            <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}>
-                              {getExecutionStatusLabel(step.status)}
+                          </div>
+
+                          <div className="relative">
+                            <select
+                              value={event.outcome}
+                              onChange={(input) => updateOutcome(event.id, input.target.value)}
+                              disabled={updatingOutcome[event.id]}
+                              className={`max-w-full appearance-none cursor-pointer rounded-none border-0 px-3 py-1.5 pr-8 text-sm font-medium ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
+                            >
+                              <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
+                              <option value="YES" className="bg-white text-[#3a8a2e]">YES</option>
+                              <option value="NO" className="bg-white text-[#EF6F67]">NO</option>
+                            </select>
+                            <svg
+                              className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#b5aa9e]"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => deleteDrug(event.id, event.shortTitle)}
+                            disabled={deletingEventId === event.id}
+                            className="whitespace-nowrap rounded-none border border-[#efc2be] bg-[#fff6f5] px-3 py-1.5 text-xs font-medium text-[#8d2c22] transition-colors hover:bg-[#fde9e7] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingEventId === event.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {showNeedsMarket && needsMarketEvents.length > 0 ? (
+            <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a]">{sectionLabels.needsMarketTitle}</h3>
+                  <p className="mt-1 text-xs text-[#8a8075]">{sectionLabels.needsMarketDescription}</p>
+                </div>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{needsMarketEvents.length} shown</p>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                {needsMarketEvents.map((event) => {
+                  const isOpening = loadingEventId === event.id
+                  const days = getDaysUntil(event.decisionDate)
+
+                  return (
+                    <div key={`needs-market-${event.id}`} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+                      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[#1a1a1a]">{event.shortTitle}</div>
+                          {event.nctNumber ? (
+                            <div className="mt-1 text-xs text-[#8a8075]">{event.nctNumber}</div>
+                          ) : null}
+                        </div>
+                        <div className="grid grid-flow-col auto-cols-max items-center justify-end gap-3">
+                          <div className="min-w-[56px] text-right">
+                            <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
+                              {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
+                            </div>
+                          </div>
+                          <span className="rounded-none px-2 py-1 text-xs text-[#8a8075] bg-[#e8ddd0]/40">
+                            NO MARKET
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => deleteDrug(event.id, event.shortTitle)}
+                            disabled={deletingEventId === event.id}
+                            className="whitespace-nowrap rounded-none border border-[#efc2be] bg-[#fff6f5] px-3 py-1.5 text-xs font-medium text-[#8d2c22] transition-colors hover:bg-[#fde9e7] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingEventId === event.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                          <button
+                            onClick={() => openMarket(event.id)}
+                            disabled={isOpening}
+                            className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isOpening ? 'Opening...' : 'Open Market'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {showResolvedMarkets ? (
+            <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a]">{sectionLabels.resolvedMarketsTitle}</h3>
+                  <p className="mt-1 text-xs text-[#8a8075]">{sectionLabels.resolvedMarketsDescription}</p>
+                </div>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{adjudicationEvents.length} shown</p>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                {adjudicationEvents.length === 0 ? (
+                  <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
+                    {sectionLabels.resolvedMarketsEmptyState}
+                  </div>
+                ) : adjudicationEvents.map((event) => {
+                  const days = getDaysUntil(event.decisionDate)
+                  const statusTone = getMarketStatusTone(event.marketStatus)
+                  const isClickable = Boolean(event.marketId)
+
+                  return (
+                    <div
+                      key={`adjudication-${event.id}`}
+                      role={isClickable ? 'link' : undefined}
+                      tabIndex={isClickable ? 0 : undefined}
+                      onClick={isClickable ? () => navigateToMarket(event.marketId) : undefined}
+                      onKeyDown={isClickable ? (input) => handleMarketRowKeyDown(input, event.marketId) : undefined}
+                      className={`rounded-none border border-[#e8ddd0] bg-white/80 p-4 ${isClickable ? 'cursor-pointer transition-colors hover:bg-[#fdfbf8] focus:outline-none focus:ring-1 focus:ring-[#8a8075]' : ''}`}
+                    >
+                      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-medium text-[#1a1a1a]">{event.shortTitle}</div>
+                            <span className={`rounded-none px-2 py-1 text-xs ${statusTone}`}>
+                              {event.marketStatus}
                             </span>
                           </div>
-                          <p className={`mt-2 text-xs ${tone.label}`}>
-                            {detail}
-                          </p>
+                          {event.nctNumber ? (
+                            <div className="mt-1 text-xs text-[#8a8075]">{event.nctNumber}</div>
+                          ) : null}
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            }) : (
-              <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#8a8075]">
-                No open markets are queued for the next daily cycle yet.
-              </div>
-            )}
-          </div>
-        </div>
 
-        {(runLog.length > 0 || errorConsole.length > 0) && (
-          <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            {runLog.length > 0 && (
-              <div className="rounded-none border border-[#e8ddd0] bg-white/70 p-3">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
-                  {runningDaily ? 'Live Activity Feed' : 'Recent Activity Feed'}
-                </p>
-                <div className="reasoning-scrollbox mt-2 max-h-44 overflow-y-auto space-y-1">
-                  {runLog.map((line, index) => (
-                    <p key={`${line}-${index}`} className="text-xs text-[#6f665b]">{line}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {errorConsole.length > 0 && (
-              <div className="rounded-none border border-[#c43a2b]/40 bg-[#2a1311] p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#f5b5ae]">
-                    {runningDaily ? 'Error Feed (Live)' : 'Error Feed (Last Run)'}
-                  </p>
-                  <p className="text-[11px] text-[#f5b5ae]/80">
-                    {errorConsole.length} issue{errorConsole.length === 1 ? '' : 's'}
-                  </p>
-                </div>
-                <div className="reasoning-scrollbox mt-2 max-h-44 overflow-y-auto space-y-1">
-                  {errorConsole.map((entry) => (
-                    <p key={entry.id} className="text-xs text-[#ffd1cb]">
-                      {entry.utcTime} UTC {entry.message}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {lastRunSummary && (
-          <div className={`mt-3 rounded-none border px-3 py-3 ${lastRunSummary.error > 0 ? 'border-[#c43a2b]/35 bg-[#c43a2b]/10' : 'border-[#e8ddd0] bg-white/70'}`}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className={`text-[11px] uppercase tracking-[0.08em] ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
-                Run Recap
-              </p>
-              <p className={`text-xs ${lastRunSummary.error > 0 ? 'text-[#8d2c22]' : 'text-[#8a8075]'}`}>
-                {lastRunSummary.runDateLabel} UTC
-              </p>
-            </div>
-            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-              <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Duration</p>
-                <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.durationSeconds}s</p>
-              </div>
-              <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Open Markets</p>
-                <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.openMarkets}</p>
-              </div>
-              <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Total Non-OK Models</p>
-                <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.nonOkModels.length}</p>
-              </div>
-            </div>
-            {lastRunSummary.nonOkModels.length > 0 && (
-              <div className="mt-2 space-y-1">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8d2c22]">Model Issues</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {lastRunSummary.nonOkModels.map((entry, index) => (
-                    (() => {
-                      const normalized = entry.toLowerCase()
-                      const isSkipped = normalized.includes('skipped')
-                      const chipClass = isSkipped
-                        ? 'rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-0.5 text-xs text-[#6f665b]'
-                        : 'rounded-none border border-[#c43a2b]/30 bg-[#fff3f1] px-2 py-0.5 text-xs text-[#8d2c22]'
-
-                      return (
-                        <span key={`${entry}-${index}`} className={chipClass}>
-                          {entry}
-                        </span>
-                      )
-                    })()
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
-        <input
-          type="text"
-          placeholder="Search drug, company, ticker"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-[#e8ddd0] bg-white/90 px-3 py-2 text-sm placeholder-[#b5aa9e] focus:border-[#8a8075] focus:outline-none"
-        />
-      </div>
-
-      <div className="space-y-5">
-        <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-[#1a1a1a]">Open Markets</h3>
-              <p className="mt-1 text-xs text-[#8a8075]">Markets that are currently live.</p>
-            </div>
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{openEvents.length} shown</p>
-          </div>
-
-          <div className="mt-3 space-y-3">
-            {openEvents.length === 0 ? (
-              <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-                No open markets match the current filter.
-              </div>
-            ) : openEvents.map((event) => {
-              const statusTone = getMarketStatusTone(event.marketStatus)
-              const days = getDaysUntil(event.decisionDate)
-
-              return (
-                <div key={event.id} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-                  <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
-                      <div className="mt-1 text-xs text-[#8a8075]">
-                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • Decision {formatDate(event.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span className={`rounded-none px-2 py-1 text-xs ${statusTone}`}>
-                        {event.marketStatus || 'NO MARKET'}
-                      </span>
-                      {event.marketPriceYes !== null ? (
-                        <span className="text-xs text-[#8a8075]">
-                          YES {(event.marketPriceYes * 100).toFixed(1)}%
-                        </span>
-                      ) : null}
-
-                      <div className="min-w-[56px] text-left sm:text-right">
-                        <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
-                          {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
-                        </div>
-                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.decisionDate)}</div>
-                      </div>
-
-                      <select
-                        value={event.outcome}
-                        onChange={(input) => updateOutcome(event.id, input.target.value)}
-                        disabled={updatingOutcome[event.id]}
-                        className={`max-w-full cursor-pointer rounded-none border-0 px-3 py-1.5 text-sm font-medium ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
-                      >
-                        <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
-                        <option value="Approved" className="bg-white text-[#3a8a2e]">Approved</option>
-                        <option value="Rejected" className="bg-white text-[#EF6F67]">Rejected</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {needsMarketEvents.length > 0 ? (
-          <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-[#1a1a1a]">Needs Market</h3>
-                <p className="mt-1 text-xs text-[#8a8075]">Pending FDA events that still need a market opened.</p>
-              </div>
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{needsMarketEvents.length} shown</p>
-            </div>
-
-            <div className="mt-3 space-y-3">
-              {needsMarketEvents.map((event) => {
-                const isOpening = loadingEventId === event.id
-
-                return (
-                  <div key={`needs-market-${event.id}`} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-                    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
-                        <div className="mt-1 text-xs text-[#8a8075]">
-                          {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • Decision {formatDate(event.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-none px-2 py-1 text-xs text-[#8a8075] bg-[#e8ddd0]/40">
-                          NO MARKET
-                        </span>
-                        <button
-                          onClick={() => openMarket(event.id)}
-                          disabled={isOpening}
-                          className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+                        <div
+                          className="grid grid-flow-col auto-cols-max items-center justify-end gap-3"
+                          onClick={(input) => input.stopPropagation()}
                         >
-                          {isOpening ? 'Opening...' : 'Open Market'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        ) : null}
+                          <div className="min-w-[56px] text-right">
+                            <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
+                              {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
+                            </div>
+                          </div>
 
-        <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-[#1a1a1a]">Resolved Markets</h3>
-              <p className="mt-1 text-xs text-[#8a8075]">Markets that have already been resolved.</p>
-            </div>
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">{adjudicationEvents.length} shown</p>
-          </div>
-
-          <div className="mt-3 space-y-3">
-            {adjudicationEvents.length === 0 ? (
-              <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-                No resolved markets match the current filter.
-              </div>
-            ) : adjudicationEvents.map((event) => {
-              const days = getDaysUntil(event.decisionDate)
-              const statusTone = getMarketStatusTone(event.marketStatus)
-
-              return (
-                <div key={`adjudication-${event.id}`} className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-                  <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-medium text-[#1a1a1a]">{event.drugName}</div>
-                        <span className={`rounded-none px-2 py-1 text-xs ${statusTone}`}>
-                          {event.marketStatus}
-                        </span>
-                        {event.marketPriceYes !== null ? (
-                          <span className="text-xs text-[#8a8075]">YES {(event.marketPriceYes * 100).toFixed(1)}%</span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-xs text-[#8a8075]">
-                        {event.companyName} {event.symbols ? `(${event.symbols})` : ''} • Decision {formatDate(event.decisionDate, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <div className="min-w-[56px] text-left sm:text-right">
-                        <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
-                          {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
+                          <div className="relative">
+                            <select
+                              value={event.outcome}
+                              onChange={(input) => updateOutcome(event.id, input.target.value)}
+                              disabled={updatingOutcome[event.id]}
+                              className={`max-w-full appearance-none cursor-pointer rounded-none border-0 px-3 py-1.5 pr-8 text-sm font-medium ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
+                            >
+                              <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
+                              <option value="YES" className="bg-white text-[#3a8a2e]">YES</option>
+                              <option value="NO" className="bg-white text-[#EF6F67]">NO</option>
+                            </select>
+                            <svg
+                              className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#b5aa9e]"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => deleteDrug(event.id, event.shortTitle)}
+                            disabled={deletingEventId === event.id}
+                            className="whitespace-nowrap rounded-none border border-[#efc2be] bg-[#fff6f5] px-3 py-1.5 text-xs font-medium text-[#8d2c22] transition-colors hover:bg-[#fde9e7] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingEventId === event.id ? 'Deleting...' : 'Delete'}
+                          </button>
                         </div>
-                        <div className="text-xs text-[#b5aa9e]">{formatDate(event.decisionDate)}</div>
                       </div>
-
-                      <select
-                        value={event.outcome}
-                        onChange={(input) => updateOutcome(event.id, input.target.value)}
-                        disabled={updatingOutcome[event.id]}
-                        className={`max-w-full cursor-pointer rounded-none border-0 px-3 py-1.5 text-sm font-medium ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
-                      >
-                        <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
-                        <option value="Approved" className="bg-white text-[#3a8a2e]">Approved</option>
-                        <option value="Rejected" className="bg-white text-[#EF6F67]">Rejected</option>
-                      </select>
                     </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      </div>
-
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

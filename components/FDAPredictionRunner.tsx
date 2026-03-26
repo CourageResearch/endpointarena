@@ -6,28 +6,25 @@ import {
   MODEL_INFO,
   OUTCOME_COLORS,
   PREDICTION_COLORS,
-  formatDate,
   getDaysUntil,
-  type FDAOutcome,
   type ModelId,
-  type PredictionOutcome,
 } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
+import { formatUtcDate } from '@/lib/date'
 import type { Prediction, PredictionHistoryEntry } from '@/lib/types'
-import { MetadataInlineInput } from '@/components/MetadataInlineInput'
 
-interface FDAEvent {
+interface TrialQuestionEvent {
   id: string
   marketId: string | null
-  drugName: string
-  companyName: string
-  therapeuticArea: string | null
-  applicationType: string
+  shortTitle: string
+  sponsorName: string
+  sponsorTicker: string | null
+  indication: string
+  exactPhase: string
   decisionDate: string
-  decisionDateKind: 'hard' | 'soft'
   outcome: string
-  source: string | null
-  nctId: string | null
+  questionPrompt: string
+  nctNumber: string | null
   predictions: Prediction[]
 }
 
@@ -38,20 +35,20 @@ interface StreamProgress {
 }
 
 interface Props {
-  events: FDAEvent[]
+  events: TrialQuestionEvent[]
 }
 
 function formatTimestamp(value: string | undefined): string {
   if (!value) return 'Unknown time'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'Unknown time'
-  return date.toLocaleString('en-US', {
+  return `${date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     timeZone: 'UTC',
-  }) + ' UTC'
+  })} UTC`
 }
 
 function formatHistoryLabel(entry: PredictionHistoryEntry): string {
@@ -76,6 +73,7 @@ function predictionToHistoryEntry(prediction: Prediction): PredictionHistoryEntr
     source: prediction.source,
     runSource: prediction.runSource,
     approvalProbability: prediction.approvalProbability,
+    yesProbability: prediction.yesProbability,
     action: prediction.action,
     linkedMarketActionId: prediction.linkedMarketActionId,
   }
@@ -96,16 +94,19 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
     if (!query) return events
 
     return events.filter((event) => (
-      event.drugName.toLowerCase().includes(query) ||
-      event.companyName.toLowerCase().includes(query) ||
-      event.applicationType.toLowerCase().includes(query) ||
-      (event.therapeuticArea || '').toLowerCase().includes(query)
+      event.shortTitle.toLowerCase().includes(query) ||
+      event.sponsorName.toLowerCase().includes(query) ||
+      event.exactPhase.toLowerCase().includes(query) ||
+      event.indication.toLowerCase().includes(query) ||
+      event.questionPrompt.toLowerCase().includes(query) ||
+      (event.sponsorTicker || '').toLowerCase().includes(query) ||
+      (event.nctNumber || '').toLowerCase().includes(query)
     ))
   }, [events, search])
 
-  const getKey = (eventId: string, modelId: string) => `${eventId}-${modelId}`
+  const getKey = (questionId: string, modelId: string) => `${questionId}-${modelId}`
 
-  const getPrediction = (event: FDAEvent, modelId: ModelId): Prediction | undefined => {
+  const getPrediction = (event: TrialQuestionEvent, modelId: ModelId): Prediction | undefined => {
     return event.predictions.find((prediction) => prediction.predictorId === modelId)
   }
 
@@ -118,27 +119,12 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
     })
   }
 
-  const upsertPrediction = (eventId: string, modelId: ModelId, incoming: Prediction) => {
+  const upsertPrediction = (questionId: string, modelId: ModelId, incoming: Prediction) => {
     setEvents((prev) => prev.map((event) => {
-      if (event.id !== eventId) return event
+      if (event.id !== questionId) return event
 
       const existing = event.predictions.find((prediction) => prediction.predictorId === modelId)
-      const existingHistory = existing?.history ?? (existing ? [{
-        id: existing.predictorId,
-        predictorId: existing.predictorId,
-        prediction: existing.prediction,
-        confidence: existing.confidence,
-        reasoning: existing.reasoning,
-        durationMs: existing.durationMs,
-        correct: existing.correct,
-        createdAt: existing.createdAt,
-        source: existing.source,
-        runSource: existing.runSource,
-        approvalProbability: existing.approvalProbability,
-        action: existing.action,
-        linkedMarketActionId: existing.linkedMarketActionId,
-      }] : [])
-
+      const existingHistory = existing?.history ?? (existing ? [predictionToHistoryEntry(existing)] : [])
       const incomingHistory = incoming.history ?? []
       const mergedHistory = [...incomingHistory, ...existingHistory]
         .filter((entry, index, arr) => arr.findIndex((candidate) => candidate.id === entry.id) === index)
@@ -153,10 +139,12 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
         history: mergedHistory,
       }
 
-      const remaining = event.predictions.filter((prediction) => prediction.predictorId !== modelId)
       return {
         ...event,
-        predictions: [...remaining, nextPrediction],
+        predictions: [
+          ...event.predictions.filter((prediction) => prediction.predictorId !== modelId),
+          nextPrediction,
+        ],
       }
     }))
   }
@@ -177,20 +165,21 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
     delete controllersRef.current[key]
   }
 
-  const pauseEventPredictions = (eventId: string) => {
-    const prefix = `${eventId}-`
+  const pauseEventPredictions = (questionId: string) => {
+    const prefix = `${questionId}-`
     Object.keys(controllersRef.current)
       .filter((key) => key.startsWith(prefix))
       .forEach((key) => pausePrediction(key, 'Paused by admin'))
   }
 
-  const runStreamingPrediction = async (eventId: string, modelId: ModelId) => {
+  const runStreamingPrediction = async (questionId: string, modelId: ModelId) => {
     setGlobalError(null)
-    const key = getKey(eventId, modelId)
+    const key = getKey(questionId, modelId)
     const existingController = controllersRef.current[key]
     if (existingController) {
       existingController.abort()
     }
+
     const controller = new AbortController()
     controllersRef.current[key] = controller
     setLoading((prev) => ({ ...prev, [key]: true }))
@@ -208,7 +197,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
       const response = await fetch('/api/model-decisions/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fdaEventId: eventId, modelId }),
+        body: JSON.stringify({ trialQuestionId: questionId, modelId }),
         signal: controller.signal,
       })
 
@@ -246,7 +235,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
           }
 
           if (data.type === 'complete' && data.snapshot) {
-            upsertPrediction(eventId, modelId, data.snapshot)
+            upsertPrediction(questionId, modelId, data.snapshot)
             clearProgress(key)
             continue
           }
@@ -275,16 +264,16 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
     }
   }
 
-  const runAllPredictions = async (eventId: string) => {
-    await Promise.all(MODEL_IDS.map((modelId) => runStreamingPrediction(eventId, modelId)))
+  const runAllPredictions = async (questionId: string) => {
+    await Promise.all(MODEL_IDS.map((modelId) => runStreamingPrediction(questionId, modelId)))
   }
 
-  const updateOutcome = async (eventId: string, outcome: string) => {
+  const updateOutcome = async (questionId: string, outcome: string) => {
     setGlobalError(null)
-    setUpdatingOutcome((prev) => ({ ...prev, [eventId]: true }))
+    setUpdatingOutcome((prev) => ({ ...prev, [questionId]: true }))
 
     try {
-      const response = await fetch(`/api/fda-events/${eventId}/outcome`, {
+      const response = await fetch(`/api/trial-questions/${questionId}/outcome`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ outcome }),
@@ -296,44 +285,22 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
       }
 
       setEvents((prev) => prev.map((event) => (
-        event.id === eventId ? { ...event, outcome } : event
+        event.id === questionId ? { ...event, outcome } : event
       )))
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : 'Failed to update outcome')
     } finally {
-      setUpdatingOutcome((prev) => ({ ...prev, [eventId]: false }))
-    }
-  }
-
-  const updateEventField = async (eventId: string, field: 'source' | 'nctId', value: string) => {
-    setGlobalError(null)
-    try {
-      const response = await fetch(`/api/fda-events/${eventId}/outcome`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: value }),
-      })
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}))
-        throw new Error(getApiErrorMessage(payload, `Failed to update ${field}`))
-      }
-
-      setEvents((prev) => prev.map((event) => (
-        event.id === eventId ? { ...event, [field]: value } : event
-      )))
-    } catch (error) {
-      setGlobalError(error instanceof Error ? error.message : `Failed to update ${field}`)
+      setUpdatingOutcome((prev) => ({ ...prev, [questionId]: false }))
     }
   }
 
   const getOutcomeStyle = (outcome: string) => {
-    const colors = OUTCOME_COLORS[outcome as FDAOutcome]
+    const colors = OUTCOME_COLORS[outcome as keyof typeof OUTCOME_COLORS]
     return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
   }
 
   const getPredictionStyle = (prediction: string) => {
-    const colors = PREDICTION_COLORS[prediction as PredictionOutcome]
+    const colors = PREDICTION_COLORS[prediction as keyof typeof PREDICTION_COLORS]
     return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
   }
 
@@ -355,12 +322,12 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Filter by drug, company, type, or area..."
+            placeholder="Filter by trial, sponsor, indication, NCT, or endpoint..."
             className="w-full rounded-none border border-[#e8ddd0] bg-[#F5F2ED] py-1.5 pl-8 pr-2 text-sm text-[#1a1a1a] placeholder-[#b5aa9e] focus:border-[#5BA5ED] focus:outline-none focus:ring-1 focus:ring-[#5BA5ED]/20"
           />
         </div>
         <span className="truncate-wrap text-xs text-[#b5aa9e]">
-          {filteredEvents.length}/{events.length} open-market events shown
+          {filteredEvents.length}/{events.length} open-market questions shown
         </span>
       </div>
 
@@ -375,9 +342,9 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate-wrap text-lg font-bold text-[#1a1a1a]">{event.drugName}</span>
+                    <span className="truncate-wrap text-lg font-bold text-[#1a1a1a]">{event.shortTitle}</span>
                     <span className="rounded-none border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-0.5 text-xs text-[#8a8075]">
-                      {event.applicationType}
+                      {event.exactPhase}
                     </span>
                     {event.marketId ? (
                       <span className="rounded-none border border-[#3a8a2e]/25 bg-[#3a8a2e]/5 px-2 py-0.5 text-xs text-[#3a8a2e]">
@@ -386,22 +353,12 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                     ) : null}
                   </div>
                   <div className="truncate-wrap text-sm text-[#8a8075]">
-                    {event.companyName} · {event.therapeuticArea || 'No area'}
+                    {event.sponsorName}{event.sponsorTicker ? ` (${event.sponsorTicker})` : ''} · {event.indication}
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    <MetadataInlineInput
-                      label="Source"
-                      initialValue={event.source || ''}
-                      placeholder="Source links or notes..."
-                      onSave={(value) => updateEventField(event.id, 'source', value)}
-                    />
-                    <MetadataInlineInput
-                      label="NCT"
-                      initialValue={event.nctId || ''}
-                      placeholder="NCT ID..."
-                      onSave={(value) => updateEventField(event.id, 'nctId', value)}
-                    />
-                  </div>
+                  <div className="mt-1 truncate-wrap text-sm text-[#6f665b]">{event.questionPrompt}</div>
+                  {event.nctNumber ? (
+                    <div className="mt-1 text-xs text-[#8a8075]">NCT {event.nctNumber}</div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
@@ -409,7 +366,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                     <div className={`text-lg font-bold ${days === 0 ? 'text-[#EF6F67]' : 'text-[#1a1a1a]'}`}>
                       {days > 0 ? `${days}d` : days === 0 ? 'Today' : 'Past'}
                     </div>
-                    <div className="text-xs text-[#b5aa9e]">{formatDate(event.decisionDate)}</div>
+                    <div className="text-xs text-[#b5aa9e]">{formatUtcDate(event.decisionDate)}</div>
                   </div>
 
                   <select
@@ -419,8 +376,8 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                     className={`max-w-full cursor-pointer border-0 px-3 py-1.5 text-sm font-medium rounded-none ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
                   >
                     <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
-                    <option value="Approved" className="bg-white text-[#3a8a2e]">Approved</option>
-                    <option value="Rejected" className="bg-white text-[#EF6F67]">Rejected</option>
+                    <option value="YES" className="bg-white text-[#3a8a2e]">YES</option>
+                    <option value="NO" className="bg-white text-[#EF6F67]">NO</option>
                   </select>
 
                   <button
@@ -457,6 +414,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                   const historyOpen = expandedHistory[key] ?? false
                   const history = prediction?.history ?? []
                   const latestAction = prediction?.action
+                  const latestProbability = prediction?.yesProbability ?? prediction?.approvalProbability
 
                   return (
                     <div key={modelId} className="rounded-none border border-[#e8ddd0] bg-[#fffdfa] p-3">
@@ -467,11 +425,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                         </div>
                         <button
                           onClick={() => (loading[key] ? pausePrediction(key) : runStreamingPrediction(event.id, modelId))}
-                          className={`shrink-0 rounded-none px-2.5 py-1 text-xs font-medium transition-colors ${
-                            loading[key]
-                              ? 'border border-[#d9cdbf] bg-[#fdfbf8] text-[#1a1a1a] hover:bg-[#f5eee5]'
-                              : 'border border-[#d9cdbf] bg-[#fdfbf8] text-[#1a1a1a] hover:bg-[#f5eee5]'
-                          }`}
+                          className="shrink-0 rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-2.5 py-1 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
                         >
                           {loading[key] ? 'Pause' : prediction ? 'Run Again' : 'Run'}
                         </button>
@@ -484,8 +438,8 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                               {prediction.prediction.toUpperCase()}
                             </span>
                             <span className="text-xs text-[#8a8075]">{prediction.confidence}% confidence</span>
-                            {prediction.approvalProbability != null ? (
-                              <span className="text-xs text-[#8a8075]">p={Math.round(prediction.approvalProbability * 100)}%</span>
+                            {latestProbability != null ? (
+                              <span className="text-xs text-[#8a8075]">p={Math.round(latestProbability * 100)}%</span>
                             ) : null}
                           </div>
 
@@ -519,6 +473,7 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                             <div className="space-y-2 border-t border-[#e8ddd0] pt-3">
                               {(history.length > 0 ? history : [predictionToHistoryEntry(prediction)]).map((entry) => {
                                 const action = 'action' in entry ? entry.action : null
+                                const probability = entry.yesProbability ?? entry.approvalProbability
                                 return (
                                   <div key={entry.id} className="rounded-none border border-[#e8ddd0] bg-white p-3 text-xs text-[#6f665b]">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -527,7 +482,9 @@ export function FDAPredictionRunner({ events: initialEvents }: Props) {
                                         {entry.prediction.toUpperCase()}
                                       </span>
                                     </div>
-                                    <div className="mt-2 text-[#8a8075]">{entry.confidence}% confidence{entry.approvalProbability != null ? ` · p=${Math.round(entry.approvalProbability * 100)}%` : ''}</div>
+                                    <div className="mt-2 text-[#8a8075]">
+                                      {entry.confidence}% confidence{probability != null ? ` · p=${Math.round(probability * 100)}%` : ''}
+                                    </div>
                                     {action ? (
                                       <div className="mt-2 text-[#8a8075]">{action.type} ${action.amountUsd.toFixed(2)} · {action.explanation}</div>
                                     ) : null}

@@ -7,6 +7,8 @@ import {
   fdaEventSources,
 } from '@/lib/db'
 
+type MetadataDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
+
 type EnrichedFDAEventMetadata = {
   externalKey: string | null
   source: string | null
@@ -107,17 +109,22 @@ export async function enrichFdaEvents<T extends { id: string }>(
   })
 }
 
-export async function upsertEventExternalId(eventId: string, idType: 'external_key' | 'nct' | 'rtt_detail', idValue: string | null): Promise<void> {
+export async function upsertEventExternalId(
+  eventId: string,
+  idType: 'external_key' | 'nct' | 'rtt_detail',
+  idValue: string | null,
+  dbClient: MetadataDbClient = db,
+): Promise<void> {
   const normalizedValue = normalizeNonEmpty(idValue)
   if (!normalizedValue) {
-    await db.delete(fdaEventExternalIds).where(and(
+    await dbClient.delete(fdaEventExternalIds).where(and(
       eq(fdaEventExternalIds.eventId, eventId),
       eq(fdaEventExternalIds.idType, idType),
     ))
     return
   }
 
-  await db.insert(fdaEventExternalIds)
+  await dbClient.insert(fdaEventExternalIds)
     .values({
       eventId,
       idType,
@@ -132,9 +139,13 @@ export async function upsertEventExternalId(eventId: string, idType: 'external_k
     })
 }
 
-export async function upsertEventPrimarySource(eventId: string, sourceUrl: string | null): Promise<void> {
+export async function upsertEventPrimarySource(
+  eventId: string,
+  sourceUrl: string | null,
+  dbClient: MetadataDbClient = db,
+): Promise<void> {
   const normalizedValue = normalizeNonEmpty(sourceUrl)
-  await db.delete(fdaEventSources).where(and(
+  await dbClient.delete(fdaEventSources).where(and(
     eq(fdaEventSources.eventId, eventId),
     eq(fdaEventSources.sourceType, 'primary'),
   ))
@@ -143,7 +154,7 @@ export async function upsertEventPrimarySource(eventId: string, sourceUrl: strin
     return
   }
 
-  await db.insert(fdaEventSources).values({
+  await dbClient.insert(fdaEventSources).values({
     eventId,
     sourceType: 'primary',
     url: normalizedValue,

@@ -28,15 +28,15 @@ type ChallengePayload = {
 }
 
 function normalizeCallbackUrl(raw: string | null): string {
-  if (!raw) return '/markets'
-  if (!raw.startsWith('/')) return '/markets'
-  if (raw.startsWith('//')) return '/markets'
+  if (!raw) return '/trials'
+  if (!raw.startsWith('/')) return '/trials'
+  if (raw.startsWith('//')) return '/trials'
   return raw
 }
 
 export function ProfileVerificationPanel() {
   const router = useRouter()
-  const [callbackUrl, setCallbackUrl] = useState('/markets')
+  const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusData, setStatusData] = useState<VerificationStatus | null>(null)
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)

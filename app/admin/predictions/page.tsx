@@ -1,48 +1,68 @@
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { FDAPredictionRunner } from '@/components/FDAPredictionRunner'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL, MODEL_IDS } from '@/lib/constants'
-import { db, fdaCalendarEvents, predictionMarkets } from '@/lib/db'
+import { db, predictionMarkets, trialQuestions } from '@/lib/db'
 import { attachUnifiedPredictionsToEvents } from '@/lib/model-decision-snapshots'
-import { enrichFdaEvents } from '@/lib/fda-event-metadata'
+import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 export const dynamic = 'force-dynamic'
 
 async function getData() {
   const openMarkets = await db.query.predictionMarkets.findMany({
-    where: eq(predictionMarkets.status, 'OPEN'),
+    where: and(
+      eq(predictionMarkets.status, 'OPEN'),
+      isNotNull(predictionMarkets.trialQuestionId),
+    ),
     orderBy: [asc(predictionMarkets.openedAt)],
   })
-  const eventIds = openMarkets.map((market) => market.fdaEventId)
-  const rawEvents = eventIds.length > 0
-    ? await db.query.fdaCalendarEvents.findMany({
+
+  const questionIds = Array.from(new Set(
+    openMarkets
+      .map((market) => market.trialQuestionId)
+      .filter((value): value is string => Boolean(value)),
+  ))
+
+  const rawQuestions = questionIds.length > 0
+    ? await db.query.trialQuestions.findMany({
         where: and(
-          inArray(fdaCalendarEvents.id, eventIds),
-          eq(fdaCalendarEvents.outcome, 'Pending'),
+          inArray(trialQuestions.id, questionIds),
+          eq(trialQuestions.outcome, 'Pending'),
         ),
-        orderBy: [asc(fdaCalendarEvents.decisionDate)],
+        with: {
+          trial: true,
+        },
+        orderBy: [asc(trialQuestions.createdAt)],
       })
     : []
-  const events = await enrichFdaEvents(rawEvents)
+  const questions = filterSupportedTrialQuestions(rawQuestions)
+  const supportedQuestionIds = new Set(questions.map((question) => question.id))
 
-  const marketByEventId = new Map(openMarkets.map((market) => [market.fdaEventId, market]))
-  const eventsWithPredictions = await attachUnifiedPredictionsToEvents(events)
+  const marketByQuestionId = new Map(
+    openMarkets
+      .filter((market) => market.trialQuestionId)
+      .filter((market) => supportedQuestionIds.has(market.trialQuestionId as string))
+      .map((market) => [market.trialQuestionId as string, market]),
+  )
+  const questionsWithPredictions = await attachUnifiedPredictionsToEvents(questions)
 
   const stats = {
-    openMarkets: eventsWithPredictions.length,
-    marketsWithSnapshots: eventsWithPredictions.filter((event) => event.predictions.length > 0).length,
-    marketsMissingSnapshots: eventsWithPredictions.filter((event) => event.predictions.length === 0).length,
-    totalSnapshots: eventsWithPredictions.reduce((sum, event) => sum + event.predictions.reduce((eventSum, prediction) => eventSum + (prediction.history?.length ?? 1), 0), 0),
-    marketsWithFullModelCoverage: eventsWithPredictions.filter((event) => event.predictions.length >= MODEL_IDS.length).length,
+    openMarkets: questionsWithPredictions.length,
+    marketsWithSnapshots: questionsWithPredictions.filter((question) => question.predictions.length > 0).length,
+    marketsMissingSnapshots: questionsWithPredictions.filter((question) => question.predictions.length === 0).length,
+    totalSnapshots: questionsWithPredictions.reduce((sum, question) => (
+      sum + question.predictions.reduce((questionSum, prediction) => questionSum + (prediction.history?.length ?? 1), 0)
+    ), 0),
+    marketsWithFullModelCoverage: questionsWithPredictions.filter((question) => question.predictions.length >= MODEL_IDS.length).length,
   }
 
   return {
-    events: eventsWithPredictions.map((event) => ({
-      ...event,
-      marketId: marketByEventId.get(event.id)?.id ?? null,
+    questions: questionsWithPredictions.map((question) => ({
+      ...question,
+      marketId: marketByQuestionId.get(question.id)?.id ?? null,
     })),
     stats,
   }
@@ -54,36 +74,36 @@ export default async function AdminPredictionsPage() {
     redirect('/login')
   }
 
-  const { events, stats } = await getData()
+  const { questions, stats } = await getData()
   const coveragePct = stats.openMarkets > 0
     ? Math.round((stats.marketsWithSnapshots / stats.openMarkets) * 100)
     : 0
 
-  const eventsForClient = events.map((event) => ({
-    id: event.id,
-    marketId: event.marketId,
-    drugName: event.drugName,
-    companyName: event.companyName,
-    therapeuticArea: event.therapeuticArea,
-    applicationType: event.applicationType,
-    decisionDate: event.decisionDate.toISOString(),
-    decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
-    outcome: event.outcome,
-    source: event.source,
-    nctId: event.nctId,
-    predictions: event.predictions,
+  const eventsForClient = questions.map((question) => ({
+    id: question.id,
+    marketId: question.marketId,
+    shortTitle: question.trial.shortTitle,
+    sponsorName: question.trial.sponsorName,
+    sponsorTicker: question.trial.sponsorTicker,
+    indication: question.trial.indication,
+    exactPhase: question.trial.exactPhase,
+    decisionDate: question.trial.estPrimaryCompletionDate.toISOString(),
+    outcome: question.outcome,
+    questionPrompt: normalizeTrialQuestionPrompt(question.prompt),
+    nctNumber: question.trial.nctNumber,
+    predictions: question.predictions,
   }))
 
   return (
     <AdminConsoleLayout
       title="Decision Operations"
-      description="Create append-only model decision snapshots for pending events that already have an open market."
+      description="Create append-only model decision snapshots for live Phase 2 results markets."
       activeTab="predictions"
     >
       <section className="mb-6">
         <div className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Open-Market Queue</h2>
-          <p className="mt-1 text-xs text-[#8a8075]">This view only includes pending FDA events with an open market.</p>
+          <p className="mt-1 text-xs text-[#8a8075]">This view only includes pending trial questions with an open market.</p>
           <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="rounded-none border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
               <p className="text-xl font-semibold text-[#D39D2E]">{stats.openMarkets}</p>
@@ -114,24 +134,6 @@ export default async function AdminPredictionsPage() {
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-none bg-[#e8ddd0]">
           <div className="h-full rounded-none bg-[#5BA5ED]" style={{ width: `${coveragePct}%` }} />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-          <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-            <p className="uppercase tracking-[0.08em] text-[#b5aa9e]">Coverage</p>
-            <p className="mt-1 text-base font-semibold text-[#1a1a1a]">{coveragePct}%</p>
-          </div>
-          <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-            <p className="uppercase tracking-[0.08em] text-[#b5aa9e]">Markets With Snapshots</p>
-            <p className="mt-1 text-base font-semibold text-[#1a1a1a]">{stats.marketsWithSnapshots}</p>
-          </div>
-          <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-            <p className="uppercase tracking-[0.08em] text-[#b5aa9e]">Missing Coverage</p>
-            <p className="mt-1 text-base font-semibold text-[#1a1a1a]">{stats.marketsMissingSnapshots}</p>
-          </div>
-          <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-            <p className="uppercase tracking-[0.08em] text-[#b5aa9e]">Tracked Models</p>
-            <p className="mt-1 text-base font-semibold text-[#1a1a1a]">{MODEL_IDS.length}</p>
-          </div>
         </div>
       </section>
 

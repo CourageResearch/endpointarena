@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { BrandLink, BrandMark, BrandWordmark } from '@/components/site/Brand'
 import {
   BRAND_GRADIENT,
@@ -9,6 +10,13 @@ import {
   SquareDivider,
 } from '@/components/site/chrome'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { buildPageMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Brand Kit',
+  description: 'Current Endpoint Arena brand colors, gradients, logo treatment, and UI brand tokens.',
+  path: '/brand',
+})
 
 const BRAND_COLORS = [
   { name: 'Coral', hex: '#EF6F67' },
@@ -120,7 +128,7 @@ export default function BrandPage() {
           </div>
         </section>
 
-        <section className="mb-10 grid gap-6 lg:grid-cols-2">
+        <section className="mb-10 grid gap-4 min-[520px]:grid-cols-2 lg:gap-6">
           <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
             <SectionHeader
               label="Gradients"
@@ -162,34 +170,6 @@ export default function BrandPage() {
               <TokenRow label="Word color" value="#8a8075" />
               <TokenRow label="Gap (mark to wordmark)" value="gap-2" />
               <TokenRow label="Focus ring accent" value="#5BA5ED / 40%" />
-            </div>
-          </GradientBorder>
-        </section>
-
-        <section className="mb-10">
-          <SectionHeader
-            label="Usage"
-            title="Brand Components In Use"
-            description="Primary files currently driving the brand across navbar, page chrome, and app icons."
-          />
-          <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
-                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">Logo + Wordmark</div>
-                <code className="mt-2 block text-xs text-[#1a1a1a] break-all">components/site/Brand.tsx</code>
-              </div>
-              <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
-                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">Chrome Tokens</div>
-                <code className="mt-2 block text-xs text-[#1a1a1a] break-all">components/site/chrome.tsx</code>
-              </div>
-              <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
-                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">Favicon</div>
-                <code className="mt-2 block text-xs text-[#1a1a1a] break-all">app/icon.tsx</code>
-              </div>
-              <div className="rounded-lg border border-[#e8ddd0] bg-white p-3">
-                <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">Apple Icon</div>
-                <code className="mt-2 block text-xs text-[#1a1a1a] break-all">app/apple-icon.tsx</code>
-              </div>
             </div>
           </GradientBorder>
         </section>

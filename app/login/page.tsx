@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const [callbackUrl, setCallbackUrl] = useState('/markets')
+  const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [geo, setGeo] = useState({ country: '', state: '' })
 
   useEffect(() => {

@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest) {
     const config = await updateMarketRuntimeConfig(body)
 
     revalidatePath('/admin/settings')
-    revalidatePath('/admin/markets')
+    revalidatePath('/admin/ai')
 
     return successResponse({ config }, {
       headers: {

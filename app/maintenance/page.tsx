@@ -3,14 +3,13 @@ import Link from 'next/link'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
+import { buildNoIndexMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildNoIndexMetadata({
   title: 'Maintenance',
-  robots: {
-    index: false,
-    follow: false,
-  },
-}
+  description: 'Endpoint Arena is temporarily in maintenance mode.',
+  path: '/maintenance',
+})
 
 export default function MaintenancePage() {
   return (

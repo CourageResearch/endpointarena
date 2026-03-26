@@ -1,35 +1,32 @@
 import { MARKET_ACTIONS, type MarketActionType } from '@/lib/markets/constants'
 
-export interface ModelDecisionOtherMarketInput {
-  drugName: string
-  companyName: string
-  decisionDate: string
-  yesPrice: number
-}
-
 export interface ModelDecisionInput {
   meta: {
     eventId: string
+    trialQuestionId?: string | null
     marketId: string
     modelId: string
     asOf: string
     runDateIso: string
   }
-  event: {
-    drugName: string
-    companyName: string
-    symbols: string | null
-    applicationType: string
-    decisionDate: string
-    daysToDecision: number | null
-    eventDescription: string
-    drugStatus: string | null
-    nctId: string | null
+  trial: {
+    shortTitle: string
+    sponsorName: string
+    sponsorTicker: string | null
+    exactPhase: string
+    estPrimaryCompletionDate: string
+    daysToPrimaryCompletion: number | null
+    indication: string
+    intervention: string
+    primaryEndpoint: string
+    currentStatus: string
+    briefSummary: string
+    nctNumber: string | null
+    questionPrompt: string
   }
   market: {
     yesPrice: number
     noPrice: number
-    otherOpenMarkets: ModelDecisionOtherMarketInput[]
   }
   portfolio: {
     cashAvailable: number
@@ -47,7 +44,8 @@ export interface ModelDecisionInput {
 
 export interface ModelDecisionForecast {
   approvalProbability: number
-  binaryCall: 'approved' | 'rejected'
+  yesProbability?: number
+  binaryCall: 'yes' | 'no'
   confidence: number
   reasoning: string
 }
@@ -118,7 +116,7 @@ function extractJsonBlock(raw: string): string {
     return codeBlockMatch[1]
   }
 
-  const forecastKeyIndex = normalized.search(/"(?:forecast|approvalProbability|binaryCall|action)"/)
+  const forecastKeyIndex = normalized.search(/"(?:forecast|approvalProbability|yesProbability|binaryCall|action)"/)
   if (forecastKeyIndex !== -1) {
     const start = normalized.lastIndexOf('{', forecastKeyIndex)
     if (start !== -1) {
@@ -151,12 +149,18 @@ function clampConfidence(value: unknown): number {
   return Math.max(50, Math.min(100, Math.round(parsed)))
 }
 
-function sanitizeBinaryCall(value: unknown, probability: number): 'approved' | 'rejected' {
+function sanitizeBinaryCall(value: unknown, probability: number): 'yes' | 'no' {
   const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'approved' || normalized === 'rejected') {
+  if (normalized === 'yes' || normalized === 'no') {
     return normalized
   }
-  return probability >= 0.5 ? 'approved' : 'rejected'
+  if (normalized === 'approved') {
+    return 'yes'
+  }
+  if (normalized === 'rejected') {
+    return 'no'
+  }
+  return probability >= 0.5 ? 'yes' : 'no'
 }
 
 function sanitizeActionType(value: unknown, allowedActions: readonly MarketActionType[]): MarketActionType {
@@ -203,25 +207,24 @@ export function buildModelDecisionPrompt(input: ModelDecisionInput): string {
   const explanationMaxChars = input.constraints.explanationMaxChars || DEFAULT_EXPLANATION_MAX_CHARS
   const renderedInput = JSON.stringify(input, null, 2)
 
-  return `You are an expert pharmaceutical analyst and FDA prediction-market decision maker.
+  return `You are an expert biotech trial analyst and prediction-market decision maker.
 
-First estimate the intrinsic probability of FDA approval from the event facts alone. Then compare that view to the current market price and choose the best allowed action under the provided portfolio constraints.
+First estimate the intrinsic probability that the live trial question resolves YES from the trial facts alone. Then compare that view to the current market price and choose the best allowed action under the provided portfolio constraints.
 
 Your task has two ordered stages.
 
 Stage 1: Intrinsic forecast
-- Use only the event fields.
-- Do not use market or portfolio fields when estimating intrinsic approval odds.
+- Use only the trial fields.
+- Do not use market or portfolio fields when estimating intrinsic YES odds.
 - Produce:
-  - approvalProbability: a number from 0 to 1
-  - binaryCall: approved if approvalProbability >= 0.5, otherwise rejected
+  - yesProbability: a number from 0 to 1
+  - binaryCall: yes if yesProbability >= 0.5, otherwise no
   - confidence: integer from 50 to 100
   - reasoning: 120 to 220 words, specific and decision-useful
 
 Stage 2: Market action
 - After forming the intrinsic forecast, compare it to the market price.
 - Use market and portfolio fields only in this stage.
-- Use otherOpenMarkets only for capital allocation context, not to estimate this event's approval probability.
 - Choose exactly one action from allowedActions.
 - Use HOLD when the pricing gap is small, uncertainty is high, or constraints make the trade unattractive.
 - amountUsd must be non-negative and must not exceed the relevant cap:
@@ -229,6 +232,7 @@ Stage 2: Market action
   - SELL_YES: maxSellYesUsd
   - SELL_NO: maxSellNoUsd
 - If a sell action is not feasible, use HOLD.
+- Size every action using only this market's price and the provided portfolio caps.
 - action.explanation must be plain language and at most ${explanationMaxChars} characters.
 
 General rules
@@ -236,7 +240,7 @@ General rules
 - No markdown.
 - No extra keys.
 - Do not restate the input.
-- Keep forecast.reasoning focused on regulatory and clinical drivers.
+- Keep forecast.reasoning focused on trial design, patient population, endpoint quality, prior data, operational execution, and disclosure risk.
 - Keep action.explanation focused on valuation and trade logic.
 
 Input JSON:
@@ -245,8 +249,8 @@ ${renderedInput}
 Return exactly:
 {
   "forecast": {
-    "approvalProbability": 0.0,
-    "binaryCall": "approved",
+    "yesProbability": 0.0,
+    "binaryCall": "yes",
     "confidence": 50,
     "reasoning": "string"
   },
@@ -275,8 +279,8 @@ export function parseModelDecisionResponse(raw: string, allowedActions: readonly
   }
 
   const forecastPayload = parsed.forecast ?? {}
-  const approvalProbability = clampProbability(forecastPayload.approvalProbability)
-  const binaryCall = sanitizeBinaryCall(forecastPayload.binaryCall, approvalProbability)
+  const yesProbability = clampProbability(forecastPayload.yesProbability ?? forecastPayload.approvalProbability)
+  const binaryCall = sanitizeBinaryCall(forecastPayload.binaryCall, yesProbability)
   const confidence = clampConfidence(forecastPayload.confidence)
   const reasoning = sanitizeReasoning(forecastPayload.reasoning)
 
@@ -287,7 +291,8 @@ export function parseModelDecisionResponse(raw: string, allowedActions: readonly
 
   return {
     forecast: {
-      approvalProbability,
+      approvalProbability: yesProbability,
+      yesProbability,
       binaryCall,
       confidence,
       reasoning,

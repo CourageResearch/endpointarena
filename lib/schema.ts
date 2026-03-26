@@ -77,6 +77,295 @@ export const verificationTokens = pgTable('verification_tokens', {
   expires: utcTimestamp('expires').notNull(),
 })
 
+export const phase2Trials = pgTable('phase2_trials', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  nctNumber: text('nct_number').notNull(),
+  shortTitle: text('short_title').notNull(),
+  sponsorName: text('sponsor_name').notNull(),
+  sponsorTicker: text('sponsor_ticker'),
+  indication: text('indication').notNull(),
+  exactPhase: text('exact_phase').notNull(),
+  intervention: text('intervention').notNull(),
+  primaryEndpoint: text('primary_endpoint').notNull(),
+  studyStartDate: utcDate('study_start_date'),
+  estPrimaryCompletionDate: utcDate('est_primary_completion_date').notNull(),
+  estStudyCompletionDate: utcDate('est_study_completion_date'),
+  estResultsPostingDate: utcDate('est_results_posting_date'),
+  currentStatus: text('current_status').notNull(),
+  estEnrollment: integer('est_enrollment'),
+  keyLocations: text('key_locations'),
+  briefSummary: text('brief_summary').notNull(),
+  standardBettingMarkets: text('standard_betting_markets'),
+  lastMonitoredAt: utcTimestamp('last_monitored_at'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  nctNumberUniqueIdx: uniqueIndex('phase2_trials_nct_number_idx').on(table.nctNumber),
+  primaryCompletionIdx: index('phase2_trials_primary_completion_idx').on(table.estPrimaryCompletionDate),
+  sponsorTickerIdx: index('phase2_trials_sponsor_ticker_idx').on(table.sponsorTicker),
+  currentStatusIdx: index('phase2_trials_current_status_idx').on(table.currentStatus),
+  estEnrollmentCheck: check(
+    'phase2_trials_est_enrollment_check',
+    sql`${table.estEnrollment} IS NULL OR ${table.estEnrollment} >= 0`
+  ),
+}))
+
+export const trialQuestions = pgTable('trial_questions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trialId: text('trial_id').notNull().references(() => phase2Trials.id, { onDelete: 'cascade' }),
+  slug: text('slug').notNull(),
+  prompt: text('prompt').notNull(),
+  status: text('status').notNull().default('coming_soon'),
+  isBettable: boolean('is_bettable').notNull().default(false),
+  sortOrder: integer('sort_order').notNull(),
+  outcome: text('outcome').notNull().default('Pending'),
+  outcomeDate: utcTimestamp('outcome_date'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  trialSlugUniqueIdx: uniqueIndex('trial_questions_trial_slug_idx').on(table.trialId, table.slug),
+  trialSortOrderUniqueIdx: uniqueIndex('trial_questions_trial_sort_order_idx').on(table.trialId, table.sortOrder),
+  slugIdx: index('trial_questions_slug_idx').on(table.slug),
+  statusIdx: index('trial_questions_status_idx').on(table.status),
+  outcomeIdx: index('trial_questions_outcome_idx').on(table.outcome),
+  statusCheck: check(
+    'trial_questions_status_check',
+    sql`${table.status} IN ('live', 'coming_soon')`
+  ),
+  outcomeCheck: check(
+    'trial_questions_outcome_check',
+    sql`${table.outcome} IN ('Pending', 'YES', 'NO')`
+  ),
+  sortOrderCheck: check(
+    'trial_questions_sort_order_check',
+    sql`${table.sortOrder} >= 0`
+  ),
+}))
+
+export const trialMonitorConfigs = pgTable('trial_monitor_configs', {
+  id: text('id').primaryKey(),
+  enabled: boolean('enabled').notNull().default(true),
+  runIntervalHours: integer('run_interval_hours').notNull().default(6),
+  lookaheadDays: integer('lookahead_days').notNull().default(30),
+  overdueRecheckHours: integer('overdue_recheck_hours').notNull().default(24),
+  maxQuestionsPerRun: integer('max_questions_per_run').notNull().default(25),
+  verifierModelKey: text('verifier_model_key').notNull().default('gpt-5.4'),
+  minCandidateConfidence: real('min_candidate_confidence').notNull().default(0.8),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  runIntervalHoursCheck: check(
+    'trial_monitor_configs_run_interval_hours_check',
+    sql`${table.runIntervalHours} >= 1 AND ${table.runIntervalHours} <= 168`
+  ),
+  lookaheadDaysCheck: check(
+    'trial_monitor_configs_lookahead_days_check',
+    sql`${table.lookaheadDays} >= 0 AND ${table.lookaheadDays} <= 365`
+  ),
+  overdueRecheckHoursCheck: check(
+    'trial_monitor_configs_overdue_recheck_hours_check',
+    sql`${table.overdueRecheckHours} >= 1 AND ${table.overdueRecheckHours} <= 720`
+  ),
+  maxQuestionsPerRunCheck: check(
+    'trial_monitor_configs_max_questions_per_run_check',
+    sql`${table.maxQuestionsPerRun} >= 1 AND ${table.maxQuestionsPerRun} <= 500`
+  ),
+  minCandidateConfidenceCheck: check(
+    'trial_monitor_configs_min_candidate_confidence_check',
+    sql`${table.minCandidateConfidence} >= 0 AND ${table.minCandidateConfidence} <= 1`
+  ),
+}))
+
+export const trialSyncConfigs = pgTable('trial_sync_configs', {
+  id: text('id').primaryKey(),
+  enabled: boolean('enabled').notNull().default(true),
+  syncIntervalHours: integer('sync_interval_hours').notNull().default(24),
+  recentCompletionLookbackDays: integer('recent_completion_lookback_days').notNull().default(180),
+  reconcileIntervalHours: integer('reconcile_interval_hours').notNull().default(168),
+  lastSuccessfulUpdatePostDate: utcDate('last_successful_update_post_date'),
+  lastSuccessfulDataTimestamp: text('last_successful_data_timestamp'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  syncIntervalHoursCheck: check(
+    'trial_sync_configs_sync_interval_hours_check',
+    sql`${table.syncIntervalHours} >= 1 AND ${table.syncIntervalHours} <= 168`
+  ),
+  recentCompletionLookbackDaysCheck: check(
+    'trial_sync_configs_recent_completion_lookback_days_check',
+    sql`${table.recentCompletionLookbackDays} >= 1 AND ${table.recentCompletionLookbackDays} <= 1095`
+  ),
+  reconcileIntervalHoursCheck: check(
+    'trial_sync_configs_reconcile_interval_hours_check',
+    sql`${table.reconcileIntervalHours} >= 1 AND ${table.reconcileIntervalHours} <= 720`
+  ),
+}))
+
+export const trialSyncRuns = pgTable('trial_sync_runs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  triggerSource: text('trigger_source').notNull().default('manual'),
+  mode: text('mode').notNull().default('incremental'),
+  status: text('status').notNull().default('running'),
+  sourceDataTimestamp: text('source_data_timestamp'),
+  studiesFetched: integer('studies_fetched').notNull().default(0),
+  studiesMatched: integer('studies_matched').notNull().default(0),
+  trialsUpserted: integer('trials_upserted').notNull().default(0),
+  questionsUpserted: integer('questions_upserted').notNull().default(0),
+  marketsOpened: integer('markets_opened').notNull().default(0),
+  errorSummary: text('error_summary'),
+  startedAt: utcTimestamp('started_at').notNull().$defaultFn(() => new Date()),
+  completedAt: utcTimestamp('completed_at'),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  triggerSourceCheck: check(
+    'trial_sync_runs_trigger_source_check',
+    sql`${table.triggerSource} IN ('cron', 'manual')`
+  ),
+  modeCheck: check(
+    'trial_sync_runs_mode_check',
+    sql`${table.mode} IN ('incremental', 'reconcile')`
+  ),
+  statusCheck: check(
+    'trial_sync_runs_status_check',
+    sql`${table.status} IN ('running', 'completed', 'failed', 'skipped')`
+  ),
+  studiesFetchedCheck: check(
+    'trial_sync_runs_studies_fetched_check',
+    sql`${table.studiesFetched} >= 0`
+  ),
+  studiesMatchedCheck: check(
+    'trial_sync_runs_studies_matched_check',
+    sql`${table.studiesMatched} >= 0`
+  ),
+  trialsUpsertedCheck: check(
+    'trial_sync_runs_trials_upserted_check',
+    sql`${table.trialsUpserted} >= 0`
+  ),
+  questionsUpsertedCheck: check(
+    'trial_sync_runs_questions_upserted_check',
+    sql`${table.questionsUpserted} >= 0`
+  ),
+  marketsOpenedCheck: check(
+    'trial_sync_runs_markets_opened_check',
+    sql`${table.marketsOpened} >= 0`
+  ),
+  startedAtIdx: index('trial_sync_runs_started_at_idx').on(table.startedAt),
+  modeStartedAtIdx: index('trial_sync_runs_mode_started_at_idx').on(table.mode, table.startedAt),
+}))
+
+export const trialSyncRunItems = pgTable('trial_sync_run_items', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  runId: text('run_id').notNull().references(() => trialSyncRuns.id, { onDelete: 'cascade' }),
+  trialId: text('trial_id').references(() => phase2Trials.id, { onDelete: 'set null' }),
+  nctNumber: text('nct_number').notNull(),
+  shortTitle: text('short_title').notNull(),
+  sponsorName: text('sponsor_name').notNull(),
+  currentStatus: text('current_status').notNull(),
+  estPrimaryCompletionDate: utcDate('est_primary_completion_date').notNull(),
+  changeType: text('change_type').notNull(),
+  changeSummary: text('change_summary'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  changeTypeCheck: check(
+    'trial_sync_run_items_change_type_check',
+    sql`${table.changeType} IN ('inserted', 'updated')`
+  ),
+  runCreatedAtIdx: index('trial_sync_run_items_run_created_at_idx').on(table.runId, table.createdAt),
+  runChangeTypeIdx: index('trial_sync_run_items_run_change_type_idx').on(table.runId, table.changeType),
+  nctNumberIdx: index('trial_sync_run_items_nct_number_idx').on(table.nctNumber),
+}))
+
+export const trialMonitorRuns = pgTable('trial_monitor_runs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  triggerSource: text('trigger_source').notNull().default('manual'),
+  status: text('status').notNull().default('running'),
+  questionsScanned: integer('questions_scanned').notNull().default(0),
+  candidatesCreated: integer('candidates_created').notNull().default(0),
+  errorSummary: text('error_summary'),
+  debugLog: text('debug_log'),
+  startedAt: utcTimestamp('started_at').notNull().$defaultFn(() => new Date()),
+  completedAt: utcTimestamp('completed_at'),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  triggerSourceCheck: check(
+    'trial_monitor_runs_trigger_source_check',
+    sql`${table.triggerSource} IN ('cron', 'manual')`
+  ),
+  statusCheck: check(
+    'trial_monitor_runs_status_check',
+    sql`${table.status} IN ('running', 'completed', 'failed')`
+  ),
+  questionsScannedCheck: check(
+    'trial_monitor_runs_questions_scanned_check',
+    sql`${table.questionsScanned} >= 0`
+  ),
+  candidatesCreatedCheck: check(
+    'trial_monitor_runs_candidates_created_check',
+    sql`${table.candidatesCreated} >= 0`
+  ),
+  startedAtIdx: index('trial_monitor_runs_started_at_idx').on(table.startedAt),
+}))
+
+export const trialOutcomeCandidates = pgTable('trial_outcome_candidates', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trialQuestionId: text('trial_question_id').notNull().references(() => trialQuestions.id, { onDelete: 'cascade' }),
+  proposedOutcome: text('proposed_outcome').notNull(),
+  proposedOutcomeDate: utcTimestamp('proposed_outcome_date'),
+  confidence: real('confidence').notNull(),
+  summary: text('summary').notNull(),
+  verifierModelKey: text('verifier_model_key').notNull(),
+  providerResponseId: text('provider_response_id'),
+  evidenceHash: text('evidence_hash').notNull(),
+  status: text('status').notNull().default('pending_review'),
+  reviewedByUserId: text('reviewed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewNotes: text('review_notes'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+  reviewedAt: utcTimestamp('reviewed_at'),
+}, (table) => ({
+  proposedOutcomeCheck: check(
+    'trial_outcome_candidates_proposed_outcome_check',
+    sql`${table.proposedOutcome} IN ('YES', 'NO', 'NO_DECISION')`
+  ),
+  confidenceCheck: check(
+    'trial_outcome_candidates_confidence_check',
+    sql`${table.confidence} >= 0 AND ${table.confidence} <= 1`
+  ),
+  statusCheck: check(
+    'trial_outcome_candidates_status_check',
+    sql`${table.status} IN ('pending_review', 'accepted', 'rejected', 'superseded', 'dismissed')`
+  ),
+  questionEvidenceHashUniqueIdx: uniqueIndex('trial_outcome_candidates_question_outcome_hash_idx').on(
+    table.trialQuestionId,
+    table.proposedOutcome,
+    table.evidenceHash,
+  ),
+  statusCreatedAtIdx: index('trial_outcome_candidates_status_created_at_idx').on(table.status, table.createdAt),
+  questionCreatedAtIdx: index('trial_outcome_candidates_question_created_at_idx').on(table.trialQuestionId, table.createdAt),
+}))
+
+export const trialOutcomeCandidateEvidence = pgTable('trial_outcome_candidate_evidence', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  candidateId: text('candidate_id').notNull().references(() => trialOutcomeCandidates.id, { onDelete: 'cascade' }),
+  sourceType: text('source_type').notNull(),
+  title: text('title').notNull(),
+  url: text('url').notNull(),
+  publishedAt: utcTimestamp('published_at'),
+  excerpt: text('excerpt').notNull(),
+  domain: text('domain').notNull(),
+  displayOrder: integer('display_order').notNull().default(0),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  sourceTypeCheck: check(
+    'trial_outcome_candidate_evidence_source_type_check',
+    sql`${table.sourceType} IN ('clinicaltrials', 'sponsor', 'stored_source', 'web_search')`
+  ),
+  candidateDisplayOrderIdx: index('trial_outcome_candidate_evidence_candidate_display_order_idx').on(
+    table.candidateId,
+    table.displayOrder,
+  ),
+}))
+
 export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyName: text('company_name').notNull(),
@@ -181,7 +470,7 @@ export const eventMonitorConfigs = pgTable('event_monitor_configs', {
   softLookaheadDays: integer('soft_lookahead_days').notNull().default(14),
   overdueRecheckHours: integer('overdue_recheck_hours').notNull().default(24),
   maxEventsPerRun: integer('max_events_per_run').notNull().default(25),
-  verifierModelKey: text('verifier_model_key').notNull().default('gpt-5.2'),
+  verifierModelKey: text('verifier_model_key').notNull().default('gpt-5.4'),
   minCandidateConfidence: real('min_candidate_confidence').notNull().default(0.8),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
@@ -330,7 +619,8 @@ export const marketActors = pgTable('market_actors', {
 
 export const predictionMarkets = pgTable('prediction_markets', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  fdaEventId: text('fda_event_id').references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  trialQuestionId: text('trial_question_id').references(() => trialQuestions.id, { onDelete: 'cascade' }),
   status: text('status').notNull().default('OPEN'),
   openingProbability: real('opening_probability').notNull(),
   b: real('b').notNull().default(25000),
@@ -343,7 +633,12 @@ export const predictionMarkets = pgTable('prediction_markets', {
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  fdaEventUniqueIdx: uniqueIndex('prediction_markets_fda_event_id_idx').on(table.fdaEventId),
+  fdaEventUniqueIdx: uniqueIndex('prediction_markets_fda_event_id_idx')
+    .on(table.fdaEventId)
+    .where(sql`${table.fdaEventId} IS NOT NULL`),
+  trialQuestionUniqueIdx: uniqueIndex('prediction_markets_trial_question_id_idx')
+    .on(table.trialQuestionId)
+    .where(sql`${table.trialQuestionId} IS NOT NULL`),
   statusIdx: index('prediction_markets_status_idx').on(table.status),
   statusCheck: check(
     'prediction_markets_status_check',
@@ -363,7 +658,7 @@ export const predictionMarkets = pgTable('prediction_markets', {
   ),
   resolvedOutcomeCheck: check(
     'prediction_markets_resolved_outcome_check',
-    sql`${table.resolvedOutcome} IS NULL OR ${table.resolvedOutcome} IN ('Approved', 'Rejected')`
+    sql`${table.resolvedOutcome} IS NULL OR ${table.resolvedOutcome} IN ('Approved', 'Rejected', 'YES', 'NO')`
   ),
   resolvedStateCheck: check(
     'prediction_markets_resolved_state_check',
@@ -371,6 +666,14 @@ export const predictionMarkets = pgTable('prediction_markets', {
       (${table.status} = 'OPEN' AND ${table.resolvedOutcome} IS NULL AND ${table.resolvedAt} IS NULL)
       OR
       (${table.status} = 'RESOLVED' AND ${table.resolvedOutcome} IS NOT NULL AND ${table.resolvedAt} IS NOT NULL)
+    )`
+  ),
+  ownershipCheck: check(
+    'prediction_markets_ownership_check',
+    sql`(
+      (${table.fdaEventId} IS NOT NULL AND ${table.trialQuestionId} IS NULL)
+      OR
+      (${table.fdaEventId} IS NULL AND ${table.trialQuestionId} IS NOT NULL)
     )`
   ),
 }))
@@ -480,6 +783,7 @@ export const marketRunLogs = pgTable('market_run_logs', {
   skippedCount: integer('skipped_count'),
   marketId: text('market_id').references(() => predictionMarkets.id, { onDelete: 'set null' }),
   fdaEventId: text('fda_event_id').references(() => fdaCalendarEvents.id, { onDelete: 'set null' }),
+  trialQuestionId: text('trial_question_id').references(() => trialQuestions.id, { onDelete: 'set null' }),
   actorId: text('actor_id').references(() => marketActors.id, { onDelete: 'set null' }),
   activityPhase: text('activity_phase'),
   action: text('action'),
@@ -528,7 +832,8 @@ export const marketActions = pgTable('market_actions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   runId: text('run_id').references(() => marketRuns.id, { onDelete: 'cascade' }),
   marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
-  fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  fdaEventId: text('fda_event_id').references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  trialQuestionId: text('trial_question_id').references(() => trialQuestions.id, { onDelete: 'cascade' }),
   actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
   runDate: utcDate('run_date').notNull(),
   actionSource: text('action_source').notNull().default('cycle'),
@@ -563,6 +868,14 @@ export const marketActions = pgTable('market_actions', {
       (${table.actionSource} = 'cycle' AND ${table.runId} IS NOT NULL)
       OR
       (${table.actionSource} = 'human' AND ${table.runId} IS NULL)
+    )`
+  ),
+  ownershipCheck: check(
+    'market_actions_ownership_check',
+    sql`(
+      (${table.fdaEventId} IS NOT NULL AND ${table.trialQuestionId} IS NULL)
+      OR
+      (${table.fdaEventId} IS NULL AND ${table.trialQuestionId} IS NOT NULL)
     )`
   ),
   actionCheck: check(
@@ -602,10 +915,12 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   runId: text('run_id').references(() => marketRuns.id, { onDelete: 'set null' }),
   runDate: utcDate('run_date').notNull(),
   marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
-  fdaEventId: text('fda_event_id').notNull().references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  fdaEventId: text('fda_event_id').references(() => fdaCalendarEvents.id, { onDelete: 'cascade' }),
+  trialQuestionId: text('trial_question_id').references(() => trialQuestions.id, { onDelete: 'cascade' }),
   actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
   runSource: text('run_source').notNull(),
   approvalProbability: real('approval_probability').notNull(),
+  yesProbability: real('yes_probability'),
   binaryCall: text('binary_call').notNull(),
   confidence: integer('confidence').notNull(),
   reasoning: text('reasoning').notNull(),
@@ -642,6 +957,11 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
     table.actorId,
     table.createdAt,
   ),
+  questionActorCreatedIdx: index('model_decision_snapshots_question_actor_created_idx').on(
+    table.trialQuestionId,
+    table.actorId,
+    table.createdAt,
+  ),
   marketActorCreatedIdx: index('model_decision_snapshots_market_actor_created_idx').on(
     table.marketId,
     table.actorId,
@@ -668,7 +988,7 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   ),
   binaryCallCheck: check(
     'model_decision_snapshots_binary_call_check',
-    sql`${table.binaryCall} IN ('approved', 'rejected')`,
+    sql`${table.binaryCall} IN ('approved', 'rejected', 'yes', 'no')`,
   ),
   confidenceCheck: check(
     'model_decision_snapshots_confidence_check',
@@ -677,6 +997,18 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   approvalProbabilityCheck: check(
     'model_decision_snapshots_approval_probability_check',
     sql`${table.approvalProbability} >= 0 AND ${table.approvalProbability} <= 1`,
+  ),
+  yesProbabilityCheck: check(
+    'model_decision_snapshots_yes_probability_check',
+    sql`${table.yesProbability} IS NULL OR (${table.yesProbability} >= 0 AND ${table.yesProbability} <= 1)`,
+  ),
+  ownershipCheck: check(
+    'model_decision_snapshots_ownership_check',
+    sql`(
+      (${table.fdaEventId} IS NOT NULL AND ${table.trialQuestionId} IS NULL)
+      OR
+      (${table.fdaEventId} IS NULL AND ${table.trialQuestionId} IS NOT NULL)
+    )`
   ),
   proposedActionCheck: check(
     'model_decision_snapshots_proposed_action_check',
@@ -824,6 +1156,8 @@ export const analyticsEvents = pgTable('analytics_events', {
   ipAddress: text('ip_address'),
   country: text('country'),
   city: text('city'),
+  searchQuery: text('search_query'),
+  resultCount: integer('result_count'),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 })
 
@@ -893,6 +1227,40 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, {
     fields: [sessions.userId],
     references: [users.id],
+  }),
+}))
+
+export const phase2TrialsRelations = relations(phase2Trials, ({ many }) => ({
+  questions: many(trialQuestions),
+}))
+
+export const trialQuestionsRelations = relations(trialQuestions, ({ one, many }) => ({
+  trial: one(phase2Trials, {
+    fields: [trialQuestions.trialId],
+    references: [phase2Trials.id],
+  }),
+  markets: many(predictionMarkets),
+  outcomeCandidates: many(trialOutcomeCandidates),
+  actions: many(marketActions),
+  decisionSnapshots: many(modelDecisionSnapshots),
+}))
+
+export const trialOutcomeCandidatesRelations = relations(trialOutcomeCandidates, ({ many, one }) => ({
+  question: one(trialQuestions, {
+    fields: [trialOutcomeCandidates.trialQuestionId],
+    references: [trialQuestions.id],
+  }),
+  evidence: many(trialOutcomeCandidateEvidence),
+  reviewedByUser: one(users, {
+    fields: [trialOutcomeCandidates.reviewedByUserId],
+    references: [users.id],
+  }),
+}))
+
+export const trialOutcomeCandidateEvidenceRelations = relations(trialOutcomeCandidateEvidence, ({ one }) => ({
+  candidate: one(trialOutcomeCandidates, {
+    fields: [trialOutcomeCandidateEvidence.candidateId],
+    references: [trialOutcomeCandidates.id],
   }),
 }))
 
@@ -976,6 +1344,10 @@ export const predictionMarketsRelations = relations(predictionMarkets, ({ one, m
     fields: [predictionMarkets.fdaEventId],
     references: [fdaCalendarEvents.id],
   }),
+  trialQuestion: one(trialQuestions, {
+    fields: [predictionMarkets.trialQuestionId],
+    references: [trialQuestions.id],
+  }),
   positions: many(marketPositions),
   actions: many(marketActions),
   decisionSnapshots: many(modelDecisionSnapshots),
@@ -1011,6 +1383,10 @@ export const marketRunLogsRelations = relations(marketRunLogs, ({ one }) => ({
     fields: [marketRunLogs.runId],
     references: [marketRuns.id],
   }),
+  trialQuestion: one(trialQuestions, {
+    fields: [marketRunLogs.trialQuestionId],
+    references: [trialQuestions.id],
+  }),
   actor: one(marketActors, {
     fields: [marketRunLogs.actorId],
     references: [marketActors.id],
@@ -1030,6 +1406,10 @@ export const marketActionsRelations = relations(marketActions, ({ one }) => ({
     fields: [marketActions.fdaEventId],
     references: [fdaCalendarEvents.id],
   }),
+  trialQuestion: one(trialQuestions, {
+    fields: [marketActions.trialQuestionId],
+    references: [trialQuestions.id],
+  }),
   actor: one(marketActors, {
     fields: [marketActions.actorId],
     references: [marketActors.id],
@@ -1048,6 +1428,10 @@ export const modelDecisionSnapshotsRelations = relations(modelDecisionSnapshots,
   fdaEvent: one(fdaCalendarEvents, {
     fields: [modelDecisionSnapshots.fdaEventId],
     references: [fdaCalendarEvents.id],
+  }),
+  trialQuestion: one(trialQuestions, {
+    fields: [modelDecisionSnapshots.trialQuestionId],
+    references: [trialQuestions.id],
   }),
   actor: one(marketActors, {
     fields: [modelDecisionSnapshots.actorId],
@@ -1074,6 +1458,24 @@ export const marketDailySnapshotsRelations = relations(marketDailySnapshots, ({ 
 }))
 
 export type User = typeof users.$inferSelect
+export type Phase2Trial = typeof phase2Trials.$inferSelect
+export type NewPhase2Trial = typeof phase2Trials.$inferInsert
+export type TrialQuestion = typeof trialQuestions.$inferSelect
+export type NewTrialQuestion = typeof trialQuestions.$inferInsert
+export type TrialMonitorConfig = typeof trialMonitorConfigs.$inferSelect
+export type NewTrialMonitorConfig = typeof trialMonitorConfigs.$inferInsert
+export type TrialSyncConfig = typeof trialSyncConfigs.$inferSelect
+export type NewTrialSyncConfig = typeof trialSyncConfigs.$inferInsert
+export type TrialSyncRun = typeof trialSyncRuns.$inferSelect
+export type NewTrialSyncRun = typeof trialSyncRuns.$inferInsert
+export type TrialSyncRunItem = typeof trialSyncRunItems.$inferSelect
+export type NewTrialSyncRunItem = typeof trialSyncRunItems.$inferInsert
+export type TrialMonitorRun = typeof trialMonitorRuns.$inferSelect
+export type NewTrialMonitorRun = typeof trialMonitorRuns.$inferInsert
+export type TrialOutcomeCandidate = typeof trialOutcomeCandidates.$inferSelect
+export type NewTrialOutcomeCandidate = typeof trialOutcomeCandidates.$inferInsert
+export type TrialOutcomeCandidateEvidence = typeof trialOutcomeCandidateEvidence.$inferSelect
+export type NewTrialOutcomeCandidateEvidence = typeof trialOutcomeCandidateEvidence.$inferInsert
 export type FDAEventExternalId = typeof fdaEventExternalIds.$inferSelect
 export type NewFDAEventExternalId = typeof fdaEventExternalIds.$inferInsert
 export type FDAEventSource = typeof fdaEventSources.$inferSelect

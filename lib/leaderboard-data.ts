@@ -1,10 +1,10 @@
-import { desc, eq, isNotNull, or } from 'drizzle-orm'
-import { db, fdaCalendarEvents, users } from '@/lib/db'
+import { desc, isNotNull } from 'drizzle-orm'
+import { db, trialQuestions, users } from '@/lib/db'
 import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
-import { attachUnifiedPredictionsToEvents, getUnifiedPredictionHistoriesByEventIds, type LeaderboardPredictionMode, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
+import { getUnifiedPredictionHistoriesByEventIds, type LeaderboardPredictionMode, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
 import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-name'
-import { enrichFdaEvents } from '@/lib/fda-event-metadata'
 import { loadOpenMarketActorState } from '@/lib/market-read-model'
+import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 interface ModelLeaderboardEntry {
   id: ModelId
@@ -42,15 +42,19 @@ interface ModelStats {
 }
 
 export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
-  const [rawAllEvents, openMarketState, rawRecentDecisionEvents, verifiedUsers] = await Promise.all([
-    db.query.fdaCalendarEvents.findMany(),
+  const [rawAllQuestions, openMarketState, rawRecentResolvedQuestions, verifiedUsers] = await Promise.all([
+    db.query.trialQuestions.findMany({
+      with: {
+        trial: true,
+      },
+    }),
     loadOpenMarketActorState(),
-    db.query.fdaCalendarEvents.findMany({
-      where: or(
-        eq(fdaCalendarEvents.outcome, 'Approved'),
-        eq(fdaCalendarEvents.outcome, 'Rejected')
-      ),
-      orderBy: [desc(fdaCalendarEvents.outcomeDate)],
+    db.query.trialQuestions.findMany({
+      where: isNotNull(trialQuestions.outcomeDate),
+      with: {
+        trial: true,
+      },
+      orderBy: [desc(trialQuestions.outcomeDate)],
       limit: 10,
     }),
     db.query.users.findMany({
@@ -62,17 +66,13 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
       },
     }),
   ])
+  const allQuestions = filterSupportedTrialQuestions(rawAllQuestions)
+  const recentResolvedQuestions = filterSupportedTrialQuestions(rawRecentResolvedQuestions)
 
-  const [allEvents, recentDecisionEvents] = await Promise.all([
-    enrichFdaEvents(rawAllEvents),
-    enrichFdaEvents(rawRecentDecisionEvents),
-  ])
-  const recentFdaDecisions = await attachUnifiedPredictionsToEvents(recentDecisionEvents)
-
-  const eventOutcomeById = new Map(allEvents.map((event) => [event.id, event.outcome]))
-  const historyByEventId = await getUnifiedPredictionHistoriesByEventIds(
-    allEvents.map((event) => event.id),
-    eventOutcomeById,
+  const questionOutcomeById = new Map(allQuestions.map((question) => [question.id, question.outcome]))
+  const historyByQuestionId = await getUnifiedPredictionHistoriesByEventIds(
+    allQuestions.map((question) => question.id),
+    questionOutcomeById,
   )
 
   const modelStats = new Map<ModelId, ModelStats>()
@@ -88,11 +88,11 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
     })
   }
 
-  for (const event of allEvents) {
-    const eventHistory = historyByEventId.get(event.id)
-    if (!eventHistory) continue
+  for (const question of allQuestions) {
+    const questionHistory = historyByQuestionId.get(question.id)
+    if (!questionHistory) continue
 
-    for (const [predictorId, history] of eventHistory.entries()) {
+    for (const [predictorId, history] of questionHistory.entries()) {
       if (!isModelId(predictorId)) continue
       const selected = selectPredictionFromHistory(history, mode)
       if (!selected) continue
@@ -103,7 +103,7 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
       stats.confidenceSum += selected.confidence
       stats.total++
 
-      const isDecided = event.outcome === 'Approved' || event.outcome === 'Rejected'
+      const isDecided = question.outcome === 'YES' || question.outcome === 'NO'
       if (!isDecided) {
         stats.pending++
         continue
@@ -172,10 +172,8 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
     .sort((a, b) => {
       if (a.totalEquity !== b.totalEquity) return b.totalEquity - a.totalEquity
       if (a.pnl !== b.pnl) return b.pnl - a.pnl
-
       const byName = a.displayName.localeCompare(b.displayName, 'en-US', { sensitivity: 'base' })
       if (byName !== 0) return byName
-
       return a.userId.localeCompare(b.userId)
     })
 
@@ -183,6 +181,18 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
     leaderboard,
     moneyLeaderboard,
     humanLeaderboard,
-    recentFdaDecisions,
+    recentResolvedQuestions: recentResolvedQuestions.map((question) => ({
+      id: question.id,
+      prompt: normalizeTrialQuestionPrompt(question.prompt),
+      outcome: question.outcome,
+      outcomeDate: question.outcomeDate?.toISOString() ?? null,
+      trial: {
+        shortTitle: question.trial.shortTitle,
+        sponsorName: question.trial.sponsorName,
+        sponsorTicker: question.trial.sponsorTicker,
+        exactPhase: question.trial.exactPhase,
+        estPrimaryCompletionDate: question.trial.estPrimaryCompletionDate.toISOString(),
+      },
+    })),
   }
 }

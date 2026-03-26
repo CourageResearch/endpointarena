@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
@@ -10,12 +11,20 @@ import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { authOptions } from '@/lib/auth'
-import { db, fdaCalendarEvents, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, users } from '@/lib/db'
+import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
+import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
+import { buildNoIndexMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = buildNoIndexMetadata({
+  title: 'Profile',
+  description: 'Private Endpoint Arena profile and account data.',
+  path: '/profile',
+})
 
 const PROFILE_TRADE_ACTIONS = ['BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO'] as const
 type ProfileTradeAction = (typeof PROFILE_TRADE_ACTIONS)[number]
@@ -149,16 +158,28 @@ async function getProfileTradingData(userId: string): Promise<{
       })
     : []
 
-  const eventIds = Array.from(new Set(markets.map((market) => market.fdaEventId)))
-  const events = eventIds.length > 0
-    ? await db.query.fdaCalendarEvents.findMany({
-        where: inArray(fdaCalendarEvents.id, eventIds),
+  const questionIds = Array.from(new Set(
+    markets
+      .map((market) => market.trialQuestionId)
+      .filter((value): value is string => Boolean(value)),
+  ))
+  const rawQuestions = questionIds.length > 0
+    ? await db.query.trialQuestions.findMany({
+        where: inArray(trialQuestions.id, questionIds),
+        with: {
+          trial: true,
+        },
       })
     : []
+  const questions = filterSupportedTrialQuestions(rawQuestions)
+  const supportedQuestionIds = new Set(questions.map((question) => question.id))
+  const supportedMarkets = markets.filter((market) => (
+    typeof market.trialQuestionId === 'string' && supportedQuestionIds.has(market.trialQuestionId)
+  ))
 
-  const marketById = new Map(markets.map((market) => [market.id, market]))
-  const openMarketById = new Map(markets.filter((market) => market.status === 'OPEN').map((market) => [market.id, market]))
-  const eventById = new Map(events.map((event) => [event.id, event]))
+  const marketById = new Map(supportedMarkets.map((market) => [market.id, market]))
+  const openMarketById = new Map(supportedMarkets.filter((market) => market.status === 'OPEN').map((market) => [market.id, market]))
+  const questionById = new Map(questions.map((question) => [question.id, question]))
 
   const holdings = rawPositions
     .flatMap<ProfileHoldingRow>((position) => {
@@ -169,10 +190,10 @@ async function getProfileTradingData(userId: string): Promise<{
       const noShares = Math.max(0, position.noShares)
       if (yesShares <= 0 && noShares <= 0) return []
 
-      const event = eventById.get(market.fdaEventId)
-      const drugName = event?.drugName?.trim() || 'Unknown market'
-      const companyName = event?.companyName?.trim() || '—'
-      const ticker = toTicker(event?.symbols)
+      const question = typeof market.trialQuestionId === 'string' ? questionById.get(market.trialQuestionId) : null
+      const drugName = question?.trial.shortTitle?.trim() || 'Unknown market'
+      const companyName = question?.trial.sponsorName?.trim() || '—'
+      const ticker = question?.trial.sponsorTicker?.trim() || '—'
       const priceYes = market.priceYes
       const priceNo = 1 - market.priceYes
       const markValueUsd = (yesShares * priceYes) + (noShares * priceNo)
@@ -187,7 +208,7 @@ async function getProfileTradingData(userId: string): Promise<{
         priceYes,
         priceNo,
         markValueUsd,
-        decisionDate: event?.decisionDate ?? null,
+        decisionDate: question?.trial.estPrimaryCompletionDate ?? null,
       }]
     })
     .sort((a, b) => b.markValueUsd - a.markValueUsd)
@@ -197,16 +218,18 @@ async function getProfileTradingData(userId: string): Promise<{
       if (!PROFILE_TRADE_ACTIONS.includes(action.action as ProfileTradeAction)) return []
 
       const market = marketById.get(action.marketId)
-      const event = market ? eventById.get(market.fdaEventId) : null
+      const question = market && typeof market.trialQuestionId === 'string'
+        ? questionById.get(market.trialQuestionId)
+        : null
       const timestamp = action.createdAt ?? action.runDate
 
       return [{
         id: action.id,
         timestamp,
         marketId: action.marketId,
-        drugName: event?.drugName?.trim() || 'Unknown market',
-        companyName: event?.companyName?.trim() || '—',
-        ticker: toTicker(event?.symbols),
+        drugName: question?.trial.shortTitle?.trim() || 'Unknown market',
+        companyName: question?.trial.sponsorName?.trim() || '—',
+        ticker: question?.trial.sponsorTicker?.trim() || '—',
         action: action.action as ProfileTradeAction,
         usdAmount: Math.max(0, action.usdAmount),
         shares: Math.abs(action.sharesDelta),
@@ -316,7 +339,7 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
                 <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{identity}</p>
@@ -342,23 +365,28 @@ export default async function ProfilePage() {
                 </form>
               </div>
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Trading Cash</p>
-                  <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
-                    Paper Trading
-                  </div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Trading Cash</p>
+                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
+                <div className="mt-2 inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
+                  Paper Trading
                 </div>
-                <p className="mt-4 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
-                <p className="mt-1 text-xs text-[#8a8075]">
-                  Open positions: {formatUsd(positionsValue)} • Total equity: {formatUsd(totalEquity)}
-                </p>
+              </div>
+              <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Portfolio</p>
+                <dl className="mt-3 space-y-3">
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Open Positions</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</dd>
+                  </div>
+                  <div className="border-t border-[#ece2d6] pt-3">
+                    <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Total Equity</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(totalEquity)}</dd>
+                  </div>
+                </dl>
               </div>
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="flex flex-wrap items-start gap-2">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Rewards Balance</p>
-                  <div className="inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
-                    Profile / Refill
-                  </div>
                 </div>
                 <ProfilePointsBalance
                   pointsBalance={pointsState.pointsBalance}
@@ -369,8 +397,7 @@ export default async function ProfilePage() {
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Humans Rank</p>
-                <p className="mt-2 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '—'}</p>
-                <p className="mt-1 text-xs text-[#8a8075]">{isVerified ? 'Live among verified players.' : 'Unlock by verifying your tweet.'}</p>
+                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '—'}</p>
               </div>
             </div>
 
@@ -432,7 +459,7 @@ export default async function ProfilePage() {
                         <tr key={`${holding.marketId}-${holding.ticker}`} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
                           <td className="px-3 py-2 text-[#1a1a1a]">
                             <Link
-                              href={`/markets/${holding.marketId}`}
+                              href={`/trials/${holding.marketId}`}
                               className="font-medium transition-colors hover:text-[#6d645a]"
                             >
                               {holding.drugName}
@@ -483,7 +510,7 @@ export default async function ProfilePage() {
                             </td>
                             <td className="px-3 py-2 text-[#1a1a1a]">
                               <Link
-                                href={`/markets/${trade.marketId}`}
+                                href={`/trials/${trade.marketId}`}
                                 className="font-medium transition-colors hover:text-[#6d645a]"
                               >
                                 {trade.drugName}
@@ -504,10 +531,10 @@ export default async function ProfilePage() {
 
             <div className="mt-6 flex flex-wrap gap-2">
               <Link
-                href="/markets"
+                href="/trials"
                 className="inline-flex items-center rounded-sm border border-[#d9cdbf] bg-white px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
               >
-                Open markets
+                Browse trials
               </Link>
               <Link
                 href="/leaderboard"

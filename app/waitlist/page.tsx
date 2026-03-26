@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { WaitlistForm } from '@/components/WaitlistForm'
 import { BRAND_GRADIENT, FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
+import { buildPageMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: 'Waitlist',
   description: 'Join the Endpoint Arena waitlist for early access to new model benchmarking features.',
-}
+  path: '/waitlist',
+})
 
 const BENEFITS = [
   {

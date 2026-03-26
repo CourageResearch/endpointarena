@@ -1,11 +1,19 @@
+import type { Metadata } from 'next'
 import { db, fdaCalendarEvents, modelDecisionSnapshots } from '@/lib/db'
 import { eq, sql } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
+import { buildPageMetadata } from '@/lib/seo'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 3600
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Methodology',
+  description: 'Learn how Endpoint Arena benchmarks AI models on real-world Phase 2 clinical trial and FDA outcome markets.',
+  path: '/method',
+})
 
 async function getData() {
   const [fdaEventCount, snapshotCount] = await Promise.all([
@@ -166,6 +174,9 @@ export default async function MethodPage() {
             <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Method</span>
             <HeaderDots />
           </div>
+          <h1 className="max-w-3xl font-serif text-3xl leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl">
+            How Endpoint Arena benchmarks AI on Phase 2 trial outcomes.
+          </h1>
           <p className="text-base sm:text-lg text-[#8a8075] max-w-xl leading-relaxed">
             A fair test of AI prediction capabilities on real-world FDA decisions
           </p>
@@ -306,41 +317,70 @@ export default async function MethodPage() {
         <section className="mb-10 sm:mb-16">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Prediction Prompt</span>
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Model Decision Prompt</span>
               <HeaderDots />
             </div>
           </div>
           <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[#e8ddd0] bg-[#f3ebe0]/50">
-                <span className="text-sm text-[#8a8075]">All models receive the same prompt</span>
+                <span className="text-sm text-[#8a8075]">All models receive the same two-stage decision prompt</span>
               </div>
               <pre className="p-3 sm:p-6 text-sm text-[#8a8075] overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
-{`You are an expert pharmaceutical analyst specializing in FDA
-regulatory decisions. Analyze the following FDA decision and
-predict the outcome.
+{`You are an expert biotech trial analyst and prediction-market
+decision maker.
 
-## Drug Information
+First estimate the intrinsic probability that the live trial
+question resolves YES from the trial facts alone. Then compare
+that view to the current market price and choose the best
+allowed action under the provided portfolio constraints.
 
-**Drug Name:** {drugName}
-**Company:** {companyName}
-**Application Type:** {applicationType}
-**Therapeutic Area:** {therapeuticArea}
-**Event Description:** {eventDescription}
+Stage 1: Intrinsic forecast
+- Use only the trial fields.
+- Do not use market or portfolio fields when estimating intrinsic YES odds.
+- Produce:
+  - yesProbability: number from 0 to 1
+  - binaryCall: yes if yesProbability >= 0.5, otherwise no
+  - confidence: integer from 50 to 100
+  - reasoning: 120 to 220 words
 
-## Your Task
+Stage 2: Market action
+- After forming the intrinsic forecast, compare it to the market price.
+- Use market and portfolio fields only in this stage.
+- Choose exactly one action from allowedActions.
+- Use HOLD when the pricing gap is small, uncertainty is high,
+  or constraints make the trade unattractive.
+- amountUsd must not exceed the relevant buy/sell cap.
+- Size the action using only this market's price and the provided portfolio caps.
+- action.explanation must be plain language and <= 220 chars.
 
-1. Analyze this FDA decision based on:
-   - Historical FDA approval rates (NDA ~85%, BLA ~90%, sNDA/sBLA ~95%)
-   - The therapeutic area and unmet medical need
-   - Priority Review vs Standard Review (if known)
-   - The company's regulatory track record
-   - Competitive landscape and existing treatments
-
-2. Make a prediction:
-   - **Prediction:** Either "approved" or "rejected"
-   - **Confidence:** A percentage between 50-100%
-   - **Reasoning:** 150-300 words supporting your prediction`}
+Input JSON includes:
+{
+  "trial": {
+    "shortTitle": "...",
+    "sponsorName": "...",
+    "indication": "...",
+    "intervention": "...",
+    "primaryEndpoint": "...",
+    "questionPrompt": "Will the results be positive?"
+  },
+  "market": {
+    "yesPrice": 0.43,
+    "noPrice": 0.57
+  },
+  "portfolio": {
+    "cashAvailable": 100000,
+    "yesSharesHeld": 0,
+    "noSharesHeld": 0,
+    "maxBuyUsd": 1000,
+    "maxSellYesUsd": 0,
+    "maxSellNoUsd": 0
+  },
+  "constraints": {
+    "allowedActions": ["BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO", "HOLD"],
+    "explanationMaxChars": 220
+  }
+}`}
               </pre>
             </div>
           </div>
@@ -350,7 +390,7 @@ predict the outcome.
         <section className="mb-10 sm:mb-16">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Expected Response</span>
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Expected JSON Response</span>
               <HeaderDots />
             </div>
           </div>
@@ -358,25 +398,32 @@ predict the outcome.
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
 <span className="text-[#b5aa9e]">{'{'}</span>
-{`\n  `}<span className="text-[#7d8e6e]">"prediction"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"approved"</span><span className="text-[#b5aa9e]">,</span>{`\n  `}<span className="text-[#7d8e6e]">"confidence"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">75</span><span className="text-[#b5aa9e]">,</span>{`\n  `}<span className="text-[#7d8e6e]">"reasoning"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"..."</span>{`\n`}<span className="text-[#b5aa9e]">{'}'}</span>
+{`\n  `}<span className="text-[#7d8e6e]">"forecast"</span><span className="text-[#b5aa9e]">:</span> <span className="text-[#b5aa9e]">{'{'}</span>
+{`\n    `}<span className="text-[#7d8e6e]">"yesProbability"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">0.61</span><span className="text-[#b5aa9e]">,</span>
+{`\n    `}<span className="text-[#7d8e6e]">"binaryCall"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"yes"</span><span className="text-[#b5aa9e]">,</span>
+{`\n    `}<span className="text-[#7d8e6e]">"confidence"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">68</span><span className="text-[#b5aa9e]">,</span>
+{`\n    `}<span className="text-[#7d8e6e]">"reasoning"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"..."</span>
+{`\n  `}<span className="text-[#b5aa9e]">{'}'}</span><span className="text-[#b5aa9e]">,</span>
+{`\n  `}<span className="text-[#7d8e6e]">"action"</span><span className="text-[#b5aa9e]">:</span> <span className="text-[#b5aa9e]">{'{'}</span>
+{`\n    `}<span className="text-[#7d8e6e]">"type"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"BUY_YES"</span><span className="text-[#b5aa9e]">,</span>
+{`\n    `}<span className="text-[#7d8e6e]">"amountUsd"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">450</span><span className="text-[#b5aa9e]">,</span>
+{`\n    `}<span className="text-[#7d8e6e]">"explanation"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"The model sees upside versus the current YES price."</span>
+{`\n  `}<span className="text-[#b5aa9e]">{'}'}</span>
+{`\n`}<span className="text-[#b5aa9e]">{'}'}</span>
               </pre>
               <div className="border-t border-[#e8ddd0] bg-[#f3ebe0]/40">
                 <div className="px-3 sm:px-6 py-2 text-xs text-[#8a8075]">Schema (shape + constraints)</div>
                 <pre className="px-3 sm:px-6 pb-4 sm:pb-6 text-xs sm:text-sm overflow-x-auto font-mono text-[#8a8075] leading-relaxed">{`{
   "type": "object",
-  "required": ["prediction", "confidence", "reasoning"],
+  "required": ["forecast", "action"],
   "properties": {
-    "prediction": {
-      "type": "string",
-      "enum": ["approved", "rejected"]
+    "forecast": {
+      "type": "object",
+      "required": ["yesProbability", "binaryCall", "confidence", "reasoning"]
     },
-    "confidence": {
-      "type": "integer",
-      "minimum": 50,
-      "maximum": 100
-    },
-    "reasoning": {
-      "type": "string"
+    "action": {
+      "type": "object",
+      "required": ["type", "amountUsd", "explanation"]
     }
   }
 }`}</pre>

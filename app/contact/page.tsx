@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { ContactForm } from '@/components/ContactForm'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
+import { buildPageMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: 'Contact',
   description: 'Contact Endpoint Arena support and partnerships.',
-}
+  path: '/contact',
+})
 
 export default function ContactPage() {
   return (

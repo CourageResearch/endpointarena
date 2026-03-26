@@ -1,7 +1,17 @@
-import { db, fdaCalendarEvents, marketAccounts, marketActions, marketDailySnapshots, marketPositions, marketPriceSnapshots, predictionMarkets } from '@/lib/db'
+import {
+  db,
+  fdaCalendarEvents,
+  marketAccounts,
+  marketActions,
+  marketDailySnapshots,
+  marketPositions,
+  marketPriceSnapshots,
+  predictionMarkets,
+  trialQuestions,
+} from '@/lib/db'
 import { MODEL_IDS, type ModelId } from '@/lib/constants'
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { DEFAULT_LMSR_B, HISTORICAL_PDUFA_APPROVAL_BASELINE, MARKET_STARTING_CASH, type MarketActionType, type MarketOutcome } from './constants'
+import { DEFAULT_BINARY_MARKET_BASELINE, DEFAULT_LMSR_B, MARKET_STARTING_CASH, type MarketActionType, type MarketOutcome } from './constants'
 import { ConfigurationError, ConflictError, NotFoundError } from '@/lib/errors'
 import { getMarketRuntimeConfig, type MarketRuntimeConfig } from './runtime-config'
 import { getModelActorIds } from '@/lib/market-actors'
@@ -44,7 +54,8 @@ type MarketDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0
 type PersistMarketActionInput = {
   runId?: string | null
   marketId: string
-  fdaEventId: string
+  fdaEventId?: string | null
+  trialQuestionId?: string | null
   actorId: string
   runDate: Date
   actionSource: MarketActionSource
@@ -90,7 +101,8 @@ async function persistMarketAction(
   const baseValues = {
     runId: input.actionSource === 'cycle' ? input.runId ?? null : null,
     marketId: input.marketId,
-    fdaEventId: input.fdaEventId,
+    fdaEventId: input.fdaEventId ?? null,
+    trialQuestionId: input.trialQuestionId ?? null,
     actorId: input.actorId,
     runDate,
     actionSource: input.actionSource,
@@ -373,8 +385,7 @@ function solveConstrainedSaleForProceeds(
 }
 
 async function calculateHistoricalApprovalRate(): Promise<number> {
-  // Use an external historical benchmark instead of local DB composition.
-  return clampProbability(HISTORICAL_PDUFA_APPROVAL_BASELINE)
+  return clampProbability(DEFAULT_BINARY_MARKET_BASELINE)
 }
 
 export async function ensureMarketAccounts(): Promise<void> {
@@ -471,6 +482,79 @@ export async function openMarketForEvent(fdaEventId: string) {
   return market
 }
 
+export async function openMarketForTrialQuestion(trialQuestionId: string) {
+  await ensureMarketAccounts()
+
+  const question = await db.query.trialQuestions.findFirst({
+    where: eq(trialQuestions.id, trialQuestionId),
+    with: {
+      trial: true,
+    },
+  })
+
+  if (!question) {
+    throw new NotFoundError('Trial question not found')
+  }
+
+  if (question.status !== 'live' || !question.isBettable) {
+    throw new ConflictError('Cannot open a market for a non-live question')
+  }
+
+  if (question.outcome !== 'Pending') {
+    throw new ConflictError('Cannot open a market for a question that already has a final outcome')
+  }
+
+  const existing = await db.query.predictionMarkets.findFirst({
+    where: eq(predictionMarkets.trialQuestionId, trialQuestionId),
+  })
+
+  if (existing) {
+    if (existing.status === 'OPEN') {
+      await ensureMarketPositions(existing.id)
+      return existing
+    }
+    throw new ConflictError('Market already exists and is resolved')
+  }
+
+  const [openingProbability, runtimeConfig] = await Promise.all([
+    calculateHistoricalApprovalRate(),
+    getMarketRuntimeConfig(),
+  ])
+
+  const initialLiquidityB = Math.max(1, runtimeConfig.openingLmsrB)
+  const initialState = createInitialMarketState(openingProbability, initialLiquidityB)
+
+  const [market] = await db.insert(predictionMarkets)
+    .values({
+      fdaEventId: null,
+      trialQuestionId,
+      status: 'OPEN',
+      openingProbability,
+      b: initialLiquidityB,
+      qYes: initialState.qYes,
+      qNo: initialState.qNo,
+      priceYes: lmsrPriceYes(initialState),
+      openedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning()
+
+  await ensureMarketPositions(market.id)
+  const runDate = normalizeRunDate(new Date())
+
+  await db.insert(marketPriceSnapshots)
+    .values({
+      marketId: market.id,
+      snapshotDate: runDate,
+      priceYes: market.priceYes,
+      qYes: market.qYes,
+      qNo: market.qNo,
+    })
+    .onConflictDoNothing({ target: [marketPriceSnapshots.marketId, marketPriceSnapshots.snapshotDate] })
+
+  return market
+}
+
 async function getOpenMarkets() {
   return db.query.predictionMarkets.findMany({
     where: eq(predictionMarkets.status, 'OPEN'),
@@ -481,6 +565,7 @@ export async function runHoldAction({
   runId,
   marketId,
   fdaEventId,
+  trialQuestionId,
   actorId,
   runDate,
   explanation,
@@ -489,7 +574,8 @@ export async function runHoldAction({
 }: {
   runId?: string
   marketId: string
-  fdaEventId: string
+  fdaEventId?: string | null
+  trialQuestionId?: string | null
   actorId: string
   runDate: Date
   explanation: string
@@ -500,6 +586,7 @@ export async function runHoldAction({
     runId,
     marketId,
     fdaEventId,
+    trialQuestionId,
     actorId,
     runDate,
     actionSource: resolveActionSource(runId, actionSource),
@@ -517,6 +604,7 @@ export async function recordMarketActionError({
   runId,
   marketId,
   fdaEventId,
+  trialQuestionId,
   actorId,
   runDate,
   priceYes,
@@ -527,7 +615,8 @@ export async function recordMarketActionError({
 }: {
   runId?: string
   marketId: string
-  fdaEventId: string
+  fdaEventId?: string | null
+  trialQuestionId?: string | null
   actorId: string
   runDate: Date
   priceYes: number
@@ -540,6 +629,7 @@ export async function recordMarketActionError({
     runId,
     marketId,
     fdaEventId,
+    trialQuestionId,
     actorId,
     runDate,
     actionSource: resolveActionSource(runId, actionSource),
@@ -664,6 +754,7 @@ export async function runBuyAction({
             runId,
             marketId: freshMarket.id,
             fdaEventId: freshMarket.fdaEventId,
+            trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
             actionSource: resolvedActionSource,
@@ -720,6 +811,7 @@ export async function runBuyAction({
       runId,
       marketId: freshMarket.id,
       fdaEventId: freshMarket.fdaEventId,
+      trialQuestionId: freshMarket.trialQuestionId,
       actorId,
       runDate,
       actionSource: resolvedActionSource,
@@ -835,6 +927,7 @@ export async function runSellAction({
             runId,
             marketId: freshMarket.id,
             fdaEventId: freshMarket.fdaEventId,
+            trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
             actionSource: resolvedActionSource,
@@ -866,6 +959,7 @@ export async function runSellAction({
             runId,
             marketId: freshMarket.id,
             fdaEventId: freshMarket.fdaEventId,
+            trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
             actionSource: resolvedActionSource,
@@ -899,6 +993,7 @@ export async function runSellAction({
             runId,
             marketId: freshMarket.id,
             fdaEventId: freshMarket.fdaEventId,
+            trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
             actionSource: resolvedActionSource,
@@ -949,6 +1044,7 @@ export async function runSellAction({
       runId,
       marketId: freshMarket.id,
       fdaEventId: freshMarket.fdaEventId,
+      trialQuestionId: freshMarket.trialQuestionId,
       actorId,
       runDate,
       actionSource: resolvedActionSource,
@@ -971,15 +1067,15 @@ export async function runSellAction({
   })
 }
 
-export async function upsertDailySnapshots(runDate: Date): Promise<void> {
+export async function upsertDailySnapshots(runDate: Date, dbClient: MarketDbClient = db): Promise<void> {
   const normalizedRunDate = normalizeRunDate(runDate)
 
-  const openMarkets = await db.query.predictionMarkets.findMany({
+  const openMarkets = await dbClient.query.predictionMarkets.findMany({
     where: eq(predictionMarkets.status, 'OPEN'),
   })
 
   if (openMarkets.length > 0) {
-    await db.insert(marketPriceSnapshots)
+    await dbClient.insert(marketPriceSnapshots)
       .values(openMarkets.map((market) => ({
         marketId: market.id,
         snapshotDate: normalizedRunDate,
@@ -1000,7 +1096,7 @@ export async function upsertDailySnapshots(runDate: Date): Promise<void> {
   const marketIds = openMarkets.map((market) => market.id)
 
   const allPositions = marketIds.length > 0
-    ? await db.query.marketPositions.findMany({
+    ? await dbClient.query.marketPositions.findMany({
         where: inArray(marketPositions.marketId, marketIds),
       })
     : []
@@ -1014,7 +1110,7 @@ export async function upsertDailySnapshots(runDate: Date): Promise<void> {
     positionsByActor.set(position.actorId, current)
   }
 
-  const accounts = await db.query.marketAccounts.findMany()
+  const accounts = await dbClient.query.marketAccounts.findMany()
 
   for (const account of accounts) {
     const positions = positionsByActor.get(account.actorId) || []
@@ -1029,7 +1125,7 @@ export async function upsertDailySnapshots(runDate: Date): Promise<void> {
 
     const totalEquity = account.cashBalance + positionsValue
 
-    await db.insert(marketDailySnapshots)
+    await dbClient.insert(marketDailySnapshots)
       .values({
         snapshotDate: normalizedRunDate,
         actorId: account.actorId,
@@ -1048,26 +1144,28 @@ export async function upsertDailySnapshots(runDate: Date): Promise<void> {
   }
 }
 
-export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketOutcome): Promise<void> {
-  const market = await db.query.predictionMarkets.findFirst({
-    where: eq(predictionMarkets.fdaEventId, fdaEventId),
-  })
+function isYesResolvingOutcome(outcome: MarketOutcome): boolean {
+  return outcome === 'Approved' || outcome === 'YES'
+}
+
+async function resolveMarketByWhere(where: any, outcome: MarketOutcome, dbClient: MarketDbClient = db): Promise<void> {
+  const market = await dbClient.query.predictionMarkets.findFirst({ where })
 
   if (!market) return
 
-  const positions = await db.query.marketPositions.findMany({
+  const positions = await dbClient.query.marketPositions.findMany({
     where: eq(marketPositions.marketId, market.id),
   })
 
   // If already resolved to a different outcome, rebalance payouts instead of throwing.
   if (market.status === 'RESOLVED' && market.resolvedOutcome && market.resolvedOutcome !== outcome) {
     for (const position of positions) {
-      const previousPayout = market.resolvedOutcome === 'Approved' ? position.yesShares : position.noShares
-      const nextPayout = outcome === 'Approved' ? position.yesShares : position.noShares
+      const previousPayout = isYesResolvingOutcome(market.resolvedOutcome as MarketOutcome) ? position.yesShares : position.noShares
+      const nextPayout = isYesResolvingOutcome(outcome) ? position.yesShares : position.noShares
       const delta = nextPayout - previousPayout
       if (delta === 0) continue
 
-      await db.update(marketAccounts)
+      await dbClient.update(marketAccounts)
         .set({
           cashBalance: sql`${marketAccounts.cashBalance} + ${delta}`,
           updatedAt: new Date(),
@@ -1075,7 +1173,7 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
         .where(eq(marketAccounts.actorId, position.actorId))
     }
 
-    await db.update(predictionMarkets)
+    await dbClient.update(predictionMarkets)
       .set({
         resolvedOutcome: outcome,
         resolvedAt: new Date(),
@@ -1083,7 +1181,7 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
       })
       .where(eq(predictionMarkets.id, market.id))
 
-    await upsertDailySnapshots(new Date())
+    await upsertDailySnapshots(new Date(), dbClient)
     return
   }
 
@@ -1092,10 +1190,10 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
   }
 
   for (const position of positions) {
-    const payout = outcome === 'Approved' ? position.yesShares : position.noShares
+    const payout = isYesResolvingOutcome(outcome) ? position.yesShares : position.noShares
     if (payout <= 0) continue
 
-    await db.update(marketAccounts)
+    await dbClient.update(marketAccounts)
       .set({
         cashBalance: sql`${marketAccounts.cashBalance} + ${payout}`,
         updatedAt: new Date(),
@@ -1103,7 +1201,7 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
       .where(eq(marketAccounts.actorId, position.actorId))
   }
 
-  await db.update(predictionMarkets)
+  await dbClient.update(predictionMarkets)
     .set({
       status: 'RESOLVED',
       resolvedOutcome: outcome,
@@ -1112,11 +1210,30 @@ export async function resolveMarketForEvent(fdaEventId: string, outcome: MarketO
     })
     .where(eq(predictionMarkets.id, market.id))
 
-  await upsertDailySnapshots(new Date())
+  await upsertDailySnapshots(new Date(), dbClient)
 }
 
-export async function reopenMarketForEvent(fdaEventId: string): Promise<void> {
-  const market = await db.query.predictionMarkets.findFirst({
+export async function resolveMarketForEvent(
+  fdaEventId: string,
+  outcome: MarketOutcome,
+  dbClient: MarketDbClient = db,
+): Promise<void> {
+  await resolveMarketByWhere(eq(predictionMarkets.fdaEventId, fdaEventId), outcome, dbClient)
+}
+
+export async function resolveMarketForTrialQuestion(
+  trialQuestionId: string,
+  outcome: Extract<MarketOutcome, 'YES' | 'NO'>,
+  dbClient: MarketDbClient = db,
+): Promise<void> {
+  await resolveMarketByWhere(eq(predictionMarkets.trialQuestionId, trialQuestionId), outcome, dbClient)
+}
+
+export async function reopenMarketForEvent(
+  fdaEventId: string,
+  dbClient: MarketDbClient = db,
+): Promise<void> {
+  const market = await dbClient.query.predictionMarkets.findFirst({
     where: eq(predictionMarkets.fdaEventId, fdaEventId),
   })
 
@@ -1124,16 +1241,16 @@ export async function reopenMarketForEvent(fdaEventId: string): Promise<void> {
     return
   }
 
-  const positions = await db.query.marketPositions.findMany({
+  const positions = await dbClient.query.marketPositions.findMany({
     where: eq(marketPositions.marketId, market.id),
   })
 
   // Undo prior settlement payout when outcome is moved back to Pending.
   for (const position of positions) {
-    const previousPayout = market.resolvedOutcome === 'Approved' ? position.yesShares : position.noShares
+    const previousPayout = isYesResolvingOutcome(market.resolvedOutcome as MarketOutcome) ? position.yesShares : position.noShares
     if (previousPayout <= 0) continue
 
-    await db.update(marketAccounts)
+    await dbClient.update(marketAccounts)
       .set({
         cashBalance: sql`${marketAccounts.cashBalance} - ${previousPayout}`,
         updatedAt: new Date(),
@@ -1141,7 +1258,7 @@ export async function reopenMarketForEvent(fdaEventId: string): Promise<void> {
       .where(eq(marketAccounts.actorId, position.actorId))
   }
 
-  await db.update(predictionMarkets)
+  await dbClient.update(predictionMarkets)
     .set({
       status: 'OPEN',
       resolvedOutcome: null,
@@ -1150,5 +1267,45 @@ export async function reopenMarketForEvent(fdaEventId: string): Promise<void> {
     })
     .where(eq(predictionMarkets.id, market.id))
 
-  await upsertDailySnapshots(new Date())
+  await upsertDailySnapshots(new Date(), dbClient)
+}
+
+export async function reopenMarketForTrialQuestion(
+  trialQuestionId: string,
+  dbClient: MarketDbClient = db,
+): Promise<void> {
+  const market = await dbClient.query.predictionMarkets.findFirst({
+    where: eq(predictionMarkets.trialQuestionId, trialQuestionId),
+  })
+
+  if (!market || market.status !== 'RESOLVED' || !market.resolvedOutcome) {
+    return
+  }
+
+  const positions = await dbClient.query.marketPositions.findMany({
+    where: eq(marketPositions.marketId, market.id),
+  })
+
+  for (const position of positions) {
+    const previousPayout = isYesResolvingOutcome(market.resolvedOutcome as MarketOutcome) ? position.yesShares : position.noShares
+    if (previousPayout <= 0) continue
+
+    await dbClient.update(marketAccounts)
+      .set({
+        cashBalance: sql`${marketAccounts.cashBalance} - ${previousPayout}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(marketAccounts.actorId, position.actorId))
+  }
+
+  await dbClient.update(predictionMarkets)
+    .set({
+      status: 'OPEN',
+      resolvedOutcome: null,
+      resolvedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(predictionMarkets.id, market.id))
+
+  await upsertDailySnapshots(new Date(), dbClient)
 }

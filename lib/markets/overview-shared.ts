@@ -1,6 +1,7 @@
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import { formatEventDateLabel, isSoftDecisionDate } from '@/lib/event-dates'
+import { DEFAULT_PHASE2_RESULTS_QUESTION, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import type { DecisionDateKind, ModelDecisionSnapshot } from '@/lib/types'
 
 export interface AccountRow {
@@ -43,11 +44,62 @@ export interface OpenMarketEventRow {
   outcome: string
   nctId?: string | null
   source?: string | null
+  shortTitle?: string
+  sponsorName?: string
+  sponsorTicker?: string | null
+  exactPhase?: string
+  indication?: string
+  intervention?: string
+  primaryEndpoint?: string
+  currentStatus?: string
+  briefSummary?: string
+  studyStartDate?: string | null
+  estStudyCompletionDate?: string | null
+  estResultsPostingDate?: string | null
+  estEnrollment?: number | null
+  keyLocations?: string | null
+  standardBettingMarkets?: string | null
+  questionPrompt?: string
+  questionSlug?: string
+  questionStatus?: 'live' | 'coming_soon'
+  allQuestions?: Array<{
+    id: string
+    slug: string
+    prompt: string
+    status: 'live' | 'coming_soon'
+    isBettable: boolean
+    outcome: string
+  }>
+}
+
+export interface PublicOutcomeEvidenceRow {
+  sourceType: 'clinicaltrials' | 'sponsor' | 'stored_source' | 'web_search'
+  title: string
+  url: string
+  publishedAt: string | null
+  excerpt: string
+  domain: string
+  displayOrder: number
+}
+
+export interface PublicAcceptedOutcomeReviewRow {
+  summary: string
+  confidence: number
+  proposedOutcomeDate: string | null
+  reviewedAt: string | null
+  evidence: PublicOutcomeEvidenceRow[]
+}
+
+export interface MarketResolutionRow {
+  outcome: 'YES' | 'NO' | null
+  resolvedAt: string | null
+  acceptedReview: PublicAcceptedOutcomeReviewRow | null
 }
 
 export interface OpenMarketRow {
   marketId: string
   fdaEventId: string
+  trialQuestionId?: string
   status: string
   priceYes: number
   priceNo: number
@@ -57,6 +109,7 @@ export interface OpenMarketRow {
   b?: number
   openedAt?: string
   event: OpenMarketEventRow | null
+  resolution?: MarketResolutionRow | null
   modelStates: MarketModelState[]
   priceHistory: Array<{
     snapshotDate: string
@@ -120,12 +173,14 @@ export interface OverviewResponse {
   generatedAt?: string
   accounts: AccountRow[]
   openMarkets: OpenMarketRow[]
+  resolvedMarkets: OpenMarketRow[]
   equityHistory: EquityHistoryRow[]
   recentActions: RecentMarketActionRow[]
   recentRuns: OverviewRunRow[]
 }
 
 const REASON_PREVIEW_MAX_CHARS = 220
+const EMPTY_HISTORY_SNAPSHOT_DATE = '1970-01-01T00:00:00.000Z'
 
 type MarketStance = 'YES' | 'NO' | 'HOLD' | 'ERROR'
 
@@ -210,21 +265,23 @@ export function daysUntilUtc(dateLike: string | null | undefined): number | null
 }
 
 export function getMarketQuestion(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return 'Will this FDA event be approved by the decision date?'
-  const date = formatEventDateLabel(
-    market.event.decisionDate,
-    market.event.decisionDateKind,
-    { timeZone: 'UTC', month: 'short', day: 'numeric' },
-  )
-  return isSoftDecisionDate(market.event.decisionDateKind)
-    ? `Will ${market.event.drugName} be approved by the expected decision date (${date})?`
-    : `Will ${market.event.drugName} be approved by ${date}?`
+  if (!market.event) return DEFAULT_PHASE2_RESULTS_QUESTION
+  return normalizeTrialQuestionPrompt(market.event.questionPrompt)
 }
 
 export function getMarketSubtitle(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return 'FDA event market'
-  const ticker = market.event.symbols?.trim() ? ` (${market.event.symbols})` : ''
-  return `${market.event.companyName}${ticker}`
+  if (!market.event) return 'Phase 2 trial market'
+  const sponsorName = market.event.sponsorName?.trim() || market.event.companyName
+  const ticker = (market.event.sponsorTicker ?? market.event.symbols)?.trim()
+  return ticker ? `${sponsorName} (${ticker})` : sponsorName
+}
+
+export function normalizeBinaryCall(value: string | null | undefined): 'yes' | 'no' | 'approved' | 'rejected' | null {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'yes' || normalized === 'no' || normalized === 'approved' || normalized === 'rejected') {
+    return normalized
+  }
+  return null
 }
 
 function toReasonPreview(reason: string): string {
@@ -249,7 +306,7 @@ export function getPriceMoveFromHistory(
   delta: number
   absDelta: number
 } {
-  const series = history.length > 0 ? history : [{ snapshotDate: new Date().toISOString(), priceYes: currentPrice }]
+  const series = history.length > 0 ? history : [{ snapshotDate: EMPTY_HISTORY_SNAPSHOT_DATE, priceYes: currentPrice }]
   const latest = series[series.length - 1]?.priceYes ?? currentPrice
   const anchorIndex = Math.max(0, series.length - 8)
   const anchor = series[anchorIndex]?.priceYes ?? series[0]?.priceYes ?? currentPrice

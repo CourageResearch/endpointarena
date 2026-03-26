@@ -33,6 +33,7 @@ interface OpenAICompatibleResponseFormat {
 }
 
 const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
+const OPENAI_GPT_MODEL = 'gpt-5.4'
 const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
 const GLM_MODEL = 'zai-org/GLM-5'
 const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
@@ -192,7 +193,7 @@ async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDeci
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const response = await client.responses.create({
-    model: 'gpt-5.2',
+    model: OPENAI_GPT_MODEL,
     input: prompt,
     max_output_tokens: 8000,
     tools: [{ type: 'web_search' }],
@@ -201,7 +202,7 @@ async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDeci
 
   const content = extractResponseText(response)
   if (!content) {
-    throw new Error('No content in GPT-5.2 response')
+    throw new Error('No content in GPT-5.4 response')
   }
 
   return buildOutput(content, input, parseUsageFromOpenAIResponse(response, 1))

@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray, or } from 'drizzle-orm'
 import { estimateCostFromTokenUsage, estimateTextGenerationCost, getCostEstimationProfileForModel, type AICostSource } from '@/lib/ai-costs'
 import { type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
@@ -8,11 +8,13 @@ import {
   marketAccounts,
   marketPositions,
   modelDecisionSnapshots,
+  phase2Trials,
   predictionMarkets,
 } from '@/lib/db'
 import { type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { calculateExecutableTradeCaps, normalizeRunDate } from '@/lib/markets/engine'
 import { type Prediction, type PredictionHistoryEntry } from '@/lib/types'
+import { isMockMarketSnapshotLike } from '@/lib/mock-market-data'
 import { MODEL_DECISION_GENERATORS, type ModelDecisionGeneration } from '@/lib/predictions/model-decision-generators'
 import { buildModelDecisionPrompt, type ModelDecisionInput, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
 
@@ -24,13 +26,20 @@ type UnifiedPredictionRecord = Prediction
 type UnifiedPredictionHistoryMap = Map<string, Map<string, PredictionHistoryEntry[]>>
 
 function computeCorrectness(prediction: string, eventOutcome: string): boolean | null {
-  if (eventOutcome !== 'Approved' && eventOutcome !== 'Rejected') {
+  if (
+    eventOutcome !== 'Approved' &&
+    eventOutcome !== 'Rejected' &&
+    eventOutcome !== 'YES' &&
+    eventOutcome !== 'NO'
+  ) {
     return null
   }
 
   return (
     (prediction === 'approved' && eventOutcome === 'Approved') ||
-    (prediction === 'rejected' && eventOutcome === 'Rejected')
+    (prediction === 'rejected' && eventOutcome === 'Rejected') ||
+    (prediction === 'yes' && eventOutcome === 'YES') ||
+    (prediction === 'no' && eventOutcome === 'NO')
   )
 }
 
@@ -51,6 +60,7 @@ function mapSnapshotPrediction(
     source: 'snapshot',
     runSource: row.runSource as 'manual' | 'cycle',
     approvalProbability: row.approvalProbability,
+    yesProbability: row.yesProbability ?? row.approvalProbability,
     action: {
       type: row.proposedActionType,
       amountUsd: row.proposedAmountUsd,
@@ -84,6 +94,7 @@ function buildLatestPrediction(history: PredictionHistoryEntry[]): Prediction | 
     source: latest.source,
     runSource: latest.runSource,
     approvalProbability: latest.approvalProbability,
+    yesProbability: latest.yesProbability ?? latest.approvalProbability,
     action: latest.action,
     linkedMarketActionId: latest.linkedMarketActionId,
     history: sortedHistory,
@@ -100,7 +111,10 @@ export async function getUnifiedPredictionHistoriesByEventIds(
 
   const [snapshotRows] = await Promise.all([
     db.query.modelDecisionSnapshots.findMany({
-      where: inArray(modelDecisionSnapshots.fdaEventId, eventIds),
+      where: or(
+        inArray(modelDecisionSnapshots.fdaEventId, eventIds),
+        inArray(modelDecisionSnapshots.trialQuestionId, eventIds),
+      ),
       orderBy: [desc(modelDecisionSnapshots.createdAt)],
       with: {
         actor: true,
@@ -119,11 +133,14 @@ export async function getUnifiedPredictionHistoriesByEventIds(
   }
 
   for (const row of snapshotRows) {
+    if (isMockMarketSnapshotLike(row)) continue
     const predictorId = row.actor.modelKey ?? row.actorId
+    const ownerId = row.trialQuestionId ?? row.fdaEventId
+    if (!ownerId) continue
     pushHistory(
-      row.fdaEventId,
+      ownerId,
       predictorId,
-      mapSnapshotPrediction(row, predictorId, eventOutcomeById.get(row.fdaEventId) || 'Pending'),
+      mapSnapshotPrediction(row, predictorId, eventOutcomeById.get(ownerId) || 'Pending'),
     )
   }
 
@@ -184,12 +201,13 @@ export async function getMarketDecisionHistoryByMarketIds(
 
   const historyByMarketId = new Map<string, PredictionHistoryEntry[]>()
   for (const row of snapshotRows) {
+    if (isMockMarketSnapshotLike(row)) continue
     const current = historyByMarketId.get(row.marketId) || []
     current.push(
       mapSnapshotPrediction(
         row,
         row.actor.modelKey ?? row.actorId,
-        eventOutcomeById.get(row.fdaEventId) || 'Pending',
+        eventOutcomeById.get(row.trialQuestionId ?? row.fdaEventId ?? '') || 'Pending',
       ),
     )
     historyByMarketId.set(row.marketId, current)
@@ -313,18 +331,13 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   modelId: ModelId
   actorId: string
   runDate: Date
-  event: typeof fdaCalendarEvents.$inferSelect
-  nctId?: string | null
+  trial: typeof phase2Trials.$inferSelect | typeof fdaCalendarEvents.$inferSelect
+  trialQuestionId?: string | null
+  questionPrompt: string
   market: typeof predictionMarkets.$inferSelect
   account: typeof marketAccounts.$inferSelect
   position: typeof marketPositions.$inferSelect
   runtimeConfig: MarketRuntimeConfig
-  otherOpenMarkets: Array<{
-    drugName: string
-    companyName: string
-    decisionDate: string
-    yesPrice: number
-  }>
 }): Promise<{
   snapshot: typeof modelDecisionSnapshots.$inferSelect
   decision: ModelDecisionResult
@@ -353,27 +366,34 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
 
   const input: ModelDecisionInput = {
     meta: {
-      eventId: args.event.id,
+      eventId: args.trial.id,
+      trialQuestionId: args.trialQuestionId ?? null,
       marketId: args.market.id,
       modelId: args.modelId,
       asOf: args.runDate.toISOString(),
       runDateIso: args.runDate.toISOString(),
     },
-    event: {
-      drugName: args.event.drugName,
-      companyName: args.event.companyName,
-      symbols: args.event.symbols || null,
-      applicationType: args.event.applicationType,
-      decisionDate: args.event.decisionDate.toISOString(),
-      daysToDecision: getDaysUntilUtc(args.event.decisionDate, normalizedRunDate),
-      eventDescription: args.event.eventDescription,
-      drugStatus: args.event.drugStatus,
-      nctId: args.nctId ?? null,
+    trial: {
+      shortTitle: 'shortTitle' in args.trial ? args.trial.shortTitle : args.trial.drugName,
+      sponsorName: 'sponsorName' in args.trial ? args.trial.sponsorName : args.trial.companyName,
+      sponsorTicker: 'sponsorTicker' in args.trial ? args.trial.sponsorTicker ?? null : (args.trial.symbols || null),
+      exactPhase: 'exactPhase' in args.trial ? args.trial.exactPhase : args.trial.applicationType,
+      estPrimaryCompletionDate: ('estPrimaryCompletionDate' in args.trial ? args.trial.estPrimaryCompletionDate : args.trial.decisionDate).toISOString(),
+      daysToPrimaryCompletion: getDaysUntilUtc(
+        ('estPrimaryCompletionDate' in args.trial ? args.trial.estPrimaryCompletionDate : args.trial.decisionDate),
+        normalizedRunDate,
+      ),
+      indication: 'indication' in args.trial ? args.trial.indication : (args.trial.therapeuticArea ?? 'Unknown'),
+      intervention: 'intervention' in args.trial ? args.trial.intervention : (args.trial.drugName ?? 'Unknown'),
+      primaryEndpoint: 'primaryEndpoint' in args.trial ? args.trial.primaryEndpoint : args.questionPrompt,
+      currentStatus: 'currentStatus' in args.trial ? args.trial.currentStatus : (args.trial.drugStatus ?? 'Unknown'),
+      briefSummary: 'briefSummary' in args.trial ? args.trial.briefSummary : args.trial.eventDescription,
+      nctNumber: 'nctNumber' in args.trial ? args.trial.nctNumber : null,
+      questionPrompt: args.questionPrompt,
     },
     market: {
       yesPrice: args.market.priceYes,
       noPrice: 1 - args.market.priceYes,
-      otherOpenMarkets: args.otherOpenMarkets,
     },
     portfolio: {
       cashAvailable: args.account.cashBalance,
@@ -404,10 +424,12 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
     runId: args.runSource === 'cycle' ? args.runId ?? null : null,
     runDate: normalizedRunDate,
     marketId: args.market.id,
-    fdaEventId: args.event.id,
+    fdaEventId: 'drugName' in args.trial ? args.trial.id : null,
+    trialQuestionId: args.trialQuestionId ?? null,
     actorId: args.actorId,
     runSource: args.runSource,
     approvalProbability: generated.result.forecast.approvalProbability,
+    yesProbability: generated.result.forecast.yesProbability ?? generated.result.forecast.approvalProbability,
     binaryCall: generated.result.forecast.binaryCall,
     confidence: generated.result.forecast.confidence,
     reasoning: generated.result.forecast.reasoning,
@@ -446,18 +468,19 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
       confidence: generated.result.forecast.confidence,
       reasoning: generated.result.forecast.reasoning,
       durationMs,
-      correct: computeCorrectness(generated.result.forecast.binaryCall, args.event.outcome),
+      correct: computeCorrectness(generated.result.forecast.binaryCall, ('outcome' in args.trial ? args.trial.outcome : 'Pending') || 'Pending'),
       createdAt: snapshot.createdAt?.toISOString(),
       source: 'snapshot',
       runSource: args.runSource,
       approvalProbability: generated.result.forecast.approvalProbability,
+      yesProbability: generated.result.forecast.yesProbability ?? generated.result.forecast.approvalProbability,
       action: {
         type: generated.result.action.type,
         amountUsd: generated.result.action.amountUsd,
         explanation: generated.result.action.explanation,
       },
       linkedMarketActionId: null,
-      history: [mapSnapshotPrediction(snapshot, args.modelId, args.event.outcome)],
+      history: [mapSnapshotPrediction(snapshot, args.modelId, ('outcome' in args.trial ? args.trial.outcome : 'Pending') || 'Pending')],
     },
   }
 }

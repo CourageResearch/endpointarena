@@ -5,7 +5,8 @@ export interface PredictionAction {
 }
 
 export interface DecisionForecast {
-  approvalProbability: number
+  approvalProbability?: number
+  yesProbability?: number
   binaryCall: string
   confidence: number
   reasoning: string
@@ -14,6 +15,7 @@ export interface DecisionForecast {
 export interface ModelDecisionSnapshot {
   id: string
   eventId: string
+  trialQuestionId?: string | null
   marketId: string | null
   modelId: string
   source: 'snapshot' | 'legacy'
@@ -36,6 +38,7 @@ export interface PredictionHistoryEntry {
   source?: 'snapshot' | 'legacy'
   runSource?: 'manual' | 'cycle' | 'legacy'
   approvalProbability?: number
+  yesProbability?: number
   action?: PredictionAction | null
   linkedMarketActionId?: string | null
 }
@@ -51,6 +54,7 @@ export interface Prediction {
   source?: 'snapshot' | 'legacy'
   runSource?: 'manual' | 'cycle' | 'legacy'
   approvalProbability?: number
+  yesProbability?: number
   action?: PredictionAction | null
   linkedMarketActionId?: string | null
   history?: PredictionHistoryEntry[]
@@ -80,4 +84,39 @@ export interface FDAEvent {
   otherApprovals?: string | null
   metaAnalysis?: string | null
   predictions: Prediction[]
+}
+
+export type TrialQuestionStatus = 'live' | 'coming_soon'
+
+export interface TrialQuestionView {
+  id: string
+  slug: string
+  prompt: string
+  status: TrialQuestionStatus
+  isBettable: boolean
+  outcome: string
+  outcomeDate?: string | null
+  sortOrder: number
+}
+
+export interface Phase2TrialView {
+  id: string
+  nctNumber: string
+  shortTitle: string
+  sponsorName: string
+  sponsorTicker: string | null
+  indication: string
+  exactPhase: string
+  intervention: string
+  primaryEndpoint: string
+  studyStartDate: string | null
+  estPrimaryCompletionDate: string
+  estStudyCompletionDate: string | null
+  estResultsPostingDate: string | null
+  currentStatus: string
+  estEnrollment: number | null
+  keyLocations: string | null
+  briefSummary: string
+  standardBettingMarkets: string | null
+  questions: TrialQuestionView[]
 }

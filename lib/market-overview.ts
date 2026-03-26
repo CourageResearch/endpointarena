@@ -1,14 +1,24 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
-import { db, fdaCalendarEvents, marketActions, marketDailySnapshots, marketPriceSnapshots, marketRuns } from '@/lib/db'
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import {
+  db,
+  marketActions,
+  marketDailySnapshots,
+  marketPriceSnapshots,
+  marketRuns,
+  trialOutcomeCandidates,
+  trialQuestions,
+} from '@/lib/db'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 import { getMarketDecisionHistoryByMarketIds } from '@/lib/model-decision-snapshots'
 import type { ModelDecisionSnapshot, PredictionHistoryEntry } from '@/lib/types'
+import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
   buildLatestCycleActionByMarketActor,
   buildMarketActorKey,
   loadOpenMarketActorState,
   toModelId,
 } from '@/lib/market-read-model'
+import { isMockMarketActionLike } from '@/lib/mock-market-data'
 
 function toRunStatus(value: string): OverviewResponse['recentRuns'][number]['status'] {
   if (value === 'running' || value === 'completed' || value === 'failed') {
@@ -21,10 +31,11 @@ function toIsoString(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
 }
 
-function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, eventId: string): ModelDecisionSnapshot {
+function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, ownerId: string): ModelDecisionSnapshot {
   return {
     id: entry.id,
-    eventId,
+    eventId: ownerId,
+    trialQuestionId: ownerId,
     marketId,
     modelId: entry.predictorId,
     source: entry.source ?? 'snapshot',
@@ -32,7 +43,8 @@ function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, eve
     createdAt: entry.createdAt,
     linkedMarketActionId: entry.linkedMarketActionId ?? null,
     forecast: {
-      approvalProbability: entry.approvalProbability ?? (entry.prediction === 'approved' ? 1 : 0),
+      approvalProbability: entry.approvalProbability ?? entry.yesProbability ?? (entry.prediction === 'yes' ? 1 : 0),
+      yesProbability: entry.yesProbability ?? entry.approvalProbability ?? (entry.prediction === 'yes' ? 1 : 0),
       binaryCall: entry.prediction,
       confidence: entry.confidence,
       reasoning: entry.reasoning,
@@ -41,9 +53,15 @@ function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, eve
   }
 }
 
-export async function getMarketOverviewData(): Promise<OverviewResponse> {
+export async function getMarketOverviewData(input: {
+  marketId?: string | null
+  includeResolved?: boolean
+} = {}): Promise<OverviewResponse> {
   const [openMarketState, allSnapshots, recentRuns] = await Promise.all([
-    loadOpenMarketActorState(),
+    loadOpenMarketActorState({
+      includeMarketIds: input.marketId ? [input.marketId] : [],
+      includeResolved: input.includeResolved === true,
+    }),
     db.query.marketDailySnapshots.findMany({
       orderBy: [desc(marketDailySnapshots.snapshotDate)],
       with: {
@@ -56,18 +74,33 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
     }),
   ])
 
-  const { accounts, openMarkets, openMarketIds, marketById, positionsByMarketActor, positionsValueByActorId } = openMarketState
-  const fdaEventIds = openMarkets.map((market) => market.fdaEventId)
+  const {
+    accounts,
+    openMarkets: visibleMarkets,
+    openMarketIds: visibleMarketIds,
+    marketById,
+    positionsByMarketActor,
+    positionsValueByActorId,
+  } = openMarketState
+  const questionIds = Array.from(new Set(
+    visibleMarkets.map((market) => market.trialQuestionId).filter((value): value is string => Boolean(value)),
+  ))
 
-  const [events, actions, marketSnapshots] = await Promise.all([
-    fdaEventIds.length > 0
-      ? db.query.fdaCalendarEvents.findMany({ where: inArray(fdaCalendarEvents.id, fdaEventIds) })
+  const [rawQuestionsWithTrials, actions, marketSnapshots] = await Promise.all([
+    questionIds.length > 0
+      ? db.query.trialQuestions.findMany({
+          where: inArray(trialQuestions.id, questionIds),
+          with: {
+            trial: true,
+          },
+        })
       : Promise.resolve([]),
-    openMarketIds.length > 0
+    visibleMarketIds.length > 0
       ? db.query.marketActions.findMany({
           where: and(
-            inArray(marketActions.marketId, openMarketIds),
+            inArray(marketActions.marketId, visibleMarketIds),
             eq(marketActions.actionSource, 'cycle'),
+            isNotNull(marketActions.trialQuestionId),
           ),
           orderBy: [desc(marketActions.createdAt)],
           with: {
@@ -75,22 +108,44 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
           },
         })
       : Promise.resolve([]),
-    openMarketIds.length > 0
+    visibleMarketIds.length > 0
       ? db.query.marketPriceSnapshots.findMany({
-          where: inArray(marketPriceSnapshots.marketId, openMarketIds),
+          where: inArray(marketPriceSnapshots.marketId, visibleMarketIds),
           orderBy: [desc(marketPriceSnapshots.snapshotDate)],
         })
       : Promise.resolve([]),
   ])
+  const acceptedOutcomeCandidates = questionIds.length > 0
+    ? await db.query.trialOutcomeCandidates.findMany({
+        where: and(
+          inArray(trialOutcomeCandidates.trialQuestionId, questionIds),
+          eq(trialOutcomeCandidates.status, 'accepted'),
+        ),
+        with: {
+          evidence: true,
+        },
+        orderBy: [desc(trialOutcomeCandidates.reviewedAt), desc(trialOutcomeCandidates.createdAt)],
+      })
+    : []
+  const filteredActions = actions.filter((action) => !isMockMarketActionLike(action))
+  const questionsWithTrials = filterSupportedTrialQuestions(rawQuestionsWithTrials)
 
-  const eventOutcomeById = new Map(events.map((event) => [event.id, event.outcome]))
-  const decisionHistoryByMarketId = await getMarketDecisionHistoryByMarketIds(openMarketIds, eventOutcomeById)
+  const questionById = new Map(questionsWithTrials.map((question) => [question.id, question]))
+  const trialById = new Map(questionsWithTrials.map((question) => [question.trial.id, question.trial]))
+  const questionOutcomeById = new Map(questionsWithTrials.map((question) => [question.id, question.outcome]))
+  const decisionHistoryByMarketId = await getMarketDecisionHistoryByMarketIds(visibleMarketIds, questionOutcomeById)
 
-  const eventById = new Map(events.map((event) => [event.id, event]))
-  const latestCycleActionByMarketActor = buildLatestCycleActionByMarketActor(actions)
+  const questionsByTrialId = new Map<string, typeof questionsWithTrials>()
+  for (const question of questionsWithTrials) {
+    const current = questionsByTrialId.get(question.trialId) || []
+    current.push(question)
+    questionsByTrialId.set(question.trialId, current)
+  }
+
+  const latestCycleActionByMarketActor = buildLatestCycleActionByMarketActor(filteredActions)
   const costBasisByMarketActor = new Map<string, number>()
   const activityTotalsByMarket = new Map<string, { totalActionsCount: number; totalVolumeUsd: number }>()
-  for (const action of actions) {
+  for (const action of filteredActions) {
     const key = buildMarketActorKey(action.marketId, action.actorId)
     const marketTotals = activityTotalsByMarket.get(action.marketId) || { totalActionsCount: 0, totalVolumeUsd: 0 }
     marketTotals.totalActionsCount += 1
@@ -113,6 +168,13 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
     marketSnapshotsByMarket.set(snapshot.marketId, current)
   }
 
+  const latestAcceptedCandidateByQuestionId = new Map<string, (typeof acceptedOutcomeCandidates)[number]>()
+  for (const candidate of acceptedOutcomeCandidates) {
+    if (!latestAcceptedCandidateByQuestionId.has(candidate.trialQuestionId)) {
+      latestAcceptedCandidateByQuestionId.set(candidate.trialQuestionId, candidate)
+    }
+  }
+
   const accountRows = accounts
     .flatMap((account) => {
       const modelId = toModelId(account.actor.modelKey ?? '')
@@ -130,15 +192,37 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
     })
     .sort((a, b) => b.totalEquity - a.totalEquity)
 
-  const marketRows = openMarkets.map((market) => {
-    const event = eventById.get(market.fdaEventId)
+  const marketRows = visibleMarkets.flatMap((market) => {
+    const questionId = market.trialQuestionId
+    if (!questionId) return []
+
+    const question = questionById.get(questionId)
+    const trial = question ? trialById.get(question.trialId) : null
+    if (!question || !trial) return []
+    const acceptedCandidate = latestAcceptedCandidateByQuestionId.get(questionId)
+    const resolvedOutcome: 'YES' | 'NO' | null = market.resolvedOutcome === 'YES' || market.resolvedOutcome === 'NO'
+      ? market.resolvedOutcome
+      : null
+
+    const allQuestions = (questionsByTrialId.get(trial.id) || [])
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((item) => ({
+        id: item.id,
+        slug: item.slug,
+        prompt: normalizeTrialQuestionPrompt(item.prompt),
+        status: item.status as 'live' | 'coming_soon',
+        isBettable: item.isBettable,
+        outcome: item.outcome,
+      }))
+
     const modelStates = accountRows.map((account) => {
       const key = buildMarketActorKey(market.id, account.actorId)
       const position = positionsByMarketActor.get(key)
       const latestAction = latestCycleActionByMarketActor.get(key)
       const decisionHistory = (decisionHistoryByMarketId.get(market.id) || [])
         .filter((entry) => entry.predictorId === account.modelId)
-        .map((entry) => toDecisionSnapshot(entry, market.id, market.fdaEventId))
+        .map((entry) => toDecisionSnapshot(entry, market.id, question.id))
 
       return {
         modelId: account.modelId,
@@ -163,9 +247,10 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
       }
     })
 
-    return {
+    return [{
       marketId: market.id,
-      fdaEventId: market.fdaEventId,
+      fdaEventId: trial.id,
+      trialQuestionId: question.id,
       status: market.status,
       priceYes: market.priceYes,
       priceNo: 1 - market.priceYes,
@@ -174,17 +259,62 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
       totalVolumeUsd: activityTotalsByMarket.get(market.id)?.totalVolumeUsd ?? 0,
       b: market.b,
       openedAt: toIsoString(market.openedAt) ?? undefined,
-      event: event
+      event: {
+        drugName: trial.shortTitle,
+        companyName: trial.sponsorName,
+        symbols: trial.sponsorTicker ?? '',
+        applicationType: trial.exactPhase,
+        decisionDate: trial.estPrimaryCompletionDate.toISOString(),
+        decisionDateKind: 'hard' as const,
+        cnpvAwardDate: null,
+        eventDescription: trial.briefSummary,
+        outcome: question.outcome,
+        nctId: trial.nctNumber,
+        source: `https://clinicaltrials.gov/study/${encodeURIComponent(trial.nctNumber)}`,
+        shortTitle: trial.shortTitle,
+        sponsorName: trial.sponsorName,
+        sponsorTicker: trial.sponsorTicker,
+        exactPhase: trial.exactPhase,
+        indication: trial.indication,
+        intervention: trial.intervention,
+        primaryEndpoint: trial.primaryEndpoint,
+        currentStatus: trial.currentStatus,
+        briefSummary: trial.briefSummary,
+        studyStartDate: toIsoString(trial.studyStartDate),
+        estStudyCompletionDate: toIsoString(trial.estStudyCompletionDate),
+        estResultsPostingDate: toIsoString(trial.estResultsPostingDate),
+        estEnrollment: trial.estEnrollment,
+        keyLocations: trial.keyLocations,
+        standardBettingMarkets: trial.standardBettingMarkets,
+        questionPrompt: normalizeTrialQuestionPrompt(question.prompt),
+        questionSlug: question.slug,
+        questionStatus: question.status as 'live' | 'coming_soon',
+        allQuestions,
+      },
+      resolution: market.status === 'RESOLVED'
         ? {
-            drugName: event.drugName,
-            companyName: event.companyName,
-            symbols: event.symbols,
-            applicationType: event.applicationType,
-            decisionDate: event.decisionDate.toISOString(),
-            decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
-            cnpvAwardDate: toIsoString(event.cnpvAwardDate),
-            eventDescription: event.eventDescription,
-            outcome: event.outcome,
+            outcome: resolvedOutcome,
+            resolvedAt: toIsoString(market.resolvedAt),
+            acceptedReview: acceptedCandidate
+              ? {
+                  summary: acceptedCandidate.summary,
+                  confidence: acceptedCandidate.confidence,
+                  proposedOutcomeDate: toIsoString(acceptedCandidate.proposedOutcomeDate),
+                  reviewedAt: toIsoString(acceptedCandidate.reviewedAt),
+                  evidence: acceptedCandidate.evidence
+                    .slice()
+                    .sort((left, right) => left.displayOrder - right.displayOrder)
+                    .map((evidence) => ({
+                      sourceType: evidence.sourceType as 'clinicaltrials' | 'sponsor' | 'stored_source' | 'web_search',
+                      title: evidence.title,
+                      url: evidence.url,
+                      publishedAt: toIsoString(evidence.publishedAt),
+                      excerpt: evidence.excerpt,
+                      domain: evidence.domain,
+                      displayOrder: evidence.displayOrder,
+                    })),
+                }
+              : null,
           }
         : null,
       modelStates,
@@ -195,7 +325,7 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
           snapshotDate: snapshot.snapshotDate.toISOString(),
           priceYes: snapshot.priceYes,
         })),
-    }
+    }]
   })
 
   const snapshotByModel = new Map<string, (typeof allSnapshots)>()
@@ -223,18 +353,20 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
       }]
     })
 
-  const recentActions = actions.flatMap((action) => {
+  const recentActions = filteredActions.flatMap((action) => {
     const modelId = toModelId(action.actor.modelKey ?? '')
     if (!modelId) return []
 
-    const event = eventById.get(action.fdaEventId)
+    const questionId = action.trialQuestionId
+    const question = questionId ? questionById.get(questionId) : null
+    const trial = question ? trialById.get(question.trialId) : null
     const market = marketById.get(action.marketId)
 
     return [{
       id: action.id,
       runId: action.runId,
       marketId: action.marketId,
-      fdaEventId: action.fdaEventId,
+      fdaEventId: trial?.id ?? questionId ?? '',
       modelId,
       runDate: action.runDate.toISOString(),
       createdAt: toIsoString(action.createdAt),
@@ -250,13 +382,13 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
       errorDetails: action.errorDetails,
       currentPriceYes: market?.priceYes ?? null,
       marketStatus: market?.status ?? null,
-      event: event
+      event: trial
         ? {
-            drugName: event.drugName,
-            companyName: event.companyName,
-            symbols: event.symbols,
-            decisionDate: event.decisionDate.toISOString(),
-            decisionDateKind: event.decisionDateKind as 'hard' | 'soft',
+            drugName: trial.shortTitle,
+            companyName: trial.sponsorName,
+            symbols: trial.sponsorTicker ?? '',
+            decisionDate: trial.estPrimaryCompletionDate.toISOString(),
+            decisionDateKind: 'hard' as const,
           }
         : null,
     }]
@@ -276,11 +408,15 @@ export async function getMarketOverviewData(): Promise<OverviewResponse> {
     completedAt: toIsoString(run.completedAt),
   }))
 
+  const openMarketRows = marketRows.filter((market) => market.status === 'OPEN')
+  const resolvedMarketRows = marketRows.filter((market) => market.status === 'RESOLVED')
+
   return {
     success: true,
     generatedAt: new Date().toISOString(),
     accounts: accountRows,
-    openMarkets: marketRows,
+    openMarkets: openMarketRows,
+    resolvedMarkets: resolvedMarketRows,
     equityHistory,
     recentActions,
     recentRuns: recentRunRows,

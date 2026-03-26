@@ -11,7 +11,7 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home' },
-  { href: '/markets', label: 'Markets' },
+  { href: '/trials', label: 'Trials' },
   { href: '/leaderboard', label: 'Leaderboard' },
   { href: '/method', label: 'Methodology' },
 ]
@@ -22,7 +22,7 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminUser = Boolean(session?.user?.email && session.user.email === ADMIN_EMAIL)
-  const safeCallback = encodeURIComponent(pathname || '/markets')
+  const safeCallback = encodeURIComponent(pathname || '/trials')
   const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
   const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Sign up'
   const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null
@@ -31,9 +31,11 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
     setMobileMenuOpen(false)
   }
 
-  const isItemActive = (href: string) => {
-    if (href === '/') return pathname === '/'
-    return pathname === href || pathname.startsWith(`${href}/`)
+  const isItemActive = (item: { href: string; matchPrefixes?: string[] }) => {
+    if (item.href === '/') return pathname === '/'
+
+    const matchPrefixes = item.matchPrefixes ?? [item.href]
+    return matchPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   }
 
   return (
@@ -74,7 +76,7 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
           {/* Desktop Navigation */}
           <div className="hidden items-center gap-0.5 xl:flex">
             {NAV_ITEMS.map((item) => {
-              const isActive = isItemActive(item.href)
+              const isActive = isItemActive(item)
               return (
                 <Link
                   key={item.href}
@@ -129,7 +131,7 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
               </Link>
             ) : null}
             {NAV_ITEMS.map((item) => {
-              const isActive = isItemActive(item.href)
+              const isActive = isItemActive(item)
               return (
                 <Link
                   key={item.href}

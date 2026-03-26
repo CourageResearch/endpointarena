@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
+import { buildNoIndexMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildNoIndexMetadata({
   title: 'Thanks',
   description: 'Thank you for contacting Endpoint Arena.',
-}
+  path: '/contact/thanks',
+})
 
 export default function ContactThanksPage() {
   return (
@@ -28,10 +30,10 @@ export default function ContactThanksPage() {
 
             <div className="mt-8 flex flex-wrap gap-2">
               <Link
-                href="/markets"
+                href="/trials"
                 className="inline-flex items-center rounded-sm border border-[#d9cdbf] bg-white px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
               >
-                Open markets
+                Browse trials
               </Link>
               <Link
                 href="/contact"

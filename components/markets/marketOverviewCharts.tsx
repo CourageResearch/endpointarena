@@ -4,6 +4,8 @@ import { useEffect, useId, useState } from 'react'
 import { formatPercent, formatShortDateUtc } from '@/lib/markets/overview-shared'
 import { cn } from '@/lib/utils'
 
+const EMPTY_HISTORY_SNAPSHOT_DATE = '1970-01-01T00:00:00.000Z'
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
@@ -41,7 +43,7 @@ export function TinyPriceSparkline({
   const width = 180
   const height = 48
   const padding = 4
-  const series = history.length > 0 ? history : [{ snapshotDate: new Date().toISOString(), priceYes: currentPrice }]
+  const series = history.length > 0 ? history : [{ snapshotDate: EMPTY_HISTORY_SNAPSHOT_DATE, priceYes: currentPrice }]
   const prices = series.map((point) => point.priceYes)
   const path = buildPricePath(prices, width, height, padding)
   const latest = prices[prices.length - 1] ?? currentPrice
@@ -86,7 +88,7 @@ export function MarketDetailChart({
   scrubSnapshotDate?: string | null
   onScrubSnapshotDateChange?: (snapshotDate: string | null) => void
 }) {
-  const series = history.length > 0 ? history : [{ snapshotDate: new Date().toISOString(), priceYes: currentPrice }]
+  const series = history.length > 0 ? history : [{ snapshotDate: EMPTY_HISTORY_SNAPSHOT_DATE, priceYes: currentPrice }]
   const pointSpacing = 40
   const width = Math.min(5600, Math.max(560, 34 + (Math.max(1, series.length - 1) * pointSpacing) + 28))
   const plotHeight = 212

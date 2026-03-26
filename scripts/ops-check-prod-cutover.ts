@@ -35,12 +35,35 @@ type CountRow = {
   row_count: string | number
 }
 
+type Phase2SummaryRow = {
+  phase2_trials: string | number
+  trial_questions: string | number
+  trial_prediction_markets: string | number
+  resolved_trial_prediction_markets: string | number
+  trial_sync_runs: string | number
+  trial_monitor_runs: string | number
+  trial_outcome_candidates: string | number
+  sample_trial_market_id: string | null
+}
+
+type SmokeCheckResult = {
+  path: string
+  status: number
+  location: string | null
+}
+
 const APP_SERVICE = process.env.RAILWAY_APP_SERVICE?.trim() || 'endpoint-arena-app'
 const GREEN_DB_SERVICE = process.env.RAILWAY_GREEN_DB_SERVICE?.trim() || 'postgres-green'
-const EXPECT_DB_TARGET = (process.env.EXPECT_DB_TARGET?.trim().toLowerCase() || 'green')
-const EXPECT_MAINTENANCE_MODE = (process.env.EXPECT_MAINTENANCE_MODE?.trim().toLowerCase() || 'false')
+const EXPECT_DB_TARGET = process.env.EXPECT_DB_TARGET?.trim().toLowerCase() || 'green'
+const EXPECT_MAINTENANCE_MODE = process.env.EXPECT_MAINTENANCE_MODE?.trim().toLowerCase() || 'false'
 const HEALTH_URL = process.env.APP_HEALTH_URL?.trim() || 'https://endpointarena.com/api/health'
-const REQUIRED_APP_VARS = ['DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL'] as const
+const REQUIRED_APP_VARS = [
+  'DATABASE_URL',
+  'NEXTAUTH_SECRET',
+  'NEXTAUTH_URL',
+  'TRIAL_MONITOR_CRON_SECRET',
+  'TRIAL_SYNC_CRON_SECRET',
+] as const
 const PREDICTION_PROVIDER_VARS = [
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
@@ -52,6 +75,26 @@ const PREDICTION_PROVIDER_VARS = [
   'BASETEN_KIMI_API_KEY',
   'MINIMAX_API_KEY',
 ] as const
+const PHASE2_REQUIRED_TABLES = [
+  'phase2_trials',
+  'trial_questions',
+  'trial_monitor_configs',
+  'trial_monitor_runs',
+  'trial_sync_configs',
+  'trial_sync_runs',
+  'trial_sync_run_items',
+  'trial_outcome_candidates',
+  'trial_outcome_candidate_evidence',
+] as const
+const PUBLIC_SMOKE_PATHS = ['/', '/trials', '/fda-calendar'] as const
+const ADMIN_SMOKE_PATHS = ['/admin', '/admin/update', '/admin/outcomes', '/admin/settings'] as const
+
+const MIN_USERS = Number(process.env.MIN_USERS ?? 1)
+const MIN_EVENTS = Number(process.env.MIN_FDA_EVENTS ?? 1)
+const MIN_MARKETS = Number(process.env.MIN_MARKETS ?? 1)
+const MIN_ACTIONS = Number(process.env.MIN_MARKET_ACTIONS ?? 0)
+const MIN_RUNS = Number(process.env.MIN_MARKET_RUNS ?? 0)
+const MIN_SNAPSHOTS = Number(process.env.MIN_MODEL_SNAPSHOTS ?? 1)
 
 function resolveRailwayBin(): string {
   const override = process.env.RAILWAY_BIN?.trim()
@@ -75,13 +118,6 @@ function resolveRailwayBin(): string {
 }
 
 const RAILWAY_BIN = resolveRailwayBin()
-
-const MIN_USERS = Number(process.env.MIN_USERS ?? 1)
-const MIN_EVENTS = Number(process.env.MIN_FDA_EVENTS ?? 1)
-const MIN_MARKETS = Number(process.env.MIN_MARKETS ?? 1)
-const MIN_ACTIONS = Number(process.env.MIN_MARKET_ACTIONS ?? 0)
-const MIN_RUNS = Number(process.env.MIN_MARKET_RUNS ?? 0)
-const MIN_SNAPSHOTS = Number(process.env.MIN_MODEL_SNAPSHOTS ?? 1)
 
 function hasNonEmptyVar(vars: Record<string, string>, key: string): boolean {
   const value = vars[key]
@@ -177,6 +213,11 @@ function extractDatabaseHost(databaseUrl: string | undefined): string | null {
   }
 }
 
+function deriveBaseUrl(value: string): string {
+  const url = new URL(value)
+  return url.origin
+}
+
 function resolveDbTarget(appVars: Record<string, string>, greenDbVars: Record<string, string>): 'green' | 'custom' {
   const active = appVars.DATABASE_URL?.trim()
   if (!active) {
@@ -222,16 +263,113 @@ async function loadGreenCounts(greenDbPublicUrl: string): Promise<Record<string,
   }
 }
 
+async function loadPhase2SchemaAudit(greenDbPublicUrl: string): Promise<{
+  existingTables: string[]
+  missingTables: string[]
+  counts: Record<string, number>
+  sampleTrialMarketId: string | null
+}> {
+  const sql = postgres(greenDbPublicUrl, { prepare: false, max: 1 })
+
+  try {
+    const existingTableRows = await sql<{ table_name: string }[]>`
+      select table_name
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name in (
+          'phase2_trials',
+          'trial_questions',
+          'trial_monitor_configs',
+          'trial_monitor_runs',
+          'trial_sync_configs',
+          'trial_sync_runs',
+          'trial_sync_run_items',
+          'trial_outcome_candidates',
+          'trial_outcome_candidate_evidence'
+        )
+      order by table_name
+    `
+    const existingTables = existingTableRows.map((row) => row.table_name)
+    const existingSet = new Set(existingTables)
+    const missingTables = PHASE2_REQUIRED_TABLES.filter((tableName) => !existingSet.has(tableName))
+
+    if (missingTables.length > 0) {
+      return {
+        existingTables,
+        missingTables,
+        counts: {},
+        sampleTrialMarketId: null,
+      }
+    }
+
+    const [summary] = await sql<Phase2SummaryRow[]>`
+      select
+        (select count(*)::bigint from phase2_trials) as phase2_trials,
+        (select count(*)::bigint from trial_questions) as trial_questions,
+        (select count(*)::bigint from prediction_markets where trial_question_id is not null) as trial_prediction_markets,
+        (select count(*)::bigint from prediction_markets where trial_question_id is not null and status = 'RESOLVED') as resolved_trial_prediction_markets,
+        (select count(*)::bigint from trial_sync_runs) as trial_sync_runs,
+        (select count(*)::bigint from trial_monitor_runs) as trial_monitor_runs,
+        (select count(*)::bigint from trial_outcome_candidates) as trial_outcome_candidates,
+        (
+          select id
+          from prediction_markets
+          where trial_question_id is not null
+          order by opened_at desc
+          limit 1
+        ) as sample_trial_market_id
+    `
+
+    return {
+      existingTables,
+      missingTables,
+      counts: {
+        phase2_trials: Number(summary?.phase2_trials ?? 0),
+        trial_questions: Number(summary?.trial_questions ?? 0),
+        trial_prediction_markets: Number(summary?.trial_prediction_markets ?? 0),
+        resolved_trial_prediction_markets: Number(summary?.resolved_trial_prediction_markets ?? 0),
+        trial_sync_runs: Number(summary?.trial_sync_runs ?? 0),
+        trial_monitor_runs: Number(summary?.trial_monitor_runs ?? 0),
+        trial_outcome_candidates: Number(summary?.trial_outcome_candidates ?? 0),
+      },
+      sampleTrialMarketId: summary?.sample_trial_market_id ?? null,
+    }
+  } finally {
+    await sql.end({ timeout: 1 })
+  }
+}
+
 async function checkHealth(url: string): Promise<number> {
   const response = await fetch(url, { method: 'GET' })
   return response.status
 }
 
+async function checkSmokePath(baseUrl: string, path: string): Promise<SmokeCheckResult> {
+  const response = await fetch(new URL(path, baseUrl), {
+    method: 'GET',
+    redirect: 'manual',
+  })
+
+  return {
+    path,
+    status: response.status,
+    location: response.headers.get('location'),
+  }
+}
+
+function isLoginRedirect(result: SmokeCheckResult): boolean {
+  if (![302, 303, 307, 308].includes(result.status)) return false
+  return (result.location ?? '').includes('/login')
+}
+
 async function main(): Promise<void> {
+  const appBaseUrl = deriveBaseUrl(HEALTH_URL)
+
   console.log('Post-cutover production checklist')
   console.log(`- App service: ${APP_SERVICE}`)
   console.log(`- Green DB service: ${GREEN_DB_SERVICE}`)
   console.log(`- Health URL: ${HEALTH_URL}`)
+  console.log(`- App base URL: ${appBaseUrl}`)
 
   const failures: string[] = []
 
@@ -267,7 +405,9 @@ async function main(): Promise<void> {
   failures.push(...envAudit.failures)
 
   console.log('- App env audit:')
-  console.log(`  - Required vars present: ${REQUIRED_APP_VARS.filter((key) => hasNonEmptyVar(appVars, key)).length}/${REQUIRED_APP_VARS.length}`)
+  console.log(
+    `  - Required vars present: ${REQUIRED_APP_VARS.filter((key) => hasNonEmptyVar(appVars, key)).length}/${REQUIRED_APP_VARS.length}`,
+  )
   console.log(
     `  - Prediction provider keys present: ${envAudit.providerKeysPresent.length > 0 ? envAudit.providerKeysPresent.join(', ') : '(none)'}`,
   )
@@ -321,6 +461,55 @@ async function main(): Promise<void> {
       } else if (value < minimum) {
         failures.push(`${tableName} count below minimum (${value} < ${minimum})`)
       }
+    }
+
+    const schemaAudit = await loadPhase2SchemaAudit(greenDbPublicUrl)
+    console.log('- Phase 2 trial schema audit:')
+    console.log(`  - Present tables: ${schemaAudit.existingTables.length > 0 ? schemaAudit.existingTables.join(', ') : '(none)'}`)
+    console.log(`  - Missing tables: ${schemaAudit.missingTables.length > 0 ? schemaAudit.missingTables.join(', ') : 'none'}`)
+    if (schemaAudit.missingTables.length > 0) {
+      failures.push(
+        `Phase 2 trial schema is incomplete on ${GREEN_DB_SERVICE}; missing ${schemaAudit.missingTables.join(', ')}`,
+      )
+    } else {
+      console.log(`  - phase2_trials: ${schemaAudit.counts.phase2_trials}`)
+      console.log(`  - trial_questions: ${schemaAudit.counts.trial_questions}`)
+      console.log(`  - trial_prediction_markets: ${schemaAudit.counts.trial_prediction_markets}`)
+      console.log(`  - resolved_trial_prediction_markets: ${schemaAudit.counts.resolved_trial_prediction_markets}`)
+      console.log(`  - trial_sync_runs: ${schemaAudit.counts.trial_sync_runs}`)
+      console.log(`  - trial_monitor_runs: ${schemaAudit.counts.trial_monitor_runs}`)
+      console.log(`  - trial_outcome_candidates: ${schemaAudit.counts.trial_outcome_candidates}`)
+      console.log(`  - Sample trial market: ${schemaAudit.sampleTrialMarketId ?? '(none yet)'}`)
+    }
+
+    console.log('- HTTP smoke checks:')
+    for (const path of PUBLIC_SMOKE_PATHS) {
+      const result = await checkSmokePath(appBaseUrl, path)
+      console.log(`  - ${path}: ${result.status}`)
+      if (result.status !== 200) {
+        failures.push(`Public smoke check failed for ${path} (got ${result.status})`)
+      }
+    }
+
+    for (const path of ADMIN_SMOKE_PATHS) {
+      const result = await checkSmokePath(appBaseUrl, path)
+      const suffix = result.location ? ` -> ${result.location}` : ''
+      console.log(`  - ${path}: ${result.status}${suffix}`)
+      if (result.status === 200 || isLoginRedirect(result)) {
+        continue
+      }
+      failures.push(`Admin smoke check failed for ${path} (got ${result.status}${suffix})`)
+    }
+
+    if (schemaAudit.sampleTrialMarketId) {
+      const detailPath = `/trials/${encodeURIComponent(schemaAudit.sampleTrialMarketId)}`
+      const result = await checkSmokePath(appBaseUrl, detailPath)
+      console.log(`  - ${detailPath}: ${result.status}`)
+      if (result.status !== 200) {
+        failures.push(`Trial detail smoke check failed for ${detailPath} (got ${result.status})`)
+      }
+    } else {
+      console.log('  - /trials/[marketId]: skipped (no trial market exists yet)')
     }
   }
 

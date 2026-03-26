@@ -12,65 +12,31 @@ if (!connectionString) {
 
 const sql = postgres(connectionString, { prepare: false })
 
+async function assertDecisionDateSchema() {
+  const columns = await sql<{ column_name: string }[]>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'fda_calendar_events'
+      AND column_name IN ('decision_date', 'decision_date_kind')
+  `
+
+  const names = new Set(columns.map((column) => column.column_name))
+  const missing = ['decision_date', 'decision_date_kind'].filter((name) => !names.has(name))
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required final-schema columns on fda_calendar_events: ${missing.join(', ')}. ` +
+      'This release assumes the renamed decision-date schema is already in place.'
+    )
+  }
+}
+
 async function migrate() {
   console.log('Preparing FDA event monitoring schema...')
-
-  await sql`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'fda_calendar_events'
-          AND column_name = 'decision_date'
-      ) THEN
-        ALTER TABLE fda_calendar_events ADD COLUMN decision_date DATE;
-      END IF;
-    END $$;
-  `
-
-  await sql`
-    UPDATE fda_calendar_events
-    SET decision_date = COALESCE(decision_date, pdufa_date)
-    WHERE decision_date IS NULL
-      AND EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'fda_calendar_events'
-          AND column_name = 'pdufa_date'
-      )
-  `
+  await assertDecisionDateSchema()
   await sql`ALTER TABLE fda_calendar_events ALTER COLUMN decision_date SET NOT NULL`
-
-  await sql`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'fda_calendar_events'
-          AND column_name = 'decision_date_kind'
-      ) THEN
-        ALTER TABLE fda_calendar_events ADD COLUMN decision_date_kind TEXT;
-      END IF;
-    END $$;
-  `
   await sql`ALTER TABLE fda_calendar_events ALTER COLUMN decision_date_kind SET DEFAULT 'hard'`
-  await sql`
-    UPDATE fda_calendar_events
-    SET decision_date_kind = CASE
-      WHEN decision_date_kind IN ('hard', 'soft') THEN decision_date_kind
-      WHEN decision_date_kind = 'public' THEN 'hard'
-      WHEN decision_date_kind = 'synthetic' THEN 'soft'
-      WHEN date_kind = 'public' THEN 'hard'
-      WHEN date_kind = 'synthetic' THEN 'soft'
-      WHEN decision_date_kind IS NULL OR decision_date_kind = '' THEN 'hard'
-      ELSE decision_date_kind
-    END
-  `
   await sql`UPDATE fda_calendar_events SET decision_date_kind = 'hard' WHERE decision_date_kind IS NULL`
   await sql`ALTER TABLE fda_calendar_events ALTER COLUMN decision_date_kind SET NOT NULL`
   await sql`ALTER TABLE fda_calendar_events ADD COLUMN IF NOT EXISTS last_monitored_at TIMESTAMPTZ`
@@ -100,7 +66,7 @@ async function migrate() {
       soft_lookahead_days INTEGER NOT NULL DEFAULT 14,
       overdue_recheck_hours INTEGER NOT NULL DEFAULT 24,
       max_events_per_run INTEGER NOT NULL DEFAULT 25,
-      verifier_model_key TEXT NOT NULL DEFAULT 'gpt-5.2',
+      verifier_model_key TEXT NOT NULL DEFAULT 'gpt-5.4',
       min_candidate_confidence REAL NOT NULL DEFAULT 0.8,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -135,7 +101,7 @@ async function migrate() {
       14,
       24,
       25,
-      'gpt-5.2',
+      'gpt-5.4',
       0.8,
       NOW(),
       NOW()
@@ -217,7 +183,7 @@ async function migrate() {
     ON event_outcome_candidate_evidence (candidate_id, display_order)
   `
 
-  console.log('Done. Event monitoring schema is ready.')
+  console.log('Done. Event monitoring schema is ready on the final decision-date schema.')
   await sql.end()
 }
 

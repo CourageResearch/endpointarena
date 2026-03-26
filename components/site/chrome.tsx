@@ -23,13 +23,13 @@ const DOTS = [
 const DIVIDER_SQUARES = [BRAND_DOT_COLORS.coral, BRAND_DOT_COLORS.green, BRAND_DOT_COLORS.gold, BRAND_DOT_COLORS.blue]
 const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
   [
-    { href: '/markets', label: 'markets' },
-    { href: '/fda-calendar', label: 'calendar' },
+    { href: '/trials', label: 'trials' },
     { href: '/leaderboard', label: 'leaderboard' },
   ],
   [
     { href: '/waitlist', label: 'waitlist' },
     { href: '/contact', label: 'contact' },
+    { href: '/brand', label: 'brand kit' },
   ],
   [
     { href: '/method', label: 'methodology' },
@@ -46,7 +46,7 @@ export function PageFrame({
   className?: string
 }) {
   return (
-    <div className={cn('min-h-screen overflow-x-clip', SITE_BG_CLASS, SITE_TEXT_CLASS, className)}>
+    <div className={cn('min-h-screen overflow-x-hidden', SITE_BG_CLASS, SITE_TEXT_CLASS, className)}>
       {children}
     </div>
   )

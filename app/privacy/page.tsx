@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
+import { buildPageMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: 'Privacy',
   description: 'Privacy policy for Endpoint Arena.',
-}
+  path: '/privacy',
+})
 
 export default function PrivacyPage() {
   return (

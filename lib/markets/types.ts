@@ -5,15 +5,16 @@ export type DailyRunActivityPhase = 'running' | 'waiting'
 
 export type DailyRunPlannedMarket = {
   marketId: string
-  fdaEventId: string
-  drugName: string
-  companyName: string
+  trialQuestionId: string
+  trialId: string
+  shortTitle: string
+  sponsorName: string
   decisionDate: string
 }
 
 export type DailyRunResult = {
   marketId: string
-  fdaEventId: string
+  trialQuestionId: string
   actorId: string | null
   modelId: ModelId
   action: string
@@ -57,7 +58,7 @@ export type DailyRunStreamEvent =
       totalActions: number
       message: string
       marketId?: string
-      fdaEventId?: string
+      trialQuestionId?: string
       actorId?: string | null
       modelId?: ModelId
       phase?: DailyRunActivityPhase
@@ -95,7 +96,7 @@ export type DailyRunHooks = {
     totalActions: number
     message: string
     marketId?: string
-    fdaEventId?: string
+    trialQuestionId?: string
     actorId?: string | null
     modelId?: ModelId
     phase?: DailyRunActivityPhase

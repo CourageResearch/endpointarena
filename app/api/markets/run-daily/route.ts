@@ -51,14 +51,14 @@ export async function POST(request: NextRequest) {
               onStart: (start) => {
                 writeEvent({ type: 'start', ...start })
               },
-              onActivity: ({ completedActions, totalActions, message, marketId, fdaEventId, actorId, modelId, phase }) => {
+              onActivity: ({ completedActions, totalActions, message, marketId, trialQuestionId, actorId, modelId, phase }) => {
                 writeEvent({
                   type: 'activity',
                   completedActions,
                   totalActions,
                   message,
                   marketId,
-                  fdaEventId,
+                  trialQuestionId,
                   actorId,
                   modelId,
                   phase,

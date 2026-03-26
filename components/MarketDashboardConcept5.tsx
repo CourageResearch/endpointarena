@@ -7,9 +7,10 @@ import { useSession } from 'next-auth/react'
 import { ModelIcon } from '@/components/ModelIcon'
 import { MarketActivityFeed } from '@/components/markets/dashboard/activity-feed'
 import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
-import { MarketDetailsPanel } from '@/components/markets/dashboard/details-panel'
+import { MarketDescriptionCard, MarketDetailsPanel, MarketResolutionPanel } from '@/components/markets/dashboard/details-panel'
 import {
   APPROVE_TEXT_CLASS,
+  DASHBOARD_SECTION_LABEL_CLASS,
   REJECT_TEXT_CLASS,
   type ActivityFilterOption,
   type HumanTradeDirection,
@@ -243,7 +244,7 @@ export function MarketDashboardConcept5({
 }: MarketDashboardConcept5Props = {}) {
   const pathname = usePathname()
   const { status: sessionStatus } = useSession()
-  const { data, error, loading, reload } = useMarketOverview(initialData)
+  const { data, error, loading, reload } = useMarketOverview(initialData, initialMarketId)
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialMarketId)
   const [marketSearch, setMarketSearch] = useState('')
   const [commentModelFilter, setCommentModelFilter] = useState<CommentModelFilter>('all')
@@ -263,7 +264,7 @@ export function MarketDashboardConcept5({
   const [traderSnapshotLoading, setTraderSnapshotLoading] = useState(false)
 
   const deferredMarketSearch = useDeferredValue(marketSearch.trim().toLowerCase())
-  const safeCallbackUrl = pathname || '/markets'
+  const safeCallbackUrl = pathname || '/trials'
 
   useEffect(() => {
     if (sessionStatus !== 'authenticated') {
@@ -299,8 +300,11 @@ export function MarketDashboardConcept5({
   }, [sessionStatus])
 
   const marketEntries = useMemo(() => {
-    return buildMarketEntries(data?.openMarkets || [], data?.recentActions || [])
-  }, [data?.openMarkets, data?.recentActions])
+    return buildMarketEntries(
+      [...(data?.openMarkets || []), ...(data?.resolvedMarkets || [])],
+      data?.recentActions || [],
+    )
+  }, [data?.openMarkets, data?.recentActions, data?.resolvedMarkets])
 
   const initialMarketMissing = useMemo(() => {
     if (showMarketList) return false
@@ -365,8 +369,14 @@ export function MarketDashboardConcept5({
   }, [selectedEntry?.market.marketId])
 
   useEffect(() => {
-    const marketId = selectedEntry?.market.marketId ?? null
-    if (sessionStatus !== 'authenticated' || !verificationStatus?.verified || !marketId) {
+    const selectedMarketForTrader = selectedEntry?.market ?? null
+    const marketId = selectedMarketForTrader?.marketId ?? null
+    if (
+      sessionStatus !== 'authenticated'
+      || !verificationStatus?.verified
+      || !marketId
+      || selectedMarketForTrader?.status !== 'OPEN'
+    ) {
       setTraderSnapshot(null)
       setTraderSnapshotLoading(false)
       return
@@ -408,7 +418,7 @@ export function MarketDashboardConcept5({
     return () => {
       cancelled = true
     }
-  }, [selectedEntry?.market.marketId, sessionStatus, verificationStatus?.verified])
+  }, [selectedEntry?.market.marketId, selectedEntry?.market.status, sessionStatus, verificationStatus?.verified])
 
   const selectedMarketActions = useMemo(() => {
     if (!selectedEntry) return []
@@ -490,7 +500,7 @@ export function MarketDashboardConcept5({
   if (initialMarketMissing) {
     return (
       <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">
-        This market was not found or is no longer open. <Link href="/markets" className="underline">Back to open markets</Link>.
+        This market was not found or is no longer open. <Link href="/trials" className="underline">Back to trials</Link>.
       </div>
     )
   }
@@ -500,21 +510,15 @@ export function MarketDashboardConcept5({
   }
 
   const selectedMarket = selectedEntry.market
-  const pdufaDays = selectedEntry.daysUntil
   const primaryTicker = selectedMarket.event?.symbols?.split(',')[0]?.trim() || ''
   const scrubbedChartDayKey = toUtcDayKey(chartScrubSnapshotDate)
   const scrubbedChartDayLabel = chartScrubSnapshotDate ? formatShortDateUtc(chartScrubSnapshotDate) : null
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
   const isTradeVerified = Boolean(verificationStatus?.verified)
-  const showTradeSidebar = useStackedLayout
-  const pdufaCountdownText = pdufaDays == null
-    ? 'No date'
-    : pdufaDays < 0
-      ? `${Math.abs(pdufaDays)}d past`
-      : pdufaDays === 0
-        ? 'Today'
-        : `${pdufaDays}d left`
+  const isResolvedMarket = selectedMarket.status === 'RESOLVED'
+  const showDetailSidebar = useStackedLayout && !isResolvedMarket
+  const MarketTitleTag = showMarketList ? 'h3' : 'h1'
   const applicationTypeMeta = selectedMarket.event?.applicationType
     ? abbreviateType(selectedMarket.event.applicationType)
     : null
@@ -537,7 +541,7 @@ export function MarketDashboardConcept5({
     [activityFilterModelIds, commentModelFilter],
   )
   const selectedTradeSide = toHumanTradeSide(tradeDirection, tradeOutcome)
-  const marketDetailHref = `/markets/${encodeURIComponent(selectedMarket.marketId)}`
+  const marketDetailHref = `/trials/${encodeURIComponent(selectedMarket.marketId)}`
   const decisionSnapshotsHref = `${marketDetailHref}/decision-snapshots`
   const yesPriceCents = Math.round(selectedMarket.priceYes * 100)
   const noPriceCents = Math.round((1 - selectedMarket.priceYes) * 100)
@@ -705,6 +709,11 @@ export function MarketDashboardConcept5({
       return
     }
 
+    if (selectedMarket.status !== 'OPEN') {
+      setTradeError('Resolved markets are no longer open for trading')
+      return
+    }
+
     if (!verificationStatus?.verified) {
       setTradeError('Complete X verification before trading')
       return
@@ -755,13 +764,13 @@ export function MarketDashboardConcept5({
         <section className="space-y-3 px-1">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Decision Snapshots</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[#171717]">
+              <div className="flex items-center gap-3">
+                <div className={DASHBOARD_SECTION_LABEL_CLASS}>Decision Snapshots</div>
+                <HeaderDots />
+              </div>
+              <h1 className="mt-3 text-[1.35rem] leading-tight font-normal text-[#2b2b2b] sm:text-[1.5rem]">
                 {selectedMarket.event?.drugName || selectedEntry.question}
-              </h2>
-              <p className="mt-2 text-sm text-[#7c7267]">
-                Full model-by-model snapshot history for this market.
-              </p>
+              </h1>
             </div>
             <Link
               href={marketDetailHref}
@@ -776,6 +785,7 @@ export function MarketDashboardConcept5({
           className="px-1"
           selectedMarketId={selectedMarket.marketId}
           decisionRows={decisionRows}
+          showHeader={false}
         />
       </div>
     )
@@ -783,7 +793,7 @@ export function MarketDashboardConcept5({
 
   return (
     <div className="space-y-5">
-      {sessionStatus === 'unauthenticated' && !useStackedLayout ? (
+      {sessionStatus === 'unauthenticated' && !useStackedLayout && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
           <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
           <p className="mt-1">Browsing is open, but trading and personal points unlock after one-time X verification.</p>
@@ -796,13 +806,13 @@ export function MarketDashboardConcept5({
         </div>
       ) : null}
 
-      {sessionStatus === 'authenticated' && verificationError ? (
+      {sessionStatus === 'authenticated' && verificationError && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-4 text-sm text-[#b94e47]">
           {verificationError}
         </div>
       ) : null}
 
-      {sessionStatus === 'authenticated' && verificationStatus?.verified ? (
+      {sessionStatus === 'authenticated' && verificationStatus?.verified && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
           <p className="font-medium text-[#2f7b40]">
             Humans vs AI unlocked
@@ -891,9 +901,9 @@ export function MarketDashboardConcept5({
           <section className="space-y-4">
             <header className="px-1">
               <div>
-                <h3 className="text-xl sm:text-2xl font-semibold leading-tight text-[#171717]">
+                <MarketTitleTag className="text-xl sm:text-2xl font-semibold leading-tight text-[#171717]">
                   {selectedMarket.event?.drugName || selectedEntry.question}
-                </h3>
+                </MarketTitleTag>
               </div>
             </header>
 
@@ -909,7 +919,7 @@ export function MarketDashboardConcept5({
 	                  useMarkets2Layout
 	                    ? 'min-w-0 px-1 xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,24rem)] xl:items-start xl:gap-4'
 	                    : useStackedLayout
-	                      ? showTradeSidebar
+	                      ? showDetailSidebar
 	                        ? 'min-w-0 px-1 lg:grid lg:grid-cols-[minmax(0,2.25fr)_minmax(18rem,0.85fr)] lg:items-start lg:gap-4'
 	                        : 'min-w-0 px-1'
 	                      : 'contents',
@@ -923,7 +933,7 @@ export function MarketDashboardConcept5({
 	                  <div className="mb-3">
 	                    <div>
 	                      <div className="flex items-center gap-3">
-	                        <div className="text-[11px] uppercase tracking-[0.16em] text-[#aa9d8d]">Market</div>
+	                        <div className={DASHBOARD_SECTION_LABEL_CLASS}>Market</div>
 	                        <HeaderDots />
                       </div>
                       <div className={cn(
@@ -948,17 +958,6 @@ export function MarketDashboardConcept5({
 		                  />
 
 		                  <div className={cn(useMarkets2Layout ? 'py-3' : 'py-1')} aria-hidden="true" />
-		                  {useStackedLayout ? (
-                        <MarketDetailsPanel
-                          selectedMarket={selectedMarket}
-                          totalVolumeUsd={selectedStats.totalVolumeUsd}
-                          pdufaCountdownText={pdufaCountdownText}
-                          applicationTypeMeta={applicationTypeMeta}
-                          primaryTicker={primaryTicker}
-                          drugDescriptionText={drugDescriptionText}
-                        />
-                      ) : null}
-		                  {useStackedLayout ? <div className="py-2" aria-hidden="true" /> : null}
 		                  {useMarkets2Layout ? (
                         <MarketActivityFeed
                           scrubbedChartDayKey={scrubbedChartDayKey}
@@ -978,7 +977,7 @@ export function MarketDashboardConcept5({
                       ) : null}
 		                  </div>
 
-				                  {(!useStackedLayout || showTradeSidebar) ? (
+				                  {(!useStackedLayout || showDetailSidebar) ? (
 				                    <div className={cn(
 				                      'min-w-0',
 				                      !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
@@ -988,6 +987,7 @@ export function MarketDashboardConcept5({
 				                    {useStackedLayout ? (
                               <MarketTradePanel
                                 className="lg:sticky lg:top-20"
+                                marketQuestion={selectedEntry.question}
                                 sessionStatus={sessionStatus}
                                 verificationStatus={verificationStatus}
                                 safeCallbackUrl={safeCallbackUrl}
@@ -1012,10 +1012,9 @@ export function MarketDashboardConcept5({
                               <MarketDetailsPanel
                                 selectedMarket={selectedMarket}
                                 totalVolumeUsd={selectedStats.totalVolumeUsd}
-                                pdufaCountdownText={pdufaCountdownText}
                                 applicationTypeMeta={applicationTypeMeta}
                                 primaryTicker={primaryTicker}
-                                drugDescriptionText={drugDescriptionText}
+                                showDescription={false}
                               />
                             )}
 
@@ -1025,7 +1024,7 @@ export function MarketDashboardConcept5({
                       <div>
                         <div className="mb-2 px-1">
                           <div className="flex items-center gap-3">
-                            <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Model Positions</div>
+                            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Positions</div>
                             <HeaderDots />
                           </div>
                         </div>
@@ -1112,7 +1111,7 @@ export function MarketDashboardConcept5({
                                       netDisplayLabel,
                                       netTextClass,
                                     } = row
-                                    const compactModelLabel = model.name === 'GPT-5.2' ? 'GPT' : model.name
+                                    const compactModelLabel = model.provider === 'OpenAI' ? 'GPT' : model.name
                                     return (
                                       <tr key={`${selectedMarket.marketId}-${state.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
                                         <td className={cn('align-top', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4')}>
@@ -1166,7 +1165,27 @@ export function MarketDashboardConcept5({
 	                    </>
 	                  ) : null}
 	                  </div>
-				                  ) : null}
+	                  ) : null}
+                    {!useMarkets2Layout && !useStackedLayout ? (
+                      <div className="px-1 lg:col-span-12">
+                        <MarketDescriptionCard drugDescriptionText={drugDescriptionText} />
+                      </div>
+                    ) : null}
+                    {useStackedLayout ? (
+                      <div className="px-1 lg:col-span-2 space-y-6">
+                        <MarketDetailsPanel
+                          selectedMarket={selectedMarket}
+                          totalVolumeUsd={selectedStats.totalVolumeUsd}
+                          applicationTypeMeta={applicationTypeMeta}
+                          primaryTicker={primaryTicker}
+                        />
+                        {isResolvedMarket ? (
+                          <MarketResolutionPanel
+                            selectedMarket={selectedMarket}
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
 
 	              </div>
 	            </div>
@@ -1193,7 +1212,7 @@ export function MarketDashboardConcept5({
 	              <div className="mt-10 px-1">
 	                <div className="mb-2 px-1">
 	                  <div className="flex items-center gap-3">
-	                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Model Positions</div>
+	                    <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Positions</div>
 	                    <HeaderDots />
 	                  </div>
 	                </div>
@@ -1327,7 +1346,7 @@ export function MarketDashboardConcept5({
                     href={decisionSnapshotsHref}
                     className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
                   >
-                    View Snapshot History
+                    Model Snapshots
                   </Link>
                 </div>
               </div>

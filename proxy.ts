@@ -7,6 +7,8 @@ const ALLOWED_API_PREFIXES = [AUTH_API_PREFIX, ADMIN_API_PREFIX]
 const ALLOWED_PAGE_PREFIXES = ['/admin', '/login', '/maintenance']
 const ALLOWED_PAGE_PATHS = new Set(['/icon', '/apple-icon', '/brand'])
 const ASSET_FILE_PATTERN = /\.[a-z0-9]+$/i
+const NOINDEX_PREFIXES = ['/admin', '/login', '/signup', '/profile', '/verify-twitter']
+const NOINDEX_EXACT_PATHS = new Set(['/contact/thanks', '/maintenance', '/glossary2', '/glossary3'])
 
 const adminAuthProxy = withAuth({
   pages: {
@@ -41,12 +43,29 @@ function maintenanceApiResponse(): NextResponse {
   )
 }
 
-export default function proxy(request: NextRequest, event: NextFetchEvent) {
+function shouldSendNoIndexHeader(request: NextRequest): boolean {
+  const { pathname, searchParams } = request.nextUrl
+
+  if (searchParams.has('_rsc')) return true
+  if (pathname.endsWith('/decision-snapshots')) return true
+  if (NOINDEX_EXACT_PATHS.has(pathname)) return true
+  return NOINDEX_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function withNoIndexHeader(response: NextResponse): NextResponse {
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  return response
+}
+
+export default async function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl
   const maintenanceMode = process.env.MAINTENANCE_MODE === 'true'
+  const shouldNoIndex = shouldSendNoIndexHeader(request)
 
   if (pathname.startsWith('/admin')) {
-    return adminAuthProxy(request as any, event)
+    const response = await adminAuthProxy(request as any, event)
+    const nextResponse = (response as NextResponse | undefined) ?? NextResponse.next()
+    return shouldNoIndex ? withNoIndexHeader(nextResponse) : nextResponse
   }
 
   if (
@@ -64,10 +83,12 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
     !isAllowedPageDuringMaintenance(pathname)
   ) {
     const maintenanceUrl = new URL('/maintenance', request.url)
-    return NextResponse.rewrite(maintenanceUrl)
+    const response = NextResponse.rewrite(maintenanceUrl)
+    return shouldNoIndex ? withNoIndexHeader(response) : response
   }
 
-  return NextResponse.next()
+  const response = NextResponse.next()
+  return shouldNoIndex ? withNoIndexHeader(response) : response
 }
 
 export const config = {

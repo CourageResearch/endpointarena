@@ -6,6 +6,10 @@ import { HeaderDots } from '@/components/site/chrome'
 import { formatCompactMoney } from '@/lib/markets/overview-shared'
 import { cn } from '@/lib/utils'
 import {
+  DASHBOARD_META_TEXT_CLASS,
+  DASHBOARD_SECTION_LABEL_CLASS,
+  DETAILS_BODY_TEXT_CLASS,
+  DETAILS_TOP_LABEL_CLASS,
   DETAILS_CARD_BORDER_STYLE,
   formatShares,
   type HumanTradeDirection,
@@ -14,8 +18,11 @@ import {
   type TweetVerificationStatus,
 } from '@/components/markets/dashboard/shared'
 
+const TRADE_DIRECTION_TAB_CLASS = 'relative inline-flex h-7 items-end px-0 pb-[6px] !font-sans !text-[11px] !font-medium uppercase tracking-[0.18em] !leading-none transition-colors after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:scale-x-0 after:rounded-full after:bg-current after:transition-transform focus-visible:outline-none disabled:cursor-not-allowed'
+
 export function MarketTradePanel({
   className,
+  marketQuestion,
   sessionStatus,
   verificationStatus,
   safeCallbackUrl,
@@ -37,6 +44,7 @@ export function MarketTradePanel({
   onSubmit,
 }: {
   className?: string
+  marketQuestion: string
   sessionStatus: 'authenticated' | 'unauthenticated' | 'loading'
   verificationStatus: TweetVerificationStatus | null
   safeCallbackUrl: string
@@ -57,44 +65,32 @@ export function MarketTradePanel({
   onTradeAmountChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
 }) {
+  const showVerificationPrompt = sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified
+
+  const gatedTradeAction = sessionStatus === 'unauthenticated'
+    ? {
+        href: `/signup?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`,
+        label: 'Create account to trade',
+        body: 'Create your account to place paper trades and track your points.',
+      }
+    : showVerificationPrompt
+      ? {
+          href: `/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`,
+          label: 'Complete verification',
+          body: verificationStatus.connected
+            ? 'Post one verification tweet to unlock trading.'
+            : 'Connect your X account and post one verification tweet to unlock trading.',
+        }
+      : null
+
   return (
     <section className={cn('space-y-3', className)}>
       <div className="px-1">
         <div className="flex items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#aa9d8d]">Trade</div>
+          <div className={DASHBOARD_SECTION_LABEL_CLASS}>Trade</div>
           <HeaderDots />
         </div>
       </div>
-
-      {sessionStatus === 'unauthenticated' ? (
-        <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
-          <p className="font-medium text-[#1a1a1a]">Create an account to trade.</p>
-          <p className="mt-1">Create your account to place paper trades and track your points.</p>
-          <Link
-            href={`/signup?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
-            className="mt-2 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
-          >
-            Create account
-          </Link>
-        </div>
-      ) : null}
-
-      {sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified ? (
-        <div className="rounded-sm border border-[#ef6f67] bg-[#fdfbf8] px-3 py-2 text-sm text-[#6f665b]">
-          <p className="font-medium text-[#1a1a1a]">Complete one-time X verification to trade.</p>
-          <p className="mt-1">
-            {verificationStatus.connected
-              ? 'Post one verification tweet to unlock trading.'
-              : 'Connect your X account and post one verification tweet to unlock trading.'}
-          </p>
-          <Link
-            href={`/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
-            className="mt-2 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
-          >
-            Complete verification
-          </Link>
-        </div>
-      ) : null}
 
       <div className="rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
         <div className="rounded-md bg-white/95 p-4">
@@ -104,16 +100,15 @@ export function MarketTradePanel({
                 type="button"
                 disabled={!isTradeVerified}
                 onClick={() => onTradeDirectionChange('buy')}
-                style={{ transform: 'scale(0.58)', transformOrigin: 'left bottom' }}
                 className={cn(
-                  'inline-flex items-end border-b px-0 pb-0.5 pt-2 text-xs font-medium uppercase tracking-[0.16em] leading-none font-sans transition-colors focus-visible:outline-none disabled:cursor-not-allowed',
+                  TRADE_DIRECTION_TAB_CLASS,
                   tradeDirection === 'buy'
                     ? isTradeVerified
-                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                      : 'border-[#b5aa9e] text-[#b5aa9e]'
+                      ? 'text-[#61584e] after:scale-x-100'
+                      : 'text-[#b8aa99] after:scale-x-100'
                     : isTradeVerified
-                      ? 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]'
-                      : 'border-transparent text-[#b5aa9e]',
+                      ? 'text-[#978a7b] hover:text-[#7f7468]'
+                      : 'text-[#b8aa99]',
                 )}
               >
                 Buy
@@ -122,22 +117,26 @@ export function MarketTradePanel({
                 type="button"
                 disabled={!isTradeVerified}
                 onClick={() => onTradeDirectionChange('sell')}
-                style={{ transform: 'scale(0.58)', transformOrigin: 'left bottom' }}
                 className={cn(
-                  'inline-flex items-end border-b px-0 pb-0.5 pt-2 text-xs font-medium uppercase tracking-[0.16em] leading-none font-sans transition-colors focus-visible:outline-none disabled:cursor-not-allowed',
+                  'ml-3',
+                  TRADE_DIRECTION_TAB_CLASS,
                   tradeDirection === 'sell'
                     ? isTradeVerified
-                      ? 'border-[#1a1a1a] text-[#1a1a1a]'
-                      : 'border-[#b5aa9e] text-[#b5aa9e]'
+                      ? 'text-[#61584e] after:scale-x-100'
+                      : 'text-[#b8aa99] after:scale-x-100'
                     : isTradeVerified
-                      ? 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]'
-                      : 'border-transparent text-[#b5aa9e]',
+                      ? 'text-[#978a7b] hover:text-[#7f7468]'
+                      : 'text-[#b8aa99]',
                 )}
               >
                 Sell
               </button>
             </div>
           </div>
+
+          <p className={cn('mb-3', DETAILS_BODY_TEXT_CLASS)}>
+            {marketQuestion}
+          </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
@@ -173,7 +172,7 @@ export function MarketTradePanel({
           <form className="mt-3 space-y-3" onSubmit={onSubmit}>
             <label className="block">
               <span className={cn(
-                'mb-1 block text-[11px] uppercase tracking-[0.16em]',
+                'mb-1 block text-[10px] font-medium uppercase tracking-[0.16em]',
                 isTradeVerified ? 'text-[#8a8075]' : 'text-[#b5aa9e]',
               )}>
                 Amount (USD)
@@ -192,13 +191,27 @@ export function MarketTradePanel({
               Paper Trading
             </div>
 
-            <button
-              type="submit"
-              disabled={!canSubmitTrade}
-              className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[#d9ccbc] bg-[#f7f2eb] px-4 text-sm font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e]"
-            >
-              {tradeSubmitting ? 'Submitting...' : `Trade ${tradeDirection === 'buy' ? 'Buy' : 'Sell'}`}
-            </button>
+            {gatedTradeAction ? (
+              <>
+                <p className="text-sm leading-relaxed text-[#6f665b]">
+                  {gatedTradeAction.body}
+                </p>
+                <Link
+                  href={gatedTradeAction.href}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[#d9ccbc] bg-[#f7f2eb] px-4 text-sm font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
+                >
+                  {gatedTradeAction.label}
+                </Link>
+              </>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSubmitTrade}
+                className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[#d9ccbc] bg-[#f7f2eb] px-4 text-sm font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e]"
+              >
+                {tradeSubmitting ? 'Submitting...' : `Trade ${tradeDirection === 'buy' ? 'Buy' : 'Sell'}`}
+              </button>
+            )}
           </form>
 
           {tradeError ? (
@@ -217,18 +230,18 @@ export function MarketTradePanel({
 
       {isTradeVerified ? (
         <>
-          <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-sm text-[#7c7267]">
+          <dl className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 px-1', DASHBOARD_META_TEXT_CLASS)}>
             <div className="inline-flex items-baseline gap-1.5">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">Cash</dt>
-              <dd className="text-[13px] font-normal text-[#6d645a]">{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>Cash</dt>
+              <dd className={DASHBOARD_META_TEXT_CLASS}>{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
             </div>
             <div className="inline-flex items-baseline gap-1.5">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">YES Shares</dt>
-              <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>YES Shares</dt>
+              <dd className={DASHBOARD_META_TEXT_CLASS}>{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
             </div>
             <div className="inline-flex items-baseline gap-1.5">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-[#a89b8c]">NO Shares</dt>
-              <dd className="text-[13px] font-normal text-[#6d645a]">{formatShares(traderSnapshot?.noShares ?? 0)}</dd>
+              <dt className={DETAILS_TOP_LABEL_CLASS}>NO Shares</dt>
+              <dd className={DASHBOARD_META_TEXT_CLASS}>{formatShares(traderSnapshot?.noShares ?? 0)}</dd>
             </div>
           </dl>
           {traderSnapshotLoading ? (

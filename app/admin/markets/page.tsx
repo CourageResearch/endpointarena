@@ -1,45 +1,12 @@
-import { asc } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { db, fdaCalendarEvents, predictionMarkets } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminMarketManager } from '@/components/AdminMarketManager'
-import { getLatestMarketRunSnapshot } from '@/lib/market-run-logs'
+import { getMarketAdminData } from '@/lib/admin-market-data'
 
 export const dynamic = 'force-dynamic'
-
-async function getMarketAdminData() {
-  const [events, markets] = await Promise.all([
-    db.query.fdaCalendarEvents.findMany({
-      orderBy: [asc(fdaCalendarEvents.decisionDate)],
-    }),
-    db.query.predictionMarkets.findMany(),
-  ])
-
-  const marketByEventId = new Map(markets.map((market) => [market.fdaEventId, market]))
-
-  return events.map((event) => {
-    const market = marketByEventId.get(event.id)
-    const marketStatus: 'OPEN' | 'RESOLVED' | null = market?.status === 'OPEN' || market?.status === 'RESOLVED'
-      ? market.status
-      : null
-
-    return {
-      id: event.id,
-      drugName: event.drugName,
-      companyName: event.companyName,
-      symbols: event.symbols,
-      decisionDate: event.decisionDate.toISOString(),
-      outcome: event.outcome,
-      marketId: market?.id ?? null,
-      marketStatus,
-      marketPriceYes: market?.priceYes ?? null,
-      marketOpenedAt: market?.openedAt?.toISOString() ?? null,
-    }
-  })
-}
 
 export default async function AdminMarketsPage() {
   const session = await getServerSession(authOptions)
@@ -47,41 +14,29 @@ export default async function AdminMarketsPage() {
     redirect('/login')
   }
 
-  const [events, initialRunSnapshot] = await Promise.all([
-    getMarketAdminData(),
-    getLatestMarketRunSnapshot(),
-  ])
-  const openMarkets = events.filter((event) => event.marketStatus === 'OPEN').length
-  const resolvedMarkets = events.filter((event) => event.marketStatus === 'RESOLVED').length
-  const pendingWithoutMarket = events.filter((event) => event.outcome === 'Pending' && event.marketStatus === null).length
-  const pendingWithMarket = events.filter((event) => event.outcome === 'Pending' && event.marketStatus === 'OPEN').length
+  const events = await getMarketAdminData()
 
   return (
     <AdminConsoleLayout
-      title="Market Operations"
-      description="Open event markets, run the daily cycle, and monitor which events are missing market coverage."
+      title="Drugs"
+      description="Search tracked drugs, update outcomes, open missing markets, and remove entries you no longer want."
       activeTab="markets"
     >
-      <section className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
-          <p className="text-xl font-semibold text-[#3a8a2e]">{openMarkets}</p>
-          <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Open Markets</p>
-        </div>
-        <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] p-3">
-          <p className="text-xl font-semibold text-[#8a8075]">{resolvedMarkets}</p>
-          <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Resolved Markets</p>
-        </div>
-        <div className="rounded-none border border-[#EF6F67]/30 bg-[#EF6F67]/5 p-3">
-          <p className="text-xl font-semibold text-[#EF6F67]">{pendingWithoutMarket}</p>
-          <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Pending, No Market</p>
-        </div>
-        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
-          <p className="text-xl font-semibold text-[#5BA5ED]">{pendingWithMarket}</p>
-          <p className="text-[11px] text-[#8a8075] uppercase tracking-[0.1em] mt-1">Pending, Open Market</p>
-        </div>
-      </section>
-
-      <AdminMarketManager events={events} initialRunSnapshot={initialRunSnapshot} />
+      <AdminMarketManager
+        events={events}
+        sections={['search', 'openMarkets', 'needsMarket', 'resolvedMarkets']}
+        labels={{
+          searchPlaceholder: 'Search drug, sponsor, ticker, endpoint',
+          openMarketsTitle: '',
+          openMarketsDescription: '',
+          openMarketsEmptyState: 'No live drugs match the current filter.',
+          needsMarketTitle: 'Drugs Without Markets',
+          needsMarketDescription: 'Pending Phase 2 results questions that still need a market opened.',
+          resolvedMarketsTitle: 'Closed Drugs',
+          resolvedMarketsDescription: 'Tracked drugs with resolved markets.',
+          resolvedMarketsEmptyState: 'No closed drugs match the current filter.',
+        }}
+      />
     </AdminConsoleLayout>
   )
 }

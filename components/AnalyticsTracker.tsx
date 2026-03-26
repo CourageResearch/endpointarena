@@ -1,25 +1,12 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 
 type AnalyticsEvent = {
-  type: 'pageview' | 'click'
+  type: 'pageview'
   url: string
   referrer?: string
-  elementId?: string
-}
-
-type AnalyticsContextValue = {
-  trackClick: (elementId: string) => void
-}
-
-const AnalyticsContext = createContext<AnalyticsContextValue>({
-  trackClick: () => {},
-})
-
-export function useAnalytics() {
-  return useContext(AnalyticsContext)
 }
 
 const FLUSH_DELAY = 2000
@@ -96,22 +83,5 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
     }
   }, [flush])
 
-  const trackClick = useCallback(
-    (elementId: string) => {
-      if (isLocalhost) return
-      if (pathname.startsWith('/admin')) return
-      enqueue({
-        type: 'click',
-        url: pathname,
-        elementId,
-      })
-    },
-    [isLocalhost, pathname, enqueue]
-  )
-
-  return (
-    <AnalyticsContext.Provider value={{ trackClick }}>
-      {children}
-    </AnalyticsContext.Provider>
-  )
+  return <>{children}</>
 }

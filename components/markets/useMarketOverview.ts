@@ -4,8 +4,22 @@ import { useEffect, useMemo, useState } from 'react'
 import { getApiErrorMessage } from '@/lib/client-api'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
-async function requestMarketOverview(): Promise<OverviewResponse> {
-  const response = await fetch('/api/markets/overview', { cache: 'no-store' })
+async function requestMarketOverview(
+  marketId?: string | null,
+  options: {
+    includeResolved?: boolean
+  } = {},
+): Promise<OverviewResponse> {
+  const params = new URLSearchParams()
+  if (marketId) {
+    params.set('marketId', marketId)
+  }
+  if (options.includeResolved) {
+    params.set('includeResolved', '1')
+  }
+  const query = params.toString()
+  const url = query ? `/api/markets/overview?${query}` : '/api/markets/overview'
+  const response = await fetch(url, { cache: 'no-store' })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
     throw new Error(getApiErrorMessage(payload, 'Failed to load markets'))
@@ -13,7 +27,13 @@ async function requestMarketOverview(): Promise<OverviewResponse> {
   return payload as OverviewResponse
 }
 
-export function useMarketOverview(initialData: OverviewResponse | null = null) {
+export function useMarketOverview(
+  initialData: OverviewResponse | null = null,
+  marketId?: string | null,
+  options: {
+    includeResolved?: boolean
+  } = {},
+) {
   const [data, setData] = useState<OverviewResponse | null>(initialData)
   const [loading, setLoading] = useState(initialData == null)
   const [refreshing, setRefreshing] = useState(false)
@@ -27,7 +47,7 @@ export function useMarketOverview(initialData: OverviewResponse | null = null) {
       else setRefreshing(true)
 
       try {
-        const next = await requestMarketOverview()
+        const next = await requestMarketOverview(marketId, options)
         if (disposed) return
         setData(next)
         setError(null)
@@ -50,12 +70,12 @@ export function useMarketOverview(initialData: OverviewResponse | null = null) {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [initialData])
+  }, [initialData, marketId, options.includeResolved])
 
   const reload = async () => {
     setRefreshing(true)
     try {
-      const next = await requestMarketOverview()
+      const next = await requestMarketOverview(marketId, options)
       setData(next)
       setError(null)
     } catch (err) {

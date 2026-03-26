@@ -1,5 +1,6 @@
-import { MODEL_IDS, MODEL_INFO, OUTCOME_COLORS, type FDAOutcome, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, MODEL_INFO, OUTCOME_COLORS, type ModelId } from '@/lib/constants'
 import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
+import { DEFAULT_PHASE2_RESULTS_QUESTION } from '@/lib/trial-questions'
 import type {
   DailyRunActivityPhase,
   DailyRunPlannedMarket,
@@ -10,11 +11,18 @@ import type {
 
 export interface AdminMarketEvent {
   id: string
-  drugName: string
-  companyName: string
-  symbols: string
+  trialId: string
+  trialQuestionId: string
+  questionSlug: string
+  questionPrompt: string
+  shortTitle: string
+  sponsorName: string
+  sponsorTicker: string
+  nctNumber: string
   decisionDate: string
   outcome: string
+  questionStatus: 'live' | 'coming_soon'
+  isBettable: boolean
   marketId: string | null
   marketStatus: 'OPEN' | 'RESOLVED' | null
   marketPriceYes: number | null
@@ -58,7 +66,7 @@ type ExecutionStepStatus = 'queued' | 'running' | 'waiting' | 'ok' | 'error' | '
 export interface ExecutionPlanStep {
   key: string
   marketId: string
-  fdaEventId: string
+  trialQuestionId: string
   modelId: ModelId
   marketSequence: number
   modelSequence: number
@@ -69,9 +77,12 @@ export interface ExecutionPlanStep {
 
 export interface ExecutionPlanMarket {
   marketId: string
-  fdaEventId: string
-  drugName: string
-  companyName: string
+  trialQuestionId: string
+  trialId: string
+  shortTitle: string
+  sponsorName: string
+  nctNumber: string
+  questionPrompt: string
   decisionDate: string
   marketSequence: number
   steps: ExecutionPlanStep[]
@@ -142,9 +153,10 @@ export function buildExecutionPlan(input: {
     ? input.orderedMarkets
     : sortCycleEvents(input.events, input.fallbackStatuses).map((event) => ({
         marketId: event.marketId as string,
-        fdaEventId: event.id,
-        drugName: event.drugName,
-        companyName: event.companyName,
+        trialQuestionId: event.trialQuestionId,
+        trialId: event.trialId,
+        shortTitle: event.shortTitle,
+        sponsorName: event.sponsorName,
         decisionDate: event.decisionDate,
       }))
 
@@ -157,7 +169,7 @@ export function buildExecutionPlan(input: {
       return {
         key: `${market.marketId}:${modelId}`,
         marketId: market.marketId,
-        fdaEventId: market.fdaEventId,
+        trialQuestionId: market.trialQuestionId,
         modelId,
         marketSequence: marketIndex + 1,
         modelSequence: modelIndex + 1,
@@ -169,9 +181,12 @@ export function buildExecutionPlan(input: {
 
     return {
       marketId: market.marketId,
-      fdaEventId: market.fdaEventId,
-      drugName: event?.drugName ?? market.drugName,
-      companyName: event?.companyName ?? market.companyName,
+      trialQuestionId: market.trialQuestionId,
+      trialId: event?.trialId ?? market.trialId,
+      shortTitle: event?.shortTitle ?? market.shortTitle,
+      sponsorName: event?.sponsorName ?? market.sponsorName,
+      nctNumber: event?.nctNumber ?? '',
+      questionPrompt: event?.questionPrompt ?? DEFAULT_PHASE2_RESULTS_QUESTION,
       decisionDate: event?.decisionDate ?? market.decisionDate,
       marketSequence: marketIndex + 1,
       steps,
@@ -414,7 +429,7 @@ export function buildRunSummaryFromSnapshot(snapshot: AdminMarketRunSnapshot | n
 
       return {
         marketId: '',
-        fdaEventId: '',
+        trialQuestionId: entry.trialQuestionId ?? '',
         actorId: entry.actorId,
         modelId,
         action: entry.action,
@@ -454,7 +469,7 @@ export function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | 
         if (!modelId || !latestResultLog.action || !latestResultLog.actionStatus) return null
         return {
           marketId: '',
-          fdaEventId: '',
+          trialQuestionId: latestResultLog.trialQuestionId ?? '',
           actorId: latestResultLog.actorId,
           modelId,
           action: latestResultLog.action,
@@ -471,7 +486,7 @@ export function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | 
         if (!modelId || !latestErrorLog.action || !latestErrorLog.actionStatus) return null
         return {
           marketId: '',
-          fdaEventId: '',
+          trialQuestionId: latestErrorLog.trialQuestionId ?? '',
           actorId: latestErrorLog.actorId,
           modelId,
           action: latestErrorLog.action,
@@ -539,7 +554,7 @@ export function buildExecutionPlanFromSnapshot(
     if (log.actionStatus && modelId && log.marketId) {
       plan = applyProgressToExecutionPlan(plan, {
         marketId: log.marketId,
-        fdaEventId: log.fdaEventId ?? '',
+        trialQuestionId: log.trialQuestionId ?? '',
         actorId: log.actorId,
         modelId,
         action: log.action ?? 'HOLD',
@@ -648,6 +663,6 @@ export function getMarketStatusTone(status: AdminMarketEvent['marketStatus']): s
 }
 
 export function getOutcomeStyle(outcome: string): string {
-  const colors = OUTCOME_COLORS[outcome as FDAOutcome]
+  const colors = OUTCOME_COLORS[outcome as keyof typeof OUTCOME_COLORS]
   return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
 }

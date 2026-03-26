@@ -33,6 +33,7 @@ const CLAUDE_CACHE_WRITE_5M_MULTIPLIER = 1.25
 const CLAUDE_CACHE_WRITE_1H_MULTIPLIER = 2
 const CLAUDE_CACHE_READ_MULTIPLIER = 0.1
 const CLAUDE_US_INFERENCE_TOKEN_MULTIPLIER = 1.1
+const GPT_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD = 272_000
 const CLAUDE_WEB_SEARCH_USD_PER_REQUEST = 0.01
 const GPT_WEB_SEARCH_MEDIUM_CONTEXT_USD_PER_REQUEST = 0.025
 const GROK_WEB_SEARCH_USD_PER_REQUEST = 0.005
@@ -65,9 +66,12 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     webSearchUsdPerRequest: CLAUDE_WEB_SEARCH_USD_PER_REQUEST,
   },
   'gpt-5.2': {
-    inputUsdPer1MTokens: 1.75,
-    outputUsdPer1MTokens: 14,
-    cachedInputUsdPer1MTokens: 0.175,
+    inputUsdPer1MTokens: 2.5,
+    outputUsdPer1MTokens: 15,
+    longContextInputTokenThreshold: GPT_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
+    longContextInputUsdPer1MTokens: 5,
+    longContextOutputUsdPer1MTokens: 22.5,
+    cachedInputUsdPer1MTokens: 0.25,
     webSearchUsdPerRequest: GPT_WEB_SEARCH_MEDIUM_CONTEXT_USD_PER_REQUEST,
   },
   'grok-4': {

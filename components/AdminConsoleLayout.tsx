@@ -7,7 +7,7 @@ import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { ensureCrashEventsSchema } from '@/lib/crash-events'
 
-type AdminTab = 'predictions' | 'metadata' | 'waitlist' | 'users' | 'contact' | 'markets' | 'humanTrades' | 'settings' | 'resources' | 'analytics' | 'costs' | 'crashes' | 'outcomes'
+type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'ai' | 'markets' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'update'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -18,19 +18,17 @@ interface AdminConsoleLayoutProps {
 }
 
 const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
-  { id: 'markets', href: '/admin/markets', label: 'Markets' },
+  { id: 'ai', href: '/admin/ai', label: 'AI' },
+  { id: 'markets', href: '/admin/markets', label: 'Drugs' },
+  { id: 'update', href: '/admin/update', label: 'Update' },
   { id: 'outcomes', href: '/admin/outcomes', label: 'Outcomes' },
-  { id: 'humanTrades', href: '/admin/human-trades', label: 'Human Trades' },
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
+  { id: 'searches', href: '/admin/searches', label: 'Searches' },
   { id: 'crashes', href: '/admin/crashes', label: 'Crashes' },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
-  { id: 'resources', href: '/admin/resources', label: 'Resources' },
-  { id: 'costs', href: '/admin/costs', label: 'Costs' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
-  { id: 'metadata', href: '/admin/metadata', label: 'Meta Data' },
-  { id: 'predictions', href: '/admin/predictions', label: 'Predictions' },
 ]
 
 async function getWaitlistBadgeData() {
@@ -95,6 +93,7 @@ async function getCrashes24hCount() {
 
 export async function AdminConsoleLayout({
   title,
+  description,
   activeTab,
   topActions,
   children,
@@ -189,6 +188,7 @@ export async function AdminConsoleLayout({
                 <HeaderDots />
               </div>
               <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
+              <p className="mt-2 max-w-2xl text-sm text-[#8a8075]">{description}</p>
             </div>
           </div>
           <div className="mt-1">

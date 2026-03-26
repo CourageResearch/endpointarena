@@ -6,10 +6,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { ADMIN_EMAIL } from '@/lib/constants'
+import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
 
 export const dynamic = 'force-dynamic'
 
 async function getAnalyticsData(days: number) {
+  await ensureAnalyticsEventsSchema()
+
   const today = new Date()
   const todayUtcMidnight = new Date(Date.UTC(
     today.getUTCFullYear(),

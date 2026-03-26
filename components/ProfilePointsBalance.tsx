@@ -128,7 +128,7 @@ export function ProfilePointsBalance({
   return (
     <>
       <ProfileRefillCelebration pointsAwarded={celebrationAwarded} />
-      <p className="mt-4 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{label}</p>
       <p className="mt-1 text-xs text-[#8a8075]">Daily cash refill auto-applies when eligible.</p>
     </>
   )

@@ -16,7 +16,7 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [errorCode, setErrorCode] = useState('')
-  const [callbackUrl, setCallbackUrl] = useState('/markets')
+  const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [geo, setGeo] = useState({ country: '', state: '' })
   const signupsClosed = errorCode === 'SIGNUPS_CLOSED'
 

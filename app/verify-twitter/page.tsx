@@ -1,9 +1,17 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
+import { buildNoIndexMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = buildNoIndexMetadata({
+  title: 'Verify X Account',
+  description: 'Private verification flow for linking an X account to Endpoint Arena.',
+  path: '/verify-twitter',
+})
 
 function normalizeCallbackUrl(raw: string | null | undefined): string {
-  if (!raw) return '/markets'
-  if (!raw.startsWith('/')) return '/markets'
-  if (raw.startsWith('//')) return '/markets'
+  if (!raw) return '/trials'
+  if (!raw.startsWith('/')) return '/trials'
+  if (raw.startsWith('//')) return '/trials'
   return raw
 }
 

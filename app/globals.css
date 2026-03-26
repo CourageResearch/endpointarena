@@ -15,13 +15,13 @@
   box-sizing: border-box;
 }
 
-html,
-body {
+html {
   max-width: 100%;
-  overflow-x: clip;
 }
 
 body {
+  min-height: 100%;
+  max-width: 100%;
   background-color: var(--ea-bg);
   color: var(--ea-text);
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -44,25 +44,6 @@ textarea {
 ::selection {
   background: rgba(45, 124, 246, 0.16);
   color: var(--ea-text);
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #18181b;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
 }
 
 /* Touch target utility - minimum 44px for accessibility */
@@ -116,58 +97,4 @@ textarea {
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
-}
-
-/* Thinner, neutral scrollbar for admin tab strip */
-.admin-tabs-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #b5aa9e transparent;
-}
-
-.admin-tabs-scroll::-webkit-scrollbar {
-  height: 4px;
-}
-
-.admin-tabs-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.admin-tabs-scroll::-webkit-scrollbar-thumb {
-  background: #b5aa9e;
-  border-radius: 9999px;
-}
-
-.admin-tabs-scroll::-webkit-scrollbar-thumb:hover {
-  background: #9e907f;
-}
-
-/* Visible, subtle scrollbar for reasoning feed panel */
-.reasoning-scrollbox {
-  scrollbar-width: thin;
-  scrollbar-color: #c8baaa #efe8dd;
-}
-
-@media (min-width: 1280px) {
-  .reasoning-scrollbox {
-    scrollbar-gutter: stable;
-  }
-}
-
-.reasoning-scrollbox::-webkit-scrollbar {
-  width: 6px;
-}
-
-.reasoning-scrollbox::-webkit-scrollbar-track {
-  background: #efe8dd;
-  border-radius: 9999px;
-}
-
-.reasoning-scrollbox::-webkit-scrollbar-thumb {
-  background: #c8baaa;
-  border-radius: 9999px;
-  border: 1px solid #efe8dd;
-}
-
-.reasoning-scrollbox::-webkit-scrollbar-thumb:hover {
-  background: #b2a28f;
 }

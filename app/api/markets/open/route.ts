@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { ensureAdmin } from '@/lib/auth'
-import { openMarketForEvent } from '@/lib/markets/engine'
+import { openMarketForTrialQuestion } from '@/lib/markets/engine'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 
@@ -9,14 +10,23 @@ export async function POST(request: NextRequest) {
 
   try {
     await ensureAdmin()
-    const body = await parseJsonBody<{ fdaEventId?: string }>(request)
-    const fdaEventId = typeof body?.fdaEventId === 'string' ? body.fdaEventId : ''
+    const body = await parseJsonBody<{ trialQuestionId?: string; fdaEventId?: string }>(request)
+    const trialQuestionId = typeof body?.trialQuestionId === 'string'
+      ? body.trialQuestionId
+      : typeof body?.fdaEventId === 'string'
+        ? body.fdaEventId
+        : ''
 
-    if (!fdaEventId) {
-      throw new ValidationError('fdaEventId is required')
+    if (!trialQuestionId) {
+      throw new ValidationError('trialQuestionId is required')
     }
 
-    const market = await openMarketForEvent(fdaEventId)
+    const market = await openMarketForTrialQuestion(trialQuestionId)
+
+    revalidatePath('/trials')
+    revalidatePath('/admin/ai')
+    revalidatePath('/admin/markets')
+    revalidatePath('/admin/predictions')
 
     return successResponse({ success: true, market }, {
       headers: {

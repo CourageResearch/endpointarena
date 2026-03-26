@@ -2,12 +2,16 @@
 
 import { ModelIcon } from '@/components/ModelIcon'
 import { HeaderDots } from '@/components/site/chrome'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 import { MODEL_INFO } from '@/lib/constants'
 import { formatPercent, type RecentMarketActionRow } from '@/lib/markets/overview-shared'
 import { cn } from '@/lib/utils'
 import {
   APPROVE_TEXT_CLASS,
-  formatDateTimeLocalCompact,
+  DASHBOARD_META_TEXT_CLASS,
+  DASHBOARD_SECTION_LABEL_CLASS,
+  DETAILS_TOP_LABEL_CLASS,
+  DETAILS_BODY_TEXT_CLASS,
   REJECT_TEXT_CLASS,
   type ActivityFilterOption,
 } from '@/components/markets/dashboard/shared'
@@ -108,24 +112,24 @@ function MarketCommentCard({ action }: { action: RecentMarketActionRow }) {
                 <ModelIcon id={action.modelId} className="h-3.5 w-3.5" />
               </div>
               <div className="min-w-0 flex items-baseline gap-3 sm:gap-4">
-                <div className="min-w-0 truncate text-[14px] leading-tight font-medium text-[#2f2a24]" title={model.fullName}>
+                <div className="min-w-0 truncate text-[13px] leading-tight font-medium text-[#2f2a24]" title={model.fullName}>
                   {model.fullName}
                 </div>
-                <div className="shrink-0 text-[13px] leading-[1.3]">
+                <div className={cn('shrink-0', DASHBOARD_META_TEXT_CLASS)}>
                   {actionValue}
                 </div>
               </div>
             </div>
-            <div className="shrink-0 text-right text-[12px] leading-tight font-medium tabular-nums text-[#8f8478]">
-              {formatDateTimeLocalCompact(action.createdAt || action.runDate)}
+            <div className={cn('shrink-0 text-right tabular-nums', DASHBOARD_META_TEXT_CLASS)}>
+              <LocalDateTime value={action.createdAt || action.runDate} emptyLabel="Unknown time" />
             </div>
           </div>
 
-          <dl className="mt-1.5 grid grid-cols-1 gap-y-1.5 text-[13px] leading-[1.35]">
+          <dl className={cn('mt-1.5 grid grid-cols-1 gap-y-1.5', DASHBOARD_META_TEXT_CLASS)}>
             <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <dt className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Size:</dt>
-              <dd className="shrink-0 break-words font-medium tabular-nums text-[#6d645a]">{sizeText}</dd>
-              <dt className="ml-2 shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">Delta:</dt>
+              <dt className={cn('shrink-0', DETAILS_TOP_LABEL_CLASS)}>Size:</dt>
+              <dd className="shrink-0 break-words tabular-nums text-[#6d645a]">{sizeText}</dd>
+              <dt className={cn('ml-2 shrink-0', DETAILS_TOP_LABEL_CLASS)}>Delta:</dt>
               <dd className="min-w-0 flex-1 break-words font-medium tabular-nums">
                 <span className={cn('font-medium tabular-nums', changeClass)}>{changeText}</span>
                 <span className="text-[#6d645a]"> ({probabilityRangeText})</span>
@@ -134,10 +138,10 @@ function MarketCommentCard({ action }: { action: RecentMarketActionRow }) {
           </dl>
 
           <div className="mt-2">
-            <div className="mb-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[#aa9d8d]">
+            <div className={cn('mb-0.5', DETAILS_TOP_LABEL_CLASS)}>
               {action.status === 'error' ? 'Error Note' : action.status === 'skipped' ? 'Skip Note' : 'Reasoning'}
             </div>
-            <p className="truncate-wrap whitespace-pre-wrap text-[13px] leading-[1.45] text-[#3f392f]">{reason}</p>
+            <p className={cn('truncate-wrap whitespace-pre-wrap text-[#3f392f]', DETAILS_BODY_TEXT_CLASS)}>{reason}</p>
           </div>
         </div>
       </div>
@@ -180,11 +184,12 @@ export function MarketActivityFeed({
     <section className={cn('min-w-0 space-y-2', className)}>
       <div className="px-1 py-1">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#a89b8c]">Activity Feed</div>
+          <div className={DASHBOARD_SECTION_LABEL_CLASS}>Activity Feed</div>
           <HeaderDots />
           <span
             className={cn(
-              'inline-flex h-6 w-[10.5rem] items-center justify-center rounded-full border bg-white/85 px-2.5 text-[11px] text-[#7c7267] transition-opacity',
+              'inline-flex h-6 w-[10.5rem] items-center justify-center rounded-full border bg-white/85 px-2.5 transition-opacity',
+              DASHBOARD_META_TEXT_CLASS,
               scrubbedChartDayKey && scrubbedChartDayLabel
                 ? 'border-[#d9ccbc] opacity-100'
                 : 'border-transparent opacity-0',
@@ -197,22 +202,23 @@ export function MarketActivityFeed({
 
         <div className="mt-3 flex items-start gap-3">
           <div className="min-w-0 flex flex-1 flex-col gap-1.5">
-            <div className="min-w-0 flex flex-wrap items-center gap-0.5">
+            <div className="flex items-center gap-2">
+              <div className="hide-scrollbar min-w-0 flex-1 overflow-x-auto overscroll-x-contain">
+                <div className="inline-flex min-w-max items-center gap-[10px] whitespace-nowrap pr-0">
               <button
                 type="button"
                 onClick={onSelectAllModels}
                 aria-pressed={allModelsSelected}
                 aria-label="All Models"
                 title="All Models"
-                style={{ fontSize: '12px', lineHeight: 1.1 }}
                 className={cn(
-                  'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-1 font-medium transition',
+                  'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-px transition',
                   allModelsSelected
                     ? 'border-[#1a1a1a] text-[#1a1a1a]'
                     : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
                 )}
               >
-                <span>All</span>
+                <span className="text-[10.5px] leading-none font-normal tracking-[0em]">All</span>
               </button>
 
               {filterOptions.map((option) => (
@@ -223,23 +229,24 @@ export function MarketActivityFeed({
                   aria-label={option.label}
                   title={option.label}
                   aria-pressed={option.active}
-                  style={{ fontSize: '12px', lineHeight: 1.1 }}
                   className={cn(
-                    'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-1 font-medium transition',
+                    'inline-flex h-7 items-center justify-center whitespace-nowrap border-b px-px transition',
                     option.active
                       ? 'border-[#1a1a1a] text-[#1a1a1a]'
                       : 'border-transparent text-[#8a8075] hover:border-[#d9ccbc] hover:text-[#1a1a1a]',
                   )}
                 >
-                  <span>{option.label}</span>
+                  <span className="text-[10.5px] leading-none font-normal tracking-[0em]">{option.label}</span>
                 </button>
               ))}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={onToggleSort}
                 aria-label={commentSort === 'newest' ? 'Sort newest first' : 'Sort oldest first'}
                 title={commentSort === 'newest' ? 'Sorting: newest first' : 'Sorting: oldest first'}
-                className="ml-auto inline-flex h-7 w-7 items-center justify-center text-sm font-medium text-[#8a8075] transition-colors hover:text-[#1a1a1a]"
+                  className={cn('inline-flex h-7 w-7 shrink-0 items-center justify-center font-medium transition-colors hover:text-[#1a1a1a]', DASHBOARD_META_TEXT_CLASS, 'text-[#8a8075]')}
               >
                 <span className="text-sm leading-none" aria-hidden="true">
                   {commentSort === 'newest' ? '↓' : '↑'}
@@ -252,10 +259,15 @@ export function MarketActivityFeed({
 
       <div className="pt-2">
         {selectedMarketActions.length === 0 ? (
-          <div className="rounded-xl border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
-            No activity entries match the current filters
-            {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
-            {' '}for this market.
+          <div
+            className="rounded-none p-px"
+            style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}
+          >
+            <div className="rounded-none bg-white/95 px-4 py-4 text-sm text-[#6f665b]">
+              No activity entries match the current filters
+              {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
+              {' '}for this market.
+            </div>
           </div>
         ) : (
           <>

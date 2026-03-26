@@ -5,15 +5,16 @@ import { DEPRECATED_MODEL_IDS, type ModelId, MODEL_IDS } from '@/lib/constants'
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
-import { db, fdaCalendarEvents, marketAccounts, marketPositions, modelDecisionSnapshots, predictionMarkets } from '@/lib/db'
+import { db, marketAccounts, marketPositions, modelDecisionSnapshots, predictionMarkets, trialQuestions } from '@/lib/db'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { generateAndStoreModelDecisionSnapshot } from '@/lib/model-decision-snapshots'
 import { getModelActorId } from '@/lib/market-actors'
-import { enrichFdaEvents } from '@/lib/fda-event-metadata'
+import { isSupportedTrialQuestionSlug, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
 
 type StreamRequestBody = {
+  trialQuestionId?: string
   fdaEventId?: string
   modelId?: string
 }
@@ -25,11 +26,15 @@ export async function POST(request: NextRequest) {
     await ensureAdmin()
 
     const body = await parseJsonBody<StreamRequestBody>(request)
-    const fdaEventId = typeof body.fdaEventId === 'string' ? body.fdaEventId : ''
+    const trialQuestionId = typeof body.trialQuestionId === 'string'
+      ? body.trialQuestionId
+      : typeof body.fdaEventId === 'string'
+        ? body.fdaEventId
+        : ''
     const modelIdRaw = typeof body.modelId === 'string' ? body.modelId.trim() : ''
 
-    if (!fdaEventId || !modelIdRaw) {
-      throw new ValidationError('fdaEventId and modelId are required')
+    if (!trialQuestionId || !modelIdRaw) {
+      throw new ValidationError('trialQuestionId and modelId are required')
     }
 
     if (DEPRECATED_MODEL_IDS.includes(modelIdRaw as (typeof DEPRECATED_MODEL_IDS)[number])) {
@@ -41,32 +46,38 @@ export async function POST(request: NextRequest) {
     }
     const modelId = modelIdRaw as ModelId
 
-    const event = await db.query.fdaCalendarEvents.findFirst({
-      where: eq(fdaCalendarEvents.id, fdaEventId),
+    const question = await db.query.trialQuestions.findFirst({
+      where: eq(trialQuestions.id, trialQuestionId),
+      with: {
+        trial: true,
+      },
     })
 
-    if (!event) {
-      throw new NotFoundError('FDA event not found')
+    if (!question) {
+      throw new NotFoundError('Trial question not found')
     }
-    const [enrichedEvent] = await enrichFdaEvents([event])
 
-    if (event.outcome !== 'Pending') {
-      throw new ValidationError(`Forward-only policy: cannot create a new snapshot for a resolved event (${event.outcome}).`)
+    if (!isSupportedTrialQuestionSlug(question.slug)) {
+      throw new ValidationError('This question type has been removed from active markets.')
+    }
+
+    if (question.outcome !== 'Pending') {
+      throw new ValidationError(`Forward-only policy: cannot create a new snapshot for a resolved question (${question.outcome}).`)
     }
 
     const market = await db.query.predictionMarkets.findFirst({
       where: and(
-        eq(predictionMarkets.fdaEventId, fdaEventId),
+        eq(predictionMarkets.trialQuestionId, trialQuestionId),
         eq(predictionMarkets.status, 'OPEN'),
       ),
     })
 
     if (!market) {
-      throw new ValidationError('An open market is required before running a combined decision snapshot for this event.')
+      throw new ValidationError('An open market is required before running a combined decision snapshot for this question.')
     }
 
     const actorId = await getModelActorId(modelId)
-    const [account, position, runtimeConfig, openMarkets, marketEvents] = await Promise.all([
+    const [account, position, runtimeConfig] = await Promise.all([
       db.query.marketAccounts.findFirst({
         where: eq(marketAccounts.actorId, actorId),
       }),
@@ -77,31 +88,11 @@ export async function POST(request: NextRequest) {
         ),
       }),
       getMarketRuntimeConfig(),
-      db.query.predictionMarkets.findMany({
-        where: eq(predictionMarkets.status, 'OPEN'),
-      }),
-      db.query.fdaCalendarEvents.findMany(),
     ])
 
     if (!account || !position) {
       throw new ValidationError('Market account or position state is missing for this model.')
     }
-
-    const eventById = new Map(marketEvents.map((row) => [row.id, row]))
-    const otherOpenMarkets = openMarkets
-      .filter((row) => row.id !== market.id)
-      .map((row) => {
-        const otherEvent = eventById.get(row.fdaEventId)
-        if (!otherEvent) return null
-        return {
-          drugName: otherEvent.drugName,
-          companyName: otherEvent.companyName,
-          decisionDate: otherEvent.decisionDate.toISOString(),
-          yesPrice: row.priceYes,
-        }
-      })
-      .filter((row): row is NonNullable<typeof row> => row != null)
-      .sort((a, b) => a.decisionDate.localeCompare(b.decisionDate))
 
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
@@ -118,21 +109,21 @@ export async function POST(request: NextRequest) {
             modelId,
             actorId,
             runDate: new Date(),
-            event,
-            nctId: enrichedEvent?.nctId ?? null,
+            trial: question.trial,
+            trialQuestionId: question.id,
+            questionPrompt: normalizeTrialQuestionPrompt(question.prompt),
             market,
             account,
             position,
             runtimeConfig,
-            otherOpenMarkets,
           })
 
           revalidatePath('/')
           revalidatePath('/leaderboard')
-          revalidatePath('/markets')
+          revalidatePath('/trials')
           revalidatePath('/admin')
-          revalidatePath('/fda-calendar')
-          revalidatePath(`/markets/${encodeURIComponent(market.id)}`)
+          revalidatePath('/admin/predictions')
+          revalidatePath(`/trials/${encodeURIComponent(market.id)}`)
 
           send({
             type: 'complete',
@@ -145,6 +136,7 @@ export async function POST(request: NextRequest) {
               durationMs: prediction.durationMs,
               createdAt: prediction.createdAt,
               approvalProbability: prediction.approvalProbability,
+              yesProbability: prediction.yesProbability,
               action: prediction.action,
               runSource: prediction.runSource,
               source: prediction.source,
@@ -187,24 +179,31 @@ export async function GET(request: NextRequest) {
     await ensureAdmin()
 
     const { searchParams } = new URL(request.url)
-    const fdaEventId = searchParams.get('fdaEventId')
-    if (!fdaEventId) {
-      throw new ValidationError('fdaEventId is required')
+    const trialQuestionId = searchParams.get('trialQuestionId') ?? searchParams.get('fdaEventId')
+    if (!trialQuestionId) {
+      throw new ValidationError('trialQuestionId is required')
     }
 
-    const event = await db.query.fdaCalendarEvents.findFirst({
-      where: eq(fdaCalendarEvents.id, fdaEventId),
+    const question = await db.query.trialQuestions.findFirst({
+      where: eq(trialQuestions.id, trialQuestionId),
+      with: {
+        trial: true,
+      },
     })
-    if (!event) {
-      throw new NotFoundError('FDA event not found')
+    if (!question) {
+      throw new NotFoundError('Trial question not found')
+    }
+
+    if (!isSupportedTrialQuestionSlug(question.slug)) {
+      throw new ValidationError('This question type has been removed from active markets.')
     }
 
     const snapshots = await db.query.modelDecisionSnapshots.findMany({
-      where: eq(modelDecisionSnapshots.fdaEventId, fdaEventId),
+      where: eq(modelDecisionSnapshots.trialQuestionId, trialQuestionId),
       orderBy: [desc(modelDecisionSnapshots.createdAt)],
     })
 
-    return successResponse({ snapshots, event }, {
+    return successResponse({ snapshots, question }, {
       headers: {
         'X-Request-Id': requestId,
       },
