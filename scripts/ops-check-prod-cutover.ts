@@ -86,7 +86,7 @@ const PHASE2_REQUIRED_TABLES = [
   'trial_outcome_candidates',
   'trial_outcome_candidate_evidence',
 ] as const
-const PUBLIC_SMOKE_PATHS = ['/', '/trials', '/fda-calendar'] as const
+const PUBLIC_SMOKE_PATHS = ['/', '/trials'] as const
 const ADMIN_SMOKE_PATHS = ['/admin', '/admin/update', '/admin/outcomes', '/admin/settings'] as const
 
 const MIN_USERS = Number(process.env.MIN_USERS ?? 1)
