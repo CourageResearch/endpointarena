@@ -213,6 +213,22 @@ async function applyRollback(sql: postgres.Sql): Promise<void> {
         and not exists (select 1 from model_decision_snapshots mds where mds.run_id = mr.id and mds.fda_event_id is not null)
         and not exists (select 1 from market_run_logs mrl where mrl.run_id = mr.id and mrl.fda_event_id is not null)
       )
+      delete from model_decision_snapshots mds
+      using trial_only_runs tor
+      where mds.run_id = tor.id
+    `)
+
+    await tx.unsafe(`
+      with trial_only_runs as (
+        select mr.id
+        from market_runs mr
+        where (
+          exists (select 1 from market_actions ma where ma.run_id = mr.id and ma.trial_question_id is not null)
+          or exists (select 1 from market_run_logs mrl where mrl.run_id = mr.id and mrl.trial_question_id is not null)
+        )
+        and not exists (select 1 from market_actions ma where ma.run_id = mr.id and ma.fda_event_id is not null)
+        and not exists (select 1 from market_run_logs mrl where mrl.run_id = mr.id and mrl.fda_event_id is not null)
+      )
       delete from market_runs mr
       using trial_only_runs tor
       where mr.id = tor.id

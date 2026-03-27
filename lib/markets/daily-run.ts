@@ -9,7 +9,7 @@ import {
   predictionMarkets,
   trialQuestions,
 } from '@/lib/db'
-import { MODEL_INFO, type ModelId } from '@/lib/constants'
+import { isModelId, MODEL_INFO, type ModelId } from '@/lib/constants'
 import {
   calculateExecutableTradeCaps,
   ensureMarketAccounts,
@@ -51,6 +51,33 @@ function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
     if (result.status === 'skipped') acc.skipped += 1
     return acc
   }, { ok: 0, error: 0, skipped: 0 })
+}
+
+function resolveDailyRunModelOrder(runDate: Date): ModelId[] {
+  const defaultOrder = rotateModelOrder(runDate)
+  const rawModelIds = process.env.MARKET_RUN_MODEL_IDS?.trim()
+  if (!rawModelIds) {
+    return defaultOrder
+  }
+
+  const allowedModelIds = Array.from(new Set(
+    rawModelIds
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value): value is ModelId => isModelId(value)),
+  ))
+
+  if (allowedModelIds.length === 0) {
+    throw new Error('MARKET_RUN_MODEL_IDS did not include any valid model ids')
+  }
+
+  const allowedModelIdSet = new Set<ModelId>(allowedModelIds)
+  const filteredOrder = defaultOrder.filter((modelId) => allowedModelIdSet.has(modelId))
+  if (filteredOrder.length === 0) {
+    throw new Error('MARKET_RUN_MODEL_IDS did not overlap with the active daily-run model order')
+  }
+
+  return filteredOrder
 }
 
 function inferErrorCode(message: string): string {
@@ -223,7 +250,7 @@ async function startRunRecord({
 export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Promise<DailyRunPayload> {
   const normalizedRunDate = normalizeRunDate(runDate)
   const runDateIso = normalizedRunDate.toISOString()
-  const modelOrder = rotateModelOrder(normalizedRunDate)
+  const modelOrder = resolveDailyRunModelOrder(normalizedRunDate)
 
   const [runtimeConfig, rawOpenMarkets] = await Promise.all([
     getMarketRuntimeConfig(),
