@@ -476,7 +476,6 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             code: 'MISSING_MARKET_STATE',
           })
 
-          const modelName = MODEL_INFO[modelId].fullName
           await pushResult({
             marketId: market.id,
             trialQuestionId: market.trialQuestionId,
@@ -487,7 +486,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             status: 'error',
             detail: message,
           })
-          throw new Error(`Halting daily run after ${modelName} failed on ${marketQuestion.trial.shortTitle}: ${message}`)
+          continue
         }
 
         const generator = MODEL_DECISION_GENERATORS[modelId]
@@ -504,7 +503,6 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             code: 'API_KEY_MISSING',
           })
 
-          const modelName = MODEL_INFO[modelId].fullName
           await pushResult({
             marketId: market.id,
             trialQuestionId: market.trialQuestionId,
@@ -515,7 +513,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             status: 'error',
             detail: message,
           })
-          throw new Error(`Halting daily run after ${modelName} failed on ${marketQuestion.trial.shortTitle}: ${message}`)
+          continue
         }
 
         let generatedSnapshotId: string | null = null
@@ -713,8 +711,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             detail: message,
           })
 
-          const modelName = MODEL_INFO[modelId].fullName
-          throw new Error(`Halting daily run after ${modelName} failed on ${marketQuestion.trial.shortTitle}: ${message}`)
+          continue
         }
       }
     }
