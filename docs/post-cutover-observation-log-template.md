@@ -17,10 +17,13 @@ Historical note: the active production surface is the Phase 2 trial rollout. Leg
 ## Release-day extras
 1. Record whether `TRIAL_SYNC_CRON_SECRET` and `TRIAL_MONITOR_CRON_SECRET` were provisioned on `endpoint-arena-app`.
 2. Record whether `npm run db:ensure-phase2-schema` was executed against the production `DATABASE_PUBLIC_URL`.
-3. Record whether `npx tsx scripts/sync-clinicaltrials-gov.ts --force --mode reconcile` was executed and summarize the resulting trial/question/market counts.
-4. Record whether one manual daily cycle completed from `/admin/markets`.
-5. Record whether one manual trial-monitor run completed from `/admin/outcomes`.
-6. If you are reviewing the historical March 2026 event-monitor rollout, note any legacy `db:import-cnpv` or `db:finalize-event-monitoring` activity separately.
+3. Record whether `npm run db:download-clinicaltrials-snapshot -- --since-date 2026-02-01 --gzip --output-file tmp/clinicaltrials-gov/first-run.json.gz` was executed and note the reported `rawStudyCount` / `matchedStudyCount`.
+4. Record whether `npm run db:extract-clinicaltrials-sponsors -- --input-file tmp/clinicaltrials-gov/first-run.json.gz --output-file tmp/clinicaltrials-gov/first-run-sponsor-map.csv` was executed and note the unique sponsor count.
+5. Record whether `npm run db:curate-clinicaltrials-sponsors -- --input-file tmp/clinicaltrials-gov/first-run-sponsor-map.csv --output-file tmp/clinicaltrials-gov/first-run-sponsor-map-curated.csv --snapshot-file tmp/clinicaltrials-gov/first-run.json.gz` was executed and note the allowed study/openable-study counts.
+6. Record whether `npm run db:sync-clinicaltrials:from-file -- tmp/clinicaltrials-gov/first-run.json.gz --sponsor-map tmp/clinicaltrials-gov/first-run-sponsor-map-curated.csv --max-open-markets 50 --force --mode reconcile` was executed and summarize the resulting trial/question/market counts.
+7. Record whether one manual daily cycle completed from `/admin/markets`.
+8. Record whether one manual trial-monitor run completed from `/admin/outcomes`.
+9. If you are reviewing the historical March 2026 event-monitor rollout, note any legacy `db:import-cnpv` or `db:finalize-event-monitoring` activity separately.
 
 ## Escalation
 - If rollback thresholds in `docs/railway-production-db-runbook-20260311.md` are met, execute rollback checklist immediately and note exact timestamp + reason in this log.

@@ -125,6 +125,11 @@ export type ClinicalTrialsGovFetchResult = {
   studies: ClinicalTrialsGovStudy[]
 }
 
+export type ClinicalTrialsSponsorOverride = {
+  sponsorName?: string
+  sponsorTicker?: string | null
+}
+
 function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, ' ').trim()
 }
@@ -274,12 +279,11 @@ export function isClinicalTrialsActiveStatusStudy(study: ClinicalTrialsGovStudy)
   return ACTIVE_SYNC_STATUSES.has(overallStatus)
 }
 
-export function isClinicalTrialsStudyInRollingWindow(
+export function isClinicalTrialsStudyOnOrAfterDate(
   study: ClinicalTrialsGovStudy,
-  lookbackDays: number,
-  now: Date = new Date(),
+  sinceDate: Date,
 ) {
-  const cutoff = addUtcDays(toUtcDayStart(now), -lookbackDays)
+  const cutoff = toUtcDayStart(sinceDate)
   const primaryCompletionDate = parseClinicalTrialsDate(study.protocolSection?.statusModule?.primaryCompletionDateStruct?.date)
   const completionDate = parseClinicalTrialsDate(study.protocolSection?.statusModule?.completionDateStruct?.date)
 
@@ -287,6 +291,15 @@ export function isClinicalTrialsStudyInRollingWindow(
     (primaryCompletionDate && primaryCompletionDate.getTime() >= cutoff.getTime())
     || (completionDate && completionDate.getTime() >= cutoff.getTime()),
   )
+}
+
+export function isClinicalTrialsStudyInRollingWindow(
+  study: ClinicalTrialsGovStudy,
+  lookbackDays: number,
+  now: Date = new Date(),
+) {
+  const cutoff = addUtcDays(toUtcDayStart(now), -lookbackDays)
+  return isClinicalTrialsStudyOnOrAfterDate(study, cutoff)
 }
 
 function summarizeInterventions(interventions: Intervention[] | null | undefined) {
@@ -377,8 +390,18 @@ export function getClinicalTrialsNctNumber(study: ClinicalTrialsGovStudy) {
   return /^NCT\d{8}$/.test(value) ? value : null
 }
 
+export function getClinicalTrialsLeadSponsorName(study: ClinicalTrialsGovStudy) {
+  const sponsorName = normalizeWhitespace(study.protocolSection?.sponsorCollaboratorsModule?.leadSponsor?.name ?? '')
+  return sponsorName || null
+}
+
+export function normalizeClinicalTrialsSponsorKey(value: string) {
+  return normalizeWhitespace(value).toUpperCase()
+}
+
 export function mapClinicalTrialsStudyToPhase2TrialInput(
   study: ClinicalTrialsGovStudy,
+  sponsorOverride?: ClinicalTrialsSponsorOverride,
 ): NormalizedPhase2TrialInput | null {
   const nctNumber = getClinicalTrialsNctNumber(study)
   const briefTitle = normalizeWhitespace(
@@ -386,7 +409,7 @@ export function mapClinicalTrialsStudyToPhase2TrialInput(
     ?? study.protocolSection?.identificationModule?.officialTitle
     ?? '',
   )
-  const sponsorName = normalizeWhitespace(study.protocolSection?.sponsorCollaboratorsModule?.leadSponsor?.name ?? '')
+  const sponsorName = normalizeWhitespace(sponsorOverride?.sponsorName ?? getClinicalTrialsLeadSponsorName(study) ?? '')
   const primaryCompletionDate = parseClinicalTrialsDate(study.protocolSection?.statusModule?.primaryCompletionDateStruct?.date)
 
   if (!nctNumber || !briefTitle || !sponsorName || !primaryCompletionDate) {
@@ -402,7 +425,7 @@ export function mapClinicalTrialsStudyToPhase2TrialInput(
     nctNumber,
     shortTitle: briefTitle,
     sponsorName,
-    sponsorTicker: null,
+    sponsorTicker: sponsorOverride?.sponsorTicker?.trim() || null,
     indication: summarizeConditions(study.protocolSection?.conditionsModule?.conditions),
     exactPhase: humanizePhases(study.protocolSection?.designModule?.phases),
     intervention: summarizeInterventions(study.protocolSection?.armsInterventionsModule?.interventions),

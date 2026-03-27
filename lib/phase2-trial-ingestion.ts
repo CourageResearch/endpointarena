@@ -58,6 +58,7 @@ export type Phase2IngestionSummary = {
 }
 
 export type IngestPhase2TrialsOptions = {
+  maxMarketsToOpen?: number
   reset?: boolean
   preserveExistingSponsorTickerOnNull?: boolean
 }
@@ -74,6 +75,30 @@ function datesEqual(left: Date | null | undefined, right: Date | null | undefine
   const leftTime = left instanceof Date ? left.getTime() : null
   const rightTime = right instanceof Date ? right.getTime() : null
   return leftTime === rightTime
+}
+
+function shouldOpenMarketForTrial(row: NormalizedPhase2TrialInput, now: Date) {
+  const normalizedStatus = row.currentStatus.trim().toLowerCase()
+  if (normalizedStatus === 'completed' || normalizedStatus === 'terminated' || normalizedStatus === 'withdrawn' || normalizedStatus === 'suspended') {
+    return false
+  }
+
+  return row.estPrimaryCompletionDate.getTime() >= now.getTime()
+}
+
+function compareRowsForMarketOpenPriority(
+  left: NormalizedPhase2TrialInput,
+  right: NormalizedPhase2TrialInput,
+  now: Date,
+) {
+  const leftOpenable = shouldOpenMarketForTrial(left, now)
+  const rightOpenable = shouldOpenMarketForTrial(right, now)
+
+  if (leftOpenable !== rightOpenable) {
+    return leftOpenable ? -1 : 1
+  }
+
+  return left.estPrimaryCompletionDate.getTime() - right.estPrimaryCompletionDate.getTime()
 }
 
 function buildChangeSummary(existingTrial: typeof phase2Trials.$inferSelect, nextTrial: NormalizedPhase2TrialInput & { sponsorTicker: string | null }) {
@@ -142,6 +167,14 @@ export async function ingestPhase2Trials(
 
   await getTrialMonitorConfig()
 
+  if (options.maxMarketsToOpen != null) {
+    const parsedMaxMarketsToOpen = Math.round(options.maxMarketsToOpen)
+    if (!Number.isFinite(parsedMaxMarketsToOpen) || parsedMaxMarketsToOpen < 0) {
+      throw new Error('maxMarketsToOpen must be a non-negative number when provided')
+    }
+    options.maxMarketsToOpen = parsedMaxMarketsToOpen
+  }
+
   const existingTrialsByNct = options.preserveExistingSponsorTickerOnNull
     ? await loadExistingTrialsByNctNumbers(rows.map((row) => row.nctNumber))
     : new Map<string, typeof phase2Trials.$inferSelect>()
@@ -153,7 +186,10 @@ export async function ingestPhase2Trials(
     changes: [],
   }
 
-  for (const row of rows) {
+  const now = new Date()
+  const orderedRows = [...rows].sort((left, right) => compareRowsForMarketOpenPriority(left, right, now))
+
+  for (const row of orderedRows) {
     const existingTrial = existingTrialsByNct.get(row.nctNumber)
     const sponsorTicker = row.sponsorTicker ?? existingTrial?.sponsorTicker ?? null
     const normalizedRow = {
@@ -275,7 +311,9 @@ export async function ingestPhase2Trials(
       const existingMarket = await db.query.predictionMarkets.findFirst({
         where: eq(predictionMarkets.trialQuestionId, question.id),
       })
-      if (!existingMarket) {
+      const canOpenAnotherMarket = options.maxMarketsToOpen == null || summary.marketsOpened < options.maxMarketsToOpen
+
+      if (!existingMarket && canOpenAnotherMarket && shouldOpenMarketForTrial(row, now)) {
         await openMarketForTrialQuestion(question.id)
         summary.marketsOpened += 1
       }

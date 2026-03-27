@@ -4,14 +4,19 @@ import { ExternalServiceError } from '@/lib/errors'
 import {
   buildClinicalTrialsIncrementalQueryTerm,
   buildClinicalTrialsReconcileQueryTerm,
+  type ClinicalTrialsGovStudy,
   fetchClinicalTrialsStudies,
   fetchClinicalTrialsVersion,
+  getClinicalTrialsLeadSponsorName,
   getClinicalTrialsLastUpdatePostDate,
   getClinicalTrialsNctNumber,
   isClinicalTrialsActiveStatusStudy,
   isClinicalTrialsBaseUniverseStudy,
+  isClinicalTrialsStudyOnOrAfterDate,
   isClinicalTrialsStudyInRollingWindow,
   mapClinicalTrialsStudyToPhase2TrialInput,
+  normalizeClinicalTrialsSponsorKey,
+  parseClinicalTrialsDate,
   toUtcDayStart,
 } from '@/lib/clinicaltrials-gov'
 import { ingestPhase2Trials } from '@/lib/phase2-trial-ingestion'
@@ -36,10 +41,23 @@ export type TrialSyncRunResult = {
   marketsOpened: number
 }
 
+export type TrialSyncPreloadedSource = {
+  completionSinceDate?: string | null
+  sourceDataTimestamp?: string | null
+  sponsorMappings?: Record<string, {
+    decision: 'allow' | 'skip' | null
+    sponsorName: string
+    sponsorTicker: string | null
+  }>
+  studies: ClinicalTrialsGovStudy[]
+}
+
 type TrialSyncInput = {
   triggerSource: TrialSyncTriggerSource
   force?: boolean
+  maxMarketsToOpen?: number
   mode?: TrialSyncMode | 'auto'
+  preloadedSource?: TrialSyncPreloadedSource
 }
 
 function addHours(value: Date, hours: number) {
@@ -228,15 +246,186 @@ async function chooseMode(input: TrialSyncInput, sourceDataTimestamp: string | n
 }
 
 export async function runTrialSync(input: TrialSyncInput): Promise<TrialSyncRunResult> {
-  let sourceDataTimestamp: string | null = null
+  let sourceDataTimestamp: string | null = input.preloadedSource?.sourceDataTimestamp?.trim() || null
+
+  if (!input.preloadedSource) {
+    try {
+      const version = await fetchClinicalTrialsVersion()
+      sourceDataTimestamp = version.dataTimestamp?.trim() || null
+    } catch (error) {
+      throw new ExternalServiceError('Failed to load ClinicalTrials.gov API version metadata', {
+        cause: error,
+      })
+    }
+  }
+
+  const { config, decision } = await chooseMode(input, sourceDataTimestamp)
+  if (!decision.execute) {
+    return {
+      executed: false,
+      reason: decision.reason,
+      studiesFetched: 0,
+      studiesMatched: 0,
+      trialsUpserted: 0,
+      questionsUpserted: 0,
+      marketsOpened: 0,
+      sourceDataTimestamp,
+    }
+  }
+
+  const mode = decision.mode
+  const run = await startRun(mode, input.triggerSource, sourceDataTimestamp)
 
   try {
-    const version = await fetchClinicalTrialsVersion()
-    sourceDataTimestamp = version.dataTimestamp?.trim() || null
-  } catch (error) {
-    throw new ExternalServiceError('Failed to load ClinicalTrials.gov API version metadata', {
-      cause: error,
+    const now = new Date()
+    const cutoffDate = addDays(toUtcDayStart(now), -config.recentCompletionLookbackDays)
+    const preloadedCompletionSinceDate = parseClinicalTrialsDate(input.preloadedSource?.completionSinceDate)
+    if (input.preloadedSource?.completionSinceDate && !preloadedCompletionSinceDate) {
+      throw new Error(`Invalid completionSinceDate in preloaded source: ${input.preloadedSource.completionSinceDate}`)
+    }
+    const matchStartDate = preloadedCompletionSinceDate ?? cutoffDate
+    const sourceResult = input.preloadedSource
+      ? {
+          totalCount: input.preloadedSource.studies.length,
+          studies: input.preloadedSource.studies,
+        }
+      : mode === 'reconcile'
+        ? await fetchClinicalTrialsStudies({
+            queryTerm: buildClinicalTrialsReconcileQueryTerm(cutoffDate),
+          })
+        : await fetchClinicalTrialsStudies({
+            queryTerm: buildClinicalTrialsIncrementalQueryTerm(config.lastSuccessfulUpdatePostDate ?? cutoffDate),
+          })
+
+    const rawStudies = sourceResult.studies
+    const existingNctNumbers = await loadExistingNctNumbers(
+      rawStudies
+        .map((study) => getClinicalTrialsNctNumber(study))
+        .filter((value): value is string => Boolean(value)),
+    )
+
+    const matchedStudies = rawStudies.filter((study) => {
+      const nctNumber = getClinicalTrialsNctNumber(study)
+      if (!nctNumber) return false
+
+      if (mode === 'reconcile') {
+        return isClinicalTrialsBaseUniverseStudy(study)
+          && isClinicalTrialsActiveStatusStudy(study)
+          && (
+            preloadedCompletionSinceDate
+              ? isClinicalTrialsStudyOnOrAfterDate(study, matchStartDate)
+              : isClinicalTrialsStudyInRollingWindow(study, config.recentCompletionLookbackDays, now)
+          )
+      }
+
+      if (existingNctNumbers.has(nctNumber)) {
+        return true
+      }
+
+      return isClinicalTrialsBaseUniverseStudy(study)
+        && isClinicalTrialsActiveStatusStudy(study)
+        && (
+          preloadedCompletionSinceDate
+            ? isClinicalTrialsStudyOnOrAfterDate(study, matchStartDate)
+            : isClinicalTrialsStudyInRollingWindow(study, config.recentCompletionLookbackDays, now)
+        )
     })
+
+    const sponsorMappings = input.preloadedSource?.sponsorMappings
+    const sponsorOverridesByNct = new Map<string, {
+      sponsorName: string
+      sponsorTicker: string | null
+    }>()
+    let studiesToNormalize = matchedStudies
+
+    if (sponsorMappings) {
+      const unresolvedSponsors = new Set<string>()
+
+      studiesToNormalize = matchedStudies.filter((study) => {
+        const sponsorName = getClinicalTrialsLeadSponsorName(study)
+        const sponsorKey = sponsorName ? normalizeClinicalTrialsSponsorKey(sponsorName) : ''
+        const mapping = sponsorKey ? sponsorMappings[sponsorKey] : undefined
+
+        if (!mapping || mapping.decision === null) {
+          unresolvedSponsors.add(sponsorName ?? '(missing sponsor name)')
+          return false
+        }
+
+        if (mapping.decision === 'skip') {
+          return false
+        }
+
+        const nctNumber = getClinicalTrialsNctNumber(study)
+        if (nctNumber) {
+          sponsorOverridesByNct.set(nctNumber, {
+            sponsorName: mapping.sponsorName,
+            sponsorTicker: mapping.sponsorTicker,
+          })
+        }
+
+        return true
+      })
+
+      if (unresolvedSponsors.size > 0) {
+        const sampleSponsors = Array.from(unresolvedSponsors).sort().slice(0, 10)
+        throw new Error(
+          `Sponsor map is missing allow/skip decisions for ${unresolvedSponsors.size} sponsor(s): ${sampleSponsors.join(', ')}`,
+        )
+      }
+    }
+
+    const normalizedRows = studiesToNormalize
+      .map((study) => mapClinicalTrialsStudyToPhase2TrialInput(
+        study,
+        (() => {
+          const nctNumber = getClinicalTrialsNctNumber(study)
+          return nctNumber ? sponsorOverridesByNct.get(nctNumber) : undefined
+        })(),
+      ))
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+
+    const ingestionSummary = await ingestPhase2Trials(normalizedRows, {
+      maxMarketsToOpen: input.maxMarketsToOpen,
+      preserveExistingSponsorTickerOnNull: true,
+    })
+
+    const lastSuccessfulUpdatePostDate = computeMaxLastUpdatePostDate(rawStudies) ?? config.lastSuccessfulUpdatePostDate
+
+    await persistRunItems(run.id, ingestionSummary.changes)
+
+    await updateTrialSyncConfig({
+      lastSuccessfulUpdatePostDate,
+      lastSuccessfulDataTimestamp: sourceDataTimestamp,
+    })
+
+    await finishRun(run.id, 'completed', {
+      sourceDataTimestamp,
+      studiesFetched: rawStudies.length,
+      studiesMatched: studiesToNormalize.length,
+      trialsUpserted: ingestionSummary.trialsUpserted,
+      questionsUpserted: ingestionSummary.questionsUpserted,
+      marketsOpened: ingestionSummary.marketsOpened,
+      errorSummary: null,
+    })
+
+    return {
+      executed: true,
+      runId: run.id,
+      mode,
+      sourceDataTimestamp,
+      studiesFetched: rawStudies.length,
+      studiesMatched: studiesToNormalize.length,
+      trialsUpserted: ingestionSummary.trialsUpserted,
+      questionsUpserted: ingestionSummary.questionsUpserted,
+      marketsOpened: ingestionSummary.marketsOpened,
+    }
+  } catch (error) {
+    await finishRun(run.id, 'failed', {
+      sourceDataTimestamp,
+      errorSummary: toErrorSummary(error),
+    })
+    throw error
+  }
 }
 
 async function persistRunItems(
@@ -266,105 +455,4 @@ async function persistRunItems(
     changeSummary: item.changeSummary,
     createdAt: new Date(),
   })))
-}
-
-  const { config, decision } = await chooseMode(input, sourceDataTimestamp)
-  if (!decision.execute) {
-    return {
-      executed: false,
-      reason: decision.reason,
-      studiesFetched: 0,
-      studiesMatched: 0,
-      trialsUpserted: 0,
-      questionsUpserted: 0,
-      marketsOpened: 0,
-      sourceDataTimestamp,
-    }
-  }
-
-  const mode = decision.mode
-  const run = await startRun(mode, input.triggerSource, sourceDataTimestamp)
-
-  try {
-    const now = new Date()
-    const cutoffDate = addDays(toUtcDayStart(now), -config.recentCompletionLookbackDays)
-    const sourceResult = mode === 'reconcile'
-      ? await fetchClinicalTrialsStudies({
-          queryTerm: buildClinicalTrialsReconcileQueryTerm(cutoffDate),
-        })
-      : await fetchClinicalTrialsStudies({
-          queryTerm: buildClinicalTrialsIncrementalQueryTerm(config.lastSuccessfulUpdatePostDate ?? cutoffDate),
-        })
-
-    const rawStudies = sourceResult.studies
-    const existingNctNumbers = await loadExistingNctNumbers(
-      rawStudies
-        .map((study) => getClinicalTrialsNctNumber(study))
-        .filter((value): value is string => Boolean(value)),
-    )
-
-    const matchedStudies = rawStudies.filter((study) => {
-      const nctNumber = getClinicalTrialsNctNumber(study)
-      if (!nctNumber) return false
-
-      if (mode === 'reconcile') {
-        return isClinicalTrialsBaseUniverseStudy(study)
-          && isClinicalTrialsActiveStatusStudy(study)
-          && isClinicalTrialsStudyInRollingWindow(study, config.recentCompletionLookbackDays, now)
-      }
-
-      if (existingNctNumbers.has(nctNumber)) {
-        return true
-      }
-
-      return isClinicalTrialsBaseUniverseStudy(study)
-        && isClinicalTrialsActiveStatusStudy(study)
-        && isClinicalTrialsStudyInRollingWindow(study, config.recentCompletionLookbackDays, now)
-    })
-
-    const normalizedRows = matchedStudies
-      .map((study) => mapClinicalTrialsStudyToPhase2TrialInput(study))
-      .filter((row): row is NonNullable<typeof row> => row !== null)
-
-    const ingestionSummary = await ingestPhase2Trials(normalizedRows, {
-      preserveExistingSponsorTickerOnNull: true,
-    })
-
-    const lastSuccessfulUpdatePostDate = computeMaxLastUpdatePostDate(rawStudies) ?? config.lastSuccessfulUpdatePostDate
-
-    await persistRunItems(run.id, ingestionSummary.changes)
-
-    await updateTrialSyncConfig({
-      lastSuccessfulUpdatePostDate,
-      lastSuccessfulDataTimestamp: sourceDataTimestamp,
-    })
-
-    await finishRun(run.id, 'completed', {
-      sourceDataTimestamp,
-      studiesFetched: rawStudies.length,
-      studiesMatched: matchedStudies.length,
-      trialsUpserted: ingestionSummary.trialsUpserted,
-      questionsUpserted: ingestionSummary.questionsUpserted,
-      marketsOpened: ingestionSummary.marketsOpened,
-      errorSummary: null,
-    })
-
-    return {
-      executed: true,
-      runId: run.id,
-      mode,
-      sourceDataTimestamp,
-      studiesFetched: rawStudies.length,
-      studiesMatched: matchedStudies.length,
-      trialsUpserted: ingestionSummary.trialsUpserted,
-      questionsUpserted: ingestionSummary.questionsUpserted,
-      marketsOpened: ingestionSummary.marketsOpened,
-    }
-  } catch (error) {
-    await finishRun(run.id, 'failed', {
-      sourceDataTimestamp,
-      errorSummary: toErrorSummary(error),
-    })
-    throw error
-  }
 }

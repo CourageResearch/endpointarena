@@ -22,7 +22,10 @@ Historical note: this document originally captured the March 2026 single-DB cuto
   - `export DATABASE_URL="$(railway variables --service postgres-green --json | jq -r '.DATABASE_PUBLIC_URL')"`
 - Active trial-era production scripts:
   - `npm run db:ensure-phase2-schema`
-  - `npx tsx scripts/sync-clinicaltrials-gov.ts --force --mode reconcile`
+  - `npm run db:download-clinicaltrials-snapshot -- --since-date 2026-02-01 --gzip --output-file tmp/clinicaltrials-gov/first-run.json.gz`
+  - `npm run db:extract-clinicaltrials-sponsors -- --input-file tmp/clinicaltrials-gov/first-run.json.gz --output-file tmp/clinicaltrials-gov/first-run-sponsor-map.csv`
+  - `npm run db:curate-clinicaltrials-sponsors -- --input-file tmp/clinicaltrials-gov/first-run-sponsor-map.csv --output-file tmp/clinicaltrials-gov/first-run-sponsor-map-curated.csv --snapshot-file tmp/clinicaltrials-gov/first-run.json.gz`
+  - `npm run db:sync-clinicaltrials:from-file -- tmp/clinicaltrials-gov/first-run.json.gz --sponsor-map tmp/clinicaltrials-gov/first-run-sponsor-map-curated.csv --max-open-markets 50 --force --mode reconcile`
   - `npm run ops:rollback-trial-bootstrap -- --apply`
 - Historical FDA-era scripts kept for reference only:
   - `npm run db:add-event-monitoring`
@@ -73,9 +76,20 @@ Historical note: this document originally captured the March 2026 single-DB cuto
 9. Push the reviewed `master` commit to `origin/master` and wait for Railway to finish the deploy.
 10. Re-run `npm run ops:check-prod-cutover`.
    - A green result here means the new app, route surface, env vars, and Phase 2 schema are all in place.
-11. Run the initial live bootstrap:
-   - `npx tsx scripts/sync-clinicaltrials-gov.ts --force --mode reconcile`
-12. Validate while maintenance is still enabled:
+11. Run the initial first-run bulk download:
+   - `npm run db:download-clinicaltrials-snapshot -- --since-date 2026-02-01 --gzip --output-file tmp/clinicaltrials-gov/first-run.json.gz`
+12. Extract the sponsor map template from the snapshot:
+   - `npm run db:extract-clinicaltrials-sponsors -- --input-file tmp/clinicaltrials-gov/first-run.json.gz --output-file tmp/clinicaltrials-gov/first-run-sponsor-map.csv`
+13. Generate the curated sponsor map from the tracked first-run sponsor allowlist:
+   - `npm run db:curate-clinicaltrials-sponsors -- --input-file tmp/clinicaltrials-gov/first-run-sponsor-map.csv --output-file tmp/clinicaltrials-gov/first-run-sponsor-map-curated.csv --snapshot-file tmp/clinicaltrials-gov/first-run.json.gz`
+   - tracked sponsor overrides live in `config/clinicaltrials-first-run-sponsors.json`
+14. Inspect the snapshot and sponsor-map counts before writing anything:
+   - confirm the reported `rawStudyCount` / `matchedStudyCount` match the intended backtest window starting on February 1, 2026
+   - confirm the curated sponsor map has no unresolved rows left blank
+15. Ingest from the reviewed snapshot while maintenance is still enabled:
+   - `npm run db:sync-clinicaltrials:from-file -- tmp/clinicaltrials-gov/first-run.json.gz --sponsor-map tmp/clinicaltrials-gov/first-run-sponsor-map-curated.csv --max-open-markets 50 --force --mode reconcile`
+   - completed / already-ended trials since February 1, 2026 remain available for backtesting, but the first run opens at most 50 future-facing public markets
+16. Validate while maintenance is still enabled:
    - `/api/health`
    - `/admin`
    - `/admin/update`
@@ -83,12 +97,12 @@ Historical note: this document originally captured the March 2026 single-DB cuto
    - `/admin/outcomes`
    - one manual daily cycle from `/admin/markets`
    - one manual trial-monitor run from `/admin/outcomes`
-13. If any validation step fails, keep maintenance on and use the rollback path below before reopening traffic.
-14. If validation succeeds, set `MAINTENANCE_MODE=false` and wait for the reopen deployment to become active.
-15. Re-run:
+17. If any validation step fails, keep maintenance on and use the rollback path below before reopening traffic.
+18. If validation succeeds, set `MAINTENANCE_MODE=false` and wait for the reopen deployment to become active.
+19. Re-run:
    - `npm run ops:check-prod-cutover`
    - `npm run ops:check-prod-alerts`
-16. Final smoke-check:
+20. Final smoke-check:
    - `/`
    - `/trials`
    - one `/trials/[marketId]`
