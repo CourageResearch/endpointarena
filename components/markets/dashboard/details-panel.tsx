@@ -58,6 +58,28 @@ function getSourceTypeLabel(sourceType: PublicOutcomeEvidenceRow['sourceType']):
   return 'Sponsor'
 }
 
+function getTrialStatusTextClass(status: string | null | undefined) {
+  const normalized = status?.trim().toLowerCase() ?? ''
+
+  if (normalized === 'recruiting' || normalized === 'not yet recruiting' || normalized === 'enrolling by invitation') {
+    return APPROVE_TEXT_CLASS
+  }
+  if (normalized === 'active not recruiting') {
+    return 'text-[#2e6793]'
+  }
+  if (normalized === 'completed') {
+    return 'text-[#675d52]'
+  }
+  if (normalized === 'terminated' || normalized === 'withdrawn') {
+    return REJECT_TEXT_CLASS
+  }
+  if (normalized === 'suspended' || normalized === 'unknown') {
+    return 'text-[#946d16]'
+  }
+
+  return 'text-[#675d52]'
+}
+
 function DetailValue({
   label,
   children,
@@ -210,6 +232,7 @@ export function MarketDetailsPanel({
 }) {
   const nctId = selectedMarket.event?.nctId?.trim() ?? ''
   const companyName = selectedMarket.event?.companyName?.trim() ?? ''
+  const currentStatus = selectedMarket.event?.currentStatus?.trim() ?? ''
   const estEnrollment = selectedMarket.event?.estEnrollment ?? null
   const isResolvedMarket = selectedMarket.status === 'RESOLVED'
   const primaryCompletionDate = selectedMarket.event?.decisionDate
@@ -293,6 +316,16 @@ export function MarketDetailsPanel({
                 </Link>
               ) : '-'}
             </div>
+          </DetailValue>
+
+          <DetailValue label="Trial Status" className="sm:min-w-[10rem] sm:flex-[0_1_10rem] lg:min-w-[9.5rem] lg:flex-[0_1_9.5rem]">
+            {currentStatus ? (
+              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, getTrialStatusTextClass(currentStatus))}>
+                {currentStatus}
+              </span>
+            ) : (
+              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, 'text-[#9c9287]')}>Unavailable</span>
+            )}
           </DetailValue>
 
           <DetailValue label="Trial Size" className="sm:min-w-[8rem] sm:flex-[0_1_8rem] lg:min-w-[7.5rem] lg:flex-[0_1_7.5rem]">

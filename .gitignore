@@ -24,6 +24,8 @@ yarn-debug.log*
 yarn-error.log*
 .npm-cache/
 .npm-logs/
+.codex-artifacts/
+.playwright-cli/
 
 # IDE
 .vscode

@@ -1043,7 +1043,7 @@ export function MarketBrowseHomepage({
     )
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="rounded-sm p-[1px]" style={{ background: PANEL_GRADIENT }}>
         <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">

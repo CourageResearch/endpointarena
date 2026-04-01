@@ -26,8 +26,11 @@ const HOUR_MS = 60 * 60 * 1000
 const TRIAL_MONITOR_STALE_TIMEOUT_MINUTES = 20
 const TRIAL_MONITOR_STALE_TIMEOUT_SECONDS = TRIAL_MONITOR_STALE_TIMEOUT_MINUTES * 60
 const VERIFIER_REQUEST_TIMEOUT_MS = 2 * 60 * 1000
-const MAX_VERIFIER_SOURCE_COUNT = 5
+const MAX_VERIFIER_SOURCE_COUNT = 3
 const MAX_VERIFIER_TITLE_CHARS = 220
+const MAX_VERIFIER_REASONING_CHARS = 420
+const MAX_VERIFIER_EXCERPT_CHARS = 320
+const VERIFIER_MAX_OUTPUT_TOKENS = 3200
 const TRIAL_MONITOR_DEBUG_LOG_MAX_CHARS = 80_000
 const TRIAL_MONITOR_DEBUG_VALUE_MAX_CHARS = 12_000
 const TRIAL_MONITOR_DEBUG_SOURCE_URL_LIMIT = 40
@@ -112,7 +115,6 @@ type StructuredVerifierSource = {
   excerpt: string
   sourceType: CandidateEvidenceSourceType
   domain: string
-  whyItMatters: string
 }
 
 type StructuredVerifierOutput = {
@@ -331,14 +333,12 @@ function buildVerifierSource(value: unknown): StructuredVerifierSource | null {
     excerpt?: unknown
     sourceType?: unknown
     domain?: unknown
-    whyItMatters?: unknown
   }
 
   const title = trimToNull(record.title)
   const url = trimToNull(record.url)
   const excerpt = trimToNull(record.excerpt)
-  const whyItMatters = trimToNull(record.whyItMatters)
-  if (!title || !url || !excerpt || !whyItMatters) {
+  if (!title || !url || !excerpt) {
     return null
   }
 
@@ -356,7 +356,6 @@ function buildVerifierSource(value: unknown): StructuredVerifierSource | null {
     excerpt: normalizeMonitorText(excerpt),
     sourceType: inferEvidenceSourceType(record.sourceType, url),
     domain,
-    whyItMatters: normalizeMonitorText(whyItMatters),
   }
 }
 
@@ -513,6 +512,8 @@ function buildResponseDebugDetails(
   return {
     ...extra,
     responseId: typeof response?.id === 'string' ? response.id : null,
+    status: typeof response?.status === 'string' ? response.status : null,
+    incompleteDetails: response?.incomplete_details ?? null,
     outputText: typeof response?.output_text === 'string'
       ? truncateDebugText(response.output_text)
       : null,
@@ -729,8 +730,9 @@ function buildOnePassVerificationPrompt(
 ): string {
   const retryInstructions = retry
     ? [
-        'This is a retry because the previous response was empty or invalid JSON.',
+        'This is a retry because the previous response was empty, truncated, or invalid JSON.',
         'Search only as much as needed to reach a decision and then finish with the required JSON object.',
+        'Be extra concise on retry: prefer 1-2 citations, one short rationale, and brief source paraphrases.',
       ]
     : []
 
@@ -745,7 +747,9 @@ function buildOnePassVerificationPrompt(
     'Return only the citations you actually used to justify the decision. Do not include unused links.',
     `Return between 1 and ${MAX_VERIFIER_SOURCE_COUNT} citations.`,
     `Keep each source title under ${MAX_VERIFIER_TITLE_CHARS} characters.`,
-    'Do not truncate the reasoning or cited excerpts with ellipses. Return the full rationale and the full relevant excerpt or paraphrase for each source.',
+    `Keep the reasoning under ${MAX_VERIFIER_REASONING_CHARS} characters.`,
+    `Keep each cited excerpt or paraphrase under ${MAX_VERIFIER_EXCERPT_CHARS} characters.`,
+    'Use concise admin-facing language. Prefer short paraphrases over long quotations.',
     'Return JSON with this exact shape:',
     '{',
     '  "classification": "yes" | "no" | "no_decision",',
@@ -759,8 +763,7 @@ function buildOnePassVerificationPrompt(
     '      "publishedAt": "ISO-8601 timestamp or null",',
     '      "excerpt": "short excerpt or paraphrase from the source",',
     '      "sourceType": "clinicaltrials" | "sponsor" | "stored_source" | "web_search",',
-    '      "domain": "example.com",',
-    '      "whyItMatters": "short note on why this citation supports the decision"',
+    '      "domain": "example.com"',
     '    }',
     '  ]',
     '}',
@@ -775,7 +778,10 @@ function createVerifierSourceSchema() {
     type: 'object',
     additionalProperties: false,
     properties: {
-      title: { type: 'string' },
+      title: {
+        type: 'string',
+        maxLength: MAX_VERIFIER_TITLE_CHARS,
+      },
       url: { type: 'string' },
       publishedAt: {
         anyOf: [
@@ -783,15 +789,17 @@ function createVerifierSourceSchema() {
           { type: 'null' },
         ],
       },
-      excerpt: { type: 'string' },
+      excerpt: {
+        type: 'string',
+        maxLength: MAX_VERIFIER_EXCERPT_CHARS,
+      },
       sourceType: {
         type: 'string',
         enum: ['clinicaltrials', 'sponsor', 'stored_source', 'web_search'],
       },
       domain: { type: 'string' },
-      whyItMatters: { type: 'string' },
     },
-    required: ['title', 'url', 'publishedAt', 'excerpt', 'sourceType', 'domain', 'whyItMatters'],
+    required: ['title', 'url', 'publishedAt', 'excerpt', 'sourceType', 'domain'],
   }
 }
 
@@ -823,10 +831,13 @@ function createVerifierJsonSchema(input: {
       },
       reasoning: {
         type: 'string',
+        maxLength: MAX_VERIFIER_REASONING_CHARS,
       },
       sources: {
         type: 'array',
         items: createVerifierSourceSchema(),
+        minItems: 1,
+        maxItems: MAX_VERIFIER_SOURCE_COUNT,
       },
     },
     required: ['classification', 'confidence', 'proposedOutcomeDate', 'reasoning', 'sources'],
@@ -866,7 +877,7 @@ async function runProviderVerificationPrompt(
         client.responses.create({
           model: spec.model,
           input: prompt,
-          max_output_tokens: 2200,
+          max_output_tokens: VERIFIER_MAX_OUTPUT_TOKENS,
           text: {
             format: createVerifierResponseFormat(),
             verbosity: 'low',
@@ -907,7 +918,7 @@ async function runProviderVerificationPrompt(
         client.responses.create({
           model: spec.model,
           input: prompt,
-          max_output_tokens: 2200,
+          max_output_tokens: VERIFIER_MAX_OUTPUT_TOKENS,
           text: {
             format: createVerifierResponseFormat(),
             verbosity: 'low',
@@ -1075,7 +1086,6 @@ async function runVerificationAttempt(
           url: source.url,
           domain: source.domain,
           sourceType: source.sourceType,
-          whyItMatters: source.whyItMatters,
         })),
         providerSourceUrls: providerResponse.sourceUrls.slice(0, TRIAL_MONITOR_DEBUG_SOURCE_URL_LIMIT),
         sourceExtractionMethod: providerResponse.sourceExtractionMethod,

@@ -34,8 +34,11 @@ const PAGE_SIZE = 10
 const ALL_TYPES_FILTER = '__all_types__'
 const TYPE_FILTER_PARAM = 'type'
 const TAB_FILTER_PARAM = 'tab'
+const FROM_FILTER_PARAM = 'from'
+const TO_FILTER_PARAM = 'to'
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
 const SEARCH_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3.5 py-2.5 text-[14px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
+const DATE_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3 py-2 text-[13px] leading-tight text-[#2f2a24] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const SEARCH_INPUT_STYLE = {
   fontSize: '14px',
 }
@@ -52,6 +55,23 @@ function parseSortableTimestamp(value: string | null | undefined): number | null
   if (!value) return null
   const time = new Date(value).getTime()
   return Number.isFinite(time) ? time : null
+}
+
+function parseFilterDateValue(value: string | null | undefined): number | null {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) return null
+
+  const parsed = new Date(`${trimmed}T00:00:00.000Z`).getTime()
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function getRowFilterTimestamp(row: TrialsBrowseRow, tab: TrialsBrowseTab): number | null {
+  const rawValue = tab === 'resolved' ? row.resolvedAt : row.decisionDate
+  const parsed = parseSortableTimestamp(rawValue)
+  if (parsed === null) return null
+
+  const date = new Date(parsed)
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
 }
 
 function compareNullableNumbers(a: number | null | undefined, b: number | null | undefined, direction: TrialsBrowseSortDirection): number {
@@ -235,11 +255,19 @@ function SortableTrialsTableHeader({
 }
 
 function TrialsBrowseSearchControls({
+  fromDateValue,
+  onClearDateRange,
+  onDateRangeChange,
   selectedTab,
+  toDateValue,
   onTabChange,
   onAppliedSearchQueryChange,
 }: {
+  fromDateValue: string
+  onClearDateRange: () => void
+  onDateRangeChange: (range: { from: string; to: string }) => void
   selectedTab: TrialsBrowseTab
+  toDateValue: string
   onTabChange: (tab: TrialsBrowseTab) => void
   onAppliedSearchQueryChange: (value: string) => void
 }) {
@@ -285,21 +313,60 @@ function TrialsBrowseSearchControls({
         </button>
       </div>
 
-      <div className="w-full max-w-[26rem]">
-        <label className="sr-only" htmlFor="trials-browse-search">
-          Search all markets
-        </label>
-        <input
-          id="trials-browse-search"
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search all markets..."
-          className={SEARCH_INPUT_CLASS_NAME}
-          style={SEARCH_INPUT_STYLE}
-          autoComplete="off"
-          spellCheck={false}
-        />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="w-full max-w-[26rem]">
+          <label className="sr-only" htmlFor="trials-browse-search">
+            Search all markets
+          </label>
+          <input
+            id="trials-browse-search"
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search all markets..."
+            className={SEARCH_INPUT_CLASS_NAME}
+            style={SEARCH_INPUT_STYLE}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-[10rem]">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]" htmlFor="trials-browse-date-from">
+              From
+            </label>
+            <input
+              id="trials-browse-date-from"
+              type="date"
+              value={fromDateValue}
+              onChange={(event) => onDateRangeChange({ from: event.target.value, to: toDateValue })}
+              className={DATE_INPUT_CLASS_NAME}
+            />
+          </div>
+
+          <div className="min-w-[10rem]">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]" htmlFor="trials-browse-date-to">
+              To
+            </label>
+            <input
+              id="trials-browse-date-to"
+              type="date"
+              value={toDateValue}
+              onChange={(event) => onDateRangeChange({ from: fromDateValue, to: event.target.value })}
+              className={DATE_INPUT_CLASS_NAME}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={onClearDateRange}
+            disabled={!fromDateValue && !toDateValue}
+            className="inline-flex min-w-[6rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-3 py-2 text-xs text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Clear
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -609,14 +676,18 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
 
 export function TrialsBrowseTable({
   initialData = null,
+  initialFromDate = null,
   initialTypeFilter = null,
   initialStatusTab = null,
+  initialToDate = null,
   detailBasePath = '/trials',
   includeResolved = true,
 }: {
   initialData?: TrialsBrowseResponse | null
+  initialFromDate?: string | null
   initialTypeFilter?: string | null
   initialStatusTab?: string | null
+  initialToDate?: string | null
   detailBasePath?: string
   includeResolved?: boolean
 }) {
@@ -625,8 +696,10 @@ export function TrialsBrowseTable({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('')
+  const [selectedFromDateParam, setSelectedFromDateParam] = useState<string | null>(initialFromDate)
   const [selectedTypeParam, setSelectedTypeParam] = useState<string | null>(initialTypeFilter)
   const [selectedTabParam, setSelectedTabParam] = useState<string | null>(initialStatusTab)
+  const [selectedToDateParam, setSelectedToDateParam] = useState<string | null>(initialToDate)
   const [currentPage, setCurrentPage] = useState(1)
   const [sortState, setSortState] = useState<TrialsBrowseSortState>(null)
 
@@ -694,11 +767,19 @@ export function TrialsBrowseTable({
   }, [selectedTypeParam, typeOptions])
 
   useEffect(() => {
+    setSelectedFromDateParam(searchParams.get(FROM_FILTER_PARAM))
+  }, [searchParams])
+
+  useEffect(() => {
     setSelectedTypeParam(searchParams.get(TYPE_FILTER_PARAM))
   }, [searchParams])
 
   useEffect(() => {
     setSelectedTabParam(searchParams.get(TAB_FILTER_PARAM))
+  }, [searchParams])
+
+  useEffect(() => {
+    setSelectedToDateParam(searchParams.get(TO_FILTER_PARAM))
   }, [searchParams])
 
   useEffect(() => {
@@ -741,13 +822,52 @@ export function TrialsBrowseTable({
     })
   }
 
+  function updateQueryParamState(next: { from?: string | null; to?: string | null; tab?: string | null }) {
+    const nextParams = new URLSearchParams(searchParams.toString())
+
+    if ('from' in next) {
+      const nextFrom = next.from?.trim() ?? ''
+      setSelectedFromDateParam(nextFrom || null)
+      if (!nextFrom) nextParams.delete(FROM_FILTER_PARAM)
+      else nextParams.set(FROM_FILTER_PARAM, nextFrom)
+    }
+
+    if ('to' in next) {
+      const nextTo = next.to?.trim() ?? ''
+      setSelectedToDateParam(nextTo || null)
+      if (!nextTo) nextParams.delete(TO_FILTER_PARAM)
+      else nextParams.set(TO_FILTER_PARAM, nextTo)
+    }
+
+    if ('tab' in next) {
+      const nextTab = next.tab?.trim() ?? ''
+      setSelectedTabParam(nextTab || null)
+      if (!nextTab) nextParams.delete(TAB_FILTER_PARAM)
+      else nextParams.set(TAB_FILTER_PARAM, nextTab)
+    }
+
+    const nextQuery = nextParams.toString()
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false })
+  }
+
   const filteredRows = useMemo(() => {
     const query = normalizedSearchQuery.toLowerCase()
     const normalizedQuery = normalizeSearchValue(query)
+    const parsedFrom = parseFilterDateValue(selectedFromDateParam)
+    const parsedTo = parseFilterDateValue(selectedToDateParam)
+    const minDate = parsedFrom === null || parsedTo === null ? parsedFrom : Math.min(parsedFrom, parsedTo)
+    const maxDate = parsedFrom === null || parsedTo === null ? parsedTo : Math.max(parsedFrom, parsedTo)
 
     return rows.filter((row) => {
       if (selectedType !== ALL_TYPES_FILTER && row.applicationTypeLabel !== selectedType) {
         return false
+      }
+
+      if (minDate !== null || maxDate !== null) {
+        const rowTimestamp = getRowFilterTimestamp(row, selectedTab)
+        if (rowTimestamp === null) return false
+        if (minDate !== null && rowTimestamp < minDate) return false
+        if (maxDate !== null && rowTimestamp > maxDate) return false
       }
 
       if (!query) return true
@@ -755,7 +875,7 @@ export function TrialsBrowseTable({
 
       return normalizedQuery.length > 0 && row.normalizedSearchText.includes(normalizedQuery)
     })
-  }, [normalizedSearchQuery, rows, selectedType])
+  }, [normalizedSearchQuery, rows, selectedFromDateParam, selectedTab, selectedToDateParam, selectedType])
 
   const sortedRows = useMemo(() => {
     return sortRows(filteredRows, sortState, selectedTab)
@@ -828,7 +948,7 @@ export function TrialsBrowseTable({
     )
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="rounded-sm p-[1px]" style={{ background: PANEL_GRADIENT }}>
         <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">
@@ -849,7 +969,11 @@ export function TrialsBrowseTable({
   return (
     <div className="space-y-4">
       <TrialsBrowseSearchControls
+        fromDateValue={selectedFromDateParam ?? ''}
+        onClearDateRange={() => updateQueryParamState({ from: null, to: null })}
+        onDateRangeChange={(range) => updateQueryParamState(range)}
         selectedTab={selectedTab}
+        toDateValue={selectedToDateParam ?? ''}
         onTabChange={handleTabChange}
         onAppliedSearchQueryChange={setAppliedSearchQuery}
       />

@@ -11,6 +11,7 @@ const TRIAL_MONITOR_CONFIG_ID = 'default'
 export type TrialMonitorConfig = {
   id: string
   enabled: boolean
+  webSearchEnabled: boolean
   runIntervalHours: number
   lookaheadDays: number
   overdueRecheckHours: number
@@ -23,6 +24,7 @@ export type TrialMonitorConfig = {
 
 export type TrialMonitorConfigPatchInput = Partial<{
   enabled: unknown
+  webSearchEnabled: unknown
   runIntervalHours: unknown
   lookaheadDays: unknown
   overdueRecheckHours: unknown
@@ -64,6 +66,7 @@ function mapRow(row: typeof trialMonitorConfigs.$inferSelect): TrialMonitorConfi
   return {
     id: row.id,
     enabled: row.enabled,
+    webSearchEnabled: row.webSearchEnabled,
     runIntervalHours: row.runIntervalHours,
     lookaheadDays: row.lookaheadDays,
     overdueRecheckHours: row.overdueRecheckHours,
@@ -104,6 +107,7 @@ export async function updateTrialMonitorConfig(input: TrialMonitorConfigPatchInp
   const patch: Partial<typeof trialMonitorConfigs.$inferInsert> = {}
 
   if (input.enabled !== undefined) patch.enabled = coerceBoolean(input.enabled, 'enabled')
+  if (input.webSearchEnabled !== undefined) patch.webSearchEnabled = coerceBoolean(input.webSearchEnabled, 'webSearchEnabled')
   if (input.runIntervalHours !== undefined) {
     const parsed = Math.round(coerceNumber(input.runIntervalHours, 'runIntervalHours'))
     if (parsed < 1 || parsed > 168) throw new ValidationError('runIntervalHours must be between 1 and 168')
