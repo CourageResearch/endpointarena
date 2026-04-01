@@ -76,16 +76,10 @@ function mapMarketToBrowseRow(market: OpenMarketRow): TrialsBrowseRow {
   }
 }
 
-function isUpcomingBrowseRow(row: TrialsBrowseRow) {
-  return row.daysUntil === null || row.daysUntil >= 0
-}
-
 export function createTrialsBrowseResponse(data: OverviewResponse | null): TrialsBrowseResponse | null {
   if (!data) return null
 
-  const openMarkets = data.openMarkets
-    .map(mapMarketToBrowseRow)
-    .filter(isUpcomingBrowseRow)
+  const openMarkets = data.openMarkets.map(mapMarketToBrowseRow)
 
   return {
     generatedAt: data.generatedAt ?? null,

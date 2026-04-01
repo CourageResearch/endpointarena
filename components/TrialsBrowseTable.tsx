@@ -294,7 +294,7 @@ function TrialsBrowseSearchControls({
           )}
         >
           <span className={cn('tracking-[0.1em]', selectedTab === 'upcoming' ? 'text-[11px]' : 'text-[10px]')}>
-            Upcoming
+            Open
           </span>
         </button>
         <button
@@ -458,7 +458,7 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
 
   const emptyMessage = selectedTab === 'resolved'
     ? 'No resolved markets match the current filters.'
-    : 'No upcoming markets match the current filters.'
+    : 'No open markets match the current filters.'
 
   return (
     <section className="mt-6">
