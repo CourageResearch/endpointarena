@@ -16,7 +16,7 @@ export function buildMarketActorKey(marketId: string, actorId: string): string {
   return `${marketId}:${actorId}`
 }
 
-export function buildActorAccountMaps(accounts: AccountWithActor[]): {
+function buildActorAccountMaps(accounts: AccountWithActor[]): {
   byActorId: Map<string, AccountWithActor>
   byModelKey: Map<ModelId, AccountWithActor>
   byUserId: Map<string, AccountWithActor>

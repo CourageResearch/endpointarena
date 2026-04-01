@@ -5,7 +5,6 @@ import { db, contactMessages, crashEvents, users, waitlistEntries } from '@/lib/
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
-import { ensureCrashEventsSchema } from '@/lib/crash-events'
 
 type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'ai' | 'markets' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'update'
 
@@ -19,7 +18,7 @@ interface AdminConsoleLayoutProps {
 
 const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'ai', href: '/admin/ai', label: 'AI' },
-  { id: 'markets', href: '/admin/markets', label: 'Drugs' },
+  { id: 'markets', href: '/admin/markets', label: 'Markets' },
   { id: 'update', href: '/admin/update', label: 'Update' },
   { id: 'outcomes', href: '/admin/outcomes', label: 'Outcomes' },
   { id: 'users', href: '/admin/users', label: 'Users' },
@@ -78,7 +77,6 @@ async function getContactCount() {
 
 async function getCrashes24hCount() {
   try {
-    await ensureCrashEventsSchema()
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const rows = await db
       .select({ count: sql<number>`count(*)` })

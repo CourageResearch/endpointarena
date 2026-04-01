@@ -1,0 +1,5612 @@
+{
+  "id": "6fce47aa-42e8-4237-bb71-1c541c6fa6ef",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.accounts": {
+      "name": "accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_account_id": {
+          "name": "provider_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_type": {
+          "name": "token_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "session_state": {
+          "name": "session_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "accounts_user_id_users_id_fk": {
+          "name": "accounts_user_id_users_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.analytics_events": {
+      "name": "analytics_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "referrer": {
+          "name": "referrer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "session_hash": {
+          "name": "session_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "element_id": {
+          "name": "element_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_query": {
+          "name": "search_query",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_count": {
+          "name": "result_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.contact_messages": {
+      "name": "contact_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "contact_messages_created_at_idx": {
+          "name": "contact_messages_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.crash_events": {
+      "name": "crash_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "digest": {
+          "name": "digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_name": {
+          "name": "error_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stack": {
+          "name": "stack",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "component_stack": {
+          "name": "component_stack",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'app-error'"
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_code": {
+          "name": "status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_email": {
+          "name": "user_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "crash_events_fingerprint_idx": {
+          "name": "crash_events_fingerprint_idx",
+          "columns": [
+            {
+              "expression": "fingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crash_events_created_at_idx": {
+          "name": "crash_events_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crash_events_digest_idx": {
+          "name": "crash_events_digest_idx",
+          "columns": [
+            {
+              "expression": "digest",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crash_events_path_idx": {
+          "name": "crash_events_path_idx",
+          "columns": [
+            {
+              "expression": "path",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crash_events_source_idx": {
+          "name": "crash_events_source_idx",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.event_monitor_configs": {
+      "name": "event_monitor_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "run_interval_hours": {
+          "name": "run_interval_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "hard_lookahead_days": {
+          "name": "hard_lookahead_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 7
+        },
+        "soft_lookahead_days": {
+          "name": "soft_lookahead_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 14
+        },
+        "overdue_recheck_hours": {
+          "name": "overdue_recheck_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 24
+        },
+        "max_events_per_run": {
+          "name": "max_events_per_run",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 25
+        },
+        "verifier_model_key": {
+          "name": "verifier_model_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'gpt-5.4'"
+        },
+        "min_candidate_confidence": {
+          "name": "min_candidate_confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0.8
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "event_monitor_configs_run_interval_hours_check": {
+          "name": "event_monitor_configs_run_interval_hours_check",
+          "value": "\"event_monitor_configs\".\"run_interval_hours\" >= 1 AND \"event_monitor_configs\".\"run_interval_hours\" <= 168"
+        },
+        "event_monitor_configs_hard_lookahead_days_check": {
+          "name": "event_monitor_configs_hard_lookahead_days_check",
+          "value": "\"event_monitor_configs\".\"hard_lookahead_days\" >= 0 AND \"event_monitor_configs\".\"hard_lookahead_days\" <= 365"
+        },
+        "event_monitor_configs_soft_lookahead_days_check": {
+          "name": "event_monitor_configs_soft_lookahead_days_check",
+          "value": "\"event_monitor_configs\".\"soft_lookahead_days\" >= 0 AND \"event_monitor_configs\".\"soft_lookahead_days\" <= 365"
+        },
+        "event_monitor_configs_overdue_recheck_hours_check": {
+          "name": "event_monitor_configs_overdue_recheck_hours_check",
+          "value": "\"event_monitor_configs\".\"overdue_recheck_hours\" >= 1 AND \"event_monitor_configs\".\"overdue_recheck_hours\" <= 720"
+        },
+        "event_monitor_configs_max_events_per_run_check": {
+          "name": "event_monitor_configs_max_events_per_run_check",
+          "value": "\"event_monitor_configs\".\"max_events_per_run\" >= 1 AND \"event_monitor_configs\".\"max_events_per_run\" <= 500"
+        },
+        "event_monitor_configs_min_candidate_confidence_check": {
+          "name": "event_monitor_configs_min_candidate_confidence_check",
+          "value": "\"event_monitor_configs\".\"min_candidate_confidence\" >= 0 AND \"event_monitor_configs\".\"min_candidate_confidence\" <= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.event_monitor_runs": {
+      "name": "event_monitor_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trigger_source": {
+          "name": "trigger_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "events_scanned": {
+          "name": "events_scanned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "candidates_created": {
+          "name": "candidates_created",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "event_monitor_runs_started_at_idx": {
+          "name": "event_monitor_runs_started_at_idx",
+          "columns": [
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "event_monitor_runs_trigger_source_check": {
+          "name": "event_monitor_runs_trigger_source_check",
+          "value": "\"event_monitor_runs\".\"trigger_source\" IN ('cron', 'manual')"
+        },
+        "event_monitor_runs_status_check": {
+          "name": "event_monitor_runs_status_check",
+          "value": "\"event_monitor_runs\".\"status\" IN ('running', 'completed', 'failed')"
+        },
+        "event_monitor_runs_events_scanned_check": {
+          "name": "event_monitor_runs_events_scanned_check",
+          "value": "\"event_monitor_runs\".\"events_scanned\" >= 0"
+        },
+        "event_monitor_runs_candidates_created_check": {
+          "name": "event_monitor_runs_candidates_created_check",
+          "value": "\"event_monitor_runs\".\"candidates_created\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.event_outcome_candidate_evidence": {
+      "name": "event_outcome_candidate_evidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "excerpt": {
+          "name": "excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain": {
+          "name": "domain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "event_outcome_candidate_evidence_candidate_display_order_idx": {
+          "name": "event_outcome_candidate_evidence_candidate_display_order_idx",
+          "columns": [
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "display_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "event_outcome_candidate_evidence_candidate_id_event_outcome_candidates_id_fk": {
+          "name": "event_outcome_candidate_evidence_candidate_id_event_outcome_candidates_id_fk",
+          "tableFrom": "event_outcome_candidate_evidence",
+          "tableTo": "event_outcome_candidates",
+          "columnsFrom": [
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "event_outcome_candidate_evidence_source_type_check": {
+          "name": "event_outcome_candidate_evidence_source_type_check",
+          "value": "\"event_outcome_candidate_evidence\".\"source_type\" IN ('fda', 'sponsor', 'stored_source', 'web_search')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.event_outcome_candidates": {
+      "name": "event_outcome_candidates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_outcome": {
+          "name": "proposed_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_outcome_date": {
+          "name": "proposed_outcome_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verifier_model_key": {
+          "name": "verifier_model_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_response_id": {
+          "name": "provider_response_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_hash": {
+          "name": "evidence_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending_review'"
+        },
+        "reviewed_by_user_id": {
+          "name": "reviewed_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_notes": {
+          "name": "review_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "event_outcome_candidates_event_outcome_hash_idx": {
+          "name": "event_outcome_candidates_event_outcome_hash_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "proposed_outcome",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_outcome_candidates_status_created_at_idx": {
+          "name": "event_outcome_candidates_status_created_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_outcome_candidates_event_created_at_idx": {
+          "name": "event_outcome_candidates_event_created_at_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "event_outcome_candidates_event_id_fda_calendar_events_id_fk": {
+          "name": "event_outcome_candidates_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "event_outcome_candidates",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "event_outcome_candidates_reviewed_by_user_id_users_id_fk": {
+          "name": "event_outcome_candidates_reviewed_by_user_id_users_id_fk",
+          "tableFrom": "event_outcome_candidates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "event_outcome_candidates_proposed_outcome_check": {
+          "name": "event_outcome_candidates_proposed_outcome_check",
+          "value": "\"event_outcome_candidates\".\"proposed_outcome\" IN ('Approved', 'Rejected')"
+        },
+        "event_outcome_candidates_confidence_check": {
+          "name": "event_outcome_candidates_confidence_check",
+          "value": "\"event_outcome_candidates\".\"confidence\" >= 0 AND \"event_outcome_candidates\".\"confidence\" <= 1"
+        },
+        "event_outcome_candidates_status_check": {
+          "name": "event_outcome_candidates_status_check",
+          "value": "\"event_outcome_candidates\".\"status\" IN ('pending_review', 'accepted', 'rejected', 'superseded')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.fda_calendar_events": {
+      "name": "fda_calendar_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_name": {
+          "name": "company_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "symbols": {
+          "name": "symbols",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "drug_name": {
+          "name": "drug_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "application_type": {
+          "name": "application_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision_date": {
+          "name": "decision_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_description": {
+          "name": "event_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Pending'"
+        },
+        "outcome_date": {
+          "name": "outcome_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_date_kind": {
+          "name": "decision_date_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'hard'"
+        },
+        "cnpv_award_date": {
+          "name": "cnpv_award_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "drug_status": {
+          "name": "drug_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "therapeutic_area": {
+          "name": "therapeutic_area",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_monitored_at": {
+          "name": "last_monitored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scraped_at": {
+          "name": "scraped_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "fda_calendar_events_identity_idx": {
+          "name": "fda_calendar_events_identity_idx",
+          "columns": [
+            {
+              "expression": "company_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "drug_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "application_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "decision_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "fda_calendar_events_decision_date_idx": {
+          "name": "fda_calendar_events_decision_date_idx",
+          "columns": [
+            {
+              "expression": "decision_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "fda_calendar_events_outcome_idx": {
+          "name": "fda_calendar_events_outcome_idx",
+          "columns": [
+            {
+              "expression": "outcome",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "fda_calendar_events_outcome_check": {
+          "name": "fda_calendar_events_outcome_check",
+          "value": "\"fda_calendar_events\".\"outcome\" IN ('Pending', 'Approved', 'Rejected')"
+        },
+        "fda_calendar_events_decision_date_kind_check": {
+          "name": "fda_calendar_events_decision_date_kind_check",
+          "value": "\"fda_calendar_events\".\"decision_date_kind\" IN ('hard', 'soft')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.fda_event_analyses": {
+      "name": "fda_event_analyses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_type": {
+          "name": "analysis_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_key": {
+          "name": "model_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "fda_event_analyses_event_type_idx": {
+          "name": "fda_event_analyses_event_type_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "analysis_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fda_event_analyses_event_id_fda_calendar_events_id_fk": {
+          "name": "fda_event_analyses_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "fda_event_analyses",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "fda_event_analyses_type_check": {
+          "name": "fda_event_analyses_type_check",
+          "value": "\"fda_event_analyses\".\"analysis_type\" IN ('meta_analysis')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.fda_event_contexts": {
+      "name": "fda_event_contexts",
+      "schema": "",
+      "columns": {
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "rival_drugs": {
+          "name": "rival_drugs",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_potential": {
+          "name": "market_potential",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "other_approvals": {
+          "name": "other_approvals",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "fda_event_contexts_event_id_fda_calendar_events_id_fk": {
+          "name": "fda_event_contexts_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "fda_event_contexts",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.fda_event_external_ids": {
+      "name": "fda_event_external_ids",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_type": {
+          "name": "id_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_value": {
+          "name": "id_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "fda_event_external_ids_event_id_type_idx": {
+          "name": "fda_event_external_ids_event_id_type_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "fda_event_external_ids_type_value_idx": {
+          "name": "fda_event_external_ids_type_value_idx",
+          "columns": [
+            {
+              "expression": "id_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id_value",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fda_event_external_ids_event_id_fda_calendar_events_id_fk": {
+          "name": "fda_event_external_ids_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "fda_event_external_ids",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "fda_event_external_ids_type_check": {
+          "name": "fda_event_external_ids_type_check",
+          "value": "\"fda_event_external_ids\".\"id_type\" IN ('external_key', 'nct', 'rtt_detail')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.fda_event_sources": {
+      "name": "fda_event_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "fda_event_sources_event_source_url_idx": {
+          "name": "fda_event_sources_event_source_url_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "url",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "fda_event_sources_event_source_order_idx": {
+          "name": "fda_event_sources_event_source_order_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "display_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fda_event_sources_event_id_fda_calendar_events_id_fk": {
+          "name": "fda_event_sources_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "fda_event_sources",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "fda_event_sources_type_check": {
+          "name": "fda_event_sources_type_check",
+          "value": "\"fda_event_sources\".\"source_type\" IN ('primary', 'news_link', 'reference')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_accounts": {
+      "name": "market_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "starting_cash": {
+          "name": "starting_cash",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 100000
+        },
+        "cash_balance": {
+          "name": "cash_balance",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 100000
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_accounts_actor_id_idx": {
+          "name": "market_accounts_actor_id_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_accounts_actor_id_market_actors_id_fk": {
+          "name": "market_accounts_actor_id_market_actors_id_fk",
+          "tableFrom": "market_accounts",
+          "tableTo": "market_actors",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_accounts_starting_cash_check": {
+          "name": "market_accounts_starting_cash_check",
+          "value": "\"market_accounts\".\"starting_cash\" >= 0"
+        },
+        "market_accounts_cash_balance_check": {
+          "name": "market_accounts_cash_balance_check",
+          "value": "\"market_accounts\".\"cash_balance\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_actions": {
+      "name": "market_actions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_id": {
+          "name": "market_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fda_event_id": {
+          "name": "fda_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trial_question_id": {
+          "name": "trial_question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_date": {
+          "name": "run_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_source": {
+          "name": "action_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'cycle'"
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usd_amount": {
+          "name": "usd_amount",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "shares_delta": {
+          "name": "shares_delta",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "price_before": {
+          "name": "price_before",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price_after": {
+          "name": "price_after",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "explanation": {
+          "name": "explanation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ok'"
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_details": {
+          "name": "error_details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_actions_market_actor_run_idx": {
+          "name": "market_actions_market_actor_run_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "run_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"market_actions\".\"action_source\" = 'cycle'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actions_run_id_idx": {
+          "name": "market_actions_run_id_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actions_market_created_idx": {
+          "name": "market_actions_market_created_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actions_actor_idx": {
+          "name": "market_actions_actor_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actions_actor_created_idx": {
+          "name": "market_actions_actor_created_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actions_action_source_idx": {
+          "name": "market_actions_action_source_idx",
+          "columns": [
+            {
+              "expression": "action_source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actions_status_idx": {
+          "name": "market_actions_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_actions_run_id_market_runs_id_fk": {
+          "name": "market_actions_run_id_market_runs_id_fk",
+          "tableFrom": "market_actions",
+          "tableTo": "market_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "market_actions_market_id_prediction_markets_id_fk": {
+          "name": "market_actions_market_id_prediction_markets_id_fk",
+          "tableFrom": "market_actions",
+          "tableTo": "prediction_markets",
+          "columnsFrom": [
+            "market_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "market_actions_fda_event_id_fda_calendar_events_id_fk": {
+          "name": "market_actions_fda_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "market_actions",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "fda_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "market_actions_trial_question_id_trial_questions_id_fk": {
+          "name": "market_actions_trial_question_id_trial_questions_id_fk",
+          "tableFrom": "market_actions",
+          "tableTo": "trial_questions",
+          "columnsFrom": [
+            "trial_question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "market_actions_actor_id_market_actors_id_fk": {
+          "name": "market_actions_actor_id_market_actors_id_fk",
+          "tableFrom": "market_actions",
+          "tableTo": "market_actors",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_actions_action_source_check": {
+          "name": "market_actions_action_source_check",
+          "value": "\"market_actions\".\"action_source\" IN ('cycle', 'human')"
+        },
+        "market_actions_action_source_shape_check": {
+          "name": "market_actions_action_source_shape_check",
+          "value": "(\n      (\"market_actions\".\"action_source\" = 'cycle' AND \"market_actions\".\"run_id\" IS NOT NULL)\n      OR\n      (\"market_actions\".\"action_source\" = 'human' AND \"market_actions\".\"run_id\" IS NULL)\n    )"
+        },
+        "market_actions_ownership_check": {
+          "name": "market_actions_ownership_check",
+          "value": "(\n      (\"market_actions\".\"fda_event_id\" IS NOT NULL AND \"market_actions\".\"trial_question_id\" IS NULL)\n      OR\n      (\"market_actions\".\"fda_event_id\" IS NULL AND \"market_actions\".\"trial_question_id\" IS NOT NULL)\n    )"
+        },
+        "market_actions_action_check": {
+          "name": "market_actions_action_check",
+          "value": "\"market_actions\".\"action\" IN ('BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO', 'HOLD')"
+        },
+        "market_actions_status_check": {
+          "name": "market_actions_status_check",
+          "value": "\"market_actions\".\"status\" IN ('ok', 'error', 'skipped')"
+        },
+        "market_actions_usd_amount_check": {
+          "name": "market_actions_usd_amount_check",
+          "value": "\"market_actions\".\"usd_amount\" >= 0"
+        },
+        "market_actions_price_before_check": {
+          "name": "market_actions_price_before_check",
+          "value": "\"market_actions\".\"price_before\" >= 0 AND \"market_actions\".\"price_before\" <= 1"
+        },
+        "market_actions_price_after_check": {
+          "name": "market_actions_price_after_check",
+          "value": "\"market_actions\".\"price_after\" >= 0 AND \"market_actions\".\"price_after\" <= 1"
+        },
+        "market_actions_direction_check": {
+          "name": "market_actions_direction_check",
+          "value": "(\n      (\"market_actions\".\"action\" IN ('BUY_YES', 'BUY_NO') AND \"market_actions\".\"shares_delta\" >= 0 AND \"market_actions\".\"usd_amount\" >= 0)\n      OR\n      (\"market_actions\".\"action\" IN ('SELL_YES', 'SELL_NO') AND \"market_actions\".\"shares_delta\" <= 0 AND \"market_actions\".\"usd_amount\" >= 0)\n      OR\n      (\"market_actions\".\"action\" = 'HOLD' AND \"market_actions\".\"shares_delta\" = 0 AND \"market_actions\".\"usd_amount\" = 0)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_actors": {
+      "name": "market_actors",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_key": {
+          "name": "model_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_actors_model_key_idx": {
+          "name": "market_actors_model_key_idx",
+          "columns": [
+            {
+              "expression": "model_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actors_user_id_idx": {
+          "name": "market_actors_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_actors_actor_type_idx": {
+          "name": "market_actors_actor_type_idx",
+          "columns": [
+            {
+              "expression": "actor_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_actors_user_id_users_id_fk": {
+          "name": "market_actors_user_id_users_id_fk",
+          "tableFrom": "market_actors",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_actors_actor_type_check": {
+          "name": "market_actors_actor_type_check",
+          "value": "\"market_actors\".\"actor_type\" IN ('model', 'human')"
+        },
+        "market_actors_shape_check": {
+          "name": "market_actors_shape_check",
+          "value": "(\n      (\"market_actors\".\"actor_type\" = 'model' AND \"market_actors\".\"model_key\" IS NOT NULL AND \"market_actors\".\"user_id\" IS NULL)\n      OR\n      (\"market_actors\".\"actor_type\" = 'human' AND \"market_actors\".\"user_id\" IS NOT NULL AND \"market_actors\".\"model_key\" IS NULL)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_daily_snapshots": {
+      "name": "market_daily_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "snapshot_date": {
+          "name": "snapshot_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cash_balance": {
+          "name": "cash_balance",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "positions_value": {
+          "name": "positions_value",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_equity": {
+          "name": "total_equity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_daily_snapshots_actor_date_idx": {
+          "name": "market_daily_snapshots_actor_date_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "snapshot_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_daily_snapshots_actor_idx": {
+          "name": "market_daily_snapshots_actor_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_daily_snapshots_actor_id_market_actors_id_fk": {
+          "name": "market_daily_snapshots_actor_id_market_actors_id_fk",
+          "tableFrom": "market_daily_snapshots",
+          "tableTo": "market_actors",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_daily_snapshots_cash_balance_check": {
+          "name": "market_daily_snapshots_cash_balance_check",
+          "value": "\"market_daily_snapshots\".\"cash_balance\" >= 0"
+        },
+        "market_daily_snapshots_positions_value_check": {
+          "name": "market_daily_snapshots_positions_value_check",
+          "value": "\"market_daily_snapshots\".\"positions_value\" >= 0"
+        },
+        "market_daily_snapshots_total_equity_check": {
+          "name": "market_daily_snapshots_total_equity_check",
+          "value": "\"market_daily_snapshots\".\"total_equity\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_positions": {
+      "name": "market_positions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "market_id": {
+          "name": "market_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "yes_shares": {
+          "name": "yes_shares",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "no_shares": {
+          "name": "no_shares",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_positions_market_actor_idx": {
+          "name": "market_positions_market_actor_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_positions_market_idx": {
+          "name": "market_positions_market_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_positions_actor_idx": {
+          "name": "market_positions_actor_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_positions_market_id_prediction_markets_id_fk": {
+          "name": "market_positions_market_id_prediction_markets_id_fk",
+          "tableFrom": "market_positions",
+          "tableTo": "prediction_markets",
+          "columnsFrom": [
+            "market_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "market_positions_actor_id_market_actors_id_fk": {
+          "name": "market_positions_actor_id_market_actors_id_fk",
+          "tableFrom": "market_positions",
+          "tableTo": "market_actors",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_positions_yes_shares_check": {
+          "name": "market_positions_yes_shares_check",
+          "value": "\"market_positions\".\"yes_shares\" >= 0"
+        },
+        "market_positions_no_shares_check": {
+          "name": "market_positions_no_shares_check",
+          "value": "\"market_positions\".\"no_shares\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_price_snapshots": {
+      "name": "market_price_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "market_id": {
+          "name": "market_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_date": {
+          "name": "snapshot_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price_yes": {
+          "name": "price_yes",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "q_yes": {
+          "name": "q_yes",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "q_no": {
+          "name": "q_no",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_price_snapshots_market_date_idx": {
+          "name": "market_price_snapshots_market_date_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "snapshot_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_price_snapshots_market_idx": {
+          "name": "market_price_snapshots_market_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_price_snapshots_market_id_prediction_markets_id_fk": {
+          "name": "market_price_snapshots_market_id_prediction_markets_id_fk",
+          "tableFrom": "market_price_snapshots",
+          "tableTo": "prediction_markets",
+          "columnsFrom": [
+            "market_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_price_snapshots_price_yes_check": {
+          "name": "market_price_snapshots_price_yes_check",
+          "value": "\"market_price_snapshots\".\"price_yes\" >= 0 AND \"market_price_snapshots\".\"price_yes\" <= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_run_logs": {
+      "name": "market_run_logs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "log_type": {
+          "name": "log_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'activity'"
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_actions": {
+          "name": "completed_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_actions": {
+          "name": "total_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ok_count": {
+          "name": "ok_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_count": {
+          "name": "error_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "skipped_count": {
+          "name": "skipped_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_id": {
+          "name": "market_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fda_event_id": {
+          "name": "fda_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trial_question_id": {
+          "name": "trial_question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activity_phase": {
+          "name": "activity_phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action_status": {
+          "name": "action_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_usd": {
+          "name": "amount_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "market_run_logs_run_created_idx": {
+          "name": "market_run_logs_run_created_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_run_logs_created_at_idx": {
+          "name": "market_run_logs_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_run_logs_actor_idx": {
+          "name": "market_run_logs_actor_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_run_logs_run_id_market_runs_id_fk": {
+          "name": "market_run_logs_run_id_market_runs_id_fk",
+          "tableFrom": "market_run_logs",
+          "tableTo": "market_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "market_run_logs_market_id_prediction_markets_id_fk": {
+          "name": "market_run_logs_market_id_prediction_markets_id_fk",
+          "tableFrom": "market_run_logs",
+          "tableTo": "prediction_markets",
+          "columnsFrom": [
+            "market_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "market_run_logs_fda_event_id_fda_calendar_events_id_fk": {
+          "name": "market_run_logs_fda_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "market_run_logs",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "fda_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "market_run_logs_trial_question_id_trial_questions_id_fk": {
+          "name": "market_run_logs_trial_question_id_trial_questions_id_fk",
+          "tableFrom": "market_run_logs",
+          "tableTo": "trial_questions",
+          "columnsFrom": [
+            "trial_question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "market_run_logs_actor_id_market_actors_id_fk": {
+          "name": "market_run_logs_actor_id_market_actors_id_fk",
+          "tableFrom": "market_run_logs",
+          "tableTo": "market_actors",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_run_logs_log_type_check": {
+          "name": "market_run_logs_log_type_check",
+          "value": "\"market_run_logs\".\"log_type\" IN ('system', 'activity', 'progress', 'error')"
+        },
+        "market_run_logs_activity_phase_check": {
+          "name": "market_run_logs_activity_phase_check",
+          "value": "\"market_run_logs\".\"activity_phase\" IS NULL OR \"market_run_logs\".\"activity_phase\" IN ('running', 'waiting')"
+        },
+        "market_run_logs_action_status_check": {
+          "name": "market_run_logs_action_status_check",
+          "value": "\"market_run_logs\".\"action_status\" IS NULL OR \"market_run_logs\".\"action_status\" IN ('ok', 'error', 'skipped')"
+        },
+        "market_run_logs_completed_actions_check": {
+          "name": "market_run_logs_completed_actions_check",
+          "value": "\"market_run_logs\".\"completed_actions\" IS NULL OR \"market_run_logs\".\"completed_actions\" >= 0"
+        },
+        "market_run_logs_total_actions_check": {
+          "name": "market_run_logs_total_actions_check",
+          "value": "\"market_run_logs\".\"total_actions\" IS NULL OR \"market_run_logs\".\"total_actions\" >= 0"
+        },
+        "market_run_logs_ok_count_check": {
+          "name": "market_run_logs_ok_count_check",
+          "value": "\"market_run_logs\".\"ok_count\" IS NULL OR \"market_run_logs\".\"ok_count\" >= 0"
+        },
+        "market_run_logs_error_count_check": {
+          "name": "market_run_logs_error_count_check",
+          "value": "\"market_run_logs\".\"error_count\" IS NULL OR \"market_run_logs\".\"error_count\" >= 0"
+        },
+        "market_run_logs_skipped_count_check": {
+          "name": "market_run_logs_skipped_count_check",
+          "value": "\"market_run_logs\".\"skipped_count\" IS NULL OR \"market_run_logs\".\"skipped_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_runs": {
+      "name": "market_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "run_date": {
+          "name": "run_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "open_markets": {
+          "name": "open_markets",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_actions": {
+          "name": "total_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "processed_actions": {
+          "name": "processed_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "ok_count": {
+          "name": "ok_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_count": {
+          "name": "error_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "skipped_count": {
+          "name": "skipped_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failure_reason": {
+          "name": "failure_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "market_runs_run_date_idx": {
+          "name": "market_runs_run_date_idx",
+          "columns": [
+            {
+              "expression": "run_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_runs_status_idx": {
+          "name": "market_runs_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "market_runs_created_at_idx": {
+          "name": "market_runs_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_runs_status_check": {
+          "name": "market_runs_status_check",
+          "value": "\"market_runs\".\"status\" IN ('running', 'completed', 'failed')"
+        },
+        "market_runs_open_markets_check": {
+          "name": "market_runs_open_markets_check",
+          "value": "\"market_runs\".\"open_markets\" >= 0"
+        },
+        "market_runs_total_actions_check": {
+          "name": "market_runs_total_actions_check",
+          "value": "\"market_runs\".\"total_actions\" >= 0"
+        },
+        "market_runs_processed_actions_check": {
+          "name": "market_runs_processed_actions_check",
+          "value": "\"market_runs\".\"processed_actions\" >= 0 AND \"market_runs\".\"processed_actions\" <= \"market_runs\".\"total_actions\""
+        },
+        "market_runs_ok_count_check": {
+          "name": "market_runs_ok_count_check",
+          "value": "\"market_runs\".\"ok_count\" >= 0"
+        },
+        "market_runs_error_count_check": {
+          "name": "market_runs_error_count_check",
+          "value": "\"market_runs\".\"error_count\" >= 0"
+        },
+        "market_runs_skipped_count_check": {
+          "name": "market_runs_skipped_count_check",
+          "value": "\"market_runs\".\"skipped_count\" >= 0"
+        },
+        "market_runs_count_sum_check": {
+          "name": "market_runs_count_sum_check",
+          "value": "\"market_runs\".\"ok_count\" + \"market_runs\".\"error_count\" + \"market_runs\".\"skipped_count\" <= \"market_runs\".\"processed_actions\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.market_runtime_configs": {
+      "name": "market_runtime_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "warmup_run_count": {
+          "name": "warmup_run_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "warmup_max_trade_usd": {
+          "name": "warmup_max_trade_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        },
+        "warmup_buy_cash_fraction": {
+          "name": "warmup_buy_cash_fraction",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0.02
+        },
+        "steady_max_trade_usd": {
+          "name": "steady_max_trade_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        },
+        "steady_buy_cash_fraction": {
+          "name": "steady_buy_cash_fraction",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0.02
+        },
+        "max_position_per_side_shares": {
+          "name": "max_position_per_side_shares",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10000
+        },
+        "opening_lmsr_b": {
+          "name": "opening_lmsr_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 100000
+        },
+        "signup_user_limit": {
+          "name": "signup_user_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 56
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_runtime_configs_warmup_run_count_check": {
+          "name": "market_runtime_configs_warmup_run_count_check",
+          "value": "\"market_runtime_configs\".\"warmup_run_count\" >= 0 AND \"market_runtime_configs\".\"warmup_run_count\" <= 365"
+        },
+        "market_runtime_configs_warmup_max_trade_usd_check": {
+          "name": "market_runtime_configs_warmup_max_trade_usd_check",
+          "value": "\"market_runtime_configs\".\"warmup_max_trade_usd\" >= 0 AND \"market_runtime_configs\".\"warmup_max_trade_usd\" <= 10000000"
+        },
+        "market_runtime_configs_warmup_buy_cash_fraction_check": {
+          "name": "market_runtime_configs_warmup_buy_cash_fraction_check",
+          "value": "\"market_runtime_configs\".\"warmup_buy_cash_fraction\" >= 0 AND \"market_runtime_configs\".\"warmup_buy_cash_fraction\" <= 1"
+        },
+        "market_runtime_configs_steady_max_trade_usd_check": {
+          "name": "market_runtime_configs_steady_max_trade_usd_check",
+          "value": "\"market_runtime_configs\".\"steady_max_trade_usd\" >= 0 AND \"market_runtime_configs\".\"steady_max_trade_usd\" <= 10000000"
+        },
+        "market_runtime_configs_steady_buy_cash_fraction_check": {
+          "name": "market_runtime_configs_steady_buy_cash_fraction_check",
+          "value": "\"market_runtime_configs\".\"steady_buy_cash_fraction\" >= 0 AND \"market_runtime_configs\".\"steady_buy_cash_fraction\" <= 1"
+        },
+        "market_runtime_configs_max_position_per_side_shares_check": {
+          "name": "market_runtime_configs_max_position_per_side_shares_check",
+          "value": "\"market_runtime_configs\".\"max_position_per_side_shares\" >= 0 AND \"market_runtime_configs\".\"max_position_per_side_shares\" <= 10000000"
+        },
+        "market_runtime_configs_opening_lmsr_b_check": {
+          "name": "market_runtime_configs_opening_lmsr_b_check",
+          "value": "\"market_runtime_configs\".\"opening_lmsr_b\" > 0 AND \"market_runtime_configs\".\"opening_lmsr_b\" <= 10000000"
+        },
+        "market_runtime_configs_signup_user_limit_check": {
+          "name": "market_runtime_configs_signup_user_limit_check",
+          "value": "\"market_runtime_configs\".\"signup_user_limit\" >= 0 AND \"market_runtime_configs\".\"signup_user_limit\" <= 10000000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.model_decision_snapshots": {
+      "name": "model_decision_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_date": {
+          "name": "run_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "market_id": {
+          "name": "market_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fda_event_id": {
+          "name": "fda_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trial_question_id": {
+          "name": "trial_question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_source": {
+          "name": "run_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approval_probability": {
+          "name": "approval_probability",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "yes_probability": {
+          "name": "yes_probability",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "binary_call": {
+          "name": "binary_call",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reasoning": {
+          "name": "reasoning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_action_type": {
+          "name": "proposed_action_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_amount_usd": {
+          "name": "proposed_amount_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "proposed_explanation": {
+          "name": "proposed_explanation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "market_price_yes": {
+          "name": "market_price_yes",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_price_no": {
+          "name": "market_price_no",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cash_available": {
+          "name": "cash_available",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "yes_shares_held": {
+          "name": "yes_shares_held",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "no_shares_held": {
+          "name": "no_shares_held",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_buy_usd": {
+          "name": "max_buy_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_sell_yes_usd": {
+          "name": "max_sell_yes_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_sell_no_usd": {
+          "name": "max_sell_no_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "input_tokens": {
+          "name": "input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "output_tokens": {
+          "name": "output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_tokens": {
+          "name": "total_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reasoning_tokens": {
+          "name": "reasoning_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "estimated_cost_usd": {
+          "name": "estimated_cost_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cost_source": {
+          "name": "cost_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cache_creation_input_tokens_5m": {
+          "name": "cache_creation_input_tokens_5m",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cache_creation_input_tokens_1h": {
+          "name": "cache_creation_input_tokens_1h",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cache_read_input_tokens": {
+          "name": "cache_read_input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "web_search_requests": {
+          "name": "web_search_requests",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inference_geo": {
+          "name": "inference_geo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_market_action_id": {
+          "name": "linked_market_action_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "model_decision_snapshots_run_id_idx": {
+          "name": "model_decision_snapshots_run_id_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "model_decision_snapshots_run_date_run_source_idx": {
+          "name": "model_decision_snapshots_run_date_run_source_idx",
+          "columns": [
+            {
+              "expression": "run_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "run_source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "model_decision_snapshots_event_actor_created_idx": {
+          "name": "model_decision_snapshots_event_actor_created_idx",
+          "columns": [
+            {
+              "expression": "fda_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "model_decision_snapshots_question_actor_created_idx": {
+          "name": "model_decision_snapshots_question_actor_created_idx",
+          "columns": [
+            {
+              "expression": "trial_question_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "model_decision_snapshots_market_actor_created_idx": {
+          "name": "model_decision_snapshots_market_actor_created_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "model_decision_snapshots_market_actor_run_date_created_idx": {
+          "name": "model_decision_snapshots_market_actor_run_date_created_idx",
+          "columns": [
+            {
+              "expression": "market_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "run_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "model_decision_snapshots_run_source_idx": {
+          "name": "model_decision_snapshots_run_source_idx",
+          "columns": [
+            {
+              "expression": "run_source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "model_decision_snapshots_run_id_market_runs_id_fk": {
+          "name": "model_decision_snapshots_run_id_market_runs_id_fk",
+          "tableFrom": "model_decision_snapshots",
+          "tableTo": "market_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "model_decision_snapshots_market_id_prediction_markets_id_fk": {
+          "name": "model_decision_snapshots_market_id_prediction_markets_id_fk",
+          "tableFrom": "model_decision_snapshots",
+          "tableTo": "prediction_markets",
+          "columnsFrom": [
+            "market_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "model_decision_snapshots_fda_event_id_fda_calendar_events_id_fk": {
+          "name": "model_decision_snapshots_fda_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "model_decision_snapshots",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "fda_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "model_decision_snapshots_trial_question_id_trial_questions_id_fk": {
+          "name": "model_decision_snapshots_trial_question_id_trial_questions_id_fk",
+          "tableFrom": "model_decision_snapshots",
+          "tableTo": "trial_questions",
+          "columnsFrom": [
+            "trial_question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "model_decision_snapshots_actor_id_market_actors_id_fk": {
+          "name": "model_decision_snapshots_actor_id_market_actors_id_fk",
+          "tableFrom": "model_decision_snapshots",
+          "tableTo": "market_actors",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "model_decision_snapshots_linked_market_action_id_market_actions_id_fk": {
+          "name": "model_decision_snapshots_linked_market_action_id_market_actions_id_fk",
+          "tableFrom": "model_decision_snapshots",
+          "tableTo": "market_actions",
+          "columnsFrom": [
+            "linked_market_action_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "model_decision_snapshots_run_source_check": {
+          "name": "model_decision_snapshots_run_source_check",
+          "value": "\"model_decision_snapshots\".\"run_source\" IN ('manual', 'cycle')"
+        },
+        "model_decision_snapshots_run_shape_check": {
+          "name": "model_decision_snapshots_run_shape_check",
+          "value": "(\n      (\"model_decision_snapshots\".\"run_source\" = 'cycle' AND \"model_decision_snapshots\".\"run_id\" IS NOT NULL)\n      OR\n      (\"model_decision_snapshots\".\"run_source\" = 'manual' AND \"model_decision_snapshots\".\"run_id\" IS NULL)\n    )"
+        },
+        "model_decision_snapshots_binary_call_check": {
+          "name": "model_decision_snapshots_binary_call_check",
+          "value": "\"model_decision_snapshots\".\"binary_call\" IN ('approved', 'rejected', 'yes', 'no')"
+        },
+        "model_decision_snapshots_confidence_check": {
+          "name": "model_decision_snapshots_confidence_check",
+          "value": "\"model_decision_snapshots\".\"confidence\" >= 50 AND \"model_decision_snapshots\".\"confidence\" <= 100"
+        },
+        "model_decision_snapshots_approval_probability_check": {
+          "name": "model_decision_snapshots_approval_probability_check",
+          "value": "\"model_decision_snapshots\".\"approval_probability\" >= 0 AND \"model_decision_snapshots\".\"approval_probability\" <= 1"
+        },
+        "model_decision_snapshots_yes_probability_check": {
+          "name": "model_decision_snapshots_yes_probability_check",
+          "value": "\"model_decision_snapshots\".\"yes_probability\" IS NULL OR (\"model_decision_snapshots\".\"yes_probability\" >= 0 AND \"model_decision_snapshots\".\"yes_probability\" <= 1)"
+        },
+        "model_decision_snapshots_ownership_check": {
+          "name": "model_decision_snapshots_ownership_check",
+          "value": "(\n      (\"model_decision_snapshots\".\"fda_event_id\" IS NOT NULL AND \"model_decision_snapshots\".\"trial_question_id\" IS NULL)\n      OR\n      (\"model_decision_snapshots\".\"fda_event_id\" IS NULL AND \"model_decision_snapshots\".\"trial_question_id\" IS NOT NULL)\n    )"
+        },
+        "model_decision_snapshots_proposed_action_check": {
+          "name": "model_decision_snapshots_proposed_action_check",
+          "value": "\"model_decision_snapshots\".\"proposed_action_type\" IN ('BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO', 'HOLD')"
+        },
+        "model_decision_snapshots_proposed_amount_check": {
+          "name": "model_decision_snapshots_proposed_amount_check",
+          "value": "\"model_decision_snapshots\".\"proposed_amount_usd\" >= 0"
+        },
+        "model_decision_snapshots_market_price_yes_check": {
+          "name": "model_decision_snapshots_market_price_yes_check",
+          "value": "\"model_decision_snapshots\".\"market_price_yes\" IS NULL OR (\"model_decision_snapshots\".\"market_price_yes\" >= 0 AND \"model_decision_snapshots\".\"market_price_yes\" <= 1)"
+        },
+        "model_decision_snapshots_market_price_no_check": {
+          "name": "model_decision_snapshots_market_price_no_check",
+          "value": "\"model_decision_snapshots\".\"market_price_no\" IS NULL OR (\"model_decision_snapshots\".\"market_price_no\" >= 0 AND \"model_decision_snapshots\".\"market_price_no\" <= 1)"
+        },
+        "model_decision_snapshots_cash_available_check": {
+          "name": "model_decision_snapshots_cash_available_check",
+          "value": "\"model_decision_snapshots\".\"cash_available\" IS NULL OR \"model_decision_snapshots\".\"cash_available\" >= 0"
+        },
+        "model_decision_snapshots_yes_shares_held_check": {
+          "name": "model_decision_snapshots_yes_shares_held_check",
+          "value": "\"model_decision_snapshots\".\"yes_shares_held\" IS NULL OR \"model_decision_snapshots\".\"yes_shares_held\" >= 0"
+        },
+        "model_decision_snapshots_no_shares_held_check": {
+          "name": "model_decision_snapshots_no_shares_held_check",
+          "value": "\"model_decision_snapshots\".\"no_shares_held\" IS NULL OR \"model_decision_snapshots\".\"no_shares_held\" >= 0"
+        },
+        "model_decision_snapshots_max_buy_usd_check": {
+          "name": "model_decision_snapshots_max_buy_usd_check",
+          "value": "\"model_decision_snapshots\".\"max_buy_usd\" IS NULL OR \"model_decision_snapshots\".\"max_buy_usd\" >= 0"
+        },
+        "model_decision_snapshots_max_sell_yes_usd_check": {
+          "name": "model_decision_snapshots_max_sell_yes_usd_check",
+          "value": "\"model_decision_snapshots\".\"max_sell_yes_usd\" IS NULL OR \"model_decision_snapshots\".\"max_sell_yes_usd\" >= 0"
+        },
+        "model_decision_snapshots_max_sell_no_usd_check": {
+          "name": "model_decision_snapshots_max_sell_no_usd_check",
+          "value": "\"model_decision_snapshots\".\"max_sell_no_usd\" IS NULL OR \"model_decision_snapshots\".\"max_sell_no_usd\" >= 0"
+        },
+        "model_decision_snapshots_cost_source_check": {
+          "name": "model_decision_snapshots_cost_source_check",
+          "value": "\"model_decision_snapshots\".\"cost_source\" IS NULL OR \"model_decision_snapshots\".\"cost_source\" IN ('provider', 'estimated')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.phase2_trials": {
+      "name": "phase2_trials",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nct_number": {
+          "name": "nct_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "short_title": {
+          "name": "short_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sponsor_name": {
+          "name": "sponsor_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sponsor_ticker": {
+          "name": "sponsor_ticker",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "indication": {
+          "name": "indication",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "exact_phase": {
+          "name": "exact_phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intervention": {
+          "name": "intervention",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "primary_endpoint": {
+          "name": "primary_endpoint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "study_start_date": {
+          "name": "study_start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "est_primary_completion_date": {
+          "name": "est_primary_completion_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "est_study_completion_date": {
+          "name": "est_study_completion_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "est_results_posting_date": {
+          "name": "est_results_posting_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_status": {
+          "name": "current_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "est_enrollment": {
+          "name": "est_enrollment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "key_locations": {
+          "name": "key_locations",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "brief_summary": {
+          "name": "brief_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "standard_betting_markets": {
+          "name": "standard_betting_markets",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_monitored_at": {
+          "name": "last_monitored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "phase2_trials_nct_number_idx": {
+          "name": "phase2_trials_nct_number_idx",
+          "columns": [
+            {
+              "expression": "nct_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phase2_trials_primary_completion_idx": {
+          "name": "phase2_trials_primary_completion_idx",
+          "columns": [
+            {
+              "expression": "est_primary_completion_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phase2_trials_sponsor_ticker_idx": {
+          "name": "phase2_trials_sponsor_ticker_idx",
+          "columns": [
+            {
+              "expression": "sponsor_ticker",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phase2_trials_current_status_idx": {
+          "name": "phase2_trials_current_status_idx",
+          "columns": [
+            {
+              "expression": "current_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "phase2_trials_est_enrollment_check": {
+          "name": "phase2_trials_est_enrollment_check",
+          "value": "\"phase2_trials\".\"est_enrollment\" IS NULL OR \"phase2_trials\".\"est_enrollment\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.prediction_markets": {
+      "name": "prediction_markets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fda_event_id": {
+          "name": "fda_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trial_question_id": {
+          "name": "trial_question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "opening_probability": {
+          "name": "opening_probability",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "b": {
+          "name": "b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 25000
+        },
+        "q_yes": {
+          "name": "q_yes",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "q_no": {
+          "name": "q_no",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "price_yes": {
+          "name": "price_yes",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0.5
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_outcome": {
+          "name": "resolved_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "prediction_markets_fda_event_id_idx": {
+          "name": "prediction_markets_fda_event_id_idx",
+          "columns": [
+            {
+              "expression": "fda_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"prediction_markets\".\"fda_event_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "prediction_markets_trial_question_id_idx": {
+          "name": "prediction_markets_trial_question_id_idx",
+          "columns": [
+            {
+              "expression": "trial_question_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"prediction_markets\".\"trial_question_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "prediction_markets_status_idx": {
+          "name": "prediction_markets_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "prediction_markets_fda_event_id_fda_calendar_events_id_fk": {
+          "name": "prediction_markets_fda_event_id_fda_calendar_events_id_fk",
+          "tableFrom": "prediction_markets",
+          "tableTo": "fda_calendar_events",
+          "columnsFrom": [
+            "fda_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "prediction_markets_trial_question_id_trial_questions_id_fk": {
+          "name": "prediction_markets_trial_question_id_trial_questions_id_fk",
+          "tableFrom": "prediction_markets",
+          "tableTo": "trial_questions",
+          "columnsFrom": [
+            "trial_question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "prediction_markets_status_check": {
+          "name": "prediction_markets_status_check",
+          "value": "\"prediction_markets\".\"status\" IN ('OPEN', 'RESOLVED')"
+        },
+        "prediction_markets_opening_probability_check": {
+          "name": "prediction_markets_opening_probability_check",
+          "value": "\"prediction_markets\".\"opening_probability\" >= 0 AND \"prediction_markets\".\"opening_probability\" <= 1"
+        },
+        "prediction_markets_b_check": {
+          "name": "prediction_markets_b_check",
+          "value": "\"prediction_markets\".\"b\" > 0"
+        },
+        "prediction_markets_price_yes_check": {
+          "name": "prediction_markets_price_yes_check",
+          "value": "\"prediction_markets\".\"price_yes\" >= 0 AND \"prediction_markets\".\"price_yes\" <= 1"
+        },
+        "prediction_markets_resolved_outcome_check": {
+          "name": "prediction_markets_resolved_outcome_check",
+          "value": "\"prediction_markets\".\"resolved_outcome\" IS NULL OR \"prediction_markets\".\"resolved_outcome\" IN ('Approved', 'Rejected', 'YES', 'NO')"
+        },
+        "prediction_markets_resolved_state_check": {
+          "name": "prediction_markets_resolved_state_check",
+          "value": "(\n      (\"prediction_markets\".\"status\" = 'OPEN' AND \"prediction_markets\".\"resolved_outcome\" IS NULL AND \"prediction_markets\".\"resolved_at\" IS NULL)\n      OR\n      (\"prediction_markets\".\"status\" = 'RESOLVED' AND \"prediction_markets\".\"resolved_outcome\" IS NOT NULL AND \"prediction_markets\".\"resolved_at\" IS NOT NULL)\n    )"
+        },
+        "prediction_markets_ownership_check": {
+          "name": "prediction_markets_ownership_check",
+          "value": "(\n      (\"prediction_markets\".\"fda_event_id\" IS NOT NULL AND \"prediction_markets\".\"trial_question_id\" IS NULL)\n      OR\n      (\"prediction_markets\".\"fda_event_id\" IS NULL AND \"prediction_markets\".\"trial_question_id\" IS NOT NULL)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_token": {
+          "name": "session_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires": {
+          "name": "expires",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sessions_session_token_unique": {
+          "name": "sessions_session_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "session_token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.trial_monitor_configs": {
+      "name": "trial_monitor_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "web_search_enabled": {
+          "name": "web_search_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "run_interval_hours": {
+          "name": "run_interval_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "lookahead_days": {
+          "name": "lookahead_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 30
+        },
+        "overdue_recheck_hours": {
+          "name": "overdue_recheck_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 24
+        },
+        "max_questions_per_run": {
+          "name": "max_questions_per_run",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 25
+        },
+        "verifier_model_key": {
+          "name": "verifier_model_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'gpt-5.4'"
+        },
+        "min_candidate_confidence": {
+          "name": "min_candidate_confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0.8
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_monitor_configs_run_interval_hours_check": {
+          "name": "trial_monitor_configs_run_interval_hours_check",
+          "value": "\"trial_monitor_configs\".\"run_interval_hours\" >= 1 AND \"trial_monitor_configs\".\"run_interval_hours\" <= 168"
+        },
+        "trial_monitor_configs_lookahead_days_check": {
+          "name": "trial_monitor_configs_lookahead_days_check",
+          "value": "\"trial_monitor_configs\".\"lookahead_days\" >= 0 AND \"trial_monitor_configs\".\"lookahead_days\" <= 365"
+        },
+        "trial_monitor_configs_overdue_recheck_hours_check": {
+          "name": "trial_monitor_configs_overdue_recheck_hours_check",
+          "value": "\"trial_monitor_configs\".\"overdue_recheck_hours\" >= 1 AND \"trial_monitor_configs\".\"overdue_recheck_hours\" <= 720"
+        },
+        "trial_monitor_configs_max_questions_per_run_check": {
+          "name": "trial_monitor_configs_max_questions_per_run_check",
+          "value": "\"trial_monitor_configs\".\"max_questions_per_run\" >= 1 AND \"trial_monitor_configs\".\"max_questions_per_run\" <= 500"
+        },
+        "trial_monitor_configs_min_candidate_confidence_check": {
+          "name": "trial_monitor_configs_min_candidate_confidence_check",
+          "value": "\"trial_monitor_configs\".\"min_candidate_confidence\" >= 0 AND \"trial_monitor_configs\".\"min_candidate_confidence\" <= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_monitor_runs": {
+      "name": "trial_monitor_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trigger_source": {
+          "name": "trigger_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "questions_scanned": {
+          "name": "questions_scanned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "candidates_created": {
+          "name": "candidates_created",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debug_log": {
+          "name": "debug_log",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trial_monitor_runs_started_at_idx": {
+          "name": "trial_monitor_runs_started_at_idx",
+          "columns": [
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_monitor_runs_trigger_source_check": {
+          "name": "trial_monitor_runs_trigger_source_check",
+          "value": "\"trial_monitor_runs\".\"trigger_source\" IN ('cron', 'manual')"
+        },
+        "trial_monitor_runs_status_check": {
+          "name": "trial_monitor_runs_status_check",
+          "value": "\"trial_monitor_runs\".\"status\" IN ('running', 'completed', 'failed')"
+        },
+        "trial_monitor_runs_questions_scanned_check": {
+          "name": "trial_monitor_runs_questions_scanned_check",
+          "value": "\"trial_monitor_runs\".\"questions_scanned\" >= 0"
+        },
+        "trial_monitor_runs_candidates_created_check": {
+          "name": "trial_monitor_runs_candidates_created_check",
+          "value": "\"trial_monitor_runs\".\"candidates_created\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_outcome_candidate_evidence": {
+      "name": "trial_outcome_candidate_evidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "excerpt": {
+          "name": "excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain": {
+          "name": "domain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trial_outcome_candidate_evidence_candidate_display_order_idx": {
+          "name": "trial_outcome_candidate_evidence_candidate_display_order_idx",
+          "columns": [
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "display_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trial_outcome_candidate_evidence_candidate_id_trial_outcome_candidates_id_fk": {
+          "name": "trial_outcome_candidate_evidence_candidate_id_trial_outcome_candidates_id_fk",
+          "tableFrom": "trial_outcome_candidate_evidence",
+          "tableTo": "trial_outcome_candidates",
+          "columnsFrom": [
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_outcome_candidate_evidence_source_type_check": {
+          "name": "trial_outcome_candidate_evidence_source_type_check",
+          "value": "\"trial_outcome_candidate_evidence\".\"source_type\" IN ('clinicaltrials', 'sponsor', 'stored_source', 'web_search')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_outcome_candidates": {
+      "name": "trial_outcome_candidates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trial_question_id": {
+          "name": "trial_question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_outcome": {
+          "name": "proposed_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_outcome_date": {
+          "name": "proposed_outcome_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verifier_model_key": {
+          "name": "verifier_model_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_response_id": {
+          "name": "provider_response_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_hash": {
+          "name": "evidence_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending_review'"
+        },
+        "reviewed_by_user_id": {
+          "name": "reviewed_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_notes": {
+          "name": "review_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "trial_outcome_candidates_question_outcome_hash_idx": {
+          "name": "trial_outcome_candidates_question_outcome_hash_idx",
+          "columns": [
+            {
+              "expression": "trial_question_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "proposed_outcome",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evidence_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_outcome_candidates_status_created_at_idx": {
+          "name": "trial_outcome_candidates_status_created_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_outcome_candidates_question_created_at_idx": {
+          "name": "trial_outcome_candidates_question_created_at_idx",
+          "columns": [
+            {
+              "expression": "trial_question_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trial_outcome_candidates_trial_question_id_trial_questions_id_fk": {
+          "name": "trial_outcome_candidates_trial_question_id_trial_questions_id_fk",
+          "tableFrom": "trial_outcome_candidates",
+          "tableTo": "trial_questions",
+          "columnsFrom": [
+            "trial_question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "trial_outcome_candidates_reviewed_by_user_id_users_id_fk": {
+          "name": "trial_outcome_candidates_reviewed_by_user_id_users_id_fk",
+          "tableFrom": "trial_outcome_candidates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_outcome_candidates_proposed_outcome_check": {
+          "name": "trial_outcome_candidates_proposed_outcome_check",
+          "value": "\"trial_outcome_candidates\".\"proposed_outcome\" IN ('YES', 'NO', 'NO_DECISION')"
+        },
+        "trial_outcome_candidates_confidence_check": {
+          "name": "trial_outcome_candidates_confidence_check",
+          "value": "\"trial_outcome_candidates\".\"confidence\" >= 0 AND \"trial_outcome_candidates\".\"confidence\" <= 1"
+        },
+        "trial_outcome_candidates_status_check": {
+          "name": "trial_outcome_candidates_status_check",
+          "value": "\"trial_outcome_candidates\".\"status\" IN ('pending_review', 'accepted', 'rejected', 'superseded', 'dismissed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_questions": {
+      "name": "trial_questions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trial_id": {
+          "name": "trial_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt": {
+          "name": "prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'coming_soon'"
+        },
+        "is_bettable": {
+          "name": "is_bettable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Pending'"
+        },
+        "outcome_date": {
+          "name": "outcome_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trial_questions_trial_slug_idx": {
+          "name": "trial_questions_trial_slug_idx",
+          "columns": [
+            {
+              "expression": "trial_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_questions_trial_sort_order_idx": {
+          "name": "trial_questions_trial_sort_order_idx",
+          "columns": [
+            {
+              "expression": "trial_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_questions_slug_idx": {
+          "name": "trial_questions_slug_idx",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_questions_status_idx": {
+          "name": "trial_questions_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_questions_outcome_idx": {
+          "name": "trial_questions_outcome_idx",
+          "columns": [
+            {
+              "expression": "outcome",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trial_questions_trial_id_phase2_trials_id_fk": {
+          "name": "trial_questions_trial_id_phase2_trials_id_fk",
+          "tableFrom": "trial_questions",
+          "tableTo": "phase2_trials",
+          "columnsFrom": [
+            "trial_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_questions_status_check": {
+          "name": "trial_questions_status_check",
+          "value": "\"trial_questions\".\"status\" IN ('live', 'coming_soon')"
+        },
+        "trial_questions_outcome_check": {
+          "name": "trial_questions_outcome_check",
+          "value": "\"trial_questions\".\"outcome\" IN ('Pending', 'YES', 'NO')"
+        },
+        "trial_questions_sort_order_check": {
+          "name": "trial_questions_sort_order_check",
+          "value": "\"trial_questions\".\"sort_order\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_sync_configs": {
+      "name": "trial_sync_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sync_interval_hours": {
+          "name": "sync_interval_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 24
+        },
+        "recent_completion_lookback_days": {
+          "name": "recent_completion_lookback_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 180
+        },
+        "reconcile_interval_hours": {
+          "name": "reconcile_interval_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 168
+        },
+        "last_successful_update_post_date": {
+          "name": "last_successful_update_post_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_successful_data_timestamp": {
+          "name": "last_successful_data_timestamp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_sync_configs_sync_interval_hours_check": {
+          "name": "trial_sync_configs_sync_interval_hours_check",
+          "value": "\"trial_sync_configs\".\"sync_interval_hours\" >= 1 AND \"trial_sync_configs\".\"sync_interval_hours\" <= 168"
+        },
+        "trial_sync_configs_recent_completion_lookback_days_check": {
+          "name": "trial_sync_configs_recent_completion_lookback_days_check",
+          "value": "\"trial_sync_configs\".\"recent_completion_lookback_days\" >= 1 AND \"trial_sync_configs\".\"recent_completion_lookback_days\" <= 1095"
+        },
+        "trial_sync_configs_reconcile_interval_hours_check": {
+          "name": "trial_sync_configs_reconcile_interval_hours_check",
+          "value": "\"trial_sync_configs\".\"reconcile_interval_hours\" >= 1 AND \"trial_sync_configs\".\"reconcile_interval_hours\" <= 720"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_sync_run_items": {
+      "name": "trial_sync_run_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trial_id": {
+          "name": "trial_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nct_number": {
+          "name": "nct_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "short_title": {
+          "name": "short_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sponsor_name": {
+          "name": "sponsor_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_status": {
+          "name": "current_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "est_primary_completion_date": {
+          "name": "est_primary_completion_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_type": {
+          "name": "change_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_summary": {
+          "name": "change_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trial_sync_run_items_run_created_at_idx": {
+          "name": "trial_sync_run_items_run_created_at_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_sync_run_items_run_change_type_idx": {
+          "name": "trial_sync_run_items_run_change_type_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "change_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_sync_run_items_nct_number_idx": {
+          "name": "trial_sync_run_items_nct_number_idx",
+          "columns": [
+            {
+              "expression": "nct_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trial_sync_run_items_run_id_trial_sync_runs_id_fk": {
+          "name": "trial_sync_run_items_run_id_trial_sync_runs_id_fk",
+          "tableFrom": "trial_sync_run_items",
+          "tableTo": "trial_sync_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "trial_sync_run_items_trial_id_phase2_trials_id_fk": {
+          "name": "trial_sync_run_items_trial_id_phase2_trials_id_fk",
+          "tableFrom": "trial_sync_run_items",
+          "tableTo": "phase2_trials",
+          "columnsFrom": [
+            "trial_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_sync_run_items_change_type_check": {
+          "name": "trial_sync_run_items_change_type_check",
+          "value": "\"trial_sync_run_items\".\"change_type\" IN ('inserted', 'updated')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_sync_runs": {
+      "name": "trial_sync_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trigger_source": {
+          "name": "trigger_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'incremental'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "source_data_timestamp": {
+          "name": "source_data_timestamp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "studies_fetched": {
+          "name": "studies_fetched",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "studies_matched": {
+          "name": "studies_matched",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "trials_upserted": {
+          "name": "trials_upserted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "questions_upserted": {
+          "name": "questions_upserted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "markets_opened": {
+          "name": "markets_opened",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trial_sync_runs_started_at_idx": {
+          "name": "trial_sync_runs_started_at_idx",
+          "columns": [
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_sync_runs_mode_started_at_idx": {
+          "name": "trial_sync_runs_mode_started_at_idx",
+          "columns": [
+            {
+              "expression": "mode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_sync_runs_trigger_source_check": {
+          "name": "trial_sync_runs_trigger_source_check",
+          "value": "\"trial_sync_runs\".\"trigger_source\" IN ('cron', 'manual')"
+        },
+        "trial_sync_runs_mode_check": {
+          "name": "trial_sync_runs_mode_check",
+          "value": "\"trial_sync_runs\".\"mode\" IN ('incremental', 'reconcile')"
+        },
+        "trial_sync_runs_status_check": {
+          "name": "trial_sync_runs_status_check",
+          "value": "\"trial_sync_runs\".\"status\" IN ('running', 'completed', 'failed', 'skipped')"
+        },
+        "trial_sync_runs_studies_fetched_check": {
+          "name": "trial_sync_runs_studies_fetched_check",
+          "value": "\"trial_sync_runs\".\"studies_fetched\" >= 0"
+        },
+        "trial_sync_runs_studies_matched_check": {
+          "name": "trial_sync_runs_studies_matched_check",
+          "value": "\"trial_sync_runs\".\"studies_matched\" >= 0"
+        },
+        "trial_sync_runs_trials_upserted_check": {
+          "name": "trial_sync_runs_trials_upserted_check",
+          "value": "\"trial_sync_runs\".\"trials_upserted\" >= 0"
+        },
+        "trial_sync_runs_questions_upserted_check": {
+          "name": "trial_sync_runs_questions_upserted_check",
+          "value": "\"trial_sync_runs\".\"questions_upserted\" >= 0"
+        },
+        "trial_sync_runs_markets_opened_check": {
+          "name": "trial_sync_runs_markets_opened_check",
+          "value": "\"trial_sync_runs\".\"markets_opened\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signup_location": {
+          "name": "signup_location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signup_state": {
+          "name": "signup_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predictions": {
+          "name": "predictions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "correct_preds": {
+          "name": "correct_preds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "x_user_id": {
+          "name": "x_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "x_username": {
+          "name": "x_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "x_connected_at": {
+          "name": "x_connected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tweet_challenge_token_hash": {
+          "name": "tweet_challenge_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tweet_challenge_expires_at": {
+          "name": "tweet_challenge_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tweet_verified_at": {
+          "name": "tweet_verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tweet_verified_tweet_id": {
+          "name": "tweet_verified_tweet_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tweet_must_stay_until": {
+          "name": "tweet_must_stay_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "points_balance": {
+          "name": "points_balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "last_points_refill_at": {
+          "name": "last_points_refill_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "users_x_user_id_idx": {
+          "name": "users_x_user_id_idx",
+          "columns": [
+            {
+              "expression": "x_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "users_display_name_check": {
+          "name": "users_display_name_check",
+          "value": "\"users\".\"name\" ~ '^[A-Za-z0-9]{1,20}$'"
+        },
+        "users_points_balance_check": {
+          "name": "users_points_balance_check",
+          "value": "\"users\".\"points_balance\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.verification_tokens": {
+      "name": "verification_tokens",
+      "schema": "",
+      "columns": {
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires": {
+          "name": "expires",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "verification_tokens_token_unique": {
+          "name": "verification_tokens_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.waitlist_entries": {
+      "name": "waitlist_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "waitlist_entries_email_unique_idx": {
+          "name": "waitlist_entries_email_unique_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

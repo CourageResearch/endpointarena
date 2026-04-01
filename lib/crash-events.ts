@@ -2,7 +2,6 @@ import { createHash } from 'crypto'
 import { Resend } from 'resend'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { crashEvents, db } from '@/lib/db'
-import { ADMIN_EMAIL } from '@/lib/constants'
 
 type CrashEventSource = 'app-error' | 'global-error' | 'api' | 'manual'
 
@@ -51,16 +50,11 @@ type CrashAlertEmailPayload = {
 }
 
 const CRASH_ALERT_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
-const CRASH_ALERT_TO_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || ADMIN_EMAIL
+const CRASH_ALERT_TO_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || ''
 const CRASH_ALERT_BASE_URL = process.env.NEXTAUTH_URL?.trim() || 'https://endpointarena.com'
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __crashEventsSchemaReadyPromise: Promise<void> | undefined
-}
 
 function normalizeText(value: string | null | undefined, maxLength: number): string | null {
   if (typeof value !== 'string') return null
@@ -291,54 +285,7 @@ async function sendCrashAlertEmail(payload: CrashAlertEmailPayload): Promise<boo
   }
 }
 
-export async function ensureCrashEventsSchema(): Promise<void> {
-  if (globalThis.__crashEventsSchemaReadyPromise) {
-    return globalThis.__crashEventsSchemaReadyPromise
-  }
-
-  globalThis.__crashEventsSchemaReadyPromise = (async () => {
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS crash_events (
-        id TEXT PRIMARY KEY,
-        fingerprint TEXT NOT NULL,
-        digest TEXT,
-        error_name TEXT,
-        message TEXT NOT NULL,
-        stack TEXT,
-        component_stack TEXT,
-        url TEXT,
-        path TEXT,
-        source TEXT NOT NULL DEFAULT 'app-error',
-        request_id TEXT,
-        error_code TEXT,
-        status_code INTEGER,
-        details TEXT,
-        user_id TEXT,
-        user_email TEXT,
-        user_agent TEXT,
-        ip_address TEXT,
-        country TEXT,
-        city TEXT,
-        created_at TIMESTAMP DEFAULT now()
-      )
-    `)
-
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS crash_events_fingerprint_idx ON crash_events(fingerprint)`)
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS crash_events_created_at_idx ON crash_events(created_at)`)
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS crash_events_digest_idx ON crash_events(digest)`)
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS crash_events_path_idx ON crash_events(path)`)
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS crash_events_source_idx ON crash_events(source)`)
-  })().catch((error) => {
-    globalThis.__crashEventsSchemaReadyPromise = undefined
-    throw error
-  })
-
-  return globalThis.__crashEventsSchemaReadyPromise
-}
-
 export async function logCrashEvent(input: LogCrashEventInput): Promise<{ id: string; fingerprint: string }> {
-  await ensureCrashEventsSchema()
-
   const digest = normalizeText(input.digest, 128)
   const errorName = normalizeText(input.errorName, 128)
   const message = normalizeText(input.message, 2000) ?? 'Unknown crash'
@@ -441,8 +388,6 @@ export async function getRecentCrashEvents({
   limit?: number
   search?: string
 }) {
-  await ensureCrashEventsSchema()
-
   const safeLimit = Math.min(Math.max(limit, 1), 2000)
   const query = normalizeText(search, 120)
   const baseFilter = gte(crashEvents.createdAt, since)

@@ -1,8 +1,8 @@
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { FDAPredictionRunner } from '@/components/FDAPredictionRunner'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { DecisionSnapshotRunner } from '@/components/DecisionSnapshotRunner'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL, MODEL_IDS } from '@/lib/constants'
 import { db, predictionMarkets, trialQuestions } from '@/lib/db'
@@ -142,7 +142,7 @@ export default async function AdminPredictionsPage() {
         <p className="mt-1 text-sm text-[#8a8075]">Manual runs create append-only snapshots only. Trade execution stays in the daily market cycle.</p>
       </section>
 
-      <FDAPredictionRunner events={eventsForClient} />
+      <DecisionSnapshotRunner events={eventsForClient} />
     </AdminConsoleLayout>
   )
 }

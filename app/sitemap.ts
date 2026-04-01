@@ -16,7 +16,6 @@ const STATIC_ROUTES = [
   '/contact',
   '/privacy',
   '/brand',
-  '/feb',
 ] as const
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

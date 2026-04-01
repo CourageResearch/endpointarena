@@ -39,7 +39,6 @@ export interface OpenMarketEventRow {
   applicationType: string
   decisionDate: string
   decisionDateKind: DecisionDateKind
-  cnpvAwardDate: string | null
   eventDescription: string
   outcome: string
   nctId?: string | null
@@ -98,7 +97,6 @@ export interface MarketResolutionRow {
 
 export interface OpenMarketRow {
   marketId: string
-  fdaEventId: string
   trialQuestionId?: string
   status: string
   priceYes: number
@@ -129,7 +127,6 @@ export interface RecentMarketActionRow {
   id: string
   runId: string | null
   marketId: string
-  fdaEventId: string
   modelId: ModelId
   runDate: string
   createdAt: string | null
@@ -276,7 +273,7 @@ export function getMarketSubtitle(market: Pick<OpenMarketRow, 'event'>): string 
   return ticker ? `${sponsorName} (${ticker})` : sponsorName
 }
 
-export function normalizeBinaryCall(value: string | null | undefined): 'yes' | 'no' | 'approved' | 'rejected' | null {
+function normalizeBinaryCall(value: string | null | undefined): 'yes' | 'no' | 'approved' | 'rejected' | null {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (normalized === 'yes' || normalized === 'no' || normalized === 'approved' || normalized === 'rejected') {
     return normalized

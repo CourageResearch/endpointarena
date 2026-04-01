@@ -1,5 +1,5 @@
-import { desc, eq } from 'drizzle-orm'
-import { db, trialSyncConfigs, trialSyncRuns } from '@/lib/db'
+import { eq } from 'drizzle-orm'
+import { db, trialSyncConfigs } from '@/lib/db'
 import { ValidationError } from '@/lib/errors'
 
 const TRIAL_SYNC_CONFIG_ID = 'default'
@@ -159,11 +159,4 @@ export async function updateTrialSyncConfig(input: TrialSyncConfigPatchInput): P
   }
 
   return mapRow(updated)
-}
-
-export async function getLatestCompletedTrialSyncRun(mode: 'incremental' | 'reconcile') {
-  return db.query.trialSyncRuns.findFirst({
-    where: eq(trialSyncRuns.mode, mode),
-    orderBy: [desc(trialSyncRuns.startedAt)],
-  })
 }

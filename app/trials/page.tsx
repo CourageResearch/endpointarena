@@ -38,7 +38,7 @@ async function getInitialOverview(): Promise<TrialsBrowseResponse | null> {
 export default async function TrialsPage({
   searchParams,
 }: {
-  searchParams?: PageSearchParams | Promise<PageSearchParams>
+  searchParams?: Promise<PageSearchParams>
 }) {
   const resolvedSearchParams = (await searchParams) ?? {}
   const initialFromDate = firstSearchParam(resolvedSearchParams.from)

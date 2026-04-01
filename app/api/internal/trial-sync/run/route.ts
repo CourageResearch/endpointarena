@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
     })
 
     revalidatePath('/trials')
-    revalidatePath('/feb')
     revalidatePath('/admin/outcomes')
 
     return successResponse({ result }, {

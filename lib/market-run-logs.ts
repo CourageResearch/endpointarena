@@ -16,7 +16,6 @@ export type PersistedRunLogEntry = {
   errorCount: number | null
   skippedCount: number | null
   marketId: string | null
-  fdaEventId: string | null
   trialQuestionId: string | null
   actorId: string | null
   modelId: string | null
@@ -84,7 +83,6 @@ export async function appendMarketRunLog(input: {
   errorCount?: number | null
   skippedCount?: number | null
   marketId?: string | null
-  fdaEventId?: string | null
   trialQuestionId?: string | null
   actorId?: string | null
   activityPhase?: DailyRunActivityPhase | null
@@ -102,7 +100,6 @@ export async function appendMarketRunLog(input: {
     errorCount: input.errorCount ?? null,
     skippedCount: input.skippedCount ?? null,
     marketId: input.marketId ?? null,
-    fdaEventId: input.fdaEventId ?? null,
     trialQuestionId: input.trialQuestionId ?? null,
     actorId: input.actorId ?? null,
     activityPhase: input.activityPhase ?? null,
@@ -176,7 +173,6 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
       errorCount: log.errorCount ?? null,
       skippedCount: log.skippedCount ?? null,
       marketId: log.marketId ?? null,
-      fdaEventId: log.fdaEventId ?? null,
       trialQuestionId: log.trialQuestionId ?? null,
       actorId: log.actorId ?? null,
       modelId: log.actor?.modelKey ?? null,

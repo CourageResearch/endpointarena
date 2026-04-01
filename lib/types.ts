@@ -62,30 +62,6 @@ export interface Prediction {
 
 export type DecisionDateKind = 'hard' | 'soft'
 
-export interface FDAEvent {
-  id: string
-  drugName: string
-  companyName: string
-  symbols: string | null
-  decisionDate: Date | string
-  decisionDateKind?: DecisionDateKind
-  cnpvAwardDate?: Date | string | null
-  therapeuticArea: string | null
-  applicationType: string
-  outcome: string
-  eventDescription: string
-  externalKey?: string | null
-  source?: string | null
-  newsLinks?: string[]
-  nctId?: string | null
-  rttDetailId?: string | null
-  rivalDrugs?: string | null
-  marketPotential?: string | null
-  otherApprovals?: string | null
-  metaAnalysis?: string | null
-  predictions: Prediction[]
-}
-
 export type TrialQuestionStatus = 'live' | 'coming_soon'
 
 export interface TrialQuestionView {

@@ -30,7 +30,7 @@ export default function MaintenancePage() {
                   Endpoint Arena is temporarily offline while we ship a production update.
                 </h1>
                 <p className="mt-4 text-base leading-7 text-[#6d6358] sm:text-lg">
-                  We&apos;re applying database and data updates to the FDA event pipeline. Health checks remain online,
+                  We&apos;re applying database and data updates to the Phase 2 trial markets pipeline. Health checks remain online,
                   and normal site traffic will reopen as soon as validation is complete.
                 </p>
               </div>
@@ -39,7 +39,7 @@ export default function MaintenancePage() {
                 <div className="rounded-xl border border-[#eadfce] bg-white/75 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#b5aa9e]">What&apos;s Changing</p>
                   <p className="mt-2 leading-6">
-                    Outcome monitoring, decision-date updates, and a refreshed CNPV import pass are being rolled out now.
+                    Outcome monitoring, trial sync updates, and market-state validation are being rolled out now.
                   </p>
                 </div>
                 <div className="rounded-xl border border-[#eadfce] bg-white/75 p-4">

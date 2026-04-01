@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { db, fdaCalendarEvents, modelDecisionSnapshots } from '@/lib/db'
-import { eq, sql } from 'drizzle-orm'
+import { db, modelDecisionSnapshots, trialQuestions } from '@/lib/db'
+import { sql } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
@@ -11,25 +11,25 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Methodology',
-  description: 'Learn how Endpoint Arena benchmarks AI models on real-world Phase 2 clinical trial and FDA outcome markets.',
+  description: 'Learn how Endpoint Arena benchmarks AI models on real-world Phase 2 clinical trial outcome markets.',
   path: '/method',
 })
 
 async function getData() {
-  const [fdaEventCount, snapshotCount] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(fdaCalendarEvents),
+  const [trialQuestionCount, snapshotCount] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(trialQuestions),
     db.select({ count: sql<number>`count(*)` }).from(modelDecisionSnapshots),
   ])
 
   return {
-    fdaEventCount: fdaEventCount[0]?.count ?? 0,
+    trialQuestionCount: trialQuestionCount[0]?.count ?? 0,
     predictionCount: snapshotCount[0]?.count ?? 0,
     snapshotCount: snapshotCount[0]?.count ?? 0,
   }
 }
 
 export default async function MethodPage() {
-  const { fdaEventCount, predictionCount, snapshotCount } = await getData()
+  const { trialQuestionCount, predictionCount, snapshotCount } = await getData()
 
   const MODEL_BINDINGS: Record<ModelId, {
     version: string
@@ -114,7 +114,7 @@ export default async function MethodPage() {
     'minimax-m2.5': {
       version: 'MiniMax-M2.5',
       internet: false,
-      internetDetail: 'No web-search tool configured in FDA generator',
+      internetDetail: 'No web-search tool configured in the combined decision generator',
       reasoning: 'Provider default',
       reasoningDetail: 'No explicit reasoning parameter configured',
       maxTokens: '16,000 output',
@@ -142,8 +142,8 @@ export default async function MethodPage() {
 
   const processSteps = [
     {
-      title: 'Track FDA Calendar Events',
-      description: 'Monitor upcoming FDA drug approval decisions, including PDUFA dates for NDAs, BLAs, and supplemental applications.'
+      title: 'Track Phase 2 Trial Questions',
+      description: 'Monitor active Phase 2 readouts and outcome questions, including completion timing, sponsor context, and market-ready metadata.'
     },
     {
       title: 'Prepare Shared Context',
@@ -154,8 +154,8 @@ export default async function MethodPage() {
       description: 'Ask each model for an intrinsic approval forecast first, then a market action for the same timepoint. Each snapshot stores approval probability, binary call, confidence, reasoning, and proposed action.'
     },
     {
-      title: 'Wait for FDA Decisions',
-      description: "Unlike benchmarks with known answers, we wait for the FDA to announce. There's no way to game this—the ground truth doesn't exist until the ruling."
+      title: 'Wait for Trial Outcomes',
+      description: "Unlike benchmarks with known answers, we wait for the real-world readout to land. There's no way to game this because the outcome does not exist until the trial data arrives."
     },
     {
       title: 'Score Results',
@@ -178,7 +178,7 @@ export default async function MethodPage() {
             How Endpoint Arena benchmarks AI on Phase 2 trial outcomes.
           </h1>
           <p className="text-base sm:text-lg text-[#8a8075] max-w-xl leading-relaxed">
-            A fair test of AI prediction capabilities on real-world FDA decisions
+            A fair test of AI prediction capabilities on real-world clinical outcomes
           </p>
         </div>
 
@@ -200,13 +200,13 @@ export default async function MethodPage() {
             <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Solution</h3>
-              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">FDA decisions do not exist until they are announced. No memorization, no leakage, and now a full time series of how each model updated over time.</p>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Trial outcomes do not exist until the data lands. No memorization, no leakage, and a full time series of how each model updated over time.</p>
               </div>
             </div>
             <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">What We're Testing</h3>
-                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Can AI models reason about complex regulatory decisions and make accurate predictions about the future?</p>
+                <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Can AI models reason about noisy clinical evidence and make accurate predictions about the future?</p>
               </div>
             </div>
           </div>
@@ -292,7 +292,7 @@ export default async function MethodPage() {
                     </div>
 
                     <div className="rounded-sm border border-[#e8ddd0] bg-[#f7f4ef]/55 px-3 py-2">
-                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Max Output (FDA)</dt>
+                      <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Max Output</dt>
                       <dd className="mt-1 text-sm leading-snug text-[#b5aa9e]">
                         {model.features.maxTokens}
                       </dd>
@@ -443,8 +443,8 @@ Input JSON includes:
           <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
             <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
               <div className="p-4 sm:p-6">
-                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{fdaEventCount}</div>
-                <div className="text-sm text-[#b5aa9e] mt-1">FDA Events Tracked</div>
+                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{trialQuestionCount}</div>
+                <div className="text-sm text-[#b5aa9e] mt-1">Trial Questions Tracked</div>
               </div>
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{predictionCount}</div>

@@ -139,7 +139,7 @@ async function loadExistingTrialsByNctNumbers(nctNumbers: string[]) {
   return new Map(rows.flat().map((row) => [row.nctNumber, row]))
 }
 
-export async function resetPhase2TrialData(): Promise<void> {
+async function resetPhase2TrialData(): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.delete(trialOutcomeCandidateEvidence)
     await tx.delete(trialOutcomeCandidates)

@@ -1,10 +1,9 @@
-import { desc, eq, inArray, or } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { estimateCostFromTokenUsage, estimateTextGenerationCost, getCostEstimationProfileForModel, type AICostSource } from '@/lib/ai-costs'
 import { type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import {
   db,
-  fdaCalendarEvents,
   marketAccounts,
   marketPositions,
   modelDecisionSnapshots,
@@ -20,8 +19,6 @@ import { buildModelDecisionPrompt, type ModelDecisionInput, type ModelDecisionRe
 
 type DecisionRunSource = 'manual' | 'cycle'
 export type LeaderboardPredictionMode = 'first' | 'final'
-
-type UnifiedPredictionRecord = Prediction
 
 type UnifiedPredictionHistoryMap = Map<string, Map<string, PredictionHistoryEntry[]>>
 
@@ -111,10 +108,7 @@ export async function getUnifiedPredictionHistoriesByEventIds(
 
   const [snapshotRows] = await Promise.all([
     db.query.modelDecisionSnapshots.findMany({
-      where: or(
-        inArray(modelDecisionSnapshots.fdaEventId, eventIds),
-        inArray(modelDecisionSnapshots.trialQuestionId, eventIds),
-      ),
+      where: inArray(modelDecisionSnapshots.trialQuestionId, eventIds),
       orderBy: [desc(modelDecisionSnapshots.createdAt)],
       with: {
         actor: true,
@@ -135,7 +129,7 @@ export async function getUnifiedPredictionHistoriesByEventIds(
   for (const row of snapshotRows) {
     if (isMockMarketSnapshotLike(row)) continue
     const predictorId = row.actor.modelKey ?? row.actorId
-    const ownerId = row.trialQuestionId ?? row.fdaEventId
+    const ownerId = row.trialQuestionId
     if (!ownerId) continue
     pushHistory(
       ownerId,
@@ -173,16 +167,6 @@ export async function attachUnifiedPredictionsToEvents<T extends { id: string; o
   })
 }
 
-export async function getLatestPredictionsForEvent(eventId: string, eventOutcome: string): Promise<Prediction[]> {
-  const historyByEventId = await getUnifiedPredictionHistoriesByEventIds([eventId], new Map([[eventId, eventOutcome]]))
-  const eventHistory = historyByEventId.get(eventId)
-  if (!eventHistory) return []
-
-  return Array.from(eventHistory.values())
-    .map((history) => buildLatestPrediction(history))
-    .filter((prediction): prediction is Prediction => prediction != null)
-}
-
 export async function getMarketDecisionHistoryByMarketIds(
   marketIds: string[],
   eventOutcomeById: Map<string, string>,
@@ -207,7 +191,7 @@ export async function getMarketDecisionHistoryByMarketIds(
       mapSnapshotPrediction(
         row,
         row.actor.modelKey ?? row.actorId,
-        eventOutcomeById.get(row.trialQuestionId ?? row.fdaEventId ?? '') || 'Pending',
+        eventOutcomeById.get(row.trialQuestionId ?? '') || 'Pending',
       ),
     )
     historyByMarketId.set(row.marketId, current)
@@ -331,7 +315,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   modelId: ModelId
   actorId: string
   runDate: Date
-  trial: typeof phase2Trials.$inferSelect | typeof fdaCalendarEvents.$inferSelect
+  trial: typeof phase2Trials.$inferSelect
   trialQuestionId?: string | null
   questionPrompt: string
   market: typeof predictionMarkets.$inferSelect
@@ -374,21 +358,21 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
       runDateIso: args.runDate.toISOString(),
     },
     trial: {
-      shortTitle: 'shortTitle' in args.trial ? args.trial.shortTitle : args.trial.drugName,
-      sponsorName: 'sponsorName' in args.trial ? args.trial.sponsorName : args.trial.companyName,
-      sponsorTicker: 'sponsorTicker' in args.trial ? args.trial.sponsorTicker ?? null : (args.trial.symbols || null),
-      exactPhase: 'exactPhase' in args.trial ? args.trial.exactPhase : args.trial.applicationType,
-      estPrimaryCompletionDate: ('estPrimaryCompletionDate' in args.trial ? args.trial.estPrimaryCompletionDate : args.trial.decisionDate).toISOString(),
+      shortTitle: args.trial.shortTitle,
+      sponsorName: args.trial.sponsorName,
+      sponsorTicker: args.trial.sponsorTicker ?? null,
+      exactPhase: args.trial.exactPhase,
+      estPrimaryCompletionDate: args.trial.estPrimaryCompletionDate.toISOString(),
       daysToPrimaryCompletion: getDaysUntilUtc(
-        ('estPrimaryCompletionDate' in args.trial ? args.trial.estPrimaryCompletionDate : args.trial.decisionDate),
+        args.trial.estPrimaryCompletionDate,
         normalizedRunDate,
       ),
-      indication: 'indication' in args.trial ? args.trial.indication : (args.trial.therapeuticArea ?? 'Unknown'),
-      intervention: 'intervention' in args.trial ? args.trial.intervention : (args.trial.drugName ?? 'Unknown'),
-      primaryEndpoint: 'primaryEndpoint' in args.trial ? args.trial.primaryEndpoint : args.questionPrompt,
-      currentStatus: 'currentStatus' in args.trial ? args.trial.currentStatus : (args.trial.drugStatus ?? 'Unknown'),
-      briefSummary: 'briefSummary' in args.trial ? args.trial.briefSummary : args.trial.eventDescription,
-      nctNumber: 'nctNumber' in args.trial ? args.trial.nctNumber : null,
+      indication: args.trial.indication,
+      intervention: args.trial.intervention,
+      primaryEndpoint: args.trial.primaryEndpoint,
+      currentStatus: args.trial.currentStatus,
+      briefSummary: args.trial.briefSummary,
+      nctNumber: args.trial.nctNumber,
       questionPrompt: args.questionPrompt,
     },
     market: {
@@ -424,7 +408,6 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
     runId: args.runSource === 'cycle' ? args.runId ?? null : null,
     runDate: normalizedRunDate,
     marketId: args.market.id,
-    fdaEventId: 'drugName' in args.trial ? args.trial.id : null,
     trialQuestionId: args.trialQuestionId ?? null,
     actorId: args.actorId,
     runSource: args.runSource,
@@ -468,7 +451,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
       confidence: generated.result.forecast.confidence,
       reasoning: generated.result.forecast.reasoning,
       durationMs,
-      correct: computeCorrectness(generated.result.forecast.binaryCall, ('outcome' in args.trial ? args.trial.outcome : 'Pending') || 'Pending'),
+      correct: computeCorrectness(generated.result.forecast.binaryCall, 'Pending'),
       createdAt: snapshot.createdAt?.toISOString(),
       source: 'snapshot',
       runSource: args.runSource,
@@ -480,7 +463,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
         explanation: generated.result.action.explanation,
       },
       linkedMarketActionId: null,
-      history: [mapSnapshotPrediction(snapshot, args.modelId, ('outcome' in args.trial ? args.trial.outcome : 'Pending') || 'Pending')],
+      history: [mapSnapshotPrediction(snapshot, args.modelId, 'Pending')],
     },
   }
 }

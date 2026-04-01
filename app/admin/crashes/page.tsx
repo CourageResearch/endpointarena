@@ -132,7 +132,7 @@ function buildCrashGroups(rows: Awaited<ReturnType<typeof getRecentCrashEvents>>
 export default async function AdminCrashesPage({
   searchParams,
 }: {
-  searchParams?: PageSearchParams | Promise<PageSearchParams>
+  searchParams?: Promise<PageSearchParams>
 }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {

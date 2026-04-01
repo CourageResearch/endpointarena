@@ -15,7 +15,6 @@ const MODEL_ID_SET = new Set<ModelId>(MODEL_IDS)
 
 type StreamRequestBody = {
   trialQuestionId?: string
-  fdaEventId?: string
   modelId?: string
 }
 
@@ -26,11 +25,7 @@ export async function POST(request: NextRequest) {
     await ensureAdmin()
 
     const body = await parseJsonBody<StreamRequestBody>(request)
-    const trialQuestionId = typeof body.trialQuestionId === 'string'
-      ? body.trialQuestionId
-      : typeof body.fdaEventId === 'string'
-        ? body.fdaEventId
-        : ''
+    const trialQuestionId = typeof body.trialQuestionId === 'string' ? body.trialQuestionId : ''
     const modelIdRaw = typeof body.modelId === 'string' ? body.modelId.trim() : ''
 
     if (!trialQuestionId || !modelIdRaw) {
@@ -179,7 +174,7 @@ export async function GET(request: NextRequest) {
     await ensureAdmin()
 
     const { searchParams } = new URL(request.url)
-    const trialQuestionId = searchParams.get('trialQuestionId') ?? searchParams.get('fdaEventId')
+    const trialQuestionId = searchParams.get('trialQuestionId')
     if (!trialQuestionId) {
       throw new ValidationError('trialQuestionId is required')
     }

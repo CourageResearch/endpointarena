@@ -10,12 +10,8 @@ export async function POST(request: NextRequest) {
 
   try {
     await ensureAdmin()
-    const body = await parseJsonBody<{ trialQuestionId?: string; fdaEventId?: string }>(request)
-    const trialQuestionId = typeof body?.trialQuestionId === 'string'
-      ? body.trialQuestionId
-      : typeof body?.fdaEventId === 'string'
-        ? body.fdaEventId
-        : ''
+    const body = await parseJsonBody<{ trialQuestionId?: string }>(request)
+    const trialQuestionId = typeof body?.trialQuestionId === 'string' ? body.trialQuestionId : ''
 
     if (!trialQuestionId) {
       throw new ValidationError('trialQuestionId is required')

@@ -181,6 +181,85 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
 }
 
+function getErrorFieldValue(value: unknown, maxChars: number = 180): string | null {
+  if (typeof value === 'string') {
+    const trimmed = trimToNull(value)
+    return trimmed ? truncateMonitorText(trimmed, maxChars) : null
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+
+  return null
+}
+
+function getErrorCauseMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+
+  const cause = (error as { cause?: unknown }).cause
+  if (!cause) return null
+
+  if (cause instanceof Error) {
+    const message = trimToNull(cause.message) ?? trimToNull(cause.name)
+    return message ? truncateMonitorText(message, 180) : null
+  }
+
+  return getErrorFieldValue(
+    typeof cause === 'object' && cause !== null
+      ? (cause as { message?: unknown }).message ?? cause
+      : cause,
+    180,
+  )
+}
+
+function buildProviderErrorDebugDetails(
+  error: unknown,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const record = error && typeof error === 'object'
+    ? error as Record<string, unknown>
+    : null
+
+  return {
+    ...extra,
+    errorName: error instanceof Error ? error.name : null,
+    errorMessage: getErrorMessage(error),
+    status: record?.status ?? null,
+    code: getErrorFieldValue(record?.code),
+    type: getErrorFieldValue(record?.type),
+    param: getErrorFieldValue(record?.param),
+    requestId: getErrorFieldValue(record?.request_id ?? record?.requestId),
+    causeMessage: getErrorCauseMessage(error),
+    headersPreview: serializeDebugValue(record?.headers, 1_500),
+  }
+}
+
+function formatProviderRequestError(providerLabel: string, error: unknown): string {
+  const message = getErrorMessage(error)
+  const record = error && typeof error === 'object'
+    ? error as Record<string, unknown>
+    : null
+  const details: string[] = []
+  const errorName = error instanceof Error ? trimToNull(error.name) : null
+  const status = getErrorFieldValue(record?.status)
+  const code = getErrorFieldValue(record?.code)
+  const errorType = getErrorFieldValue(record?.type)
+  const requestId = getErrorFieldValue(record?.request_id ?? record?.requestId)
+  const causeMessage = getErrorCauseMessage(error)
+
+  if (errorName && errorName !== 'Error') details.push(errorName)
+  if (status) details.push(`status ${status}`)
+  if (code) details.push(`code ${code}`)
+  if (errorType) details.push(`type ${errorType}`)
+  if (requestId) details.push(`request ${requestId}`)
+
+  const detailSuffix = details.length > 0 ? ` (${details.join(', ')})` : ''
+  const causeSuffix = causeMessage && causeMessage !== message ? `; cause: ${causeMessage}` : ''
+
+  return `${providerLabel} verifier request failed: ${message}${detailSuffix}${causeSuffix}`
+}
+
 function summarizeTextForError(value: string, maxChars: number = 280): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
   if (normalized.length <= maxChars) return normalized
@@ -867,8 +946,13 @@ async function runProviderVerificationPrompt(
   modelKey: TrialMonitorVerifierModelKey,
   prompt: string,
   trialTitle: string,
+  webSearchEnabled: boolean,
 ): Promise<TrialMonitorProviderTextResponse> {
   const spec = getTrialMonitorVerifierSpec(modelKey)
+
+  if (!webSearchEnabled) {
+    throw new ConfigurationError('Trial monitor web search is disabled. Enable web search before running the verifier.')
+  }
 
   switch (spec.provider) {
     case 'openai': {
@@ -1029,16 +1113,43 @@ async function runVerificationAttempt(
   modelKey: TrialMonitorVerifierModelKey,
   question: TrialQuestionWithTrial,
   retry: boolean,
+  webSearchEnabled: boolean,
   debugLog?: MonitorDebugLogger,
 ): Promise<{
   decision: VerifierDecision
   providerResponseId: string | null
 }> {
-  const providerResponse = await runProviderVerificationPrompt(
-    modelKey,
-    buildOnePassVerificationPrompt(question, retry),
-    question.trial.shortTitle,
-  )
+  const spec = getTrialMonitorVerifierSpec(modelKey)
+  let providerResponse: TrialMonitorProviderTextResponse
+
+  try {
+    providerResponse = await runProviderVerificationPrompt(
+      modelKey,
+      buildOnePassVerificationPrompt(question, retry),
+      question.trial.shortTitle,
+      webSearchEnabled,
+    )
+  } catch (error) {
+    await debugLog?.({
+      level: 'error',
+      stage: 'verifier',
+      message: 'Verifier request failed before returning a structured response.',
+      trialQuestionId: question.id,
+      trialTitle: question.trial.shortTitle,
+      attempt: retry ? 'retry' : 'initial',
+      details: buildProviderErrorDebugDetails(error, {
+        reasonCode: 'verifier_request_failed',
+        provider: spec.providerLabel,
+        model: spec.model,
+        webSearchEnabled,
+      }),
+    })
+
+    throw new ExternalServiceError(
+      formatProviderRequestError(spec.providerLabel, error),
+      { cause: error },
+    )
+  }
 
   const raw = providerResponse.rawText
   if (!raw) {
@@ -1135,16 +1246,17 @@ async function runVerificationAttempt(
 async function verifyTrialOutcome(
   modelKey: TrialMonitorVerifierModelKey,
   question: TrialQuestionWithTrial,
+  webSearchEnabled: boolean,
   debugLog?: MonitorDebugLogger,
 ): Promise<{
   decision: VerifierDecision
   providerResponseId: string | null
 }> {
   try {
-    return await runVerificationAttempt(modelKey, question, false, debugLog)
+    return await runVerificationAttempt(modelKey, question, false, webSearchEnabled, debugLog)
   } catch (firstError) {
     try {
-      return await runVerificationAttempt(modelKey, question, true, debugLog)
+      return await runVerificationAttempt(modelKey, question, true, webSearchEnabled, debugLog)
     } catch (retryError) {
       await debugLog?.({
         level: 'error',
@@ -1158,7 +1270,7 @@ async function verifyTrialOutcome(
           retryError: getErrorMessage(retryError),
         },
       })
-      throw firstError
+      throw retryError
     }
   }
 }
@@ -1188,6 +1300,9 @@ export async function runTrialMonitor(input: {
   const config = await getTrialMonitorConfig()
   if (!config.enabled) {
     return { executed: false, reason: 'disabled', questionsScanned: 0, candidatesCreated: 0, errors: [] }
+  }
+  if (!config.webSearchEnabled) {
+    throw new ConfigurationError('Trial monitor web search is disabled. Enable web search before running the verifier.')
   }
 
   const verifierSpec = getConfiguredTrialMonitorVerifierSpec(config.verifierModelKey)
@@ -1240,6 +1355,7 @@ export async function runTrialMonitor(input: {
         forced: Boolean(input.force),
         verifierModelKey,
         verifierModelLabel: verifierSpec.label,
+        webSearchEnabled: config.webSearchEnabled,
         lookaheadDays: config.lookaheadDays,
         overdueRecheckHours: config.overdueRecheckHours,
         maxQuestionsPerRun: config.maxQuestionsPerRun,
@@ -1260,6 +1376,7 @@ export async function runTrialMonitor(input: {
         const { decision, providerResponseId } = await verifyTrialOutcome(
           verifierModelKey,
           question,
+          config.webSearchEnabled,
           debugLog,
         )
 

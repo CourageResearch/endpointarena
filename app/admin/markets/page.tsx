@@ -18,23 +18,23 @@ export default async function AdminMarketsPage() {
 
   return (
     <AdminConsoleLayout
-      title="Drugs"
-      description="Search tracked drugs, update outcomes, open missing markets, and remove entries you no longer want."
+      title="Markets"
+      description="Search tracked trial markets, update outcomes, open missing markets, and remove entries you no longer want."
       activeTab="markets"
     >
       <AdminMarketManager
         events={events}
         sections={['search', 'openMarkets', 'needsMarket', 'resolvedMarkets']}
         labels={{
-          searchPlaceholder: 'Search drug, sponsor, ticker, endpoint',
+          searchPlaceholder: 'Search trial, sponsor, ticker, endpoint',
           openMarketsTitle: '',
           openMarketsDescription: '',
-          openMarketsEmptyState: 'No live drugs match the current filter.',
-          needsMarketTitle: 'Drugs Without Markets',
-          needsMarketDescription: 'Pending Phase 2 results questions that still need a market opened.',
-          resolvedMarketsTitle: 'Closed Drugs',
-          resolvedMarketsDescription: 'Tracked drugs with resolved markets.',
-          resolvedMarketsEmptyState: 'No closed drugs match the current filter.',
+          openMarketsEmptyState: 'No live trial markets match the current filter.',
+          needsMarketTitle: 'Trials Without Markets',
+          needsMarketDescription: 'Pending Phase 2 result questions that still need a market opened.',
+          resolvedMarketsTitle: 'Closed Markets',
+          resolvedMarketsDescription: 'Tracked trial markets with resolved outcomes.',
+          resolvedMarketsEmptyState: 'No closed markets match the current filter.',
         }}
       />
     </AdminConsoleLayout>

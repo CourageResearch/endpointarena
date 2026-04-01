@@ -2,25 +2,24 @@
 
 ## Overview
 
-Endpoint Arena is a Next.js 16 app for AI-generated FDA event forecasts and market decisions. The primary product surface is the markets experience: open FDA-linked markets, model decision snapshots, admin daily runs, leaderboard, and profile/trading flows.
+Endpoint Arena is a Next.js 16 app for Phase 2 clinical trial prediction markets. The primary product surface is the trials experience: live and resolved markets, model decision snapshots, admin daily runs, leaderboard, and profile/trading flows.
 
 ## Current Routes
 
 - `/` home and market summary
-- `/markets` market browser
-- `/markets/[marketId]` market detail dashboard
-- `/markets/[marketId]/decision-snapshots` full model snapshot history
+- `/trials` market browser
+- `/trials/[marketId]` market detail dashboard
+- `/trials/[marketId]/decision-snapshots` full model snapshot history
 - `/admin` admin market operations
 - `/admin/analytics` internal analytics dashboard
-- `/fda-calendar`, `/leaderboard`, `/method`, `/glossary`, `/contact`, `/waitlist`, `/login`, `/signup`, `/profile`
+- `/leaderboard`, `/method`, `/glossary`, `/contact`, `/waitlist`, `/login`, `/signup`, `/profile`
 
 ## API Surface
 
 - `/api/markets/*` market open, trade, overview, and daily-run operations
 - `/api/model-decisions/stream` manual one-off decision snapshot streaming for admin
-- `/api/fda-events/[id]/outcome` FDA outcome updates
+- `/api/trial-questions/[id]/outcome` trial outcome updates
 - `/api/analytics`, `/api/contact`, `/api/waitlist`, `/api/twitter-verification/*`
-- `/api/fda-predictions/meta-analysis` is legacy support code; the active market pipeline does not use the removed `lib/predictions/fda-prompt.ts`
 
 ## Active Prediction Pipeline
 
@@ -35,9 +34,6 @@ Daily market cycle:
 2. `lib/markets/daily-run.ts`
 3. market runtime config, account/position state, and snapshot storage
 4. NDJSON progress stream back to `components/AdminMarketManager.tsx`
-
-Legacy/meta-analysis support:
-- `lib/predictions/fda-generators.ts`
 
 ## Models
 
@@ -107,7 +103,8 @@ Core local commands:
 
 ```bash
 npm run dev
-npm run lint
+npm run typecheck
+npm run check
 npm run build
-npm run db:import-cnpv
+npm run db:import-phase2
 ```

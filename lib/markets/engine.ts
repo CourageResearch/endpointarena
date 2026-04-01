@@ -1,6 +1,5 @@
 import {
   db,
-  fdaCalendarEvents,
   marketAccounts,
   marketActions,
   marketDailySnapshots,
@@ -54,7 +53,6 @@ type MarketDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0
 type PersistMarketActionInput = {
   runId?: string | null
   marketId: string
-  fdaEventId?: string | null
   trialQuestionId?: string | null
   actorId: string
   runDate: Date
@@ -101,7 +99,6 @@ async function persistMarketAction(
   const baseValues = {
     runId: input.actionSource === 'cycle' ? input.runId ?? null : null,
     marketId: input.marketId,
-    fdaEventId: input.fdaEventId ?? null,
     trialQuestionId: input.trialQuestionId ?? null,
     actorId: input.actorId,
     runDate,
@@ -183,7 +180,7 @@ function lmsrPriceYes({ qYes, qNo, b }: MarketState): number {
   return 1 / (1 + Math.exp(z))
 }
 
-export function createInitialMarketState(openingProbability: number, b: number = DEFAULT_LMSR_B): MarketState {
+function createInitialMarketState(openingProbability: number, b: number = DEFAULT_LMSR_B): MarketState {
   const p = clampProbability(openingProbability)
   const delta = b * Math.log(p / (1 - p))
   return {
@@ -417,71 +414,6 @@ export async function ensureMarketPositions(marketId: string): Promise<void> {
   }
 }
 
-export async function openMarketForEvent(fdaEventId: string) {
-  await ensureMarketAccounts()
-
-  const event = await db.query.fdaCalendarEvents.findFirst({
-    where: eq(fdaCalendarEvents.id, fdaEventId),
-  })
-
-  if (!event) {
-    throw new NotFoundError('FDA event not found')
-  }
-
-  if (event.outcome !== 'Pending') {
-    throw new ConflictError('Cannot open market for an event that already has a final outcome')
-  }
-
-  const existing = await db.query.predictionMarkets.findFirst({
-    where: eq(predictionMarkets.fdaEventId, fdaEventId),
-  })
-
-  if (existing) {
-    if (existing.status === 'OPEN') {
-      await ensureMarketPositions(existing.id)
-      return existing
-    }
-    throw new ConflictError('Market already exists and is resolved')
-  }
-
-  const [openingProbability, runtimeConfig] = await Promise.all([
-    calculateHistoricalApprovalRate(),
-    getMarketRuntimeConfig(),
-  ])
-
-  const initialLiquidityB = Math.max(1, runtimeConfig.openingLmsrB)
-  const initialState = createInitialMarketState(openingProbability, initialLiquidityB)
-
-  const [market] = await db.insert(predictionMarkets)
-    .values({
-      fdaEventId,
-      status: 'OPEN',
-      openingProbability,
-      b: initialLiquidityB,
-      qYes: initialState.qYes,
-      qNo: initialState.qNo,
-      priceYes: lmsrPriceYes(initialState),
-      openedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .returning()
-
-  await ensureMarketPositions(market.id)
-  const runDate = normalizeRunDate(new Date())
-
-  await db.insert(marketPriceSnapshots)
-    .values({
-      marketId: market.id,
-      snapshotDate: runDate,
-      priceYes: market.priceYes,
-      qYes: market.qYes,
-      qNo: market.qNo,
-    })
-    .onConflictDoNothing({ target: [marketPriceSnapshots.marketId, marketPriceSnapshots.snapshotDate] })
-
-  return market
-}
-
 export async function openMarketForTrialQuestion(trialQuestionId: string) {
   await ensureMarketAccounts()
 
@@ -526,7 +458,6 @@ export async function openMarketForTrialQuestion(trialQuestionId: string) {
 
   const [market] = await db.insert(predictionMarkets)
     .values({
-      fdaEventId: null,
       trialQuestionId,
       status: 'OPEN',
       openingProbability,
@@ -564,7 +495,6 @@ async function getOpenMarkets() {
 export async function runHoldAction({
   runId,
   marketId,
-  fdaEventId,
   trialQuestionId,
   actorId,
   runDate,
@@ -574,7 +504,6 @@ export async function runHoldAction({
 }: {
   runId?: string
   marketId: string
-  fdaEventId?: string | null
   trialQuestionId?: string | null
   actorId: string
   runDate: Date
@@ -585,7 +514,6 @@ export async function runHoldAction({
   return persistMarketAction(db, {
     runId,
     marketId,
-    fdaEventId,
     trialQuestionId,
     actorId,
     runDate,
@@ -603,7 +531,6 @@ export async function runHoldAction({
 export async function recordMarketActionError({
   runId,
   marketId,
-  fdaEventId,
   trialQuestionId,
   actorId,
   runDate,
@@ -615,7 +542,6 @@ export async function recordMarketActionError({
 }: {
   runId?: string
   marketId: string
-  fdaEventId?: string | null
   trialQuestionId?: string | null
   actorId: string
   runDate: Date
@@ -628,7 +554,6 @@ export async function recordMarketActionError({
   return persistMarketAction(db, {
     runId,
     marketId,
-    fdaEventId,
     trialQuestionId,
     actorId,
     runDate,
@@ -753,7 +678,6 @@ export async function runBuyAction({
         ? await persistMarketAction(tx, {
             runId,
             marketId: freshMarket.id,
-            fdaEventId: freshMarket.fdaEventId,
             trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
@@ -810,7 +734,6 @@ export async function runBuyAction({
     const actionRecord = await persistMarketAction(tx, {
       runId,
       marketId: freshMarket.id,
-      fdaEventId: freshMarket.fdaEventId,
       trialQuestionId: freshMarket.trialQuestionId,
       actorId,
       runDate,
@@ -926,7 +849,6 @@ export async function runSellAction({
         ? await persistMarketAction(tx, {
             runId,
             marketId: freshMarket.id,
-            fdaEventId: freshMarket.fdaEventId,
             trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
@@ -958,7 +880,6 @@ export async function runSellAction({
         ? await persistMarketAction(tx, {
             runId,
             marketId: freshMarket.id,
-            fdaEventId: freshMarket.fdaEventId,
             trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
@@ -992,7 +913,6 @@ export async function runSellAction({
         ? await persistMarketAction(tx, {
             runId,
             marketId: freshMarket.id,
-            fdaEventId: freshMarket.fdaEventId,
             trialQuestionId: freshMarket.trialQuestionId,
             actorId,
             runDate,
@@ -1043,7 +963,6 @@ export async function runSellAction({
     const actionRecord = await persistMarketAction(tx, {
       runId,
       marketId: freshMarket.id,
-      fdaEventId: freshMarket.fdaEventId,
       trialQuestionId: freshMarket.trialQuestionId,
       actorId,
       runDate,
@@ -1213,61 +1132,12 @@ async function resolveMarketByWhere(where: any, outcome: MarketOutcome, dbClient
   await upsertDailySnapshots(new Date(), dbClient)
 }
 
-export async function resolveMarketForEvent(
-  fdaEventId: string,
-  outcome: MarketOutcome,
-  dbClient: MarketDbClient = db,
-): Promise<void> {
-  await resolveMarketByWhere(eq(predictionMarkets.fdaEventId, fdaEventId), outcome, dbClient)
-}
-
 export async function resolveMarketForTrialQuestion(
   trialQuestionId: string,
   outcome: Extract<MarketOutcome, 'YES' | 'NO'>,
   dbClient: MarketDbClient = db,
 ): Promise<void> {
   await resolveMarketByWhere(eq(predictionMarkets.trialQuestionId, trialQuestionId), outcome, dbClient)
-}
-
-export async function reopenMarketForEvent(
-  fdaEventId: string,
-  dbClient: MarketDbClient = db,
-): Promise<void> {
-  const market = await dbClient.query.predictionMarkets.findFirst({
-    where: eq(predictionMarkets.fdaEventId, fdaEventId),
-  })
-
-  if (!market || market.status !== 'RESOLVED' || !market.resolvedOutcome) {
-    return
-  }
-
-  const positions = await dbClient.query.marketPositions.findMany({
-    where: eq(marketPositions.marketId, market.id),
-  })
-
-  // Undo prior settlement payout when outcome is moved back to Pending.
-  for (const position of positions) {
-    const previousPayout = isYesResolvingOutcome(market.resolvedOutcome as MarketOutcome) ? position.yesShares : position.noShares
-    if (previousPayout <= 0) continue
-
-    await dbClient.update(marketAccounts)
-      .set({
-        cashBalance: sql`${marketAccounts.cashBalance} - ${previousPayout}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(marketAccounts.actorId, position.actorId))
-  }
-
-  await dbClient.update(predictionMarkets)
-    .set({
-      status: 'OPEN',
-      resolvedOutcome: null,
-      resolvedAt: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(predictionMarkets.id, market.id))
-
-  await upsertDailySnapshots(new Date(), dbClient)
 }
 
 export async function reopenMarketForTrialQuestion(

@@ -7,7 +7,7 @@ export type TrialQuestionDefinition = {
 }
 
 export const DEFAULT_PHASE2_RESULTS_QUESTION = 'Will the results be positive?'
-export const LEGACY_PRIMARY_ENDPOINT_QUESTION = 'Will the primary endpoint be met?'
+const LEGACY_PRIMARY_ENDPOINT_QUESTION = 'Will the primary endpoint be met?'
 
 export function normalizeTrialQuestionPrompt(prompt: string | null | undefined): string {
   const trimmed = typeof prompt === 'string' ? prompt.trim() : ''
@@ -33,8 +33,7 @@ export const TRIAL_QUESTION_DEFINITIONS: TrialQuestionDefinition[] = [
   },
 ]
 
-export const LIVE_PRIMARY_ENDPOINT_SLUG = 'primary_endpoint_met'
-export const SUPPORTED_TRIAL_QUESTION_SLUGS = TRIAL_QUESTION_DEFINITIONS.map((definition) => definition.slug)
+const SUPPORTED_TRIAL_QUESTION_SLUGS = TRIAL_QUESTION_DEFINITIONS.map((definition) => definition.slug)
 
 export function isSupportedTrialQuestionSlug(slug: string): slug is TrialQuestionDefinition['slug'] {
   return SUPPORTED_TRIAL_QUESTION_SLUGS.includes(slug as TrialQuestionDefinition['slug'])
@@ -42,8 +41,4 @@ export function isSupportedTrialQuestionSlug(slug: string): slug is TrialQuestio
 
 export function filterSupportedTrialQuestions<T extends { slug: string }>(questions: T[]): T[] {
   return questions.filter((question) => isSupportedTrialQuestionSlug(question.slug))
-}
-
-export function getTrialQuestionDefinition(slug: string): TrialQuestionDefinition | null {
-  return TRIAL_QUESTION_DEFINITIONS.find((definition) => definition.slug === slug) ?? null
 }

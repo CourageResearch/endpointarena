@@ -231,7 +231,7 @@ async function backfillMissingXUsernames(userRows: Array<typeof users.$inferSele
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams?: PageSearchParams | Promise<PageSearchParams>
+  searchParams?: Promise<PageSearchParams>
 }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {

@@ -10,41 +10,6 @@ import { LocalDateTime } from '@/components/ui/local-date-time'
 
 export const dynamic = 'force-dynamic'
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __adminContactSchemaReadyPromise: Promise<void> | undefined
-}
-
-async function ensureContactSchema(): Promise<void> {
-  if (globalThis.__adminContactSchemaReadyPromise) {
-    return globalThis.__adminContactSchemaReadyPromise
-  }
-
-  globalThis.__adminContactSchemaReadyPromise = (async () => {
-    try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS contact_messages (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          email text NOT NULL,
-          message text NOT NULL,
-          created_at timestamp DEFAULT now()
-        )
-      `)
-
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS contact_messages_created_at_idx
-        ON contact_messages (created_at)
-      `)
-    } catch (error) {
-      globalThis.__adminContactSchemaReadyPromise = undefined
-      throw error
-    }
-  })()
-
-  return globalThis.__adminContactSchemaReadyPromise
-}
-
 async function deleteContactMessage(formData: FormData) {
   'use server'
 
@@ -58,8 +23,6 @@ async function deleteContactMessage(formData: FormData) {
 }
 
 async function getContactData() {
-  await ensureContactSchema()
-
   const [messages, totalRows] = await Promise.all([
     db.query.contactMessages.findMany({
       orderBy: [desc(contactMessages.createdAt)],

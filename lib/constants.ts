@@ -143,11 +143,11 @@ export const MODEL_INFO: Record<ModelId, {
 }
 
 // Binary trial-question outcomes
-export const QUESTION_OUTCOMES = ['Pending', 'YES', 'NO'] as const
+const QUESTION_OUTCOMES = ['Pending', 'YES', 'NO'] as const
 export type QuestionOutcome = (typeof QUESTION_OUTCOMES)[number]
 
 // Legacy FDA outcomes retained for compatibility with older pages/scripts.
-export const FDA_OUTCOMES = ['Pending', 'Approved', 'Rejected'] as const
+const FDA_OUTCOMES = ['Pending', 'Approved', 'Rejected'] as const
 export type FDAOutcome = (typeof FDA_OUTCOMES)[number]
 
 // Outcome colors (warm production palette)
@@ -160,10 +160,10 @@ export const OUTCOME_COLORS: Record<QuestionOutcome | FDAOutcome, { bg: string; 
 }
 
 // Prediction outcomes
-export const PREDICTION_OUTCOMES = ['approved', 'rejected'] as const
+const PREDICTION_OUTCOMES = ['approved', 'rejected'] as const
 export type PredictionOutcome = (typeof PREDICTION_OUTCOMES)[number]
 
-export const BINARY_PREDICTION_OUTCOMES = ['yes', 'no'] as const
+const BINARY_PREDICTION_OUTCOMES = ['yes', 'no'] as const
 export type BinaryPredictionOutcome = (typeof BINARY_PREDICTION_OUTCOMES)[number]
 
 // Prediction outcome colors
@@ -179,29 +179,6 @@ export function getDaysUntil(date: Date | string): number {
   return getDaysUntilUtc(date) ?? Number.NaN
 }
 
-type ModelVariant = ModelId
-
-export function findPredictionByModelId<T extends { predictorId: string }>(
-  predictions: T[],
-  modelId: ModelId
-): T | undefined {
-  return predictions.find((p) => p.predictorId === modelId)
-}
-
-// Model display names for variants
-export const MODEL_DISPLAY_NAMES: Record<ModelVariant, string> = {
-  'claude-opus': 'Claude Opus 4.6',
-  'gpt-5.2': 'GPT-5.4',
-  'grok-4': 'Grok 4.1',
-  'gemini-2.5': 'Gemini 2.5 Pro',
-  'gemini-3-pro': 'Gemini 3 Pro',
-  'deepseek-v3.2': 'DeepSeek V3.1',
-  'glm-5': 'GLM 5',
-  'llama-4': 'Llama 4 Scout',
-  'kimi-k2.5': 'Kimi K2.5 Thinking',
-  'minimax-m2.5': 'MiniMax M2.5',
-}
-
 // Model names by full ID
 export const MODEL_NAMES: Record<ModelId, string> = {
   'claude-opus': 'Claude Opus 4.6',
@@ -214,15 +191,6 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   'llama-4': 'Llama 4 Scout',
   'kimi-k2.5': 'Kimi K2.5 Thinking',
   'minimax-m2.5': 'MiniMax M2.5',
-}
-
-// Status colors for FDA outcomes (hex values)
-export const STATUS_COLORS = {
-  Pending: '#b5aa9e',
-  YES: '#3a8a2e',
-  NO: '#c43a2b',
-  Approved: '#3a8a2e',
-  Rejected: '#c43a2b',
 }
 
 // Application type abbreviations

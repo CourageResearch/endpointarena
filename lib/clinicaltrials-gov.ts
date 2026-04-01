@@ -148,7 +148,7 @@ function titleizeToken(value: string) {
     .join(' ')
 }
 
-export function formatUtcDateForQuery(value: Date) {
+function formatUtcDateForQuery(value: Date) {
   return value.toISOString().slice(0, 10)
 }
 
@@ -252,7 +252,7 @@ export async function fetchClinicalTrialsStudies(input: FetchStudiesInput): Prom
   }
 }
 
-export function buildClinicalTrialsBaseQueryTerm() {
+function buildClinicalTrialsBaseQueryTerm() {
   return 'AREA[LeadSponsorClass]INDUSTRY AND AREA[StudyType]INTERVENTIONAL AND AREA[Phase]PHASE2'
 }
 

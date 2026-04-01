@@ -9,13 +9,13 @@ function normalize(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
-export function isMockMarketExplanation(value: string | null | undefined): boolean {
+function isMockMarketExplanation(value: string | null | undefined): boolean {
   const text = normalize(value)
   if (!text) return false
   return MOCK_VALIDATION_MARKERS.some((marker) => text.includes(marker))
 }
 
-export function isMockMarketInferenceGeo(value: string | null | undefined): boolean {
+function isMockMarketInferenceGeo(value: string | null | undefined): boolean {
   return normalize(value) === 'local-mock'
 }
 

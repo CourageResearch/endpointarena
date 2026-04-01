@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 
-export const SITE_NAME = 'Endpoint Arena'
-export const DEFAULT_SITE_URL = 'https://endpointarena.com'
+const SITE_NAME = 'Endpoint Arena'
+const DEFAULT_SITE_URL = 'https://endpointarena.com'
 export const DEFAULT_SITE_DESCRIPTION =
-  'Live benchmark and prediction market for Phase 2 clinical trial and FDA outcomes.'
+  'Live benchmark and prediction market for Phase 2 clinical trial outcomes.'
 
-export const NO_INDEX_ROBOTS: NonNullable<Metadata['robots']> = {
+const NO_INDEX_ROBOTS: NonNullable<Metadata['robots']> = {
   index: false,
   follow: false,
   googleBot: {
@@ -31,7 +31,7 @@ function normalizeSiteUrl(value: string | null | undefined): string {
   }
 }
 
-export function getSiteUrl(): string {
+function getSiteUrl(): string {
   return normalizeSiteUrl(
     process.env.NEXT_PUBLIC_SITE_URL?.trim()
     || process.env.SITE_URL?.trim()

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreFiles": [
+    "_archive/**",
+    "scripts/audit-market-db-v2.ts",
+    "scripts/check-local.ts",
+    "scripts/cleanup-local-mock-market-data.ts",
+    "scripts/create-local-db.ts",
+    "scripts/download-clinicaltrials-gov-snapshot.ts",
+    "scripts/export-trial-public-state.ts",
+    "scripts/report-public-sponsor-coverage.ts",
+    "scripts/sync-clinicaltrials-gov.ts"
+  ],
+  "ignoreIssues": {
+    "scripts/*-utils.ts": [
+      "exports"
+    ]
+  }
+}

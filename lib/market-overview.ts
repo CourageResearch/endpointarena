@@ -249,7 +249,6 @@ export async function getMarketOverviewData(input: {
 
     return [{
       marketId: market.id,
-      fdaEventId: trial.id,
       trialQuestionId: question.id,
       status: market.status,
       priceYes: market.priceYes,
@@ -266,7 +265,6 @@ export async function getMarketOverviewData(input: {
         applicationType: trial.exactPhase,
         decisionDate: trial.estPrimaryCompletionDate.toISOString(),
         decisionDateKind: 'hard' as const,
-        cnpvAwardDate: null,
         eventDescription: trial.briefSummary,
         outcome: question.outcome,
         nctId: trial.nctNumber,
@@ -366,7 +364,6 @@ export async function getMarketOverviewData(input: {
       id: action.id,
       runId: action.runId,
       marketId: action.marketId,
-      fdaEventId: trial?.id ?? questionId ?? '',
       modelId,
       runDate: action.runDate.toISOString(),
       createdAt: toIsoString(action.createdAt),

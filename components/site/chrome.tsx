@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 const SITE_BG_CLASS = 'bg-[#F5F2ED]'
 const SITE_TEXT_CLASS = 'text-[#1a1a1a]'
-export const BRAND_DOT_COLORS = {
+const BRAND_DOT_COLORS = {
   coral: '#EF6F67',
   green: '#5DBB63',
   gold: '#D39D2E',

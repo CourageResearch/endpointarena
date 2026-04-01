@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
 import { Resend } from 'resend'
-import { sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { contactMessages } from '@/lib/schema'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
@@ -8,15 +7,10 @@ import { ValidationError } from '@/lib/errors'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CONTACT_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
-const CONTACT_ADMIN_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || 'mfischer1000@gmail.com'
+const CONTACT_ADMIN_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || ''
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __contactSchemaReadyPromise: Promise<void> | undefined
-}
 
 type ContactRequest = {
   name?: string
@@ -132,36 +126,6 @@ function buildAdminEmailHtml({
   `
 }
 
-async function ensureContactSchema(): Promise<void> {
-  if (globalThis.__contactSchemaReadyPromise) {
-    return globalThis.__contactSchemaReadyPromise
-  }
-
-  globalThis.__contactSchemaReadyPromise = (async () => {
-    try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS contact_messages (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          email text NOT NULL,
-          message text NOT NULL,
-          created_at timestamp DEFAULT now()
-        )
-      `)
-
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS contact_messages_created_at_idx
-        ON contact_messages (created_at)
-      `)
-    } catch (error) {
-      globalThis.__contactSchemaReadyPromise = undefined
-      throw error
-    }
-  })()
-
-  return globalThis.__contactSchemaReadyPromise
-}
-
 async function sendAdminNotification({
   name,
   email,
@@ -214,8 +178,6 @@ export async function POST(request: NextRequest) {
     const email = normalizeEmail(body.email)
     const message = normalizeMessage(body.message)
     const createdAt = new Date()
-
-    await ensureContactSchema()
 
     await db.insert(contactMessages).values({
       name,

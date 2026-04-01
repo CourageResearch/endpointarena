@@ -76,7 +76,7 @@ function mapMarketToBrowseRow(market: OpenMarketRow): TrialsBrowseRow {
   }
 }
 
-export function createTrialsBrowseResponse(data: OverviewResponse | null): TrialsBrowseResponse | null {
+function createTrialsBrowseResponse(data: OverviewResponse | null): TrialsBrowseResponse | null {
   if (!data) return null
 
   const openMarkets = data.openMarkets.map(mapMarketToBrowseRow)

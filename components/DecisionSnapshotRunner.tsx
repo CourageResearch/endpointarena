@@ -79,7 +79,7 @@ function predictionToHistoryEntry(prediction: Prediction): PredictionHistoryEntr
   }
 }
 
-export function FDAPredictionRunner({ events: initialEvents }: Props) {
+export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
   const [events, setEvents] = useState(initialEvents)
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [progress, setProgress] = useState<Record<string, StreamProgress>>({})
