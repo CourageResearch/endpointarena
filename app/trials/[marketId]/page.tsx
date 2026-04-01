@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { MarketDashboardConcept5 } from '@/components/MarketDashboardConcept5'
 import { FooterGradientRule, PageFrame } from '@/components/site/chrome'
@@ -70,12 +71,18 @@ export default async function TrialDetailPage({
 }) {
   const { marketId: encodedMarketId } = await params
   const marketId = decodeURIComponent(encodedMarketId)
-  const initialData = createDetailOverviewPayload(
-    await getMarketOverviewData({ marketId }).catch((error) => {
-      console.error('Failed to preload market overview for trial detail page:', error)
-      return null
-    }),
-  )
+  const overviewData = await getMarketOverviewData({ marketId }).catch((error) => {
+    console.error('Failed to preload market overview for trial detail page:', error)
+    return null
+  })
+  const selectedMarket = overviewData?.openMarkets.find((market) => market.marketId === marketId)
+    || overviewData?.resolvedMarkets.find((market) => market.marketId === marketId)
+
+  if (!selectedMarket) {
+    notFound()
+  }
+
+  const initialData = createDetailOverviewPayload(overviewData)
 
   return (
     <PageFrame>

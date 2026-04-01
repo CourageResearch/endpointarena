@@ -12,7 +12,7 @@ export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
 export const STARTER_POINTS = 5
 
 // All known model IDs supported by the application.
-const ALL_MODEL_IDS = [
+export const ALL_MODEL_IDS = [
   'claude-opus',
   // Keep the legacy `gpt-5.2` slot id stable so existing model state keeps mapping cleanly.
   'gpt-5.2',

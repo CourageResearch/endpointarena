@@ -79,6 +79,7 @@ async function main() {
     CREATE TABLE IF NOT EXISTS trial_monitor_configs (
       id text PRIMARY KEY,
       enabled boolean NOT NULL DEFAULT true,
+      web_search_enabled boolean NOT NULL DEFAULT true,
       run_interval_hours integer NOT NULL DEFAULT 6,
       lookahead_days integer NOT NULL DEFAULT 30,
       overdue_recheck_hours integer NOT NULL DEFAULT 24,
@@ -94,6 +95,7 @@ async function main() {
       CONSTRAINT trial_monitor_configs_min_candidate_confidence_check CHECK (min_candidate_confidence >= 0 AND min_candidate_confidence <= 1)
     )
   `)
+  await exec(`ALTER TABLE trial_monitor_configs ADD COLUMN IF NOT EXISTS web_search_enabled boolean NOT NULL DEFAULT true`)
   await exec(`
     DO $$
     BEGIN

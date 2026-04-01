@@ -145,6 +145,7 @@ export const trialQuestions = pgTable('trial_questions', {
 export const trialMonitorConfigs = pgTable('trial_monitor_configs', {
   id: text('id').primaryKey(),
   enabled: boolean('enabled').notNull().default(true),
+  webSearchEnabled: boolean('web_search_enabled').notNull().default(true),
   runIntervalHours: integer('run_interval_hours').notNull().default(6),
   lookaheadDays: integer('lookahead_days').notNull().default(30),
   overdueRecheckHours: integer('overdue_recheck_hours').notNull().default(24),

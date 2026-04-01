@@ -16,8 +16,10 @@ export const metadata: Metadata = buildPageMetadata({
 })
 
 type PageSearchParams = {
+  from?: string | string[]
   type?: string | string[]
   tab?: string | string[]
+  to?: string | string[]
 }
 
 function firstSearchParam(value: string | string[] | undefined): string | null {
@@ -39,8 +41,10 @@ export default async function TrialsPage({
   searchParams?: PageSearchParams | Promise<PageSearchParams>
 }) {
   const resolvedSearchParams = (await searchParams) ?? {}
+  const initialFromDate = firstSearchParam(resolvedSearchParams.from)
   const initialTypeFilter = firstSearchParam(resolvedSearchParams.type)
   const initialStatusTab = firstSearchParam(resolvedSearchParams.tab)
+  const initialToDate = firstSearchParam(resolvedSearchParams.to)
   const initialOverview = await getInitialOverview()
 
   return (
@@ -64,8 +68,10 @@ export default async function TrialsPage({
         <Suspense fallback={null}>
           <TrialsBrowseTable
             initialData={initialOverview}
+            initialFromDate={initialFromDate}
             initialTypeFilter={initialTypeFilter}
             initialStatusTab={initialStatusTab}
+            initialToDate={initialToDate}
             includeResolved
           />
         </Suspense>
