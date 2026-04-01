@@ -61,7 +61,7 @@ export default async function TrialsPage({
             Phase 2 clinical trial prediction markets.
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Browse upcoming and resolved trial markets, compare AI model calls, and inspect the public context behind each market.
+            Browse open and resolved trial markets, compare AI model calls, and inspect the public context behind each market.
           </p>
         </header>
 
