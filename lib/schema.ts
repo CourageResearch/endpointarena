@@ -367,6 +367,39 @@ export const trialOutcomeCandidateEvidence = pgTable('trial_outcome_candidate_ev
   ),
 }))
 
+export const trialQuestionOutcomeHistory = pgTable('trial_question_outcome_history', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trialQuestionId: text('trial_question_id').notNull().references(() => trialQuestions.id, { onDelete: 'cascade' }),
+  previousOutcome: text('previous_outcome'),
+  previousOutcomeDate: utcTimestamp('previous_outcome_date'),
+  nextOutcome: text('next_outcome').notNull(),
+  nextOutcomeDate: utcTimestamp('next_outcome_date'),
+  changedAt: utcTimestamp('changed_at').notNull().$defaultFn(() => new Date()),
+  changeSource: text('change_source').notNull(),
+  changedByUserId: text('changed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewCandidateId: text('review_candidate_id').references(() => trialOutcomeCandidates.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+}, (table) => ({
+  previousOutcomeCheck: check(
+    'trial_question_outcome_history_previous_outcome_check',
+    sql`${table.previousOutcome} IS NULL OR ${table.previousOutcome} IN ('Pending', 'YES', 'NO')`
+  ),
+  nextOutcomeCheck: check(
+    'trial_question_outcome_history_next_outcome_check',
+    sql`${table.nextOutcome} IN ('Pending', 'YES', 'NO')`
+  ),
+  changeSourceCheck: check(
+    'trial_question_outcome_history_change_source_check',
+    sql`${table.changeSource} IN ('manual_admin', 'accepted_candidate')`
+  ),
+  questionChangedAtIdx: index('trial_question_outcome_history_question_changed_at_idx').on(
+    table.trialQuestionId,
+    table.changedAt,
+  ),
+  changedAtIdx: index('trial_question_outcome_history_changed_at_idx').on(table.changedAt),
+  reviewCandidateUniqueIdx: uniqueIndex('trial_question_outcome_history_review_candidate_id_idx').on(table.reviewCandidateId),
+}))
+
 export const fdaCalendarEvents = pgTable('fda_calendar_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyName: text('company_name').notNull(),
@@ -1053,7 +1086,7 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   ),
   costSourceCheck: check(
     'model_decision_snapshots_cost_source_check',
-    sql`${table.costSource} IS NULL OR ${table.costSource} IN ('provider', 'estimated')`,
+    sql`${table.costSource} IS NULL OR ${table.costSource} IN ('provider', 'estimated', 'subscription')`,
   ),
 }))
 
@@ -1215,6 +1248,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   sessions: many(sessions),
   marketActors: many(marketActors),
+  trialOutcomeHistoryChanges: many(trialQuestionOutcomeHistory),
 }))
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -1242,6 +1276,7 @@ export const trialQuestionsRelations = relations(trialQuestions, ({ one, many })
   }),
   markets: many(predictionMarkets),
   outcomeCandidates: many(trialOutcomeCandidates),
+  outcomeHistory: many(trialQuestionOutcomeHistory),
   actions: many(marketActions),
   decisionSnapshots: many(modelDecisionSnapshots),
 }))
@@ -1256,11 +1291,27 @@ export const trialOutcomeCandidatesRelations = relations(trialOutcomeCandidates,
     fields: [trialOutcomeCandidates.reviewedByUserId],
     references: [users.id],
   }),
+  historyEntries: many(trialQuestionOutcomeHistory),
 }))
 
 export const trialOutcomeCandidateEvidenceRelations = relations(trialOutcomeCandidateEvidence, ({ one }) => ({
   candidate: one(trialOutcomeCandidates, {
     fields: [trialOutcomeCandidateEvidence.candidateId],
+    references: [trialOutcomeCandidates.id],
+  }),
+}))
+
+export const trialQuestionOutcomeHistoryRelations = relations(trialQuestionOutcomeHistory, ({ one }) => ({
+  question: one(trialQuestions, {
+    fields: [trialQuestionOutcomeHistory.trialQuestionId],
+    references: [trialQuestions.id],
+  }),
+  changedByUser: one(users, {
+    fields: [trialQuestionOutcomeHistory.changedByUserId],
+    references: [users.id],
+  }),
+  reviewCandidate: one(trialOutcomeCandidates, {
+    fields: [trialQuestionOutcomeHistory.reviewCandidateId],
     references: [trialOutcomeCandidates.id],
   }),
 }))
@@ -1477,6 +1528,8 @@ export type TrialOutcomeCandidate = typeof trialOutcomeCandidates.$inferSelect
 export type NewTrialOutcomeCandidate = typeof trialOutcomeCandidates.$inferInsert
 export type TrialOutcomeCandidateEvidence = typeof trialOutcomeCandidateEvidence.$inferSelect
 export type NewTrialOutcomeCandidateEvidence = typeof trialOutcomeCandidateEvidence.$inferInsert
+export type TrialQuestionOutcomeHistory = typeof trialQuestionOutcomeHistory.$inferSelect
+export type NewTrialQuestionOutcomeHistory = typeof trialQuestionOutcomeHistory.$inferInsert
 export type FDAEventExternalId = typeof fdaEventExternalIds.$inferSelect
 export type NewFDAEventExternalId = typeof fdaEventExternalIds.$inferInsert
 export type FDAEventSource = typeof fdaEventSources.$inferSelect

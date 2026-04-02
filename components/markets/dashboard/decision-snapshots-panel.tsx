@@ -18,7 +18,7 @@ import {
 } from '@/components/markets/dashboard/shared'
 
 const METRIC_PILL_CLASS = 'inline-flex items-center rounded-sm border border-[#ddd2c5] bg-[#f9f4ec] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none text-[#6d645a]'
-const CONTENT_PANEL_CLASS = 'rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-4 py-3'
+const CONTENT_PANEL_CLASS = 'rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-4 py-3'
 
 function formatActionTypeLabel(actionType: string): string {
   if (actionType === 'BUY_YES') return 'Buy Yes'
@@ -90,7 +90,7 @@ export function MarketDecisionSnapshotsPanel({
       ) : null}
 
       {decisionRows.length === 0 ? (
-        <div className="mx-1 rounded-sm border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
+        <div className="mx-1 rounded-none border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
           No decision snapshots recorded for this market yet.
         </div>
       ) : (
@@ -109,9 +109,8 @@ export function MarketDecisionSnapshotsPanel({
               <article
                 key={`${selectedMarketId}-decision-${state.modelId}`}
                 className={cn('mx-1', DETAILS_CARD_SHELL_CLASS)}
-                style={DETAILS_CARD_BORDER_STYLE}
               >
-                <div className="rounded-sm bg-white/95 px-4 py-4 sm:px-5">
+                <div className="rounded-none border border-transparent px-4 py-4 sm:px-5" style={DETAILS_CARD_BORDER_STYLE}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="truncate text-[14px] font-medium text-[#1a1a1a]" title={model.fullName}>
@@ -174,7 +173,7 @@ export function MarketDecisionSnapshotsPanel({
                   )}
 
                   {history.length > 0 ? (
-                    <details className="group mt-4 overflow-hidden rounded-sm border border-[#e8ddd0] bg-[#faf7f2]">
+                    <details className="group mt-4 overflow-hidden rounded-none border border-[#e8ddd0] bg-[#faf7f2]">
                       <summary
                         className={cn(
                           'flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5',

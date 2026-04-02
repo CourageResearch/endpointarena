@@ -8,6 +8,13 @@
       "when": 1775058049328,
       "tag": "0000_baseline_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775074045812,
+      "tag": "0001_rapid_spitfire",
+      "breakpoints": true
     }
   ]
 }

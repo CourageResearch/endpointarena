@@ -63,14 +63,6 @@ export default async function MethodPage() {
       reasoningDetail: 'Native fast reasoning mode',
       maxTokens: '16,000 output',
     },
-    'gemini-2.5': {
-      version: 'gemini-2.5-pro',
-      internet: true,
-      internetDetail: 'Google Search grounding',
-      reasoning: 'Thinking',
-      reasoningDetail: 'thinkingConfig.thinkingBudget = -1',
-      maxTokens: '65,536 output',
-    },
     'gemini-3-pro': {
       version: 'gemini-3-pro-preview',
       internet: true,

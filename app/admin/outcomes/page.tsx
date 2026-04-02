@@ -6,6 +6,7 @@ import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminTrialOutcomeReview } from '@/components/AdminTrialOutcomeReview'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { listEligibleTrialOutcomeQuestions, listPendingTrialOutcomeCandidates, listRecentTrialMonitorRuns } from '@/lib/trial-monitor'
+import { listRecentTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
   getTrialMonitorVerifierLabel,
@@ -33,17 +34,27 @@ function extractVerifierModelLabelFromRunDebugLog(debugLog: string | null | unde
   return 'Unknown model'
 }
 
+function extractScopedNctNumberFromRunDebugLog(debugLog: string | null | undefined): string | null {
+  if (typeof debugLog !== 'string' || debugLog.trim().length === 0) {
+    return null
+  }
+
+  const nctMatch = debugLog.match(/"scopedNctNumber":\s*"([^"]+)"/)
+  return nctMatch?.[1] ?? null
+}
+
 export default async function AdminOutcomesPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
     redirect('/login')
   }
 
-  const [config, candidates, recentRuns, eligibleQuestions] = await Promise.all([
+  const [config, candidates, recentRuns, eligibleQuestions, historyEntries] = await Promise.all([
     getTrialMonitorConfig(),
     listPendingTrialOutcomeCandidates(),
     listRecentTrialMonitorRuns(),
     listEligibleTrialOutcomeQuestions(),
+    listRecentTrialQuestionOutcomeHistory(),
   ])
   const normalizedVerifierModelKey = normalizeTrialMonitorVerifierModelKey(config.verifierModelKey) ?? 'gpt-5.4'
   const verifierModelOptions = getTrialMonitorVerifierOptions({
@@ -105,6 +116,7 @@ export default async function AdminOutcomesPage() {
           triggerSource: run.triggerSource as 'cron' | 'manual',
           status: run.status as 'running' | 'completed' | 'failed',
           verifierModelLabel: extractVerifierModelLabelFromRunDebugLog(run.debugLog),
+          scopedNctNumber: extractScopedNctNumberFromRunDebugLog(run.debugLog),
           questionsScanned: run.questionsScanned,
           candidatesCreated: run.candidatesCreated,
           errorSummary: run.errorSummary,
@@ -123,6 +135,38 @@ export default async function AdminOutcomesPage() {
             estPrimaryCompletionDate: question.trial.estPrimaryCompletionDate.toISOString(),
             lastMonitoredAt: question.trial.lastMonitoredAt ? question.trial.lastMonitoredAt.toISOString() : null,
           },
+        }))}
+        historyEntries={historyEntries.map((entry) => ({
+          id: entry.id,
+          trialQuestionId: entry.trialQuestionId,
+          marketId: entry.marketId,
+          questionPrompt: normalizeTrialQuestionPrompt(entry.questionPrompt),
+          previousOutcome: entry.previousOutcome,
+          previousOutcomeDate: entry.previousOutcomeDate,
+          nextOutcome: entry.nextOutcome,
+          nextOutcomeDate: entry.nextOutcomeDate,
+          currentOutcome: entry.currentOutcome,
+          currentOutcomeDate: entry.currentOutcomeDate,
+          changedAt: entry.changedAt,
+          changeSource: entry.changeSource,
+          changedByName: entry.changedByName,
+          changedByEmail: entry.changedByEmail,
+          notes: entry.notes,
+          trial: {
+            shortTitle: entry.trial.shortTitle,
+            sponsorName: entry.trial.sponsorName,
+            sponsorTicker: entry.trial.sponsorTicker,
+            nctNumber: entry.trial.nctNumber,
+          },
+          candidate: entry.candidate
+            ? {
+                id: entry.candidate.id,
+                confidence: entry.candidate.confidence,
+                summary: entry.candidate.summary,
+                verifierModelLabel: getTrialMonitorVerifierLabel(entry.candidate.verifierModelKey),
+                reviewedAt: entry.candidate.reviewedAt,
+              }
+            : null,
         }))}
       />
     </AdminConsoleLayout>

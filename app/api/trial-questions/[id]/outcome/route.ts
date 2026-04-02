@@ -1,11 +1,13 @@
+import { getServerSession } from 'next-auth'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { db, predictionMarkets, trialQuestions } from '@/lib/db'
-import { ensureAdmin } from '@/lib/auth'
+import { authOptions, ensureAdmin } from '@/lib/auth'
 import { reopenMarketForTrialQuestion, resolveMarketForTrialQuestion } from '@/lib/markets/engine'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
+import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 
 type PatchBody = {
   outcome?: 'Pending' | 'YES' | 'NO'
@@ -21,6 +23,8 @@ export async function PATCH(
 
   try {
     await ensureAdmin()
+    const session = await getServerSession(authOptions)
+    const changedByUserId = session?.user?.id ?? null
 
     const { id } = await params
     const body = await parseJsonBody<PatchBody>(request)
@@ -48,11 +52,19 @@ export async function PATCH(
       throw new NotFoundError('Trial question not found')
     }
 
+    const previousOutcome = question.outcome as PatchBody['outcome']
+    const previousOutcomeDate = question.outcomeDate
+    const nextOutcomeDate = outcome === 'Pending'
+      ? null
+      : previousOutcome === outcome
+        ? previousOutcomeDate ?? new Date()
+        : new Date()
+
     const updated = await db.transaction(async (tx) => {
       const [nextQuestion] = await tx.update(trialQuestions)
         .set({
           outcome,
-          outcomeDate: outcome === 'Pending' ? null : new Date(),
+          outcomeDate: nextOutcomeDate,
           updatedAt: new Date(),
         })
         .where(eq(trialQuestions.id, id))
@@ -63,6 +75,17 @@ export async function PATCH(
       } else {
         await resolveMarketForTrialQuestion(id, outcome, tx)
       }
+
+      await recordTrialQuestionOutcomeHistory({
+        dbClient: tx,
+        trialQuestionId: id,
+        previousOutcome: previousOutcome ?? null,
+        previousOutcomeDate,
+        nextOutcome: outcome,
+        nextOutcomeDate,
+        changeSource: 'manual_admin',
+        changedByUserId,
+      })
 
       return nextQuestion
     })

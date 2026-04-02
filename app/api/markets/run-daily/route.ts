@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ensureAdmin } from '@/lib/auth'
 import { errorResponse, parseOptionalJsonBody, createRequestId, successResponse } from '@/lib/api-response'
+import { DEPRECATED_MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
 import { ValidationError } from '@/lib/errors'
 import { executeDailyRun } from '@/lib/markets/daily-run'
 import { normalizeRunDate } from '@/lib/markets/engine'
@@ -21,6 +22,65 @@ function resolveRunDate(input?: string): Date {
   return normalizeRunDate(parsed)
 }
 
+function resolveScopedNctNumber(input: unknown): string | undefined {
+  if (input == null || input === '') {
+    return undefined
+  }
+
+  if (typeof input !== 'string') {
+    throw new ValidationError('nctNumber must be a string')
+  }
+
+  const normalized = input.trim().toUpperCase()
+  if (!/^NCT\d{8}$/.test(normalized)) {
+    throw new ValidationError('nctNumber must look like NCT12345678')
+  }
+
+  return normalized
+}
+
+function resolveModelIds(input: unknown): ModelId[] | undefined {
+  if (input == null) {
+    return undefined
+  }
+
+  if (!Array.isArray(input)) {
+    throw new ValidationError('modelIds must be an array of model ids')
+  }
+
+  const normalized = Array.from(new Set(
+    input.map((value) => {
+      if (typeof value !== 'string') {
+        throw new ValidationError('modelIds must contain strings only')
+      }
+
+      const modelId = value.trim()
+      if (DEPRECATED_MODEL_IDS.includes(modelId as (typeof DEPRECATED_MODEL_IDS)[number])) {
+        throw new ValidationError(`Model ${modelId} is deprecated and cannot be run`)
+      }
+      if (!isModelId(modelId)) {
+        throw new ValidationError(`Unknown modelId: ${modelId}`)
+      }
+
+      return modelId
+    }),
+  ))
+
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function resolveClaudeProvider(input: unknown): 'api' | 'web' | undefined {
+  if (input == null || input === '') {
+    return undefined
+  }
+
+  if (input === 'api' || input === 'web') {
+    return input
+  }
+
+  throw new ValidationError('claudeProvider must be either "api" or "web"')
+}
+
 export async function POST(request: NextRequest) {
   const requestId = createRequestId()
   const streamMode = new URL(request.url).searchParams.get('stream') === '1'
@@ -28,8 +88,20 @@ export async function POST(request: NextRequest) {
   try {
     await ensureAdmin()
 
-    const body = await parseOptionalJsonBody<{ runDate?: string }>(request, {})
+    const body = await parseOptionalJsonBody<{
+      runDate?: string
+      nctNumber?: string
+      modelIds?: string[]
+      claudeProvider?: 'api' | 'web'
+    }>(request, {})
     const runDate = resolveRunDate(body.runDate)
+    const nctNumber = resolveScopedNctNumber(body.nctNumber)
+    const modelIds = resolveModelIds(body.modelIds)
+    const claudeProvider = resolveClaudeProvider(body.claudeProvider)
+
+    if (claudeProvider === 'web' && process.env.NODE_ENV === 'production') {
+      throw new ValidationError('claudeProvider="web" is currently only supported in local development')
+    }
 
     if (streamMode) {
       const stream = new ReadableStream<Uint8Array>({
@@ -48,29 +120,34 @@ export async function POST(request: NextRequest) {
 
           try {
             const payload = await executeDailyRun(runDate, {
-              onStart: (start) => {
-                writeEvent({ type: 'start', ...start })
-              },
-              onActivity: ({ completedActions, totalActions, message, marketId, trialQuestionId, actorId, modelId, phase }) => {
-                writeEvent({
-                  type: 'activity',
-                  completedActions,
-                  totalActions,
-                  message,
-                  marketId,
-                  trialQuestionId,
-                  actorId,
-                  modelId,
-                  phase,
-                })
-              },
-              onProgress: ({ completedActions, totalActions, result }) => {
-                writeEvent({
-                  type: 'progress',
-                  completedActions,
-                  totalActions,
-                  result,
-                })
+              nctNumber,
+              modelIds,
+              claudeProvider,
+              hooks: {
+                onStart: (start) => {
+                  writeEvent({ type: 'start', ...start })
+                },
+                onActivity: ({ completedActions, totalActions, message, marketId, trialQuestionId, actorId, modelId, phase }) => {
+                  writeEvent({
+                    type: 'activity',
+                    completedActions,
+                    totalActions,
+                    message,
+                    marketId,
+                    trialQuestionId,
+                    actorId,
+                    modelId,
+                    phase,
+                  })
+                },
+                onProgress: ({ completedActions, totalActions, result }) => {
+                  writeEvent({
+                    type: 'progress',
+                    completedActions,
+                    totalActions,
+                    result,
+                  })
+                },
               },
             })
 
@@ -117,7 +194,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const payload = await executeDailyRun(runDate)
+    const payload = await executeDailyRun(runDate, {
+      nctNumber,
+      modelIds,
+      claudeProvider,
+    })
     return successResponse(payload, {
       headers: {
         'X-Request-Id': requestId,

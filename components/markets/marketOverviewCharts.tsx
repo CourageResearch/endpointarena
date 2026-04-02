@@ -175,7 +175,7 @@ export function MarketDetailChart({
   const latestPointPosition = pointPositions[pointPositions.length - 1] ?? null
 
   return (
-    <div className={cn('rounded-2xl border border-[#eadfce] bg-white/80 p-3', className)}>
+    <div className={cn('rounded-none border border-[#eadfce] bg-white/80 p-3', className)}>
       <div
         className="hide-scrollbar overflow-x-auto"
         onPointerLeave={() => {
@@ -279,7 +279,7 @@ export function MarketDetailChart({
                 y={activeTooltip.y}
                 width={activeTooltip.width}
                 height={activeTooltip.height}
-                rx={activeTooltip.height / 2}
+                rx={0}
                 fill="rgba(45, 76, 108, 0.92)"
                 stroke="rgba(171, 211, 243, 0.8)"
                 strokeWidth="0.75"
@@ -321,7 +321,7 @@ export function MarketDetailChart({
       <div className="mt-2 flex min-h-[32px] items-center justify-end text-[11px] text-[#5c6f84]">
         <span
           className={cn(
-            'max-w-full truncate whitespace-nowrap rounded-full border border-[#bad7ee] bg-[#eaf4fd] px-2.5 py-1 transition-opacity duration-150',
+            'max-w-full truncate whitespace-nowrap rounded-none border border-[#bad7ee] bg-[#eaf4fd] px-2.5 py-1 transition-opacity duration-150',
             isScrubLocked && scrubSnapshotDate ? 'opacity-100' : 'pointer-events-none select-none opacity-0',
           )}
           aria-hidden={!isScrubLocked || !scrubSnapshotDate}

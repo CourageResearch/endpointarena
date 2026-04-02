@@ -11,8 +11,12 @@
   --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
 }
 
-* {
+/* Corners are intentionally square across the product. */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+  border-radius: 0 !important;
 }
 
 html {

@@ -31,7 +31,11 @@ import {
   linkSnapshotToMarketAction,
 } from '@/lib/model-decision-snapshots'
 import { DAILY_RUN_STOPPED_REASON, throwIfDailyRunStopRequested } from '@/lib/markets/run-control'
-import { MODEL_DECISION_GENERATORS } from '@/lib/predictions/model-decision-generators'
+import {
+  getModelDecisionGeneratorDisabledReason,
+  MODEL_DECISION_GENERATORS,
+  type ModelDecisionGeneratorOptions,
+} from '@/lib/predictions/model-decision-generators'
 import { getModelActorIds } from '@/lib/market-actors'
 import { appendMarketRunLog } from '@/lib/market-run-logs'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
@@ -44,6 +48,13 @@ type TrialQuestionWithTrial = typeof trialQuestions.$inferSelect & {
   trial: typeof phase2Trials.$inferSelect
 }
 
+export interface DailyRunExecutionOptions {
+  hooks?: DailyRunHooks
+  nctNumber?: string
+  modelIds?: ModelId[]
+  claudeProvider?: ModelDecisionGeneratorOptions['claudeProvider']
+}
+
 function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
   return results.reduce<DailyRunSummary>((acc, result) => {
     if (result.status === 'ok') acc.ok += 1
@@ -53,7 +64,15 @@ function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
   }, { ok: 0, error: 0, skipped: 0 })
 }
 
-function resolveDailyRunModelOrder(runDate: Date): ModelId[] {
+function normalizeScopedNctNumber(value: string): string {
+  return value.trim().toUpperCase()
+}
+
+function resolveDailyRunModelOrder(runDate: Date, requestedModelIds?: ModelId[]): ModelId[] {
+  if (requestedModelIds && requestedModelIds.length > 0) {
+    return Array.from(new Set(requestedModelIds))
+  }
+
   const defaultOrder = rotateModelOrder(runDate)
   const rawModelIds = process.env.MARKET_RUN_MODEL_IDS?.trim()
   if (!rawModelIds) {
@@ -247,10 +266,23 @@ async function startRunRecord({
   return runRecord
 }
 
-export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Promise<DailyRunPayload> {
+export async function executeDailyRun(
+  runDate: Date,
+  options: DailyRunExecutionOptions = {},
+): Promise<DailyRunPayload> {
+  const {
+    hooks,
+    nctNumber,
+    modelIds,
+    claudeProvider,
+  } = options
   const normalizedRunDate = normalizeRunDate(runDate)
   const runDateIso = normalizedRunDate.toISOString()
-  const modelOrder = resolveDailyRunModelOrder(normalizedRunDate)
+  const modelOrder = resolveDailyRunModelOrder(normalizedRunDate, modelIds)
+  const generatorOptions: ModelDecisionGeneratorOptions | undefined = claudeProvider
+    ? { claudeProvider }
+    : undefined
+  const scopedNctNumber = nctNumber ? normalizeScopedNctNumber(nctNumber) : null
 
   const [runtimeConfig, rawOpenMarkets] = await Promise.all([
     getMarketRuntimeConfig(),
@@ -293,8 +325,15 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
 
     return a.id.localeCompare(b.id)
   })
+  const scopedOpenMarkets = scopedNctNumber
+    ? orderedOpenMarkets.filter((market) => questionById.get(market.trialQuestionId)?.trial.nctNumber.toUpperCase() === scopedNctNumber)
+    : orderedOpenMarkets
 
-  const orderedMarketPlan = orderedOpenMarkets
+  if (scopedNctNumber && scopedOpenMarkets.length === 0) {
+    throw new Error(`No open market found for ${scopedNctNumber}`)
+  }
+
+  const orderedMarketPlan = scopedOpenMarkets
     .map((market) => {
       const question = questionById.get(market.trialQuestionId)
       if (!question) return null
@@ -311,13 +350,13 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
     .filter((entry): entry is DailyRunPlannedMarket => entry !== null)
 
   await ensureMarketAccounts()
-  await Promise.all(orderedOpenMarkets.map((market) => ensureMarketPositions(market.id)))
+  await Promise.all(scopedOpenMarkets.map((market) => ensureMarketPositions(market.id)))
   const actorIdByModelId = await getModelActorIds(modelOrder)
 
-  const totalActions = orderedOpenMarkets.length * modelOrder.length
+  const totalActions = scopedOpenMarkets.length * modelOrder.length
   const runRecord = await startRunRecord({
     runDate: normalizedRunDate,
-    openMarkets: orderedOpenMarkets.length,
+    openMarkets: scopedOpenMarkets.length,
     totalActions,
   })
 
@@ -326,7 +365,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
     runDate: runDateIso,
     modelOrder,
     orderedMarkets: orderedMarketPlan,
-    openMarkets: orderedOpenMarkets.length,
+    openMarkets: scopedOpenMarkets.length,
     totalActions,
   })
   await appendMarketRunLog({
@@ -339,6 +378,24 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
     errorCount: 0,
     skippedCount: 0,
   })
+  if (scopedNctNumber || modelIds?.length || claudeProvider) {
+    const scopedMessageParts = [
+      scopedNctNumber ? `Trial ${scopedNctNumber}` : null,
+      modelOrder.length > 0 ? `Models: ${modelOrder.map((modelId) => MODEL_INFO[modelId].fullName).join(', ')}` : null,
+      claudeProvider ? `Claude provider: ${claudeProvider}` : null,
+    ].filter((value): value is string => Boolean(value))
+
+    await appendMarketRunLog({
+      runId: runRecord.id,
+      logType: 'system',
+      message: `Scoped run: ${scopedMessageParts.join(' | ')}`,
+      completedActions: 0,
+      totalActions,
+      okCount: 0,
+      errorCount: 0,
+      skippedCount: 0,
+    })
+  }
 
   const results: DailyRunResult[] = []
   let processedActions = 0
@@ -421,7 +478,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
   try {
     await throwIfDailyRunStopRequested(runRecord.id)
 
-    for (const [marketIndex, market] of orderedOpenMarkets.entries()) {
+    for (const [marketIndex, market] of scopedOpenMarkets.entries()) {
       await throwIfDailyRunStopRequested(runRecord.id)
       const marketQuestion = questionById.get(market.trialQuestionId)
 
@@ -517,8 +574,8 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
         }
 
         const generator = MODEL_DECISION_GENERATORS[modelId]
-        if (!generator?.enabled()) {
-          const message = `${modelId} generator is disabled because its API key is not configured`
+        if (!generator?.enabled(generatorOptions)) {
+          const message = getModelDecisionGeneratorDisabledReason(modelId, generatorOptions)
           await recordMarketActionError({
             runId: runRecord.id,
             marketId: market.id,
@@ -527,7 +584,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
             runDate: normalizedRunDate,
             priceYes: market.priceYes,
             message,
-            code: 'API_KEY_MISSING',
+            code: inferErrorCode(message),
           })
 
           await pushResult({
@@ -550,7 +607,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
           await emitActivity({
             completedActions: processedActions,
             totalActions,
-            message: `Running ${modelName} on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${orderedOpenMarkets.length} markets)`,
+            message: `Running ${modelName} on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${scopedOpenMarkets.length} markets)`,
             marketId: market.id,
             trialQuestionId: market.trialQuestionId,
             actorId,
@@ -616,6 +673,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
               account,
               position,
               runtimeConfig,
+              generatorOptions,
             }),
             MARKET_MODEL_RESPONSE_TIMEOUT_MS,
             `${modelName} response`,
@@ -752,7 +810,7 @@ export async function executeDailyRun(runDate: Date, hooks?: DailyRunHooks): Pro
       runDate: runDateIso,
       modelOrder,
       orderedMarkets: orderedMarketPlan,
-      openMarkets: orderedOpenMarkets.length,
+      openMarkets: scopedOpenMarkets.length,
       totalActions,
       processedActions,
       summary,

@@ -26,10 +26,10 @@ export function BrandMark({
       fill="none"
       aria-hidden="true"
     >
-      <rect x="0.8" y="7.8" width="6.4" height="6.4" rx="2" fill={colors.coral} />
-      <rect x="7.8" y="14.8" width="6.4" height="6.4" rx="2" fill={colors.green} />
-      <rect x="14.8" y="7.8" width="6.4" height="6.4" rx="2" fill={colors.gold} />
-      <rect x="21.8" y="0.8" width="6.4" height="6.4" rx="2" fill={colors.blue} />
+      <rect x="0.8" y="7.8" width="6.4" height="6.4" rx="0" fill={colors.coral} />
+      <rect x="7.8" y="14.8" width="6.4" height="6.4" rx="0" fill={colors.green} />
+      <rect x="14.8" y="7.8" width="6.4" height="6.4" rx="0" fill={colors.gold} />
+      <rect x="21.8" y="0.8" width="6.4" height="6.4" rx="0" fill={colors.blue} />
     </svg>
   )
 }
@@ -65,7 +65,7 @@ export function BrandLink({
       href={href}
       onClick={onClick}
       className={cn(
-        'group flex min-w-0 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5BA5ED]/40',
+        'group flex min-w-0 items-center gap-2 rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5BA5ED]/40',
         className
       )}
     >

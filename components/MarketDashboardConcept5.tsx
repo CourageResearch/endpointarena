@@ -11,6 +11,7 @@ import { MarketDescriptionCard, MarketDetailsPanel, MarketResolutionPanel } from
 import {
   APPROVE_TEXT_CLASS,
   DASHBOARD_SECTION_LABEL_CLASS,
+  DETAILS_CARD_BORDER_STYLE,
   REJECT_TEXT_CLASS,
   type ActivityFilterOption,
   type HumanTradeDirection,
@@ -182,8 +183,6 @@ function getPositionModelLabel(modelId: ModelId, fullName: string): string {
   switch (modelId) {
     case 'claude-opus':
       return 'Claude 4.6'
-    case 'gemini-2.5':
-      return 'Gemini 2.5'
     default:
       return fullName
   }
@@ -1028,8 +1027,8 @@ export function MarketDashboardConcept5({
                             <HeaderDots />
                           </div>
                         </div>
-                        <div className="mx-1 rounded-md p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-                          <div className="overflow-hidden rounded-md bg-white/95">
+                        <div className="mx-1 rounded-none">
+                          <div className="overflow-hidden rounded-none border border-transparent" style={DETAILS_CARD_BORDER_STYLE}>
                             <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
                               <table className={cn(
                                 'w-full table-fixed',
@@ -1216,8 +1215,8 @@ export function MarketDashboardConcept5({
 	                    <HeaderDots />
 	                  </div>
 	                </div>
-	                <div className="mx-1 rounded-md p-[1px]" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
-	                  <div className="overflow-hidden rounded-md bg-white/95">
+	                <div className="mx-1 rounded-none">
+	                  <div className="overflow-hidden rounded-none border border-transparent" style={DETAILS_CARD_BORDER_STYLE}>
 	                    <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
 	                      <table className="w-full table-fixed min-w-[560px] sm:min-w-[620px] xl:min-w-0">
 	                        <colgroup>

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { GoogleGenAI } from '@google/genai'
 import type { ModelId } from '@/lib/constants'
+import { askClaudeWeb } from './claude-web-runner'
 import { buildModelDecisionPrompt, parseModelDecisionResponse, type ModelDecisionInput, type ModelDecisionResult } from './model-decision-prompt'
 
 interface ProviderUsageSnapshot {
@@ -20,11 +21,16 @@ export interface ModelDecisionGeneration {
   result: ModelDecisionResult
   rawResponse: string
   usage: ProviderUsageSnapshot | null
+  billingMode?: 'metered' | 'subscription'
 }
 
 interface ModelDecisionGeneratorConfig {
-  generator: (input: ModelDecisionInput) => Promise<ModelDecisionGeneration>
-  enabled: () => boolean
+  generator: (input: ModelDecisionInput, options?: ModelDecisionGeneratorOptions) => Promise<ModelDecisionGeneration>
+  enabled: (options?: ModelDecisionGeneratorOptions) => boolean
+}
+
+export interface ModelDecisionGeneratorOptions {
+  claudeProvider?: 'api' | 'web'
 }
 
 interface OpenAICompatibleResponseFormat {
@@ -32,13 +38,13 @@ interface OpenAICompatibleResponseFormat {
   json_schema?: Record<string, unknown>
 }
 
-const BASETEN_BASE_URL = 'https://inference.baseten.co/v1'
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1'
 const OPENAI_GPT_MODEL = 'gpt-5.4'
-const DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.1'
-const GLM_MODEL = 'zai-org/GLM-5'
+const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v3p2'
+const GLM_MODEL = 'accounts/fireworks/models/glm-5'
 const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
-const KIMI_MODEL = 'moonshotai/Kimi-K2.5'
-const MINIMAX_MODEL = 'MiniMax-M2.5'
+const KIMI_MODEL = 'accounts/fireworks/models/kimi-k2p5'
+const MINIMAX_MODEL = 'accounts/fireworks/models/minimax-m2p5'
 const DEFAULT_USAGE: ProviderUsageSnapshot = {
   inputTokens: null,
   outputTokens: null,
@@ -136,6 +142,32 @@ function parseUsageFromOpenAIResponse(response: any, webSearchRequests: number):
   }
 }
 
+function parseUsageFromChatCompletion(completion: any): ProviderUsageSnapshot | null {
+  const usage = completion?.usage
+  if (!usage || typeof usage !== 'object') {
+    return DEFAULT_USAGE
+  }
+
+  const inputTokens = typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : null
+  const outputTokens = typeof usage.completion_tokens === 'number' ? usage.completion_tokens : null
+  const totalTokens = typeof usage.total_tokens === 'number'
+    ? usage.total_tokens
+    : (typeof inputTokens === 'number' && typeof outputTokens === 'number' ? inputTokens + outputTokens : null)
+
+  return {
+    ...DEFAULT_USAGE,
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    reasoningTokens: typeof usage.completion_tokens_details?.reasoning_tokens === 'number'
+      ? usage.completion_tokens_details.reasoning_tokens
+      : null,
+    cacheReadInputTokens: typeof usage.prompt_tokens_details?.cached_tokens === 'number'
+      ? usage.prompt_tokens_details.cached_tokens
+      : null,
+  }
+}
+
 function parseUsageFromClaudeMessage(message: any, webSearchRequests: number): ProviderUsageSnapshot | null {
   const usage = message?.usage
   if (!usage || typeof usage !== 'object') {
@@ -159,15 +191,31 @@ function parseUsageFromClaudeMessage(message: any, webSearchRequests: number): P
   }
 }
 
-function buildOutput(rawResponse: string, input: ModelDecisionInput, usage: ProviderUsageSnapshot | null = DEFAULT_USAGE): ModelDecisionGeneration {
+function buildOutput(
+  rawResponse: string,
+  input: ModelDecisionInput,
+  usage: ProviderUsageSnapshot | null = DEFAULT_USAGE,
+  billingMode: 'metered' | 'subscription' = 'metered',
+): ModelDecisionGeneration {
   return {
     rawResponse,
     usage,
+    billingMode,
     result: parseModelDecisionResponse(rawResponse, input.constraints.allowedActions, input.constraints.explanationMaxChars),
   }
 }
 
-async function generateClaudeDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+function buildClaudeWebDecisionPrompt(input: ModelDecisionInput): string {
+  return [
+    'Use Claude web search before answering.',
+    'Search the live public web for recent, decision-relevant information about this trial, sponsor, indication, endpoint, and timeline.',
+    'After searching, follow the instructions below exactly and return valid JSON only.',
+    '',
+    buildModelDecisionPrompt(input),
+  ].join('\n')
+}
+
+async function generateClaudeApiDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const message = await client.messages.create({
@@ -187,6 +235,22 @@ async function generateClaudeDecision(input: ModelDecisionInput): Promise<ModelD
     : 0
 
   return buildOutput(content, input, parseUsageFromClaudeMessage(message, toolUseCount))
+}
+
+async function generateClaudeWebDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+  const content = await askClaudeWeb(buildClaudeWebDecisionPrompt(input))
+  return buildOutput(content, input, null, 'subscription')
+}
+
+async function generateClaudeDecision(
+  input: ModelDecisionInput,
+  options: ModelDecisionGeneratorOptions = {},
+): Promise<ModelDecisionGeneration> {
+  if (options.claudeProvider === 'web') {
+    return generateClaudeWebDecision(input)
+  }
+
+  return generateClaudeApiDecision(input)
 }
 
 async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
@@ -253,12 +317,61 @@ async function generateGeminiDecision(input: ModelDecisionInput, model: string):
   return buildOutput(content, input)
 }
 
-async function generateGemini25Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  return generateGeminiDecision(input, 'gemini-2.5-pro')
-}
-
 async function generateGemini3Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
   return generateGeminiDecision(input, 'gemini-3-pro-preview')
+}
+
+async function generateFireworksDecision(args: {
+  model: string
+  input: ModelDecisionInput
+  errorLabel: string
+  maxTokens?: number
+  temperature?: number
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high'
+  responseFormat?: OpenAICompatibleResponseFormat
+}): Promise<ModelDecisionGeneration> {
+  const apiKey = process.env.FIREWORKS_API_KEY
+  if (!apiKey) {
+    throw new Error('FIREWORKS_API_KEY is not configured')
+  }
+
+  const prompt = buildModelDecisionPrompt(args.input)
+  const requestBody: Record<string, unknown> = {
+    model: args.model,
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: args.maxTokens ?? 8192,
+    temperature: args.temperature ?? 0.6,
+  }
+
+  if (args.reasoningEffort) {
+    requestBody.reasoning_effort = args.reasoningEffort
+  }
+
+  if (args.responseFormat) {
+    requestBody.response_format = args.responseFormat
+  }
+
+  const response = await fetch(`${FIREWORKS_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  const rawPayload = await response.text()
+  if (!response.ok) {
+    throw new Error(`Fireworks ${args.errorLabel} request failed (${response.status}): ${rawPayload.slice(0, 400)}`)
+  }
+
+  const completion = JSON.parse(rawPayload)
+  const content = extractChatCompletionText(completion)
+  if (!content) {
+    throw new Error(`No content in ${args.errorLabel} response`)
+  }
+
+  return buildOutput(content, args.input, parseUsageFromChatCompletion(completion))
 }
 
 async function generateOpenAICompatibleDecision(args: {
@@ -269,7 +382,7 @@ async function generateOpenAICompatibleDecision(args: {
   errorLabel: string
   maxTokens?: number
   temperature?: number
-  extraBody?: Record<string, unknown>
+  requestOverrides?: Record<string, unknown>
   responseFormat?: OpenAICompatibleResponseFormat
 }): Promise<ModelDecisionGeneration> {
   const client = new OpenAI({
@@ -285,8 +398,8 @@ async function generateOpenAICompatibleDecision(args: {
     temperature: args.temperature ?? 0.6,
   }
 
-  if (args.extraBody && Object.keys(args.extraBody).length > 0) {
-    completionRequest.extra_body = args.extraBody
+  if (args.requestOverrides && Object.keys(args.requestOverrides).length > 0) {
+    Object.assign(completionRequest, args.requestOverrides)
   }
 
   if (args.responseFormat) {
@@ -299,19 +412,18 @@ async function generateOpenAICompatibleDecision(args: {
     throw new Error(`No content in ${args.errorLabel} response`)
   }
 
-  return buildOutput(content, args.input)
+  return buildOutput(content, args.input, parseUsageFromChatCompletion(completion))
 }
 
 async function generateDeepSeekDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  return generateOpenAICompatibleDecision({
-    apiKey: process.env.BASETEN_DEEPSEEK_API_KEY,
-    baseURL: BASETEN_BASE_URL,
+  return generateFireworksDecision({
     model: DEEPSEEK_MODEL,
     input,
-    errorLabel: 'DeepSeek V3.1',
-    maxTokens: 8192,
+    errorLabel: 'DeepSeek V3.2',
+    maxTokens: 4096,
     temperature: 0.6,
-    extraBody: { reasoning_effort: 'high' },
+    reasoningEffort: 'none',
+    responseFormat: { type: 'json_object' },
   })
 }
 
@@ -329,46 +441,57 @@ async function generateLlama4Decision(input: ModelDecisionInput): Promise<ModelD
 }
 
 async function generateGlm5Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  return generateOpenAICompatibleDecision({
-    apiKey: process.env.BASETEN_GLM_API_KEY,
-    baseURL: BASETEN_BASE_URL,
+  return generateFireworksDecision({
     model: GLM_MODEL,
     input,
     errorLabel: 'GLM 5',
-    maxTokens: 16000,
+    maxTokens: 4096,
     temperature: 0.6,
+    reasoningEffort: 'none',
+    responseFormat: { type: 'json_object' },
   })
 }
 
 async function generateKimiDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  return generateOpenAICompatibleDecision({
-    apiKey: process.env.BASETEN_KIMI_API_KEY,
-    baseURL: BASETEN_BASE_URL,
+  return generateFireworksDecision({
     model: KIMI_MODEL,
     input,
-    errorLabel: 'Kimi K2.5 Thinking',
-    maxTokens: 16000,
-    temperature: 1.0,
-    extraBody: { chat_template_args: { enable_thinking: true } },
+    errorLabel: 'Kimi K2.5',
+    maxTokens: 4096,
+    temperature: 0.6,
+    responseFormat: { type: 'json_object' },
   })
 }
 
 async function generateMiniMaxDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  return generateOpenAICompatibleDecision({
-    apiKey: process.env.MINIMAX_API_KEY,
-    baseURL: 'https://api.minimax.io/v1',
+  return generateFireworksDecision({
     model: MINIMAX_MODEL,
     input,
     errorLabel: 'MiniMax M2.5',
-    maxTokens: 8192,
+    maxTokens: 4096,
     temperature: 0.7,
+    reasoningEffort: 'low',
+    responseFormat: { type: 'json_object' },
   })
+}
+
+export function getModelDecisionGeneratorDisabledReason(
+  modelId: ModelId,
+  options: ModelDecisionGeneratorOptions = {},
+): string {
+  if (modelId === 'claude-opus' && options.claudeProvider === 'web') {
+    return 'claude-opus web generator is only supported in local development'
+  }
+
+  return `${modelId} generator is disabled because its API key is not configured`
 }
 
 export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorConfig> = {
   'claude-opus': {
     generator: generateClaudeDecision,
-    enabled: () => !!process.env.ANTHROPIC_API_KEY,
+    enabled: (options) => options?.claudeProvider === 'web'
+      ? process.env.NODE_ENV !== 'production'
+      : !!process.env.ANTHROPIC_API_KEY,
   },
   'gpt-5.2': {
     generator: generateGptDecision,
@@ -378,21 +501,17 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
     generator: generateGrokDecision,
     enabled: () => !!process.env.XAI_API_KEY,
   },
-  'gemini-2.5': {
-    generator: generateGemini25Decision,
-    enabled: () => !!process.env.GOOGLE_API_KEY,
-  },
   'gemini-3-pro': {
     generator: generateGemini3Decision,
     enabled: () => !!process.env.GOOGLE_API_KEY,
   },
   'deepseek-v3.2': {
     generator: generateDeepSeekDecision,
-    enabled: () => !!process.env.BASETEN_DEEPSEEK_API_KEY,
+    enabled: () => !!process.env.FIREWORKS_API_KEY,
   },
   'glm-5': {
     generator: generateGlm5Decision,
-    enabled: () => !!process.env.BASETEN_GLM_API_KEY,
+    enabled: () => !!process.env.FIREWORKS_API_KEY,
   },
   'llama-4': {
     generator: generateLlama4Decision,
@@ -400,10 +519,10 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
   },
   'kimi-k2.5': {
     generator: generateKimiDecision,
-    enabled: () => !!process.env.BASETEN_KIMI_API_KEY,
+    enabled: () => !!process.env.FIREWORKS_API_KEY,
   },
   'minimax-m2.5': {
     generator: generateMiniMaxDecision,
-    enabled: () => !!process.env.MINIMAX_API_KEY,
+    enabled: () => !!process.env.FIREWORKS_API_KEY,
   },
 }

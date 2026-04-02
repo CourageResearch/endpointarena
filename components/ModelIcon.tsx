@@ -22,7 +22,7 @@ function RasterLogoIcon({ src, className }: { src: string; className: string }) 
 function MonogramIcon({ text, className }: { text: string; className: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.6">
-      <rect x="2.5" y="2.5" width="19" height="19" rx="4" />
+      <rect x="2.5" y="2.5" width="19" height="19" rx="0" />
       <text
         x="12"
         y="15.2"

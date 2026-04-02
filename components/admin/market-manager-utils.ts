@@ -27,6 +27,7 @@ export interface AdminMarketEvent {
   marketStatus: 'OPEN' | 'RESOLVED' | null
   marketPriceYes: number | null
   marketOpenedAt: string | null
+  estimatedModelRunCosts: Partial<Record<ModelId, number>>
 }
 
 export interface LastRunSummaryState {
@@ -86,6 +87,7 @@ export interface ExecutionPlanMarket {
   decisionDate: string
   marketSequence: number
   steps: ExecutionPlanStep[]
+  estimatedModelRunCosts: Partial<Record<ModelId, number>>
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -111,6 +113,87 @@ export function rotateModelOrderLocal(runDate?: string | Date | null): ModelId[]
   const dayNumber = Math.floor(normalized.getTime() / DAY_MS)
   const offset = ((dayNumber % MODEL_IDS.length) + MODEL_IDS.length) % MODEL_IDS.length
   return MODEL_IDS.map((_, index) => MODEL_IDS[(index + offset) % MODEL_IDS.length])
+}
+
+function extractSnapshotModelOrder(snapshot: AdminMarketRunSnapshot): ModelId[] {
+  const seen = new Set<ModelId>()
+  const orderedModelIds: ModelId[] = []
+
+  for (const log of [...snapshot.logs].reverse()) {
+    const modelId = toModelId(log.modelId)
+    if (!modelId || seen.has(modelId)) continue
+    seen.add(modelId)
+    orderedModelIds.push(modelId)
+  }
+
+  return orderedModelIds.length > 0 ? orderedModelIds : rotateModelOrderLocal(snapshot.runDate)
+}
+
+function extractSnapshotOrderedMarkets(
+  events: AdminMarketEvent[],
+  snapshot: AdminMarketRunSnapshot
+): DailyRunPlannedMarket[] {
+  const eventByMarketId = new Map(
+    events
+      .filter((event): event is AdminMarketEvent & { marketId: string } => typeof event.marketId === 'string')
+      .map((event) => [event.marketId, event] as const)
+  )
+
+  const seen = new Set<string>()
+  const orderedMarkets: DailyRunPlannedMarket[] = []
+
+  for (const log of [...snapshot.logs].reverse()) {
+    if (!log.marketId || seen.has(log.marketId)) continue
+    const event = eventByMarketId.get(log.marketId)
+    if (!event) continue
+
+    seen.add(log.marketId)
+    orderedMarkets.push({
+      marketId: log.marketId,
+      trialQuestionId: event.trialQuestionId,
+      trialId: event.trialId,
+      shortTitle: event.shortTitle,
+      sponsorName: event.sponsorName,
+      decisionDate: event.decisionDate,
+    })
+  }
+
+  return orderedMarkets
+}
+
+function toPlannedMarket(event: AdminMarketEvent & { marketId: string }): DailyRunPlannedMarket {
+  return {
+    marketId: event.marketId,
+    trialQuestionId: event.trialQuestionId,
+    trialId: event.trialId,
+    shortTitle: event.shortTitle,
+    sponsorName: event.sponsorName,
+    decisionDate: event.decisionDate,
+  }
+}
+
+function mergeSnapshotMarketsWithOpenQueue(
+  events: AdminMarketEvent[],
+  snapshot: AdminMarketRunSnapshot
+): DailyRunPlannedMarket[] {
+  const touchedMarkets = extractSnapshotOrderedMarkets(events, snapshot)
+  const openQueueMarkets = sortCycleEvents(events, ['OPEN']).map((event) => toPlannedMarket(event as AdminMarketEvent & { marketId: string }))
+  const seen = new Set<string>()
+  const merged: DailyRunPlannedMarket[] = []
+
+  for (const market of touchedMarkets) {
+    if (seen.has(market.marketId)) continue
+    seen.add(market.marketId)
+    merged.push(market)
+  }
+
+  for (const market of openQueueMarkets) {
+    if (seen.has(market.marketId)) continue
+    seen.add(market.marketId)
+    merged.push(market)
+  }
+
+  return merged
 }
 
 function sortCycleEvents(
@@ -151,14 +234,7 @@ export function buildExecutionPlan(input: {
 
   const orderedMarkets = input.orderedMarkets && input.orderedMarkets.length > 0
     ? input.orderedMarkets
-    : sortCycleEvents(input.events, input.fallbackStatuses).map((event) => ({
-        marketId: event.marketId as string,
-        trialQuestionId: event.trialQuestionId,
-        trialId: event.trialId,
-        shortTitle: event.shortTitle,
-        sponsorName: event.sponsorName,
-        decisionDate: event.decisionDate,
-      }))
+    : sortCycleEvents(input.events, input.fallbackStatuses).map((event) => toPlannedMarket(event as AdminMarketEvent & { marketId: string }))
 
   let globalSequence = 0
 
@@ -190,6 +266,7 @@ export function buildExecutionPlan(input: {
       decisionDate: event?.decisionDate ?? market.decisionDate,
       marketSequence: marketIndex + 1,
       steps,
+      estimatedModelRunCosts: event?.estimatedModelRunCosts ?? {},
     } satisfies ExecutionPlanMarket
   })
 }
@@ -508,7 +585,7 @@ export function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | 
   return {
     startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
     runDate: snapshot.runDate,
-    modelOrder: rotateModelOrderLocal(snapshot.runDate),
+    modelOrder: extractSnapshotModelOrder(snapshot),
     orderedMarkets: [],
     openMarkets: snapshot.openMarkets,
     totalActions: counts.totalActions,
@@ -534,9 +611,13 @@ export function buildExecutionPlanFromSnapshot(
     })
   }
 
+  const orderedMarkets = mergeSnapshotMarketsWithOpenQueue(events, snapshot)
+
   let plan = buildExecutionPlan({
     events,
     runDate: snapshot.runDate,
+    modelOrder: extractSnapshotModelOrder(snapshot),
+    orderedMarkets: orderedMarkets.length > 0 ? orderedMarkets : undefined,
     fallbackStatuses: ['OPEN', 'RESOLVED'],
   })
 

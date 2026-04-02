@@ -262,6 +262,43 @@ async function main() {
   `)
   await exec(`CREATE INDEX IF NOT EXISTS trial_outcome_candidate_evidence_candidate_display_order_idx ON trial_outcome_candidate_evidence (candidate_id, display_order)`)
 
+  await exec(`
+    CREATE TABLE IF NOT EXISTS trial_question_outcome_history (
+      id text PRIMARY KEY,
+      trial_question_id text NOT NULL REFERENCES trial_questions(id) ON DELETE CASCADE,
+      previous_outcome text,
+      previous_outcome_date timestamp with time zone,
+      next_outcome text NOT NULL,
+      next_outcome_date timestamp with time zone,
+      changed_at timestamp with time zone NOT NULL DEFAULT now(),
+      change_source text NOT NULL,
+      changed_by_user_id text REFERENCES users(id) ON DELETE SET NULL,
+      review_candidate_id text REFERENCES trial_outcome_candidates(id) ON DELETE SET NULL,
+      notes text
+    )
+  `)
+  await exec(`ALTER TABLE trial_question_outcome_history DROP CONSTRAINT IF EXISTS trial_question_outcome_history_previous_outcome_check`)
+  await exec(`
+    ALTER TABLE trial_question_outcome_history
+    ADD CONSTRAINT trial_question_outcome_history_previous_outcome_check
+    CHECK (previous_outcome IS NULL OR previous_outcome IN ('Pending', 'YES', 'NO'))
+  `)
+  await exec(`ALTER TABLE trial_question_outcome_history DROP CONSTRAINT IF EXISTS trial_question_outcome_history_next_outcome_check`)
+  await exec(`
+    ALTER TABLE trial_question_outcome_history
+    ADD CONSTRAINT trial_question_outcome_history_next_outcome_check
+    CHECK (next_outcome IN ('Pending', 'YES', 'NO'))
+  `)
+  await exec(`ALTER TABLE trial_question_outcome_history DROP CONSTRAINT IF EXISTS trial_question_outcome_history_change_source_check`)
+  await exec(`
+    ALTER TABLE trial_question_outcome_history
+    ADD CONSTRAINT trial_question_outcome_history_change_source_check
+    CHECK (change_source IN ('manual_admin', 'accepted_candidate'))
+  `)
+  await exec(`CREATE INDEX IF NOT EXISTS trial_question_outcome_history_question_changed_at_idx ON trial_question_outcome_history (trial_question_id, changed_at)`)
+  await exec(`CREATE INDEX IF NOT EXISTS trial_question_outcome_history_changed_at_idx ON trial_question_outcome_history (changed_at)`)
+  await exec(`CREATE UNIQUE INDEX IF NOT EXISTS trial_question_outcome_history_review_candidate_id_idx ON trial_question_outcome_history (review_candidate_id)`)
+
   await exec(`ALTER TABLE prediction_markets ADD COLUMN IF NOT EXISTS trial_question_id text`)
   await exec(`ALTER TABLE prediction_markets ALTER COLUMN fda_event_id DROP NOT NULL`)
   await exec(`ALTER TABLE prediction_markets DROP CONSTRAINT IF EXISTS prediction_markets_resolved_outcome_check`)
@@ -349,6 +386,8 @@ async function main() {
   await exec(`ALTER TABLE model_decision_snapshots ADD CONSTRAINT model_decision_snapshots_binary_call_check CHECK (binary_call IN ('approved', 'rejected', 'yes', 'no'))`)
   await exec(`ALTER TABLE model_decision_snapshots DROP CONSTRAINT IF EXISTS model_decision_snapshots_yes_probability_check`)
   await exec(`ALTER TABLE model_decision_snapshots ADD CONSTRAINT model_decision_snapshots_yes_probability_check CHECK (yes_probability IS NULL OR (yes_probability >= 0 AND yes_probability <= 1))`)
+  await exec(`ALTER TABLE model_decision_snapshots DROP CONSTRAINT IF EXISTS model_decision_snapshots_cost_source_check`)
+  await exec(`ALTER TABLE model_decision_snapshots ADD CONSTRAINT model_decision_snapshots_cost_source_check CHECK (cost_source IS NULL OR cost_source IN ('provider', 'estimated', 'subscription'))`)
   await exec(`ALTER TABLE model_decision_snapshots DROP CONSTRAINT IF EXISTS model_decision_snapshots_ownership_check`)
   await exec(`
     ALTER TABLE model_decision_snapshots

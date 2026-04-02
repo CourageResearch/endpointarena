@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
 import { formatLocalDateTime } from '@/lib/date'
+import { AdminTrialOutcomeHistory, type AdminTrialOutcomeHistoryEntry } from '@/components/AdminTrialOutcomeHistory'
 
 type TrialMonitorConfigDto = {
   enabled: boolean
@@ -50,6 +51,7 @@ type RunRow = {
   triggerSource: 'cron' | 'manual'
   status: 'running' | 'completed' | 'failed'
   verifierModelLabel: string
+  scopedNctNumber: string | null
   questionsScanned: number
   candidatesCreated: number
   errorSummary: string | null
@@ -80,6 +82,7 @@ interface Props {
   initialCandidates: Candidate[]
   recentRuns: RunRow[]
   initialEligibleQuestions: EligibleQuestion[]
+  historyEntries: AdminTrialOutcomeHistoryEntry[]
 }
 
 type ConfigFormState = {
@@ -105,6 +108,7 @@ type TrialMonitorRunResult = {
   candidatesCreated: number
   errors: string[]
   nextEligibleAt?: string
+  scopedNctNumber?: string
 }
 
 function toFormState(config: TrialMonitorConfigDto): ConfigFormState {
@@ -138,6 +142,15 @@ function parseBoundedInteger(value: string, min: number, max: number): number | 
   const rounded = Math.round(parsed)
   if (rounded < min || rounded > max) return null
   return rounded
+}
+
+function normalizeScopedNctNumberInput(value: string): string {
+  return value.toUpperCase().replace(/\s+/g, '')
+}
+
+function parseScopedNctNumber(value: string): string | null {
+  const normalized = normalizeScopedNctNumberInput(value)
+  return /^NCT\d{8}$/.test(normalized) ? normalized : null
 }
 
 function getConfigValidationMessage(form: ConfigFormState): string | null {
@@ -229,6 +242,7 @@ export function AdminTrialOutcomeReview({
   initialCandidates,
   recentRuns,
   initialEligibleQuestions,
+  historyEntries,
 }: Props) {
   const router = useRouter()
   const [form, setForm] = useState<ConfigFormState>(() => toFormState(initialConfig))
@@ -245,6 +259,7 @@ export function AdminTrialOutcomeReview({
   const [configStatusTone, setConfigStatusTone] = useState<'muted' | 'saving' | 'saved' | 'invalid' | 'error'>('muted')
   const [lastSavedConfigSignature, setLastSavedConfigSignature] = useState(() => serializeConfigPayload(toConfigSavePayload(initialConfig)))
   const [isRunningMonitor, setIsRunningMonitor] = useState(false)
+  const [scopedNctNumber, setScopedNctNumber] = useState('')
   const autosaveTimerRef = useRef<number | null>(null)
   const activeConfigSaveRef = useRef<Promise<void> | null>(null)
   const activeRun = runs.find((run) => run.status === 'running') ?? null
@@ -280,18 +295,22 @@ export function AdminTrialOutcomeReview({
   }, [initialEligibleQuestions])
 
   const formatRunResult = (result: TrialMonitorRunResult): string => {
+    const runLabel = result.scopedNctNumber
+      ? `One-off run for ${result.scopedNctNumber}`
+      : 'Run'
+
     if (!result.executed) {
       if (result.reason === 'disabled') {
         return 'Trial monitor is disabled, so no run was started.'
       }
       if (result.reason === 'not_due') {
         const nextEligible = result.nextEligibleAt ? formatLocalDateTime(result.nextEligibleAt) : 'later'
-        return `Trial monitor skipped because the next scheduled run is not due until ${nextEligible}.`
+        return `${runLabel} skipped because the next scheduled run is not due until ${nextEligible}.`
       }
-      return 'Trial monitor skipped.'
+      return `${runLabel} skipped.`
     }
 
-    const base = `Run finished: scanned ${result.questionsScanned} question${result.questionsScanned === 1 ? '' : 's'} and created ${result.candidatesCreated} queue item${result.candidatesCreated === 1 ? '' : 's'}.`
+    const base = `${runLabel} finished: scanned ${result.questionsScanned} question${result.questionsScanned === 1 ? '' : 's'} and created ${result.candidatesCreated} queue item${result.candidatesCreated === 1 ? '' : 's'}.`
     if (result.errors.length === 0) return base
     return `${base} ${result.errors.length} question${result.errors.length === 1 ? '' : 's'} had errors.`
   }
@@ -389,12 +408,17 @@ export function AdminTrialOutcomeReview({
     }
   }, [configStatusTone, form, isSavingConfig, lastSavedConfigSignature, router])
 
-  const runMonitor = async () => {
+  const runMonitor = async (options: { nctNumber?: string | null } = {}) => {
     setError(null)
     setSuccessMessage(null)
     setRunMessage(null)
 
     try {
+      const normalizedScopedNctNumber = parseScopedNctNumber(options.nctNumber ?? '')
+      if (options.nctNumber && !normalizedScopedNctNumber) {
+        throw new Error('Use an NCT number like NCT01234567 for a one-off run.')
+      }
+
       const validationMessage = getConfigValidationMessage(form)
       const configPayload = getConfigPayloadFromForm(form)
       const signature = configPayload ? serializeConfigPayload(configPayload) : null
@@ -419,7 +443,10 @@ export function AdminTrialOutcomeReview({
       const response = await fetch('/api/admin/trial-monitor/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: true }),
+        body: JSON.stringify({
+          force: true,
+          nctNumber: normalizedScopedNctNumber ?? undefined,
+        }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -516,7 +543,7 @@ export function AdminTrialOutcomeReview({
               <h3 className="text-sm font-semibold text-[#1f5a8c]">Monitor Run In Progress</h3>
               <p className="mt-1 text-sm">
                 {activeRun
-                  ? `Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
+                  ? `${activeRun.scopedNctNumber ? `Scoped to ${activeRun.scopedNctNumber}. ` : ''}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
                   : 'Starting the monitor run and waiting for the first heartbeat from the server.'}
               </p>
               <p className="mt-2 text-xs text-[#5b7ea6]">
@@ -670,7 +697,7 @@ export function AdminTrialOutcomeReview({
       </section>
 
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <h3 className="text-sm font-semibold text-[#1a1a1a]">Monitor Actions</h3>
             {isRunActive ? (
@@ -683,14 +710,62 @@ export function AdminTrialOutcomeReview({
               </p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={runMonitor}
-            disabled={isRunActive || isSavingConfig}
-            className="rounded-none bg-[#1a1a1a] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run Monitor Now'}
-          </button>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
+              <div className="flex h-full flex-col gap-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Full Run</div>
+                  <p className="mt-1 text-xs leading-5 text-[#8a8075]">
+                    Run the full Phase 2 outcome monitor across the current eligible queue.
+                  </p>
+                </div>
+                <div className="mt-auto">
+                  <button
+                    type="button"
+                    onClick={() => void runMonitor()}
+                    disabled={isRunActive || isSavingConfig}
+                    className="w-full rounded-none bg-[#1a1a1a] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run Full Monitor'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">One-Off NCT</div>
+                  <p className="mt-1 text-xs leading-5 text-[#8a8075]">
+                    Bypass the normal lookahead and recheck window, then scan only the live pending outcome question for that trial.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={scopedNctNumber}
+                    onChange={(event) => {
+                      setScopedNctNumber(normalizeScopedNctNumberInput(event.target.value))
+                    }}
+                    placeholder="NCT01234567"
+                    inputMode="text"
+                    spellCheck={false}
+                    className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm uppercase tracking-[0.06em] text-[#1a1a1a] outline-none transition-colors placeholder:tracking-normal focus:border-[#1a1a1a]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void runMonitor({ nctNumber: scopedNctNumber })}
+                    disabled={isRunActive || isSavingConfig || !parseScopedNctNumber(scopedNctNumber)}
+                    className="rounded-none border border-[#d9cdbf] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Run
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -713,7 +788,10 @@ export function AdminTrialOutcomeReview({
             <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
               No trial questions are currently eligible for the next monitor pass.
             </div>
-          ) : eligibleQuestions.map((question) => (
+          ) : eligibleQuestions.map((question) => {
+            const normalizedQuestionNctNumber = parseScopedNctNumber(question.trial.nctNumber ?? '')
+
+            return (
             <div key={question.id} className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -732,10 +810,24 @@ export function AdminTrialOutcomeReview({
                     <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Last Checked</div>
                     <div className="mt-1 font-medium text-[#1a1a1a]">{formatLocalDateTime(question.trial.lastMonitoredAt)}</div>
                   </div>
+                  {normalizedQuestionNctNumber ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScopedNctNumber(normalizedQuestionNctNumber)
+                        void runMonitor({ nctNumber: normalizedQuestionNctNumber })
+                      }}
+                      disabled={isRunActive || isSavingConfig}
+                      className="rounded-none border border-[#d9cdbf] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Run Just This NCT
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
@@ -874,6 +966,8 @@ export function AdminTrialOutcomeReview({
         </div>
       </section>
 
+      <AdminTrialOutcomeHistory entries={historyEntries} />
+
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
         <h3 className="text-sm font-semibold text-[#1a1a1a]">Recent Monitor Runs</h3>
         <div className="mt-4 space-y-3">
@@ -887,6 +981,11 @@ export function AdminTrialOutcomeReview({
                     <span className="rounded-none border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-1 text-xs font-medium text-[#5f564c]">
                       {run.triggerSource === 'manual' ? 'Manual' : 'Scheduled'}
                     </span>
+                    {run.scopedNctNumber ? (
+                      <span className="rounded-none border border-[#d8ccb9] bg-[#fffdf9] px-2 py-1 text-xs font-medium text-[#7a7065]">
+                        {run.scopedNctNumber}
+                      </span>
+                    ) : null}
                     <span className={`rounded-none px-2 py-1 text-xs font-medium ${getRunStatusTone(run.status)}`}>
                       {run.status === 'running' ? 'Running' : run.status === 'failed' ? 'Failed' : 'Completed'}
                     </span>

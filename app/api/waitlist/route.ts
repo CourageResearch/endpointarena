@@ -102,17 +102,17 @@ function buildWelcomeEmailHtml(safeGreeting: string): string {
                           <td style="width:8px;height:8px;"></td>
                           <td style="width:8px;height:8px;"></td>
                           <td style="width:8px;height:8px;"></td>
-                          <td style="width:8px;height:8px;background:#5BA5ED;border-radius:2px;"></td>
+                          <td style="width:8px;height:8px;background:#5BA5ED;border-radius:0;"></td>
                         </tr>
                         <tr>
-                          <td style="width:8px;height:8px;background:#EF6F67;border-radius:2px;"></td>
+                          <td style="width:8px;height:8px;background:#EF6F67;border-radius:0;"></td>
                           <td style="width:8px;height:8px;"></td>
-                          <td style="width:8px;height:8px;background:#D39D2E;border-radius:2px;"></td>
+                          <td style="width:8px;height:8px;background:#D39D2E;border-radius:0;"></td>
                           <td style="width:8px;height:8px;"></td>
                         </tr>
                         <tr>
                           <td style="width:8px;height:8px;"></td>
-                          <td style="width:8px;height:8px;background:#5DBB63;border-radius:2px;"></td>
+                          <td style="width:8px;height:8px;background:#5DBB63;border-radius:0;"></td>
                           <td style="width:8px;height:8px;"></td>
                           <td style="width:8px;height:8px;"></td>
                         </tr>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { getDaysUntil, MODEL_INFO } from '@/lib/constants'
+import { getDaysUntil, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import { formatUtcDate } from '@/lib/date'
 import {
@@ -87,6 +87,53 @@ const DEFAULT_LABELS: AdminMarketManagerLabels = {
   resolvedMarketsEmptyState: 'No resolved markets match the current filter.',
 }
 
+type RunDailyCycleOptions = {
+  nctNumber?: string
+  modelIds?: ModelId[]
+  claudeProvider?: 'api' | 'web'
+}
+
+const DEFAULT_LOCAL_CLAUDE_PROVIDER: 'api' | 'web' | undefined =
+  process.env.NODE_ENV !== 'production' ? 'web' : undefined
+
+function normalizeScopedNctNumberInput(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+}
+
+function parseScopedNctNumber(value: string): string | null {
+  const normalized = normalizeScopedNctNumberInput(value)
+  return /^NCT\d{8}$/.test(normalized) ? normalized : null
+}
+
+function formatUsdEstimate(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '$0'
+  }
+
+  const maximumFractionDigits = value >= 1
+    ? 2
+    : value >= 0.1
+      ? 3
+      : value >= 0.01
+        ? 4
+        : 5
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  }).format(value)
+}
+
+function filterEventsForRun(events: AdminMarketEvent[], nctNumber?: string): AdminMarketEvent[] {
+  if (!nctNumber) {
+    return events
+  }
+
+  return events.filter((event) => event.nctNumber.trim().toUpperCase() === nctNumber)
+}
+
 export function AdminMarketManager({
   events: initialEvents,
   initialRunSnapshot = null,
@@ -106,17 +153,25 @@ export function AdminMarketManager({
   const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
   const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
   const [executionPlan, setExecutionPlan] = useState<ExecutionPlanMarket[]>(() => (
-    initialRunSnapshot?.status === 'running'
+    initialRunSnapshot
       ? buildExecutionPlanFromSnapshot(initialEvents, initialRunSnapshot)
       : buildNextExecutionPlan(initialEvents)
   ))
-  const [preserveExecutionPlan, setPreserveExecutionPlan] = useState(initialRunSnapshot?.status === 'running')
+  const [preserveExecutionPlan, setPreserveExecutionPlan] = useState(Boolean(initialRunSnapshot))
   const [uiError, setUiError] = useState<string | null>(null)
   const [isStoppingDaily, setIsStoppingDaily] = useState(initialRunSnapshot?.status === 'running' && isAdminStoppedMessage(initialRunSnapshot?.failureReason))
   const [isStreamingRun, setIsStreamingRun] = useState(false)
+  const [scopedClaudeNctInput, setScopedClaudeNctInput] = useState('')
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
   const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
+  const scopedClaudeNctNumber = useMemo(() => parseScopedNctNumber(scopedClaudeNctInput), [scopedClaudeNctInput])
+  const scopedClaudeEvents = useMemo(() => (
+    scopedClaudeNctNumber ? filterEventsForRun(events, scopedClaudeNctNumber) : []
+  ), [events, scopedClaudeNctNumber])
+  const scopedClaudeOpenMarketCount = useMemo(() => (
+    scopedClaudeEvents.filter((event) => event.marketStatus === 'OPEN' && event.marketId).length
+  ), [scopedClaudeEvents])
   const enabledSections = new Set(sections)
   const showDailyCycle = enabledSections.has('dailyCycle')
   const showSearch = enabledSections.has('search')
@@ -165,11 +220,7 @@ export function AdminMarketManager({
     setRunLog(buildRunLogFromSnapshot(snapshot))
     setErrorConsole(buildErrorConsoleFromSnapshot(snapshot))
     setRunProgress(nextProgress)
-    setExecutionPlan(
-      snapshot.status === 'running'
-        ? buildExecutionPlanFromSnapshot(events, snapshot)
-        : buildNextExecutionPlan(events, snapshot.runDate)
-    )
+    setExecutionPlan(buildExecutionPlanFromSnapshot(events, snapshot))
 
     if (snapshot.status === 'running') {
       setPreserveExecutionPlan(true)
@@ -180,6 +231,7 @@ export function AdminMarketManager({
     }
 
     setRunningDaily(false)
+    setPreserveExecutionPlan(true)
     setIsStoppingDaily(false)
     setLastRunSummary(nextSummary)
     setElapsedSeconds(nextSummary?.durationSeconds ?? 0)
@@ -383,10 +435,23 @@ export function AdminMarketManager({
     })
   }
 
-  const runDailyCycle = async () => {
+  const runDailyCycle = async (options: RunDailyCycleOptions = {}) => {
     const startedAtMs = Date.now()
     let keepPersistedRunningState = false
     const controller = new AbortController()
+    const effectiveClaudeProvider = options.claudeProvider ?? DEFAULT_LOCAL_CLAUDE_PROVIDER
+    const runDescription = options.nctNumber && options.modelIds?.length === 1 && options.modelIds[0] === 'claude-opus' && effectiveClaudeProvider === 'web'
+      ? `Claude.ai Opus 4.6 on ${options.nctNumber}`
+      : 'daily market cycle'
+    const relevantEvents = filterEventsForRun(events, options.nctNumber)
+    const initialModelOrder = options.modelIds && options.modelIds.length > 0
+      ? options.modelIds
+      : rotateModelOrderLocal(new Date(startedAtMs))
+    const requestBody = {
+      nctNumber: options.nctNumber,
+      modelIds: options.modelIds,
+      claudeProvider: effectiveClaudeProvider,
+    }
 
     setUiError(null)
     setIsStoppingDaily(false)
@@ -395,12 +460,12 @@ export function AdminMarketManager({
     setRunningDaily(true)
     setLastRunSummary(null)
     setElapsedSeconds(0)
-    setRunLog([`${formatUtcLogPrefix(new Date(startedAtMs))} UTC  Starting daily market cycle...`])
+    setRunLog([`${formatUtcLogPrefix(new Date(startedAtMs))} UTC  Starting ${runDescription}...`])
     setErrorConsole([])
     setRunProgress({
       startedAtMs,
       runDate: null,
-      modelOrder: rotateModelOrderLocal(new Date(startedAtMs)),
+      modelOrder: initialModelOrder,
       orderedMarkets: [],
       openMarkets: 0,
       totalActions: 0,
@@ -410,11 +475,12 @@ export function AdminMarketManager({
       skippedCount: 0,
       latestResult: null,
       latestError: null,
-      currentActivity: 'Initializing daily run...',
+      currentActivity: `Initializing ${runDescription}...`,
     })
     setExecutionPlan(buildExecutionPlan({
-      events,
+      events: relevantEvents,
       runDate: new Date(startedAtMs),
+      modelOrder: initialModelOrder,
       fallbackStatuses: ['OPEN'],
     }))
 
@@ -422,6 +488,10 @@ export function AdminMarketManager({
       const response = await fetch('/api/markets/run-daily?stream=1', {
         method: 'POST',
         signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -450,7 +520,7 @@ export function AdminMarketManager({
             currentActivity: `Discovered ${event.openMarkets} open markets (${event.totalActions} actions)`,
           } : prev)
           setExecutionPlan(buildExecutionPlan({
-            events,
+            events: relevantEvents,
             runDate: event.runDate,
             modelOrder: event.modelOrder,
             orderedMarkets: event.orderedMarkets,
@@ -516,11 +586,11 @@ export function AdminMarketManager({
             okCount: event.payload.summary.ok,
             errorCount: event.payload.summary.error,
             skippedCount: event.payload.summary.skipped,
-            currentActivity: 'Daily market cycle completed',
+            currentActivity: `${runDescription} completed`,
           } : prev)
           setExecutionPlan((prev) => finalizeExecutionPlan(prev))
           setSummaryFromPayload(event.payload, startedAtMs)
-          appendRunLog('Daily market cycle completed')
+          appendRunLog(`${runDescription} completed`)
           return
         }
 
@@ -607,7 +677,7 @@ export function AdminMarketManager({
       setUiError(message)
       setRunProgress((prev) => prev ? {
         ...prev,
-        currentActivity: `Daily market cycle failed: ${message}`,
+        currentActivity: `${runDescription} failed: ${message}`,
       } : prev)
       setExecutionPlan((prev) => finalizeExecutionPlan(prev))
       appendErrorConsole(`RUN FAILED - ${message}`)
@@ -651,15 +721,44 @@ export function AdminMarketManager({
     (sum, market) => sum + market.steps.filter((step) => step.status === 'queued').length,
     0
   )
+  const showingLastRunResults = !runningDaily && preserveExecutionPlan && Boolean(lastRunSummary)
   const executionPlanHeading = runningDaily
     ? 'Execution Plan'
-    : preserveExecutionPlan
+    : showingLastRunResults
+      ? 'Last Run Results'
+      : preserveExecutionPlan
       ? 'Latest Run Plan'
       : 'Next Run Plan'
   const currentExecutionMarket = currentExecutionStep
     ? executionPlan.find((market) => market.marketId === currentExecutionStep.marketId) ?? null
     : null
   const executionModelOrder = executionPlan[0]?.steps.map((step) => step.modelId) ?? runProgress?.modelOrder ?? []
+  const executionEstimatedCostUsd = useMemo(() => (
+    executionPlan.reduce((total, market) => (
+      total + executionModelOrder.reduce((marketTotal, modelId) => (
+        marketTotal + (market.estimatedModelRunCosts[modelId] ?? 0)
+      ), 0)
+    ), 0)
+  ), [executionModelOrder, executionPlan])
+  const averageModelRowCost = useMemo(() => (
+    executionModelOrder.reduce<Partial<Record<ModelId, number>>>((acc, modelId) => {
+      let total = 0
+      let count = 0
+
+      for (const market of executionPlan) {
+        const cost = market.estimatedModelRunCosts[modelId]
+        if (typeof cost !== 'number' || !Number.isFinite(cost) || cost <= 0) continue
+        total += cost
+        count += 1
+      }
+
+      if (count > 0) {
+        acc[modelId] = total / count
+      }
+
+      return acc
+    }, {})
+  ), [executionModelOrder, executionPlan])
   const getExecutionStepFallbackDetail = (status: 'queued' | 'running' | 'waiting' | 'ok' | 'error' | 'skipped') => {
     switch (status) {
       case 'queued':
@@ -690,7 +789,9 @@ export function AdminMarketManager({
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-start gap-2">
             <button
-              onClick={runDailyCycle}
+              onClick={() => {
+                void runDailyCycle()
+              }}
               disabled={runningDaily}
               className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -707,6 +808,48 @@ export function AdminMarketManager({
               >
                 {isStoppingDaily ? 'Stopping...' : 'Pause'}
               </button>
+            ) : null}
+          </div>
+          <div className="rounded-none border border-[#e8ddd0] bg-white/75 p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={scopedClaudeNctInput}
+                onChange={(event) => setScopedClaudeNctInput(normalizeScopedNctNumberInput(event.target.value))}
+                placeholder="NCT06870240"
+                inputMode="text"
+                spellCheck={false}
+                className="min-w-[180px] flex-1 rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-2 text-sm text-[#1a1a1a] outline-none placeholder:text-[#a39789] focus:border-[#b8aa98]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!scopedClaudeNctNumber) return
+                  void runDailyCycle({
+                    nctNumber: scopedClaudeNctNumber,
+                    modelIds: ['claude-opus'],
+                    claudeProvider: 'web',
+                  })
+                }}
+                disabled={runningDaily || !scopedClaudeNctNumber || scopedClaudeOpenMarketCount === 0}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Run Claude.ai Opus
+              </button>
+            </div>
+            <p className="text-xs text-[#8a8075]">
+              Local only. Claude runs from this page use your Claude.ai browser session in app incognito mode with web search.
+            </p>
+            {scopedClaudeNctInput && !scopedClaudeNctNumber ? (
+              <p className="text-xs text-[#8d2c22]">Enter an NCT id like NCT06870240.</p>
+            ) : null}
+            {scopedClaudeNctNumber && scopedClaudeOpenMarketCount === 0 ? (
+              <p className="text-xs text-[#8d2c22]">No open market currently matches {scopedClaudeNctNumber}.</p>
+            ) : null}
+            {scopedClaudeNctNumber && scopedClaudeOpenMarketCount > 0 ? (
+              <p className="text-xs text-[#2f6f24]">
+                Ready to run Claude Opus 4.6 for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open market{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
+              </p>
             ) : null}
           </div>
           <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
@@ -781,9 +924,21 @@ export function AdminMarketManager({
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div className="space-y-1">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">{executionPlanHeading}</p>
+                {executionEstimatedCostUsd > 0 ? (
+                  <p className="text-[11px] text-[#8a8075]">
+                    {formatUsdEstimate(executionEstimatedCostUsd)} estimated list-price cost across the displayed steps.
+                  </p>
+                ) : null}
+                {executionPlanStepCount > 0 ? (
+                  <p className="text-[11px] text-[#8a8075]">
+                    Fresh estimate using current API list prices and this row&apos;s prompt shape. Search-enabled models assume one tool-backed search pass.
+                  </p>
+                ) : null}
                 <p className="text-xs text-[#8a8075]">
                   {executionPlan.length} trial{executionPlan.length === 1 ? '' : 's'} • {executionPlanStepCount} model step{executionPlanStepCount === 1 ? '' : 's'}
-                  {!runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 ? ` • ${queuedExecutionSteps} queued for the next run` : ''}
+                  {showingLastRunResults
+                    ? ' • preserved from the latest completed run'
+                    : (!runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 ? ` • ${queuedExecutionSteps} queued for the next run` : '')}
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -833,6 +988,11 @@ export function AdminMarketManager({
                             <p className="mt-1 text-xs font-medium text-[#1a1a1a]">
                               {MODEL_INFO[modelId].fullName}
                             </p>
+                            {averageModelRowCost[modelId] ? (
+                              <p className="mt-1 text-[11px] text-[#6f665b]">
+                                {formatUsdEstimate(averageModelRowCost[modelId] ?? 0)}/row
+                              </p>
+                            ) : null}
                           </th>
                         ))}
                       </tr>
@@ -842,6 +1002,9 @@ export function AdminMarketManager({
                         const marketDoneCount = market.steps.filter((step) => step.status === 'ok' || step.status === 'skipped' || step.status === 'error').length
                         const stepByModel = new Map(market.steps.map((step) => [step.modelId, step] as const))
                         const isCurrentMarket = currentExecutionMarket?.marketId === market.marketId
+                        const marketEstimatedCostUsd = executionModelOrder.reduce((total, modelId) => (
+                          total + (market.estimatedModelRunCosts[modelId] ?? 0)
+                        ), 0)
 
                         return (
                           <tr key={market.marketId} className="align-top">
@@ -861,6 +1024,11 @@ export function AdminMarketManager({
                               <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
                                 steps closed
                               </p>
+                              {marketEstimatedCostUsd > 0 ? (
+                                <p className="mt-2 text-xs text-[#6f665b]">
+                                  {formatUsdEstimate(marketEstimatedCostUsd)} est.
+                                </p>
+                              ) : null}
                               {isCurrentMarket && currentExecutionStep && (
                                 <p className="mt-2 text-xs text-[#1f5cb9]">
                                   Live on {MODEL_INFO[currentExecutionStep.modelId].name}
@@ -885,6 +1053,7 @@ export function AdminMarketManager({
                               const detail = step.detail
                                 ? truncateText(step.detail, 88)
                                 : getExecutionStepFallbackDetail(step.status)
+                              const estimatedStepCostUsd = market.estimatedModelRunCosts[modelId] ?? 0
 
                               return (
                                 <td
@@ -904,6 +1073,11 @@ export function AdminMarketManager({
                                       {detail}
                                     </p>
                                   ) : null}
+                                  {estimatedStepCostUsd > 0 ? (
+                                    <p className="mt-2 text-[11px] text-[#8a8075]">
+                                      {formatUsdEstimate(estimatedStepCostUsd)} est.
+                                    </p>
+                                  ) : null}
                                 </td>
                               )
                             })}
@@ -915,7 +1089,9 @@ export function AdminMarketManager({
                 </div>
               ) : (
                 <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#8a8075]">
-                  No open markets are queued for the next daily cycle yet.
+                  {showingLastRunResults
+                    ? 'No markets were processed in the latest completed run.'
+                    : 'No open markets are queued for the next daily cycle yet.'}
                 </div>
               )}
             </div>

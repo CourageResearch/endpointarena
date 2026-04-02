@@ -37,6 +37,10 @@ const TAB_FILTER_PARAM = 'tab'
 const FROM_FILTER_PARAM = 'from'
 const TO_FILTER_PARAM = 'to'
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
+const PANEL_BORDER_STYLE = {
+  background: PANEL_GRADIENT,
+  paddingTop: '0.5px',
+} as const
 const SEARCH_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3.5 py-2.5 text-[14px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const DATE_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3 py-2 text-[13px] leading-tight text-[#2f2a24] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const SEARCH_INPUT_STYLE = {
@@ -474,7 +478,7 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
         </div>
       </div>
 
-      <div className="rounded-sm p-[1px]" style={{ background: PANEL_GRADIENT }}>
+      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
         <div className="rounded-sm bg-white/95">
           {rows.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-[#8a8075]">{emptyMessage}</div>
@@ -942,7 +946,7 @@ export function TrialsBrowseTable({
 
   if (loading) {
     return (
-      <div className="rounded-sm p-[1px]" style={{ background: PANEL_GRADIENT }}>
+      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
         <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading markets...</div>
       </div>
     )
@@ -950,7 +954,7 @@ export function TrialsBrowseTable({
 
   if (error && !data) {
     return (
-      <div className="rounded-sm p-[1px]" style={{ background: PANEL_GRADIENT }}>
+      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
         <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           Failed to load markets: {error}
         </div>
@@ -960,7 +964,7 @@ export function TrialsBrowseTable({
 
   if (!data) {
     return (
-      <div className="rounded-sm p-[1px]" style={{ background: PANEL_GRADIENT }}>
+      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
         <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No market data.</div>
       </div>
     )

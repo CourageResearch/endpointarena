@@ -17,7 +17,6 @@ export const ALL_MODEL_IDS = [
   // Keep the legacy `gpt-5.2` slot id stable so existing model state keeps mapping cleanly.
   'gpt-5.2',
   'grok-4',
-  'gemini-2.5',
   'gemini-3-pro',
   'deepseek-v3.2',
   'glm-5',
@@ -90,13 +89,6 @@ export const MODEL_INFO: Record<ModelId, {
     provider: 'xAI',
     features: ['Fast Reasoning', 'Web Search'],
   },
-  'gemini-2.5': {
-    name: 'Gemini',
-    fullName: 'Gemini 2.5 Pro',
-    color: '#8E24AA',
-    provider: 'Google',
-    features: ['Google Search Grounding', 'Thinking'],
-  },
   'gemini-3-pro': {
     name: 'Gemini 3',
     fullName: 'Gemini 3 Pro',
@@ -106,16 +98,16 @@ export const MODEL_INFO: Record<ModelId, {
   },
   'deepseek-v3.2': {
     name: 'DeepSeek',
-    fullName: 'DeepSeek V3.1',
+    fullName: 'DeepSeek V3.2',
     color: '#3A86FF',
-    provider: 'Baseten',
-    features: ['Reasoning', 'High Throughput'],
+    provider: 'Fireworks',
+    features: ['Reasoning', 'Structured Output'],
   },
   'glm-5': {
     name: 'GLM',
     fullName: 'GLM 5',
     color: '#0B9E6F',
-    provider: 'Baseten',
+    provider: 'Fireworks',
     features: ['Reasoning', 'Long Context'],
   },
   // Keep the legacy `llama-4` slot id stable so existing model state keeps mapping cleanly.
@@ -128,16 +120,16 @@ export const MODEL_INFO: Record<ModelId, {
   },
   'kimi-k2.5': {
     name: 'Kimi',
-    fullName: 'Kimi K2.5 Thinking',
+    fullName: 'Kimi K2.5',
     color: '#F28C28',
-    provider: 'Baseten',
-    features: ['Thinking', 'Tool Use'],
+    provider: 'Fireworks',
+    features: ['Reasoning', 'Long Context'],
   },
   'minimax-m2.5': {
     name: 'MiniMax',
     fullName: 'MiniMax M2.5',
     color: '#0F766E',
-    provider: 'MiniMax',
+    provider: 'Fireworks',
     features: ['Reasoning', 'Large Context'],
   },
 }
@@ -184,12 +176,11 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   'claude-opus': 'Claude Opus 4.6',
   'gpt-5.2': 'GPT-5.4',
   'grok-4': 'Grok 4.1',
-  'gemini-2.5': 'Gemini 2.5 Pro',
   'gemini-3-pro': 'Gemini 3 Pro',
-  'deepseek-v3.2': 'DeepSeek V3.1',
+  'deepseek-v3.2': 'DeepSeek V3.2',
   'glm-5': 'GLM 5',
   'llama-4': 'Llama 4 Scout',
-  'kimi-k2.5': 'Kimi K2.5 Thinking',
+  'kimi-k2.5': 'Kimi K2.5',
   'minimax-m2.5': 'MiniMax M2.5',
 }
 

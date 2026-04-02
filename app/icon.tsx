@@ -21,10 +21,10 @@ export default function Icon() {
       >
         <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
           <g transform="translate(1.5 5)">
-            <rect x="0.8" y="7.8" width="6.4" height="6.4" rx="2" fill="#EF6F67" />
-            <rect x="7.8" y="14.8" width="6.4" height="6.4" rx="2" fill="#5DBB63" />
-            <rect x="14.8" y="7.8" width="6.4" height="6.4" rx="2" fill="#D39D2E" />
-            <rect x="21.8" y="0.8" width="6.4" height="6.4" rx="2" fill="#5BA5ED" />
+            <rect x="0.8" y="7.8" width="6.4" height="6.4" rx="0" fill="#EF6F67" />
+            <rect x="7.8" y="14.8" width="6.4" height="6.4" rx="0" fill="#5DBB63" />
+            <rect x="14.8" y="7.8" width="6.4" height="6.4" rx="0" fill="#D39D2E" />
+            <rect x="21.8" y="0.8" width="6.4" height="6.4" rx="0" fill="#5BA5ED" />
           </g>
         </svg>
       </div>

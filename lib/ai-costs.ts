@@ -10,14 +10,13 @@ interface ModelPricingEstimate {
   webSearchUsdPerRequest?: number
 }
 
-export const AI_COST_SOURCES = ['provider', 'estimated'] as const
+export const AI_COST_SOURCES = ['provider', 'estimated', 'subscription'] as const
 export type AICostSource = (typeof AI_COST_SOURCES)[number]
 type AICostEstimationProfile =
   | 'default'
   | 'claude-deep-research'
   | 'gpt-deep-research'
   | 'grok-deep-research'
-  | 'gemini-deep-research'
   | 'gemini3-deep-research'
   | 'deepseek-reasoning'
   | 'glm-reasoning'
@@ -46,7 +45,6 @@ const CLAUDE_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS = 4
 const CLAUDE_DEEP_RESEARCH_ESTIMATED_INPUT_TOKENS_PER_SEARCH = 1_500
 const GPT_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS = 1
 const GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS = 1
-const GEMINI_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS = 1
 const GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS = 1
 const DEEPSEEK_ESTIMATED_SEARCH_REQUESTS = 0
 const GLM_ESTIMATED_SEARCH_REQUESTS = 0
@@ -82,14 +80,6 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     longContextOutputUsdPer1MTokens: 1,
     cachedInputUsdPer1MTokens: 0.05,
     webSearchUsdPerRequest: GROK_WEB_SEARCH_USD_PER_REQUEST,
-  },
-  'gemini-2.5': {
-    inputUsdPer1MTokens: 1.25,
-    outputUsdPer1MTokens: 10,
-    longContextInputTokenThreshold: GEMINI_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
-    longContextInputUsdPer1MTokens: 2.5,
-    longContextOutputUsdPer1MTokens: 15,
-    webSearchUsdPerRequest: GEMINI_GROUNDING_WEB_SEARCH_USD_PER_REQUEST,
   },
   'gemini-3-pro': {
     inputUsdPer1MTokens: 2,
@@ -160,9 +150,6 @@ export function getCostEstimationProfileForModel(modelId: ModelId): AICostEstima
   }
   if (modelId === 'grok-4') {
     return 'grok-deep-research'
-  }
-  if (modelId === 'gemini-2.5') {
-    return 'gemini-deep-research'
   }
   if (modelId === 'gemini-3-pro') {
     return 'gemini3-deep-research'
@@ -284,8 +271,6 @@ export function estimateTextGenerationCost(args: {
     webSearchRequests = GPT_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'grok-deep-research' && args.modelId === 'grok-4') {
     webSearchRequests = GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
-  } else if (args.profile === 'gemini-deep-research' && args.modelId === 'gemini-2.5') {
-    webSearchRequests = GEMINI_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS
   } else if (args.profile === 'gemini3-deep-research' && args.modelId === 'gemini-3-pro') {
     webSearchRequests = GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS
   } else if (args.profile === 'deepseek-reasoning' && args.modelId === 'deepseek-v3.2') {

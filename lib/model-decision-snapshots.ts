@@ -14,7 +14,12 @@ import { type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { calculateExecutableTradeCaps, normalizeRunDate } from '@/lib/markets/engine'
 import { type Prediction, type PredictionHistoryEntry } from '@/lib/types'
 import { isMockMarketSnapshotLike } from '@/lib/mock-market-data'
-import { MODEL_DECISION_GENERATORS, type ModelDecisionGeneration } from '@/lib/predictions/model-decision-generators'
+import {
+  getModelDecisionGeneratorDisabledReason,
+  MODEL_DECISION_GENERATORS,
+  type ModelDecisionGeneration,
+  type ModelDecisionGeneratorOptions,
+} from '@/lib/predictions/model-decision-generators'
 import { buildModelDecisionPrompt, type ModelDecisionInput, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
 
 type DecisionRunSource = 'manual' | 'cycle'
@@ -251,6 +256,7 @@ function resolveUsageForStorage(args: {
   promptText: string
   responseText: string
   providerUsage: ProviderUsage | null
+  billingMode?: ModelDecisionGeneration['billingMode']
 }): PersistedRunUsage {
   const providerInput = toNonNegativeInt(args.providerUsage?.inputTokens ?? null)
   const providerOutput = toNonNegativeInt(args.providerUsage?.outputTokens ?? null)
@@ -268,17 +274,19 @@ function resolveUsageForStorage(args: {
       outputTokens: providerOutput,
       totalTokens: providerTotal ?? (providerInput + providerOutput),
       reasoningTokens: providerReasoning,
-      estimatedCostUsd: estimateCostFromTokenUsage({
-        modelId: args.modelId,
-        inputTokens: providerInput,
-        outputTokens: providerOutput,
-        cacheCreationInputTokens5m: providerCacheCreation5m,
-        cacheCreationInputTokens1h: providerCacheCreation1h,
-        cacheReadInputTokens: providerCacheRead,
-        webSearchRequests: providerWebSearchRequests,
-        inferenceGeo: providerInferenceGeo,
-      }),
-      costSource: 'provider',
+      estimatedCostUsd: args.billingMode === 'subscription'
+        ? 0
+        : estimateCostFromTokenUsage({
+            modelId: args.modelId,
+            inputTokens: providerInput,
+            outputTokens: providerOutput,
+            cacheCreationInputTokens5m: providerCacheCreation5m,
+            cacheCreationInputTokens1h: providerCacheCreation1h,
+            cacheReadInputTokens: providerCacheRead,
+            webSearchRequests: providerWebSearchRequests,
+            inferenceGeo: providerInferenceGeo,
+          }),
+      costSource: args.billingMode === 'subscription' ? 'subscription' : 'provider',
       cacheCreationInputTokens5m: providerCacheCreation5m,
       cacheCreationInputTokens1h: providerCacheCreation1h,
       cacheReadInputTokens: providerCacheRead,
@@ -299,8 +307,8 @@ function resolveUsageForStorage(args: {
     outputTokens: estimated.outputTokens,
     totalTokens: estimated.inputTokens + estimated.outputTokens,
     reasoningTokens: null,
-    estimatedCostUsd: estimated.estimatedCostUsd,
-    costSource: 'estimated',
+    estimatedCostUsd: args.billingMode === 'subscription' ? 0 : estimated.estimatedCostUsd,
+    costSource: args.billingMode === 'subscription' ? 'subscription' : 'estimated',
     cacheCreationInputTokens5m: null,
     cacheCreationInputTokens1h: null,
     cacheReadInputTokens: null,
@@ -322,6 +330,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   account: typeof marketAccounts.$inferSelect
   position: typeof marketPositions.$inferSelect
   runtimeConfig: MarketRuntimeConfig
+  generatorOptions?: ModelDecisionGeneratorOptions
 }): Promise<{
   snapshot: typeof modelDecisionSnapshots.$inferSelect
   decision: ModelDecisionResult
@@ -329,8 +338,8 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   input: ModelDecisionInput
 }> {
   const generator = MODEL_DECISION_GENERATORS[args.modelId]
-  if (!generator?.enabled()) {
-    throw new Error(`${args.modelId} generator is disabled because its API key is not configured`)
+  if (!generator?.enabled(args.generatorOptions)) {
+    throw new Error(getModelDecisionGeneratorDisabledReason(args.modelId, args.generatorOptions))
   }
 
   const normalizedRunDate = normalizeRunDate(args.runDate)
@@ -395,13 +404,14 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
 
   const prompt = buildModelDecisionPrompt(input)
   const startedAt = Date.now()
-  const generated = await generator.generator(input)
+  const generated = await generator.generator(input, args.generatorOptions)
   const durationMs = Date.now() - startedAt
   const usage = resolveUsageForStorage({
     modelId: args.modelId,
     promptText: prompt,
     responseText: generated.rawResponse,
     providerUsage: generated.usage,
+    billingMode: generated.billingMode,
   })
 
   const [snapshot] = await db.insert(modelDecisionSnapshots).values({

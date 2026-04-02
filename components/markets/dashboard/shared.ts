@@ -5,10 +5,12 @@ import type { OpenMarketRow } from '@/lib/markets/overview-shared'
 
 export const APPROVE_TEXT_CLASS = 'text-[#2f7b63]'
 export const REJECT_TEXT_CLASS = 'text-[#b3566b]'
-export const DETAILS_CARD_SHELL_CLASS = 'rounded-sm p-[1px]'
-export const DETAILS_CARD_INNER_CLASS = 'h-full rounded-sm bg-white/95 px-3 py-2'
+export const DETAILS_CARD_SHELL_CLASS = 'rounded-none'
+export const DETAILS_CARD_INNER_CLASS = 'h-full rounded-none border border-transparent px-3 py-2'
 export const DETAILS_CARD_BORDER_STYLE = {
-  background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)',
+  background: 'linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box, linear-gradient(135deg, rgba(239, 111, 103, 0.78), rgba(93, 187, 99, 0.78), rgba(211, 157, 46, 0.78), rgba(91, 165, 237, 0.78)) border-box',
+  backgroundClip: 'padding-box, border-box',
+  backgroundOrigin: 'padding-box, border-box',
 } as const
 export const DASHBOARD_SECTION_LABEL_CLASS = 'text-[11px] font-medium uppercase tracking-[0.18em] text-[#aa9d8d]'
 export const DETAILS_TOP_LABEL_CLASS = 'text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]'

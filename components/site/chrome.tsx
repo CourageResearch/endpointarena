@@ -13,6 +13,7 @@ const BRAND_DOT_COLORS = {
 
 export const BRAND_GRADIENT = `linear-gradient(135deg, ${BRAND_DOT_COLORS.coral}, ${BRAND_DOT_COLORS.green}, ${BRAND_DOT_COLORS.gold}, ${BRAND_DOT_COLORS.blue})`
 export const BRAND_GRADIENT_HORIZONTAL = `linear-gradient(90deg, ${BRAND_DOT_COLORS.coral}, ${BRAND_DOT_COLORS.green}, ${BRAND_DOT_COLORS.gold}, ${BRAND_DOT_COLORS.blue})`
+const BRAND_BORDER_GRADIENT = 'linear-gradient(135deg, rgba(239, 111, 103, 0.78), rgba(93, 187, 99, 0.78), rgba(211, 157, 46, 0.78), rgba(91, 165, 237, 0.78))'
 const DOTS = [
   BRAND_DOT_COLORS.coral,
   BRAND_DOT_COLORS.green,
@@ -62,7 +63,7 @@ export function HeaderDots({
       {DOTS.map((color, index) => (
         <div
           key={`${color}-${index}`}
-          className="h-[6px] w-[6px] rounded-[2px]"
+          className="h-[6px] w-[6px] rounded-none"
           style={{ backgroundColor: color, opacity: index === 1 ? 0.85 : 0.8 }}
         />
       ))}
@@ -74,10 +75,10 @@ export function SquareDivider({ className }: { className?: string }) {
   return (
     <div className={cn('w-full', className)} aria-hidden="true">
       <svg className="w-full" height="8" preserveAspectRatio="none">
-        <rect x="20%" y="1" width="6" height="6" rx="1" fill={DIVIDER_SQUARES[0]} opacity="0.8" />
-        <rect x="40%" y="1" width="6" height="6" rx="1" fill={DIVIDER_SQUARES[1]} opacity="0.8" />
-        <rect x="60%" y="1" width="6" height="6" rx="1" fill={DIVIDER_SQUARES[2]} opacity="0.85" />
-        <rect x="80%" y="1" width="6" height="6" rx="1" fill={DIVIDER_SQUARES[3]} opacity="0.8" />
+        <rect x="20%" y="1" width="6" height="6" rx="0" fill={DIVIDER_SQUARES[0]} opacity="0.8" />
+        <rect x="40%" y="1" width="6" height="6" rx="0" fill={DIVIDER_SQUARES[1]} opacity="0.8" />
+        <rect x="60%" y="1" width="6" height="6" rx="0" fill={DIVIDER_SQUARES[2]} opacity="0.85" />
+        <rect x="80%" y="1" width="6" height="6" rx="0" fill={DIVIDER_SQUARES[3]} opacity="0.8" />
       </svg>
     </div>
   )
@@ -129,8 +130,15 @@ export function GradientBorder({
   innerClassName?: string
 }) {
   return (
-    <div className={cn('rounded-xl p-px', className)} style={{ background: BRAND_GRADIENT }}>
-      <div className={cn('rounded-[11px] bg-white/95', innerClassName)}>
+    <div className={cn('rounded-none', className)}>
+      <div
+        className={cn('rounded-none border border-transparent', innerClassName)}
+        style={{
+          background: `linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box, ${BRAND_BORDER_GRADIENT} border-box`,
+          backgroundClip: 'padding-box, border-box',
+          backgroundOrigin: 'padding-box, border-box',
+        }}
+      >
         {children}
       </div>
     </div>

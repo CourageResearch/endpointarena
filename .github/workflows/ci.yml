@@ -7,6 +7,11 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    env:
+      # CI only needs build-time values here; the build does not require a live database.
+      DATABASE_URL: ${{ secrets.CI_DATABASE_URL != '' && secrets.CI_DATABASE_URL || 'postgresql://ci:ci@127.0.0.1:5432/endpointarena_ci' }}
+      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET != '' && secrets.CI_NEXTAUTH_SECRET || 'ci-nextauth-secret' }}
+      NEXTAUTH_URL: ${{ vars.CI_NEXTAUTH_URL != '' && vars.CI_NEXTAUTH_URL || 'https://endpointarena.com' }}
 
     steps:
       - name: Check out repository

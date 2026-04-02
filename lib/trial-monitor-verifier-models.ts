@@ -4,7 +4,6 @@ export type TrialMonitorVerifierModelKey =
   | 'gpt-5.4'
   | 'grok-4'
   | 'grok-4.20'
-  | 'gemini-2.5'
   | 'gemini-3-pro'
   | 'claude-opus'
 
@@ -52,15 +51,6 @@ const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMo
     providerLabel: 'xAI',
     envKey: 'XAI_API_KEY',
     model: 'grok-4.20-beta-latest-non-reasoning',
-  },
-  'gemini-2.5': {
-    key: 'gemini-2.5',
-    label: 'Gemini 2.5 Pro (Google)',
-    provider: 'google',
-    providerLabel: 'Google',
-    envKey: 'GOOGLE_API_KEY',
-    model: 'gemini-2.5-pro',
-    selectable: false,
   },
   'gemini-3-pro': {
     key: 'gemini-3-pro',

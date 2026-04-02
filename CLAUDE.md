@@ -42,7 +42,6 @@ Canonical model IDs live in `lib/constants.ts`.
 - `claude-opus`
 - `gpt-5.2` (stable slot id; currently runs GPT-5.4)
 - `grok-4`
-- `gemini-2.5`
 - `gemini-3-pro`
 - `deepseek-v3.2`
 - `glm-5`

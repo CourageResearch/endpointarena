@@ -10,6 +10,7 @@ import {
   APPROVE_TEXT_CLASS,
   DASHBOARD_META_TEXT_CLASS,
   DASHBOARD_SECTION_LABEL_CLASS,
+  DETAILS_CARD_BORDER_STYLE,
   DETAILS_TOP_LABEL_CLASS,
   DETAILS_BODY_TEXT_CLASS,
   REJECT_TEXT_CLASS,
@@ -101,10 +102,9 @@ function MarketCommentCard({ action }: { action: RecentMarketActionRow }) {
   return (
     <article
       data-reasoning-card="true"
-      className="w-full rounded-none p-px"
-      style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}
+      className="w-full rounded-none"
     >
-      <div className="rounded-none bg-white/95 p-3 sm:p-3.5">
+      <div className="rounded-none border border-transparent p-3 sm:p-3.5" style={DETAILS_CARD_BORDER_STYLE}>
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex flex-1 items-center gap-2">
@@ -260,10 +260,9 @@ export function MarketActivityFeed({
       <div className="pt-2">
         {selectedMarketActions.length === 0 ? (
           <div
-            className="rounded-none p-px"
-            style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}
+            className="rounded-none"
           >
-            <div className="rounded-none bg-white/95 px-4 py-4 text-sm text-[#6f665b]">
+            <div className="rounded-none border border-transparent px-4 py-4 text-sm text-[#6f665b]" style={DETAILS_CARD_BORDER_STYLE}>
               No activity entries match the current filters
               {scrubbedChartDayLabel ? ` for ${scrubbedChartDayLabel}` : ''}
               {' '}for this market.

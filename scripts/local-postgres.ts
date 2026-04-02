@@ -149,7 +149,48 @@ function extractDataDirFromCommand(command: string): string | null {
   return value ? path.resolve(value) : null
 }
 
+function getWindowsListeningPostgresDataDir(port: number): string | null {
+  const pidResult = runCommand(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-Command',
+      `(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)`,
+    ],
+    true,
+  )
+
+  if (pidResult.status !== 0 || !pidResult.stdout) {
+    return null
+  }
+
+  const pid = pidResult.stdout.trim()
+  if (!pid) {
+    return null
+  }
+
+  const commandLineResult = runCommand(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-Command',
+      `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" | Select-Object -ExpandProperty CommandLine)`,
+    ],
+    true,
+  )
+
+  if (commandLineResult.status !== 0 || !commandLineResult.stdout) {
+    return null
+  }
+
+  return extractDataDirFromCommand(commandLineResult.stdout)
+}
+
 function getListeningPostgresDataDir(port: number): string | null {
+  if (process.platform === 'win32') {
+    return getWindowsListeningPostgresDataDir(port)
+  }
+
   const lsofResult = runCommand('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp'], true)
   if (lsofResult.status !== 0 || !lsofResult.stdout) {
     return null

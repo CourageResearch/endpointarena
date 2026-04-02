@@ -92,8 +92,8 @@ export function MarketTradePanel({
         </div>
       </div>
 
-      <div className="rounded-md p-[1px]" style={DETAILS_CARD_BORDER_STYLE}>
-        <div className="rounded-md bg-white/95 p-4">
+      <div className="rounded-none">
+        <div className="rounded-none border border-transparent p-4" style={DETAILS_CARD_BORDER_STYLE}>
           <div className="-mx-4 -mt-4 mb-4 border-b border-[#e8ddd0] bg-[#f8f3ec]/45 px-4">
             <div className="flex items-center gap-0">
               <button

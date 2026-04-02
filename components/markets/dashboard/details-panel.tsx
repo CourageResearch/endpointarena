@@ -62,7 +62,7 @@ function getTrialStatusTextClass(status: string | null | undefined) {
   const normalized = status?.trim().toLowerCase() ?? ''
 
   if (normalized === 'recruiting' || normalized === 'not yet recruiting' || normalized === 'enrolling by invitation') {
-    return APPROVE_TEXT_CLASS
+    return 'text-[#675d52]'
   }
   if (normalized === 'active not recruiting') {
     return 'text-[#2e6793]'
@@ -90,8 +90,8 @@ function DetailValue({
   className?: string
 }) {
   return (
-    <div className={cn('h-full min-w-0 w-full sm:w-auto', DETAILS_CARD_SHELL_CLASS, className)} style={DETAILS_CARD_BORDER_STYLE}>
-      <div className={cn('flex flex-col justify-between', DETAILS_CARD_INNER_CLASS, DETAIL_CARD_INNER_CLASS)}>
+    <div className={cn('h-full min-w-0 w-full sm:w-auto', DETAILS_CARD_SHELL_CLASS, className)}>
+      <div className={cn('flex flex-col justify-between', DETAILS_CARD_INNER_CLASS, DETAIL_CARD_INNER_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
         <dt className={cn(DETAILS_TOP_LABEL_CLASS, DETAIL_TOP_LABEL_CLASS)}>{label}</dt>
         <dd className="mt-3 space-y-1.5">
           {children}
@@ -107,8 +107,8 @@ export function MarketDescriptionCard({
   drugDescriptionText: string
 }) {
   return (
-    <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
-      <div className={cn('flex flex-col justify-between', DETAILS_CARD_INNER_CLASS, DETAIL_COMPACT_CARD_INNER_CLASS)}>
+    <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)}>
+      <div className={cn('flex flex-col justify-between', DETAILS_CARD_INNER_CLASS, DETAIL_COMPACT_CARD_INNER_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
         <dt className={cn(DETAILS_TOP_LABEL_CLASS, DETAIL_TOP_LABEL_CLASS)}>Drug Description</dt>
         <dd className={cn('mt-3', DETAILS_BODY_TEXT_CLASS, DETAIL_BODY_VALUE_CLASS)}>
           {drugDescriptionText}
@@ -140,8 +140,8 @@ export function MarketResolutionPanel({
         </div>
       </div>
 
-      <div className={cn(DETAILS_CARD_SHELL_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 px-4 py-4 sm:px-5 sm:py-5">
+      <div className={cn(DETAILS_CARD_SHELL_CLASS)}>
+        <div className="rounded-none border border-transparent px-4 py-4 sm:px-5 sm:py-5" style={DETAILS_CARD_BORDER_STYLE}>
           <dl className="flex flex-wrap gap-3 lg:flex-nowrap lg:gap-2 xl:gap-3">
               <DetailValue label="Outcome" className="sm:min-w-[8rem] sm:flex-[0_1_8rem] lg:min-w-[7.25rem] lg:flex-[0_1_7.25rem]">
                 <span className={cn('inline-flex items-center rounded-sm border px-2.5 py-1 text-[11px] font-medium tracking-[0.14em]', outcomeTone.badgeClass)}>
@@ -181,7 +181,7 @@ export function MarketResolutionPanel({
                     href={evidence.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group block rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-4 py-4 transition-colors hover:border-[#d9cdbf] sm:px-5"
+                    className="group block rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-4 py-4 transition-colors hover:border-[#d9cdbf] sm:px-5"
                   >
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                       <span className="inline-flex items-center rounded-sm border border-[#ddd2c5] bg-white/80 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[#9a8f82] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">

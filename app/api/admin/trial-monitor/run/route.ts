@@ -7,6 +7,7 @@ import { runTrialMonitor } from '@/lib/trial-monitor'
 
 type RequestBody = {
   force?: boolean
+  nctNumber?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -19,10 +20,14 @@ export async function POST(request: NextRequest) {
     if (body.force !== undefined && typeof body.force !== 'boolean') {
       throw new ValidationError('force must be a boolean when provided')
     }
+    if (body.nctNumber !== undefined && typeof body.nctNumber !== 'string') {
+      throw new ValidationError('nctNumber must be a string when provided')
+    }
 
     const result = await runTrialMonitor({
       triggerSource: 'manual',
       force: body.force ?? true,
+      nctNumber: body.nctNumber,
     })
 
     revalidatePath('/admin/outcomes')

@@ -11,8 +11,9 @@ import {
   trialOutcomeCandidates,
   trialQuestions,
 } from '@/lib/db'
-import { ConfigurationError, ConflictError, ExternalServiceError, NotFoundError } from '@/lib/errors'
+import { ConfigurationError, ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '@/lib/errors'
 import { resolveMarketForTrialQuestion } from '@/lib/markets/engine'
+import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
@@ -34,6 +35,8 @@ const VERIFIER_MAX_OUTPUT_TOKENS = 3200
 const TRIAL_MONITOR_DEBUG_LOG_MAX_CHARS = 80_000
 const TRIAL_MONITOR_DEBUG_VALUE_MAX_CHARS = 12_000
 const TRIAL_MONITOR_DEBUG_SOURCE_URL_LIMIT = 40
+const TRIAL_MONITOR_DEFAULT_CONCURRENCY = 1
+const TRIAL_MONITOR_MANUAL_CONCURRENCY = 3
 type MonitorTriggerSource = 'cron' | 'manual'
 type CandidateEvidenceSourceType = 'clinicaltrials' | 'sponsor' | 'stored_source' | 'web_search'
 type VerifierClassification = 'yes' | 'no' | 'no_decision'
@@ -41,6 +44,7 @@ type CandidateOutcome = 'YES' | 'NO' | 'NO_DECISION'
 type MonitorDebugStage = 'verifier' | 'run'
 type MonitorDebugLevel = 'info' | 'warn' | 'error'
 type MonitorDebugAttempt = 'initial' | 'retry'
+type TrialMonitorQuestionSelection = 'eligible_queue' | 'specific_nct'
 type SourceExtractionMethod =
   | 'openai_web_search_sources'
   | 'xai_web_search_sources'
@@ -65,10 +69,15 @@ export type EligibleTrialOutcomeQuestion = {
   }
 }
 
-async function getEligibleTrialOutcomeQuestionsInternal(config: Awaited<ReturnType<typeof getTrialMonitorConfig>>): Promise<TrialQuestionWithTrial[]> {
-  const now = new Date()
+function compareTrialMonitorQuestionsByPriority(left: TrialQuestionWithTrial, right: TrialQuestionWithTrial): number {
+  const leftTime = left.trial.estPrimaryCompletionDate.getTime()
+  const rightTime = right.trial.estPrimaryCompletionDate.getTime()
+  if (leftTime !== rightTime) return leftTime - rightTime
+  return left.trial.shortTitle.localeCompare(right.trial.shortTitle)
+}
 
-  const allQuestions = await db.query.trialQuestions.findMany({
+async function listMonitorableTrialOutcomeQuestionsInternal(): Promise<TrialQuestionWithTrial[]> {
+  return await db.query.trialQuestions.findMany({
     where: and(
       eq(trialQuestions.status, 'live'),
       eq(trialQuestions.isBettable, true),
@@ -79,15 +88,15 @@ async function getEligibleTrialOutcomeQuestionsInternal(config: Awaited<ReturnTy
     },
     orderBy: [asc(trialQuestions.sortOrder), asc(trialQuestions.createdAt)],
   }) as TrialQuestionWithTrial[]
+}
+
+async function getEligibleTrialOutcomeQuestionsInternal(config: Awaited<ReturnType<typeof getTrialMonitorConfig>>): Promise<TrialQuestionWithTrial[]> {
+  const now = new Date()
+  const allQuestions = await listMonitorableTrialOutcomeQuestionsInternal()
 
   return allQuestions
     .filter((question) => isQuestionEligible(question, now, config.lookaheadDays, config.overdueRecheckHours))
-    .sort((a, b) => {
-      const aTime = a.trial.estPrimaryCompletionDate.getTime()
-      const bTime = b.trial.estPrimaryCompletionDate.getTime()
-      if (aTime !== bTime) return aTime - bTime
-      return a.trial.shortTitle.localeCompare(b.trial.shortTitle)
-    })
+    .sort(compareTrialMonitorQuestionsByPriority)
     .slice(0, config.maxQuestionsPerRun)
 }
 
@@ -153,11 +162,23 @@ export type TrialMonitorRunResult = {
   questionsScanned: number
   candidatesCreated: number
   nextEligibleAt?: string
+  scopedNctNumber?: string
   errors: string[]
+}
+
+type TrialMonitorQuestionResult = {
+  candidateCreated: boolean
+  errorMessage: string | null
 }
 
 function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + (hours * HOUR_MS))
+}
+
+function getTrialMonitorRunConcurrency(triggerSource: MonitorTriggerSource): number {
+  return triggerSource === 'manual'
+    ? TRIAL_MONITOR_MANUAL_CONCURRENCY
+    : TRIAL_MONITOR_DEFAULT_CONCURRENCY
 }
 
 function trimToNull(value: unknown): string | null {
@@ -795,12 +816,42 @@ function isQuestionEligible(question: TrialQuestionWithTrial, now: Date, lookahe
   return isWithinLookahead && recheckDue
 }
 
-function normalizeClinicalTrialsNctNumber(value: string | null | undefined): string | null {
+function tryNormalizeClinicalTrialsNctNumber(value: string | null | undefined): string | null {
   const trimmed = trimToNull(value)
   if (!trimmed || !/^NCT\d{8}$/i.test(trimmed)) {
-    throw new ConfigurationError(`Invalid NCT Number for trial monitor: "${value ?? ''}"`)
+    return null
   }
   return trimmed.toUpperCase()
+}
+
+function normalizeClinicalTrialsNctNumber(value: string | null | undefined): string {
+  const normalized = tryNormalizeClinicalTrialsNctNumber(value)
+  if (!normalized) {
+    throw new ConfigurationError(`Invalid NCT Number for trial monitor: "${value ?? ''}"`)
+  }
+  return normalized
+}
+
+function normalizeScopedTrialMonitorNctNumber(value: string | null | undefined): string | null {
+  const trimmed = trimToNull(value)
+  if (!trimmed) {
+    return null
+  }
+
+  const normalized = tryNormalizeClinicalTrialsNctNumber(trimmed)
+  if (!normalized) {
+    throw new ValidationError('nctNumber must look like NCT01234567')
+  }
+
+  return normalized
+}
+
+async function getScopedTrialOutcomeQuestionsInternal(nctNumber: string): Promise<TrialQuestionWithTrial[]> {
+  const allQuestions = await listMonitorableTrialOutcomeQuestionsInternal()
+
+  return allQuestions
+    .filter((question) => tryNormalizeClinicalTrialsNctNumber(question.trial.nctNumber) === nctNumber)
+    .sort(compareTrialMonitorQuestionsByPriority)
 }
 
 function buildOnePassVerificationPrompt(
@@ -884,8 +935,10 @@ function createVerifierSourceSchema() {
 
 function createVerifierJsonSchema(input: {
   includeConfidenceBounds?: boolean
+  includeSourceCountBounds?: boolean
 } = {}) {
   const includeConfidenceBounds = input.includeConfidenceBounds !== false
+  const includeSourceCountBounds = input.includeSourceCountBounds !== false
 
   return {
     type: 'object',
@@ -915,8 +968,10 @@ function createVerifierJsonSchema(input: {
       sources: {
         type: 'array',
         items: createVerifierSourceSchema(),
-        minItems: 1,
-        maxItems: MAX_VERIFIER_SOURCE_COUNT,
+        ...(includeSourceCountBounds ? {
+          minItems: 1,
+          maxItems: MAX_VERIFIER_SOURCE_COUNT,
+        } : {}),
       },
     },
     required: ['classification', 'confidence', 'proposedOutcomeDate', 'reasoning', 'sources'],
@@ -1075,6 +1130,7 @@ async function runProviderVerificationPrompt(
               type: 'json_schema',
               schema: createVerifierJsonSchema({
                 includeConfidenceBounds: false,
+                includeSourceCountBounds: false,
               }),
             },
           },
@@ -1275,6 +1331,157 @@ async function verifyTrialOutcome(
   }
 }
 
+async function processTrialMonitorQuestion(input: {
+  verifierModelKey: TrialMonitorVerifierModelKey
+  question: TrialQuestionWithTrial
+  webSearchEnabled: boolean
+  debugLog: MonitorDebugLogger
+}): Promise<TrialMonitorQuestionResult> {
+  const { verifierModelKey, question, webSearchEnabled, debugLog } = input
+
+  try {
+    const { decision, providerResponseId } = await verifyTrialOutcome(
+      verifierModelKey,
+      question,
+      webSearchEnabled,
+      debugLog,
+    )
+
+    if (decision.evidence.length === 0) {
+      await debugLog({
+        level: 'warn',
+        stage: 'run',
+        message: 'Verifier returned no usable evidence, so no queue item was created.',
+        trialQuestionId: question.id,
+        trialTitle: question.trial.shortTitle,
+        providerResponseId,
+        details: {
+          classification: decision.classification,
+          confidence: decision.confidence,
+          summary: decision.summary,
+        },
+      })
+
+      return {
+        candidateCreated: false,
+        errorMessage: 'Verifier returned no usable evidence',
+      }
+    }
+
+    const settlementOutcome = decision.classification === 'yes'
+      ? 'YES'
+      : decision.classification === 'no'
+        ? 'NO'
+        : 'NO_DECISION'
+    const proposedOutcome: CandidateOutcome = settlementOutcome
+    const evidenceHash = buildEvidenceHash(proposedOutcome, decision.evidence.map((entry) => entry.url))
+    const existingCandidate = await db.query.trialOutcomeCandidates.findFirst({
+      where: and(
+        eq(trialOutcomeCandidates.trialQuestionId, question.id),
+        eq(trialOutcomeCandidates.proposedOutcome, proposedOutcome),
+        eq(trialOutcomeCandidates.evidenceHash, evidenceHash),
+      ),
+    })
+
+    let candidateCreated = false
+
+    if (!existingCandidate) {
+      const [candidate] = await db.insert(trialOutcomeCandidates)
+        .values({
+          trialQuestionId: question.id,
+          proposedOutcome,
+          proposedOutcomeDate: proposedOutcome === 'NO_DECISION' ? null : decision.proposedOutcomeDate,
+          confidence: decision.confidence,
+          summary: decision.summary,
+          verifierModelKey,
+          providerResponseId,
+          evidenceHash,
+          status: 'pending_review',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning()
+
+      if (candidate) {
+        await db.insert(trialOutcomeCandidateEvidence)
+          .values(decision.evidence.map((evidence, index) => ({
+            candidateId: candidate.id,
+            sourceType: evidence.sourceType,
+            title: evidence.title,
+            url: evidence.url,
+            publishedAt: evidence.publishedAt,
+            excerpt: evidence.excerpt,
+            domain: evidence.domain,
+            displayOrder: index,
+            createdAt: new Date(),
+          })))
+
+        candidateCreated = true
+        await debugLog({
+          level: 'info',
+          stage: 'run',
+          message: 'Created a new trial outcome queue item.',
+          trialQuestionId: question.id,
+          trialTitle: question.trial.shortTitle,
+          providerResponseId,
+          details: {
+            candidateId: candidate.id,
+            proposedOutcome,
+            classification: decision.classification,
+            confidence: decision.confidence,
+            evidenceCount: decision.evidence.length,
+          },
+        })
+      }
+    } else {
+      await debugLog({
+        level: 'info',
+        stage: 'run',
+        message: 'Skipped queue item creation because matching evidence was already recorded.',
+        trialQuestionId: question.id,
+        trialTitle: question.trial.shortTitle,
+        providerResponseId,
+        details: {
+          existingCandidateId: existingCandidate.id,
+          proposedOutcome,
+          confidence: decision.confidence,
+          evidenceCount: decision.evidence.length,
+        },
+      })
+    }
+
+    await db.update(phase2Trials)
+      .set({
+        lastMonitoredAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(phase2Trials.id, question.trial.id))
+
+    return {
+      candidateCreated,
+      errorMessage: null,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Failed to monitor ${question.trial.shortTitle}`
+    await debugLog({
+      level: 'error',
+      stage: 'run',
+      message: 'Question monitoring failed.',
+      trialQuestionId: question.id,
+      trialTitle: question.trial.shortTitle,
+      details: {
+        errorMessage: message,
+        stack: error instanceof Error ? truncateDebugText(error.stack ?? '') : null,
+      },
+    })
+
+    return {
+      candidateCreated: false,
+      errorMessage: message,
+    }
+  }
+}
+
 export async function listEligibleTrialOutcomeQuestions(): Promise<EligibleTrialOutcomeQuestion[]> {
   const config = await getTrialMonitorConfig()
   const questions = await getEligibleTrialOutcomeQuestionsInternal(config)
@@ -1296,10 +1503,21 @@ export async function listEligibleTrialOutcomeQuestions(): Promise<EligibleTrial
 export async function runTrialMonitor(input: {
   triggerSource: MonitorTriggerSource
   force?: boolean
+  nctNumber?: string | null
 }): Promise<TrialMonitorRunResult> {
   const config = await getTrialMonitorConfig()
+  const processingConcurrency = getTrialMonitorRunConcurrency(input.triggerSource)
+  const scopedNctNumber = normalizeScopedTrialMonitorNctNumber(input.nctNumber ?? null)
+  const questionSelection: TrialMonitorQuestionSelection = scopedNctNumber ? 'specific_nct' : 'eligible_queue'
   if (!config.enabled) {
-    return { executed: false, reason: 'disabled', questionsScanned: 0, candidatesCreated: 0, errors: [] }
+    return {
+      executed: false,
+      reason: 'disabled',
+      questionsScanned: 0,
+      candidatesCreated: 0,
+      scopedNctNumber: scopedNctNumber ?? undefined,
+      errors: [],
+    }
   }
   if (!config.webSearchEnabled) {
     throw new ConfigurationError('Trial monitor web search is disabled. Enable web search before running the verifier.')
@@ -1309,7 +1527,7 @@ export async function runTrialMonitor(input: {
   const verifierModelKey = verifierSpec.key
 
   const now = new Date()
-  if (!input.force) {
+  if (!input.force && !scopedNctNumber) {
     const latestRun = await db.query.trialMonitorRuns.findFirst({
       orderBy: [desc(trialMonitorRuns.startedAt)],
     })
@@ -1322,10 +1540,19 @@ export async function runTrialMonitor(input: {
           questionsScanned: 0,
           candidatesCreated: 0,
           nextEligibleAt: nextEligibleAt.toISOString(),
+          scopedNctNumber: scopedNctNumber ?? undefined,
           errors: [],
         }
       }
     }
+  }
+
+  const questionsToScan = scopedNctNumber
+    ? await getScopedTrialOutcomeQuestionsInternal(scopedNctNumber)
+    : await getEligibleTrialOutcomeQuestionsInternal(config)
+
+  if (scopedNctNumber && questionsToScan.length === 0) {
+    throw new NotFoundError(`No live pending outcome question was found for ${scopedNctNumber}`)
   }
 
   const run = await startMonitorRun(input.triggerSource)
@@ -1355,171 +1582,71 @@ export async function runTrialMonitor(input: {
         forced: Boolean(input.force),
         verifierModelKey,
         verifierModelLabel: verifierSpec.label,
+        scopedNctNumber,
+        questionSelection,
         webSearchEnabled: config.webSearchEnabled,
         lookaheadDays: config.lookaheadDays,
         overdueRecheckHours: config.overdueRecheckHours,
         maxQuestionsPerRun: config.maxQuestionsPerRun,
         minCandidateConfidence: config.minCandidateConfidence,
+        processingConcurrency,
+        questionCount: questionsToScan.length,
       },
     })
 
-    const eligibleQuestions = await getEligibleTrialOutcomeQuestionsInternal(config)
+    let persistRunProgressQueue = Promise.resolve()
+    const persistRunProgress = async () => {
+      const snapshotQuestionsScanned = questionsScanned
+      const snapshotCandidatesCreated = candidatesCreated
+      const snapshotErrorSummary = errors.length > 0 ? errors.join('\n').slice(0, 1200) : null
 
-    for (const question of eligibleQuestions) {
-      questionsScanned += 1
+      persistRunProgressQueue = persistRunProgressQueue.then(async () => {
+        await db.update(trialMonitorRuns)
+          .set({
+            questionsScanned: snapshotQuestionsScanned,
+            candidatesCreated: snapshotCandidatesCreated,
+            errorSummary: snapshotErrorSummary,
+            updatedAt: new Date(),
+          })
+          .where(eq(trialMonitorRuns.id, run.id))
+      })
 
-      await db.update(trialMonitorRuns)
-        .set({ questionsScanned, candidatesCreated, updatedAt: new Date() })
-        .where(eq(trialMonitorRuns.id, run.id))
+      await persistRunProgressQueue
+    }
 
-      try {
-        const { decision, providerResponseId } = await verifyTrialOutcome(
+    let nextQuestionIndex = 0
+    const workerCount = Math.min(processingConcurrency, Math.max(questionsToScan.length, 1))
+    const worker = async () => {
+      while (true) {
+        const question = questionsToScan[nextQuestionIndex++]
+        if (!question) {
+          return
+        }
+
+        questionsScanned += 1
+        await persistRunProgress()
+
+        const result = await processTrialMonitorQuestion({
           verifierModelKey,
           question,
-          config.webSearchEnabled,
+          webSearchEnabled: config.webSearchEnabled,
           debugLog,
-        )
-
-        if (decision.evidence.length === 0) {
-          errors.push(`${question.trial.shortTitle}: Verifier returned no usable evidence`)
-          await debugLog({
-            level: 'warn',
-            stage: 'run',
-            message: 'Verifier returned no usable evidence, so no queue item was created.',
-            trialQuestionId: question.id,
-            trialTitle: question.trial.shortTitle,
-            providerResponseId,
-            details: {
-              classification: decision.classification,
-              confidence: decision.confidence,
-              summary: decision.summary,
-            },
-          })
-          await db.update(trialMonitorRuns)
-            .set({
-              questionsScanned,
-              candidatesCreated,
-              errorSummary: errors.length > 0 ? errors.join('\n').slice(0, 1200) : null,
-              updatedAt: new Date(),
-            })
-            .where(eq(trialMonitorRuns.id, run.id))
-          continue
-        }
-
-        const settlementOutcome = decision.classification === 'yes'
-          ? 'YES'
-          : decision.classification === 'no'
-            ? 'NO'
-            : 'NO_DECISION'
-        const proposedOutcome: CandidateOutcome = settlementOutcome
-        const evidenceHash = buildEvidenceHash(proposedOutcome, decision.evidence.map((entry) => entry.url))
-        const existingCandidate = await db.query.trialOutcomeCandidates.findFirst({
-          where: and(
-            eq(trialOutcomeCandidates.trialQuestionId, question.id),
-            eq(trialOutcomeCandidates.proposedOutcome, proposedOutcome),
-            eq(trialOutcomeCandidates.evidenceHash, evidenceHash),
-          ),
         })
 
-        if (!existingCandidate) {
-          const [candidate] = await db.insert(trialOutcomeCandidates)
-            .values({
-              trialQuestionId: question.id,
-              proposedOutcome,
-              proposedOutcomeDate: proposedOutcome === 'NO_DECISION' ? null : decision.proposedOutcomeDate,
-              confidence: decision.confidence,
-              summary: decision.summary,
-              verifierModelKey,
-              providerResponseId,
-              evidenceHash,
-              status: 'pending_review',
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .returning()
-
-          if (candidate) {
-            await db.insert(trialOutcomeCandidateEvidence)
-              .values(decision.evidence.map((evidence, index) => ({
-                candidateId: candidate.id,
-                sourceType: evidence.sourceType,
-                title: evidence.title,
-                url: evidence.url,
-                publishedAt: evidence.publishedAt,
-                excerpt: evidence.excerpt,
-                domain: evidence.domain,
-                displayOrder: index,
-                createdAt: new Date(),
-              })))
-
-            candidatesCreated += 1
-            await debugLog({
-              level: 'info',
-              stage: 'run',
-              message: 'Created a new trial outcome queue item.',
-              trialQuestionId: question.id,
-              trialTitle: question.trial.shortTitle,
-              providerResponseId,
-              details: {
-                candidateId: candidate.id,
-                proposedOutcome,
-                classification: decision.classification,
-                confidence: decision.confidence,
-                evidenceCount: decision.evidence.length,
-              },
-            })
-          }
-        } else {
-          await debugLog({
-            level: 'info',
-            stage: 'run',
-            message: 'Skipped queue item creation because matching evidence was already recorded.',
-            trialQuestionId: question.id,
-            trialTitle: question.trial.shortTitle,
-            providerResponseId,
-            details: {
-              existingCandidateId: existingCandidate.id,
-              proposedOutcome,
-              confidence: decision.confidence,
-              evidenceCount: decision.evidence.length,
-            },
-          })
+        if (result.candidateCreated) {
+          candidatesCreated += 1
         }
 
-        await db.update(phase2Trials)
-          .set({
-            lastMonitoredAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(phase2Trials.id, question.trial.id))
+        if (result.errorMessage) {
+          errors.push(`${question.trial.shortTitle}: ${result.errorMessage}`)
+        }
 
-        await db.update(trialMonitorRuns)
-          .set({ questionsScanned, candidatesCreated, updatedAt: new Date() })
-          .where(eq(trialMonitorRuns.id, run.id))
-      } catch (error) {
-        const message = error instanceof Error ? error.message : `Failed to monitor ${question.trial.shortTitle}`
-        errors.push(`${question.trial.shortTitle}: ${message}`)
-        await debugLog({
-          level: 'error',
-          stage: 'run',
-          message: 'Question monitoring failed.',
-          trialQuestionId: question.id,
-          trialTitle: question.trial.shortTitle,
-          details: {
-            errorMessage: message,
-            stack: error instanceof Error ? truncateDebugText(error.stack ?? '') : null,
-          },
-        })
-        await db.update(trialMonitorRuns)
-          .set({
-            questionsScanned,
-            candidatesCreated,
-            errorSummary: errors.join('\n').slice(0, 1200),
-            updatedAt: new Date(),
-          })
-          .where(eq(trialMonitorRuns.id, run.id))
+        await persistRunProgress()
       }
     }
+
+    await Promise.all(Array.from({ length: workerCount }, () => worker()))
+    await persistRunProgressQueue
 
     await completeRun(run.id, {
       status: 'completed',
@@ -1545,6 +1672,7 @@ export async function runTrialMonitor(input: {
       runId: run.id,
       questionsScanned,
       candidatesCreated,
+      scopedNctNumber: scopedNctNumber ?? undefined,
       errors,
     }
   } catch (error) {
@@ -1627,6 +1755,8 @@ export async function reviewTrialOutcomeCandidate(input: {
       question: {
         columns: {
           trialId: true,
+          outcome: true,
+          outcomeDate: true,
         },
       },
     },
@@ -1662,14 +1792,30 @@ export async function reviewTrialOutcomeCandidate(input: {
       throw new ConflictError('Only YES/NO candidates can be accepted')
     }
 
+    const nextOutcomeDate = candidate.proposedOutcomeDate ?? now
+
     await db.transaction(async (tx) => {
       await tx.update(trialQuestions)
         .set({
           outcome: candidate.proposedOutcome,
-          outcomeDate: candidate.proposedOutcomeDate ?? now,
+          outcomeDate: nextOutcomeDate,
           updatedAt: now,
         })
         .where(eq(trialQuestions.id, candidate.trialQuestionId))
+
+      await recordTrialQuestionOutcomeHistory({
+        dbClient: tx,
+        trialQuestionId: candidate.trialQuestionId,
+        previousOutcome: candidate.question.outcome as 'Pending' | 'YES' | 'NO',
+        previousOutcomeDate: candidate.question.outcomeDate,
+        nextOutcome: candidate.proposedOutcome as 'YES' | 'NO',
+        nextOutcomeDate,
+        changedAt: now,
+        changeSource: 'accepted_candidate',
+        changedByUserId: input.reviewerId ?? null,
+        reviewCandidateId: candidate.id,
+        notes: input.reviewNotes ?? null,
+      })
 
       await tx.update(trialOutcomeCandidates)
         .set({

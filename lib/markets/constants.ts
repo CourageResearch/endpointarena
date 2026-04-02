@@ -16,7 +16,6 @@ const MARKET_MODELS = [
   'claude-opus',
   'gpt-5.2',
   'grok-4',
-  'gemini-2.5',
   'gemini-3-pro',
   'deepseek-v3.2',
   'glm-5',
