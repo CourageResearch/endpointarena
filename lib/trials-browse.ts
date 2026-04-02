@@ -10,7 +10,7 @@ import {
 import type { TrialsBrowseResponse, TrialsBrowseRow } from '@/lib/trials-browse-shared'
 
 function getBrowseCompanyName(market: OpenMarketRow): string {
-  return market.event?.sponsorName?.trim() || market.event?.companyName?.trim() || 'Trial market'
+  return market.event?.sponsorName?.trim() || market.event?.companyName?.trim() || 'Trial'
 }
 
 function getBrowseDecisionCounts(market: OpenMarketRow) {

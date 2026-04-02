@@ -267,7 +267,7 @@ export function getMarketQuestion(market: Pick<OpenMarketRow, 'event'>): string 
 }
 
 export function getMarketSubtitle(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return 'Phase 2 trial market'
+  if (!market.event) return 'Phase 2 trial'
   const sponsorName = market.event.sponsorName?.trim() || market.event.companyName
   const ticker = (market.event.sponsorTicker ?? market.event.symbols)?.trim()
   return ticker ? `${sponsorName} (${ticker})` : sponsorName

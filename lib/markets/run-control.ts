@@ -4,7 +4,7 @@ import { db, marketRuns } from '@/lib/db'
 const DAILY_RUN_STOP_REQUEST_REASON =
   'Stop requested by admin. Finish the current in-flight model step, then halt the run.'
 export const DAILY_RUN_STOPPED_REASON =
-  'Daily market cycle stopped by admin after the current in-flight model step.'
+  'Daily trial cycle stopped by admin after the current in-flight model step.'
 
 class DailyRunStoppedError extends Error {
   constructor(message: string = DAILY_RUN_STOPPED_REASON) {

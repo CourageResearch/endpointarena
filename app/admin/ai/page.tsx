@@ -5,7 +5,7 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminTrialManager } from '@/components/AdminTrialManager'
 import { getTrialAdminData, getTrialAdminStats } from '@/lib/admin-trial-data'
-import { getLatestMarketRunSnapshot } from '@/lib/market-run-logs'
+import { getLatestTrialRunSnapshot } from '@/lib/trial-run-logs'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ export default async function AdminAiPage() {
 
   const [events, initialRunSnapshot] = await Promise.all([
     getTrialAdminData(),
-    getLatestMarketRunSnapshot(),
+    getLatestTrialRunSnapshot(),
   ])
   const {
     openMarkets,

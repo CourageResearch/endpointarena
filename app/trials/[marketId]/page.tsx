@@ -30,8 +30,8 @@ export async function generateMetadata({
 
   if (!market?.event) {
     return buildNoIndexMetadata({
-      title: 'Trial Market',
-      description: 'This trial market is unavailable.',
+      title: 'Trial',
+      description: 'This trial is unavailable.',
       path: `/trials/${encodeURIComponent(marketId)}`,
     })
   }
@@ -58,7 +58,7 @@ export async function generateMetadata({
     .join(' ')
 
   return buildPageMetadata({
-    title: `${drugName} Trial Market`,
+    title: `${drugName} Trial`,
     description,
     path: `/trials/${encodeURIComponent(marketId)}`,
   })

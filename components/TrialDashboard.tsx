@@ -866,7 +866,7 @@ export function TrialDashboard({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className={cn('text-xs leading-relaxed', active ? 'text-white/90' : 'text-[#2f2a24]')}>
-                            {entry.market.event?.drugName || 'Trial Market'}
+                            {entry.market.event?.drugName || 'Trial'}
                           </div>
                           <div className={cn('font-mono text-sm', active ? 'text-white' : 'text-[#181818]')}>
                             {formatPercent(entry.market.priceYes, 0)}

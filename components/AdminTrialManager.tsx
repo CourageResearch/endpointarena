@@ -21,7 +21,7 @@ import {
   getCurrentExecutionStep,
   getExecutionStatusLabel,
   getExecutionStepTone,
-  getMarketStatusTone,
+  getTrialStatusTone,
   getOutcomeStyle,
   isAdminStoppedMessage,
   rotateModelOrderLocal,
@@ -30,20 +30,20 @@ import {
   summarizeNonOkModels,
   truncateText,
   type AdminTrialEvent,
+  type AdminTrialRunSnapshot,
   type DailyRunProgressState,
   type ErrorConsoleEntry,
-  type ExecutionPlanMarket,
+  type ExecutionPlanTrial,
   type LastRunSummaryState,
-} from '@/components/admin/market-manager-utils'
+} from '@/components/admin/trial-manager-utils'
 import type {
   DailyRunPayload,
   DailyRunStreamEvent,
 } from '@/lib/markets/types'
-import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
 
 interface Props {
   events: AdminTrialEvent[]
-  initialRunSnapshot?: AdminMarketRunSnapshot | null
+  initialRunSnapshot?: AdminTrialRunSnapshot | null
   sections?: AdminTrialManagerSection[]
   labels?: Partial<AdminTrialManagerLabels>
 }
@@ -80,8 +80,8 @@ const DEFAULT_LABELS: AdminTrialManagerLabels = {
   openMarketsTitle: 'Open Trials',
   openMarketsDescription: 'Trials that are currently live.',
   openMarketsEmptyState: 'No open trials match the current filter.',
-  needsMarketTitle: 'Needs Trial Market',
-  needsMarketDescription: 'Live Phase 2 questions that still need a trial opened for trading.',
+  needsMarketTitle: 'Trials Not Yet Open',
+  needsMarketDescription: 'Live Phase 2 questions that still need to be opened for trading.',
   resolvedMarketsTitle: 'Resolved Trials',
   resolvedMarketsDescription: 'Trials that have already been resolved.',
   resolvedMarketsEmptyState: 'No resolved trials match the current filter.',
@@ -152,7 +152,7 @@ export function AdminTrialManager({
   const [elapsedSeconds, setElapsedSeconds] = useState(() => buildRunSummaryFromSnapshot(initialRunSnapshot)?.durationSeconds ?? 0)
   const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
   const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
-  const [executionPlan, setExecutionPlan] = useState<ExecutionPlanMarket[]>(() => (
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlanTrial[]>(() => (
     initialRunSnapshot
       ? buildExecutionPlanFromSnapshot(initialEvents, initialRunSnapshot)
       : buildNextExecutionPlan(initialEvents)
@@ -206,7 +206,7 @@ export function AdminTrialManager({
     return () => window.clearInterval(timer)
   }, [runningDaily, runStartedAtMs])
 
-  const applyRunSnapshot = (snapshot: AdminMarketRunSnapshot | null) => {
+  const applyRunSnapshot = (snapshot: AdminTrialRunSnapshot | null) => {
     if (!snapshot) {
       setPreserveExecutionPlan(false)
       setIsStoppingDaily(false)
@@ -306,7 +306,7 @@ export function AdminTrialManager({
       })
 
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open trial market'))
+      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open trial'))
 
       setEvents((prev) => prev.map((event) => (
         event.id === trialQuestionId
@@ -320,7 +320,7 @@ export function AdminTrialManager({
           : event
       )))
     } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed to open trial market')
+      setUiError(error instanceof Error ? error.message : 'Failed to open trial')
     } finally {
       setLoadingEventId(null)
     }
@@ -410,11 +410,11 @@ export function AdminTrialManager({
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload, 'Failed to stop daily market cycle'))
+        throw new Error(getApiErrorMessage(payload, 'Failed to stop daily trial cycle'))
       }
     } catch (error) {
       setIsStoppingDaily(false)
-      setUiError(error instanceof Error ? error.message : 'Failed to stop daily market cycle')
+      setUiError(error instanceof Error ? error.message : 'Failed to stop daily trial cycle')
     }
   }
 
@@ -443,7 +443,7 @@ export function AdminTrialManager({
     const effectiveClaudeProvider = options.claudeProvider ?? DEFAULT_LOCAL_CLAUDE_PROVIDER
     const runDescription = options.nctNumber && options.modelIds?.length === 1 && options.modelIds[0] === 'claude-opus' && effectiveClaudeProvider === 'web'
       ? `Claude.ai Opus 4.6 on ${options.nctNumber}`
-      : 'daily market cycle'
+      : 'daily trial cycle'
     const relevantEvents = filterEventsForRun(events, options.nctNumber)
     const initialModelOrder = options.modelIds && options.modelIds.length > 0
       ? options.modelIds
@@ -1223,7 +1223,7 @@ export function AdminTrialManager({
                     {sectionLabels.openMarketsEmptyState}
                   </div>
                 ) : openEvents.map((event) => {
-                  const statusTone = getMarketStatusTone(event.marketStatus)
+                  const statusTone = getTrialStatusTone(event.marketStatus)
                   const days = getDaysUntil(event.decisionDate)
                   const isClickable = Boolean(event.marketId)
 
@@ -1343,7 +1343,7 @@ export function AdminTrialManager({
                             disabled={isOpening}
                             className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {isOpening ? 'Opening...' : 'Open Trial Market'}
+                            {isOpening ? 'Opening...' : 'Open Trial'}
                           </button>
                         </div>
                       </div>
@@ -1371,7 +1371,7 @@ export function AdminTrialManager({
                   </div>
                 ) : adjudicationEvents.map((event) => {
                   const days = getDaysUntil(event.decisionDate)
-                  const statusTone = getMarketStatusTone(event.marketStatus)
+                  const statusTone = getTrialStatusTone(event.marketStatus)
                   const isClickable = Boolean(event.marketId)
 
                   return (

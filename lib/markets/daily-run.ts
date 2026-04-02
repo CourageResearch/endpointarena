@@ -37,7 +37,7 @@ import {
   type ModelDecisionGeneratorOptions,
 } from '@/lib/predictions/model-decision-generators'
 import { getModelActorIds } from '@/lib/market-actors'
-import { appendMarketRunLog } from '@/lib/market-run-logs'
+import { appendTrialRunLog } from '@/lib/trial-run-logs'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 type Phase2OpenMarket = typeof predictionMarkets.$inferSelect & {
@@ -243,7 +243,7 @@ async function startRunRecord({
 
     if (staleRunUpdate.length === 0) {
       const activeRunDate = activeRun.runDate.toISOString()
-      throw new ConflictError(`A daily market cycle is already running (runDate ${activeRunDate}). Wait for it to finish before starting another run.`)
+      throw new ConflictError(`A daily trial cycle is already running (runDate ${activeRunDate}). Wait for it to finish before starting another run.`)
     }
   }
 
@@ -330,7 +330,7 @@ export async function executeDailyRun(
     : orderedOpenMarkets
 
   if (scopedNctNumber && scopedOpenMarkets.length === 0) {
-    throw new Error(`No open market found for ${scopedNctNumber}`)
+    throw new Error(`No open trial found for ${scopedNctNumber}`)
   }
 
   const orderedMarketPlan = scopedOpenMarkets
@@ -368,10 +368,10 @@ export async function executeDailyRun(
     openMarkets: scopedOpenMarkets.length,
     totalActions,
   })
-  await appendMarketRunLog({
+  await appendTrialRunLog({
     runId: runRecord.id,
     logType: 'system',
-    message: 'Starting daily market cycle...',
+    message: 'Starting daily trial cycle...',
     completedActions: 0,
     totalActions,
     okCount: 0,
@@ -385,7 +385,7 @@ export async function executeDailyRun(
       claudeProvider ? `Claude provider: ${claudeProvider}` : null,
     ].filter((value): value is string => Boolean(value))
 
-    await appendMarketRunLog({
+    await appendTrialRunLog({
       runId: runRecord.id,
       logType: 'system',
       message: `Scoped run: ${scopedMessageParts.join(' | ')}`,
@@ -426,7 +426,7 @@ export async function executeDailyRun(
     modelId?: ModelId
     phase?: 'running' | 'waiting'
   }): Promise<void> => {
-    await appendMarketRunLog({
+    await appendTrialRunLog({
       runId: runRecord.id,
       logType: 'activity',
       message: input.message,
@@ -451,7 +451,7 @@ export async function executeDailyRun(
     if (result.status === 'error') errorCount += 1
     if (result.status === 'skipped') skippedCount += 1
 
-    await appendMarketRunLog({
+    await appendTrialRunLog({
       runId: runRecord.id,
       logType: result.status === 'error' ? 'error' : 'progress',
       message: formatProgressLog(result),
@@ -607,7 +607,7 @@ export async function executeDailyRun(
           await emitActivity({
             completedActions: processedActions,
             totalActions,
-            message: `Running ${modelName} on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${scopedOpenMarkets.length} markets)`,
+      message: `Running ${modelName} on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${scopedOpenMarkets.length} trials)`,
             marketId: market.id,
             trialQuestionId: market.trialQuestionId,
             actorId,
@@ -817,10 +817,10 @@ export async function executeDailyRun(
       results,
     }
 
-    await appendMarketRunLog({
+    await appendTrialRunLog({
       runId: runRecord.id,
       logType: 'system',
-      message: 'Daily market cycle completed',
+      message: 'Daily trial cycle completed',
       completedActions: processedActions,
       totalActions,
       okCount: summary.ok,
@@ -846,7 +846,7 @@ export async function executeDailyRun(
     const message = error instanceof Error ? error.message : 'Daily run failed'
     const summary = summarizeResults(results)
 
-    await appendMarketRunLog({
+    await appendTrialRunLog({
       runId: runRecord.id,
       logType: message === DAILY_RUN_STOPPED_REASON ? 'system' : 'error',
       message: message === DAILY_RUN_STOPPED_REASON ? message : `RUN FAILED - ${message}`,

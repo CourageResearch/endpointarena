@@ -92,7 +92,7 @@ function formatRunMessage(result: TrialSyncRunResult) {
     return 'ClinicalTrials.gov sync was skipped.'
   }
 
-  return `${result.mode === 'reconcile' ? 'Reconcile' : 'Sync'} finished: fetched ${result.studiesFetched} studies, matched ${result.studiesMatched}, changed ${result.trialsUpserted}, and opened ${result.marketsOpened} market${result.marketsOpened === 1 ? '' : 's'}.`
+  return `${result.mode === 'reconcile' ? 'Reconcile' : 'Sync'} finished: fetched ${result.studiesFetched} studies, matched ${result.studiesMatched}, changed ${result.trialsUpserted}, and opened ${result.marketsOpened} trial${result.marketsOpened === 1 ? '' : 's'}.`
 }
 
 export function AdminTrialSyncPanel({
@@ -273,7 +273,7 @@ export function AdminTrialSyncPanel({
                 <div><span className="text-[#8a8075]">Fetched:</span> {run.studiesFetched}</div>
                 <div><span className="text-[#8a8075]">Matched:</span> {run.studiesMatched}</div>
                 <div><span className="text-[#8a8075]">Changed:</span> {run.trialsUpserted}</div>
-                <div><span className="text-[#8a8075]">Markets opened:</span> {run.marketsOpened}</div>
+                <div><span className="text-[#8a8075]">Trials opened:</span> {run.marketsOpened}</div>
               </div>
               {run.errorSummary ? (
                 <div className="mt-2 text-sm text-[#8d2c22]">{run.errorSummary}</div>
@@ -320,7 +320,7 @@ export function AdminTrialSyncPanel({
                       href={`/trials/${encodeURIComponent(item.marketId)}`}
                       className="rounded-none bg-[#1a1a1a] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#333]"
                     >
-                      Open market
+                      Open trial
                     </Link>
                   ) : null}
                   <Link

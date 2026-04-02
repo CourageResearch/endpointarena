@@ -26,7 +26,7 @@ export type PersistedRunLogEntry = {
   createdAt: string | null
 }
 
-export type AdminMarketRunSnapshot = {
+export type AdminTrialRunSnapshot = {
   runId: string
   runDate: string
   status: 'running' | 'completed' | 'failed'
@@ -96,7 +96,7 @@ function mapRunLogEntry(log: RunLogWithActor): PersistedRunLogEntry {
 function buildSnapshotFromRuns(input: {
   runs: Array<typeof marketRuns.$inferSelect>
   logs: RunLogWithActor[]
-}): AdminMarketRunSnapshot | null {
+}): AdminTrialRunSnapshot | null {
   const { runs, logs } = input
   if (runs.length === 0) return null
 
@@ -166,7 +166,7 @@ async function failStaleRunningRunIfNeeded(run: {
   return updated.length > 0
 }
 
-export async function appendMarketRunLog(input: {
+export async function appendTrialRunLog(input: {
   runId: string
   logType: LogType
   message: string
@@ -213,7 +213,7 @@ async function getRunningMarketRunId(): Promise<string | null> {
   return staleFailed ? null : activeRun.id
 }
 
-export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapshot | null> {
+export async function getLatestTrialRunSnapshot(): Promise<AdminTrialRunSnapshot | null> {
   let running = await db.query.marketRuns.findFirst({
     where: eq(marketRuns.status, 'running'),
     orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],

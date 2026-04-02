@@ -327,7 +327,7 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
           />
         </div>
         <span className="truncate-wrap text-xs text-[#b5aa9e]">
-          {filteredEvents.length}/{events.length} open-market questions shown
+          {filteredEvents.length}/{events.length} open-trial questions shown
         </span>
       </div>
 
@@ -348,7 +348,7 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
                     </span>
                     {event.marketId ? (
                       <span className="rounded-none border border-[#3a8a2e]/25 bg-[#3a8a2e]/5 px-2 py-0.5 text-xs text-[#3a8a2e]">
-                        Open market
+                        Open trial
                       </span>
                     ) : null}
                   </div>

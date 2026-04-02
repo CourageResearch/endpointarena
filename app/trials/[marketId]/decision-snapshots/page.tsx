@@ -20,7 +20,7 @@ export async function generateMetadata({
 
   return buildNoIndexMetadata({
     title: 'Decision Snapshots',
-    description: 'Model decision history for this trial market.',
+    description: 'Model decision history for this trial.',
     path: `/trials/${encodeURIComponent(canonicalMarketId)}`,
   })
 }

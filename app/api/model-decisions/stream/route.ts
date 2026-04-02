@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isSupportedTrialQuestionSlug(question.slug)) {
-      throw new ValidationError('This question type has been removed from active markets.')
+      throw new ValidationError('This question type has been removed from active trials.')
     }
 
     if (question.outcome !== 'Pending') {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!market) {
-      throw new ValidationError('An open market is required before running a combined decision snapshot for this question.')
+      throw new ValidationError('An open trial is required before running a combined decision snapshot for this question.')
     }
 
     const actorId = await getModelActorId(modelId)
@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!isSupportedTrialQuestionSlug(question.slug)) {
-      throw new ValidationError('This question type has been removed from active markets.')
+      throw new ValidationError('This question type has been removed from active trials.')
     }
 
     const snapshots = await db.query.modelDecisionSnapshots.findMany({

@@ -4,14 +4,14 @@ import { sql } from 'drizzle-orm'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { AdminMarketConstantsManager, type MarketRuntimeConfigDto } from '@/components/AdminMarketConstantsManager'
+import { AdminTrialConstantsManager, type TrialRuntimeConfigDto } from '@/components/AdminTrialConstantsManager'
 import { AdminModelStartingBankroll } from '@/components/AdminModelStartingBankroll'
-import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
+import { getTrialRuntimeConfig } from '@/lib/trial-runtime-config'
 import { db, users } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-function toDto(config: Awaited<ReturnType<typeof getMarketRuntimeConfig>>): MarketRuntimeConfigDto {
+function toDto(config: Awaited<ReturnType<typeof getTrialRuntimeConfig>>): TrialRuntimeConfigDto {
   return {
     warmupRunCount: config.warmupRunCount,
     warmupMaxTradeUsd: config.warmupMaxTradeUsd,
@@ -33,7 +33,7 @@ export default async function AdminSettingsPage() {
   }
 
   const [config, userRows] = await Promise.all([
-    getMarketRuntimeConfig(),
+    getTrialRuntimeConfig(),
     db.select({ count: sql<number>`count(*)::int` }).from(users),
   ])
   const currentUsersCount = userRows[0]?.count ?? 0
@@ -41,18 +41,18 @@ export default async function AdminSettingsPage() {
   return (
     <AdminConsoleLayout
       title="Runtime Settings"
-      description="Tune market controls and signup access without redeploying."
+      description="Tune trial controls and signup access without redeploying."
       activeTab="settings"
     >
       <section className="mb-4">
         <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Runtime Controls</h2>
         <p className="text-sm text-[#8a8075] mt-1">
-          Changes apply immediately after saving. Market settings affect new opens and future runs; signup limits affect new account creation.
+          Changes apply immediately after saving. Trial settings affect new openings and future runs; signup limits affect new account creation.
         </p>
       </section>
 
       <div className="space-y-4">
-        <AdminMarketConstantsManager initialConfig={toDto(config)} currentUsersCount={currentUsersCount} />
+        <AdminTrialConstantsManager initialConfig={toDto(config)} currentUsersCount={currentUsersCount} />
         <AdminModelStartingBankroll />
       </div>
     </AdminConsoleLayout>

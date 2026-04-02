@@ -1,5 +1,5 @@
 import { MODEL_IDS, MODEL_INFO, OUTCOME_COLORS, type ModelId } from '@/lib/constants'
-import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
+import type { AdminTrialRunSnapshot } from '@/lib/trial-run-logs'
 import { DEFAULT_PHASE2_RESULTS_QUESTION } from '@/lib/trial-questions'
 import type {
   DailyRunActivityPhase,
@@ -8,6 +8,8 @@ import type {
   DailyRunStatus,
   DailyRunSummary,
 } from '@/lib/markets/types'
+
+export type { AdminTrialRunSnapshot } from '@/lib/trial-run-logs'
 
 export interface AdminTrialEvent {
   id: string
@@ -77,7 +79,7 @@ export interface ExecutionPlanStep {
   detail: string | null
 }
 
-export interface ExecutionPlanMarket {
+export interface ExecutionPlanTrial {
   marketId: string
   trialQuestionId: string
   trialId: string
@@ -90,6 +92,9 @@ export interface ExecutionPlanMarket {
   steps: ExecutionPlanStep[]
   estimatedModelRunCosts: Partial<Record<ModelId, number>>
 }
+
+type AdminMarketRunSnapshot = AdminTrialRunSnapshot
+type ExecutionPlanMarket = ExecutionPlanTrial
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -563,8 +568,8 @@ export function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | 
   const defaultActivity = snapshot.status === 'running'
     ? (stopRequested ? snapshot.failureReason : 'Daily run is in progress...')
     : snapshot.status === 'completed'
-      ? 'Daily market cycle completed'
-      : (isAdminStoppedMessage(snapshot.failureReason) ? 'Daily market cycle stopped by admin' : 'Daily market cycle failed')
+      ? 'Daily trial cycle completed'
+      : (isAdminStoppedMessage(snapshot.failureReason) ? 'Daily trial cycle stopped by admin' : 'Daily trial cycle failed')
 
   return {
     startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
@@ -721,7 +726,7 @@ export function getExecutionStatusLabel(status: ExecutionStepStatus): string {
   return 'Queued'
 }
 
-export function getMarketStatusTone(status: AdminMarketEvent['marketStatus']): string {
+export function getTrialStatusTone(status: AdminMarketEvent['marketStatus']): string {
   if (status === 'OPEN') return 'text-[#3a8a2e] bg-[#3a8a2e]/10'
   if (status === 'RESOLVED') return 'text-[#b5aa9e] bg-[#b5aa9e]/15'
   return 'text-[#8a8075] bg-[#e8ddd0]/40'
@@ -732,4 +737,4 @@ export function getOutcomeStyle(outcome: string): string {
   return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
 }
 
-export type AdminMarketEvent = AdminTrialEvent
+type AdminMarketEvent = AdminTrialEvent
