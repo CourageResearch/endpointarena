@@ -187,7 +187,7 @@ function buildPromptInput(args: AdminAiEstimateInput, modelId: ModelId): ModelDe
   }
 }
 
-export function estimateAdminAiRowCost(
+function estimateAdminAiRowCost(
   modelId: ModelId,
   args: AdminAiEstimateInput,
 ): AdminAiRowEstimate {
