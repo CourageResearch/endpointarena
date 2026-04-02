@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { useTrialsOverview } from '@/components/markets/useMarketOverview'
+import { useTrialsOverview } from '@/components/trials/useTrialsOverview'
 import { MODEL_IDS, abbreviateType } from '@/lib/constants'
 import {
   daysUntilUtc,
@@ -1221,5 +1221,3 @@ export function TrialsBrowseHomepage({
     </div>
   )
 }
-
-export const MarketBrowseHomepage = TrialsBrowseHomepage

@@ -32,6 +32,7 @@ export interface AdminTrialEvent {
 
 export interface LastRunSummaryState {
   runDateLabel: string
+  runCount: number
   durationSeconds: number
   ok: number
   error: number
@@ -426,24 +427,6 @@ function getSnapshotCounts(snapshot: AdminMarketRunSnapshot): {
   errorCount: number
   skippedCount: number
 } {
-  for (const log of snapshot.logs) {
-    if (
-      log.completedActions != null ||
-      log.totalActions != null ||
-      log.okCount != null ||
-      log.errorCount != null ||
-      log.skippedCount != null
-    ) {
-      return {
-        completedActions: log.completedActions ?? snapshot.processedActions,
-        totalActions: log.totalActions ?? snapshot.totalActions,
-        okCount: log.okCount ?? snapshot.okCount,
-        errorCount: log.errorCount ?? snapshot.errorCount,
-        skippedCount: log.skippedCount ?? snapshot.skippedCount,
-      }
-    }
-  }
-
   return {
     completedActions: snapshot.processedActions,
     totalActions: snapshot.totalActions,
@@ -521,6 +504,7 @@ export function buildRunSummaryFromSnapshot(snapshot: AdminMarketRunSnapshot | n
 
   return {
     runDateLabel: new Date(snapshot.runDate).toLocaleString('en-US', { timeZone: 'UTC' }),
+    runCount: snapshot.runCount,
     durationSeconds,
     ok: counts.okCount,
     error: counts.errorCount,

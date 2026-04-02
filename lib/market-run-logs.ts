@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db, marketRunLogs, marketRuns } from '@/lib/db'
 import type { DailyRunActivityPhase, DailyRunStatus } from '@/lib/markets/types'
 import { MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
@@ -30,6 +30,7 @@ export type AdminMarketRunSnapshot = {
   runId: string
   runDate: string
   status: 'running' | 'completed' | 'failed'
+  runCount: number
   openMarkets: number
   totalActions: number
   processedActions: number
@@ -45,6 +46,98 @@ export type AdminMarketRunSnapshot = {
 
 function toIsoString(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
+}
+
+function toEpoch(value: Date | null | undefined): number {
+  return value instanceof Date ? value.getTime() : Number.NaN
+}
+
+function maxDate(...values: Array<Date | null | undefined>): Date | null {
+  const dated = values.filter((value): value is Date => value instanceof Date)
+  if (dated.length === 0) return null
+  return dated.reduce((latest, current) => (current.getTime() > latest.getTime() ? current : latest))
+}
+
+function minDate(...values: Array<Date | null | undefined>): Date | null {
+  const dated = values.filter((value): value is Date => value instanceof Date)
+  if (dated.length === 0) return null
+  return dated.reduce((earliest, current) => (current.getTime() < earliest.getTime() ? current : earliest))
+}
+
+type RunLogWithActor = typeof marketRunLogs.$inferSelect & {
+  actor?: {
+    modelKey: string | null
+  } | null
+}
+
+function mapRunLogEntry(log: RunLogWithActor): PersistedRunLogEntry {
+  return {
+    id: log.id,
+    runId: log.runId,
+    logType: log.logType as LogType,
+    message: log.message,
+    completedActions: log.completedActions ?? null,
+    totalActions: log.totalActions ?? null,
+    okCount: log.okCount ?? null,
+    errorCount: log.errorCount ?? null,
+    skippedCount: log.skippedCount ?? null,
+    marketId: log.marketId ?? null,
+    trialQuestionId: log.trialQuestionId ?? null,
+    actorId: log.actorId ?? null,
+    modelId: log.actor?.modelKey ?? null,
+    activityPhase: (log.activityPhase as DailyRunActivityPhase | null) ?? null,
+    action: log.action ?? null,
+    actionStatus: (log.actionStatus as DailyRunStatus | null) ?? null,
+    amountUsd: log.amountUsd ?? null,
+    createdAt: toIsoString(log.createdAt),
+  }
+}
+
+function buildSnapshotFromRuns(input: {
+  runs: Array<typeof marketRuns.$inferSelect>
+  logs: RunLogWithActor[]
+}): AdminMarketRunSnapshot | null {
+  const { runs, logs } = input
+  if (runs.length === 0) return null
+
+  const latestRun = [...runs].sort((left, right) => {
+    const updatedDiff = toEpoch(right.updatedAt ?? right.createdAt) - toEpoch(left.updatedAt ?? left.createdAt)
+    if (updatedDiff !== 0) return updatedDiff
+    return toEpoch(right.createdAt) - toEpoch(left.createdAt)
+  })[0]
+
+  const createdAt = minDate(...runs.map((run) => run.createdAt))
+  const updatedAt = maxDate(...runs.map((run) => run.updatedAt ?? run.createdAt))
+  const completedAt = maxDate(...runs.map((run) => run.completedAt ?? run.updatedAt ?? run.createdAt))
+  const touchedMarketIds = new Set(
+    logs
+      .map((log) => log.marketId)
+      .filter((marketId): marketId is string => typeof marketId === 'string' && marketId.length > 0),
+  )
+
+  return {
+    runId: latestRun.id,
+    runDate: latestRun.runDate.toISOString(),
+    status: runs.some((run) => run.status === 'running')
+      ? 'running'
+      : runs.some((run) => run.status === 'failed')
+        ? 'failed'
+        : 'completed',
+    runCount: runs.length,
+    openMarkets: touchedMarketIds.size > 0
+      ? touchedMarketIds.size
+      : runs.reduce((total, run) => total + run.openMarkets, 0),
+    totalActions: runs.reduce((total, run) => total + run.totalActions, 0),
+    processedActions: runs.reduce((total, run) => total + run.processedActions, 0),
+    okCount: runs.reduce((total, run) => total + run.okCount, 0),
+    errorCount: runs.reduce((total, run) => total + run.errorCount, 0),
+    skippedCount: runs.reduce((total, run) => total + run.skippedCount, 0),
+    failureReason: latestRun.failureReason ?? null,
+    createdAt: toIsoString(createdAt),
+    updatedAt: toIsoString(updatedAt),
+    completedAt: toIsoString(completedAt),
+    logs: logs.map(mapRunLogEntry),
+  }
 }
 
 async function failStaleRunningRunIfNeeded(run: {
@@ -139,48 +232,24 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
 
   if (!latest) return null
 
-  const logs = await db.query.marketRunLogs.findMany({
-    where: eq(marketRunLogs.runId, latest.id),
-    orderBy: [desc(marketRunLogs.createdAt)],
-    limit: 120,
-    with: {
-      actor: true,
-    },
+  const runsForDate = await db.query.marketRuns.findMany({
+    where: eq(marketRuns.runDate, latest.runDate),
+    orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
   })
+  const runIds = runsForDate.map((run) => run.id)
+  const logs = runIds.length === 0
+    ? []
+    : await db.query.marketRunLogs.findMany({
+        where: inArray(marketRunLogs.runId, runIds),
+        orderBy: [desc(marketRunLogs.createdAt)],
+        limit: 4000,
+        with: {
+          actor: true,
+        },
+      })
 
-  return {
-    runId: latest.id,
-    runDate: latest.runDate.toISOString(),
-    status: latest.status as 'running' | 'completed' | 'failed',
-    openMarkets: latest.openMarkets,
-    totalActions: latest.totalActions,
-    processedActions: latest.processedActions,
-    okCount: latest.okCount,
-    errorCount: latest.errorCount,
-    skippedCount: latest.skippedCount,
-    failureReason: latest.failureReason ?? null,
-    createdAt: toIsoString(latest.createdAt),
-    updatedAt: toIsoString(latest.updatedAt),
-    completedAt: toIsoString(latest.completedAt),
-    logs: logs.map((log) => ({
-      id: log.id,
-      runId: log.runId,
-      logType: log.logType as LogType,
-      message: log.message,
-      completedActions: log.completedActions ?? null,
-      totalActions: log.totalActions ?? null,
-      okCount: log.okCount ?? null,
-      errorCount: log.errorCount ?? null,
-      skippedCount: log.skippedCount ?? null,
-      marketId: log.marketId ?? null,
-      trialQuestionId: log.trialQuestionId ?? null,
-      actorId: log.actorId ?? null,
-      modelId: log.actor?.modelKey ?? null,
-      activityPhase: (log.activityPhase as DailyRunActivityPhase | null) ?? null,
-      action: log.action ?? null,
-      actionStatus: (log.actionStatus as DailyRunStatus | null) ?? null,
-      amountUsd: log.amountUsd ?? null,
-      createdAt: toIsoString(log.createdAt),
-    })),
-  }
+  return buildSnapshotFromRuns({
+    runs: runsForDate,
+    logs,
+  })
 }

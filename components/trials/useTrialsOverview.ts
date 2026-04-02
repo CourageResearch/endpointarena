@@ -90,5 +90,3 @@ export function useTrialsOverview(
 
   return { data, loading, refreshing, error, reload, generatedAt }
 }
-
-export const useMarketOverview = useTrialsOverview

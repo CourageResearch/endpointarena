@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { getTrialsOverviewData } from '@/lib/market-overview'
-import { createBrowseTrialsOverviewPayload } from '@/lib/market-overview-payload'
+import { getTrialsOverviewData } from '@/lib/trial-overview'
+import { createBrowseTrialsOverviewPayload } from '@/lib/trial-overview-payload'
 import { HomePageContent } from '@/components/HomePageContent'
 import { buildPageMetadata } from '@/lib/seo'
 

@@ -1,6 +1,6 @@
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, PageFrame, SquareDivider } from '@/components/site/chrome'
-import { HomeTrialsClient } from '@/components/HomeMarketsClient'
+import { HomeTrialsClient } from '@/components/HomeTrialsClient'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 export function HomePageContent({
@@ -53,7 +53,7 @@ export function HomePageContent({
           <HomeTrialsClient
             detailBasePath="/trials"
             headerLinkHref="/trials"
-          headerLinkLabel="View all trials ->"
+            headerLinkLabel="View all trials ->"
             initialOverview={initialTrialOverview}
             variant="table"
           />

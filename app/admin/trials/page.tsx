@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { AdminTrialManager } from '@/components/AdminMarketManager'
-import { getTrialAdminData } from '@/lib/admin-market-data'
+import { AdminTrialManager } from '@/components/AdminTrialManager'
+import { getTrialAdminData } from '@/lib/admin-trial-data'
 
 export const dynamic = 'force-dynamic'
 

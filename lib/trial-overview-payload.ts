@@ -18,14 +18,14 @@ function trimDecisionStateForBrowse(state: MarketModelState): MarketModelState {
   }
 }
 
-function trimMarketForBrowse(market: OpenMarketRow): OpenMarketRow {
+function trimTrialForBrowse(market: OpenMarketRow): OpenMarketRow {
   return {
     ...market,
     modelStates: market.modelStates.map(trimDecisionStateForBrowse),
   }
 }
 
-export function createBrowseOverviewPayload(data: OverviewResponse | null): OverviewResponse | null {
+export function createBrowseTrialsOverviewPayload(data: OverviewResponse | null): OverviewResponse | null {
   if (!data) return null
 
   return {
@@ -34,12 +34,12 @@ export function createBrowseOverviewPayload(data: OverviewResponse | null): Over
     equityHistory: [],
     recentActions: [],
     recentRuns: [],
-    openMarkets: data.openMarkets.map(trimMarketForBrowse),
-    resolvedMarkets: data.resolvedMarkets.map(trimMarketForBrowse),
+    openMarkets: data.openMarkets.map(trimTrialForBrowse),
+    resolvedMarkets: data.resolvedMarkets.map(trimTrialForBrowse),
   }
 }
 
-export function createDetailOverviewPayload(data: OverviewResponse | null): OverviewResponse | null {
+export function createDetailTrialsOverviewPayload(data: OverviewResponse | null): OverviewResponse | null {
   if (!data) return null
 
   return {
@@ -49,6 +49,3 @@ export function createDetailOverviewPayload(data: OverviewResponse | null): Over
     recentRuns: [],
   }
 }
-
-export const createBrowseTrialsOverviewPayload = createBrowseOverviewPayload
-export const createDetailTrialsOverviewPayload = createDetailOverviewPayload

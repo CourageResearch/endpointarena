@@ -117,6 +117,3 @@ export function getTrialAdminStats(events: AdminTrialEvent[]) {
     upcomingOpenMarkets: Math.max(openMarketEvents.length - openMarketsNeedingReview, 0),
   }
 }
-
-export const getMarketAdminData = getTrialAdminData
-export const getMarketAdminStats = getTrialAdminStats

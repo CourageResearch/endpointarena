@@ -22,7 +22,7 @@ import {
 } from '@/components/markets/dashboard/shared'
 import { MarketTradePanel } from '@/components/markets/dashboard/trade-panel'
 import { MarketDetailChart, TinyPriceSparkline } from '@/components/markets/marketOverviewCharts'
-import { useTrialsOverview } from '@/components/markets/useMarketOverview'
+import { useTrialsOverview } from '@/components/trials/useTrialsOverview'
 import { HeaderDots } from '@/components/site/chrome'
 import {
   daysUntilUtc,
@@ -1356,5 +1356,3 @@ export function TrialDashboard({
     </div>
   )
 }
-
-export const MarketDashboardConcept5 = TrialDashboard

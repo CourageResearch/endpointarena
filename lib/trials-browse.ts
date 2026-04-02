@@ -1,5 +1,5 @@
 import { abbreviateType } from '@/lib/constants'
-import { getMarketOverviewData } from '@/lib/market-overview'
+import { getTrialsOverviewData } from '@/lib/trial-overview'
 import {
   daysUntilUtc,
   getMarketQuestion,
@@ -91,7 +91,7 @@ function createTrialsBrowseResponse(data: OverviewResponse | null): TrialsBrowse
 export async function getTrialsBrowseData(input: {
   includeResolved?: boolean
 } = {}): Promise<TrialsBrowseResponse> {
-  const data = await getMarketOverviewData({
+  const data = await getTrialsOverviewData({
     includeResolved: input.includeResolved,
   })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
-import { TrialsBrowseHomepage } from '@/components/MarketBrowseHomepage'
+import { TrialsBrowseHomepage } from '@/components/TrialsBrowseHomepage'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 export function HomeTrialsClient({
@@ -36,5 +36,3 @@ export function HomeTrialsClient({
     </Suspense>
   )
 }
-
-export const HomeMarketsClient = HomeTrialsClient

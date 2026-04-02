@@ -13,27 +13,6 @@
     "scripts/sync-clinicaltrials-gov.ts"
   ],
   "ignoreIssues": {
-    "components/AdminMarketManager.tsx": [
-      "exports"
-    ],
-    "components/HomeMarketsClient.tsx": [
-      "exports"
-    ],
-    "components/MarketBrowseHomepage.tsx": [
-      "exports"
-    ],
-    "components/MarketDashboardConcept5.tsx": [
-      "exports"
-    ],
-    "components/markets/useMarketOverview.ts": [
-      "exports"
-    ],
-    "lib/admin-market-data.ts": [
-      "exports"
-    ],
-    "lib/market-overview-payload.ts": [
-      "exports"
-    ],
     "scripts/*-utils.ts": [
       "exports"
     ]

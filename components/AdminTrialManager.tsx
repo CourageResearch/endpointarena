@@ -426,6 +426,7 @@ export function AdminTrialManager({
 
     setLastRunSummary({
       runDateLabel,
+      runCount: 1,
       durationSeconds,
       ok: counts.ok,
       error: counts.error,
@@ -937,7 +938,9 @@ export function AdminTrialManager({
                 <p className="text-xs text-[#8a8075]">
                   {executionPlan.length} trial{executionPlan.length === 1 ? '' : 's'} • {executionPlanStepCount} model step{executionPlanStepCount === 1 ? '' : 's'}
                   {showingLastRunResults
-                    ? ' • preserved from the latest completed run'
+                    ? (lastRunSummary?.runCount && lastRunSummary.runCount > 1
+                        ? ` • combined from ${lastRunSummary.runCount} runs on this run date`
+                        : ' • preserved from the latest completed run')
                     : (!runningDaily && !preserveExecutionPlan && executionPlanStepCount > 0 ? ` • ${queuedExecutionSteps} queued for the next run` : '')}
                 </p>
               </div>
@@ -1448,5 +1451,3 @@ export function AdminTrialManager({
     </div>
   )
 }
-
-export const AdminMarketManager = AdminTrialManager

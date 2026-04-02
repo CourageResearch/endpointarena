@@ -53,7 +53,7 @@ function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, own
   }
 }
 
-export async function getMarketOverviewData(input: {
+export async function getTrialsOverviewData(input: {
   marketId?: string | null
   includeResolved?: boolean
 } = {}): Promise<OverviewResponse> {
@@ -419,5 +419,3 @@ export async function getMarketOverviewData(input: {
     recentRuns: recentRunRows,
   }
 }
-
-export const getTrialsOverviewData = getMarketOverviewData
