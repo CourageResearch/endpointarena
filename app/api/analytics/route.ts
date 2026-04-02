@@ -80,21 +80,23 @@ export async function POST(request: Request) {
     const clientIp = extractClientIp(request.headers)
     const geo = clientIp ? await geolocateIp(clientIp) : null
 
-    // Cap at 50 events, filter valid types
-    const validTypes = new Set(['pageview', 'click', 'market_search'])
+    // Cap at 50 events and normalize legacy search event names during the compatibility window.
+    const validTypes = new Set(['pageview', 'click', 'market_search', 'trial_search'])
     const rows = events
       .slice(0, 50)
       .map((event: any) => {
-        if (!validTypes.has(event?.type)) return null
+        const rawType = String(event?.type || '')
+        if (!validTypes.has(rawType)) return null
 
-        const type = String(event.type)
+        const type = rawType === 'market_search' ? 'trial_search' : rawType
+        const isSearchEvent = type === 'trial_search'
         const url = String(event.url || '').slice(0, 500)
-        const searchQuery = type === 'market_search'
+        const searchQuery = isSearchEvent
           ? normalizeSearchQuery(event.searchQuery)
           : null
 
         if (!url) return null
-        if (type === 'market_search' && !searchQuery) return null
+        if (isSearchEvent && !searchQuery) return null
 
         return {
           type,
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
           country: geo?.country ?? null,
           city: geo?.city ?? null,
           searchQuery,
-          resultCount: type === 'market_search' ? normalizeResultCount(event.resultCount) : null,
+          resultCount: isSearchEvent ? normalizeResultCount(event.resultCount) : null,
         }
       })
       .filter((row): row is {

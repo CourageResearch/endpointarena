@@ -320,14 +320,14 @@ function TrialsBrowseSearchControls({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="w-full max-w-[26rem]">
           <label className="sr-only" htmlFor="trials-browse-search">
-            Search all markets
+            Search all trials
           </label>
           <input
             id="trials-browse-search"
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search all markets..."
+            placeholder="Search all trials..."
             className={SEARCH_INPUT_CLASS_NAME}
             style={SEARCH_INPUT_STYLE}
             autoComplete="off"
@@ -461,8 +461,8 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
   }
 
   const emptyMessage = selectedTab === 'resolved'
-    ? 'No resolved markets match the current filters.'
-    : 'No open markets match the current filters.'
+    ? 'No resolved trials match the current filters.'
+    : 'No open trials match the current filters.'
 
   return (
     <section className="mt-6">
@@ -901,7 +901,7 @@ export function TrialsBrowseTable({
     if (typeof window === 'undefined') return
     if (isLocalhostHostname(window.location.hostname)) return
 
-    const storageKey = `market-search:${pathname}:${normalizedSearchQuery.toLowerCase()}`
+    const storageKey = `trial-search:${pathname}:${normalizedSearchQuery.toLowerCase()}`
 
     try {
       if (window.sessionStorage.getItem(storageKey) === '1') {
@@ -914,7 +914,7 @@ export function TrialsBrowseTable({
     const timer = window.setTimeout(() => {
       const payload = JSON.stringify({
         events: [{
-          type: 'market_search',
+          type: 'trial_search',
           url: pathname,
           referrer: typeof document !== 'undefined' ? document.referrer : undefined,
           elementId: 'trials-browse-search',
@@ -947,7 +947,7 @@ export function TrialsBrowseTable({
   if (loading) {
     return (
       <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading markets...</div>
+        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading trials...</div>
       </div>
     )
   }
@@ -956,7 +956,7 @@ export function TrialsBrowseTable({
     return (
       <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
         <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          Failed to load markets: {error}
+          Failed to load trials: {error}
         </div>
       </div>
     )
@@ -965,7 +965,7 @@ export function TrialsBrowseTable({
   if (!data) {
     return (
       <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No market data.</div>
+        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No trial data.</div>
       </div>
     )
   }

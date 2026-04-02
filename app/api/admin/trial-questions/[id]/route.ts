@@ -50,6 +50,7 @@ export async function DELETE(
     revalidatePath('/profile')
     revalidatePath('/admin')
     revalidatePath('/admin/ai')
+    revalidatePath('/admin/trials')
     revalidatePath('/admin/markets')
     revalidatePath('/admin/outcomes')
     revalidatePath('/admin/predictions')

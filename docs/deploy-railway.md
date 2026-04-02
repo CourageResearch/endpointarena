@@ -95,7 +95,7 @@ cmd /c railway logs --service endpoint-arena-app --environment 4a8cf2da-561b-446
 - `https://endpointarena.com/api/health`
 - `https://endpointarena.com/trials`
 - Login/auth flow
-- One DB-backed admin route such as market run state
+- One DB-backed admin route such as trial run state
 
 7. Confirm the active Railway deployment SHA matches the intended GitHub commit. Railway GitHub deployment records on April 1, 2026 showed a newer deployment entry that did not record a `success` state even though production remained healthy, so verify the deployed SHA explicitly in Railway or via the GitHub deployment history.
 

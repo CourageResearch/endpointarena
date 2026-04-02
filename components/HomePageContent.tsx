@@ -1,20 +1,19 @@
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, PageFrame, SquareDivider } from '@/components/site/chrome'
-import { HomeMarketsClient } from '@/components/HomeMarketsClient'
+import { HomeTrialsClient } from '@/components/HomeMarketsClient'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 export function HomePageContent({
-  initialMarketOverview,
+  initialTrialOverview,
 }: {
-  initialMarketOverview: OverviewResponse | null
+  initialTrialOverview: OverviewResponse | null
 }) {
   return (
     <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
-      {/* ── 1. HERO ── */}
+      {/* Hero */}
       <section className="relative overflow-hidden">
-        {/* Soft gradient wash */}
         <div
           className="absolute inset-0 opacity-[0.05]"
           style={{
@@ -24,7 +23,6 @@ export function HomePageContent({
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-10 sm:pt-20 pb-6 sm:pb-10">
           <div className="flex gap-6 sm:gap-8">
-            {/* Left vertical accent rule */}
             <div className="hidden sm:block w-[2px] shrink-0 rounded-full self-stretch" style={{ background: 'linear-gradient(180deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }} />
             <div className="min-w-0">
               <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-normal tracking-tight leading-[1.08] mb-5">
@@ -44,31 +42,26 @@ export function HomePageContent({
                 </span>
                 .
               </h1>
-              <p className="text-[#8a8075] text-base sm:text-lg max-w-xl leading-relaxed">
-                Trade live markets on whether Phase 2 clinical trials will report positive results.
-              </p>
             </div>
           </div>
         </div>
-
       </section>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-8 pb-10 sm:pb-16">
-
-        {/* ── 2. OPEN MARKETS ── */}
+        {/* Trials */}
         <section className="mb-16">
-          <HomeMarketsClient
+          <HomeTrialsClient
             detailBasePath="/trials"
             headerLinkHref="/trials"
-            headerLinkLabel="View all →"
-            initialOverview={initialMarketOverview}
+          headerLinkLabel="View all trials ->"
+            initialOverview={initialTrialOverview}
             variant="table"
           />
         </section>
 
         <SquareDivider className="mb-16" />
 
-        {/* ── 3. FOOTER ── */}
+        {/* Footer */}
         <FooterGradientRule />
       </main>
     </PageFrame>

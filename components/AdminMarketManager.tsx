@@ -29,7 +29,7 @@ import {
   summarizeCounts,
   summarizeNonOkModels,
   truncateText,
-  type AdminMarketEvent,
+  type AdminTrialEvent,
   type DailyRunProgressState,
   type ErrorConsoleEntry,
   type ExecutionPlanMarket,
@@ -42,13 +42,13 @@ import type {
 import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
 
 interface Props {
-  events: AdminMarketEvent[]
+  events: AdminTrialEvent[]
   initialRunSnapshot?: AdminMarketRunSnapshot | null
-  sections?: AdminMarketManagerSection[]
-  labels?: Partial<AdminMarketManagerLabels>
+  sections?: AdminTrialManagerSection[]
+  labels?: Partial<AdminTrialManagerLabels>
 }
 
-interface AdminMarketManagerLabels {
+interface AdminTrialManagerLabels {
   searchPlaceholder: string
   openMarketsTitle: string
   openMarketsDescription: string
@@ -60,14 +60,14 @@ interface AdminMarketManagerLabels {
   resolvedMarketsEmptyState: string
 }
 
-export type AdminMarketManagerSection =
+export type AdminTrialManagerSection =
   | 'dailyCycle'
   | 'search'
   | 'openMarkets'
   | 'needsMarket'
   | 'resolvedMarkets'
 
-const DEFAULT_SECTIONS: AdminMarketManagerSection[] = [
+const DEFAULT_SECTIONS: AdminTrialManagerSection[] = [
   'dailyCycle',
   'search',
   'openMarkets',
@@ -75,16 +75,16 @@ const DEFAULT_SECTIONS: AdminMarketManagerSection[] = [
   'resolvedMarkets',
 ]
 
-const DEFAULT_LABELS: AdminMarketManagerLabels = {
+const DEFAULT_LABELS: AdminTrialManagerLabels = {
   searchPlaceholder: 'Search trial, sponsor, ticker, endpoint',
-  openMarketsTitle: 'Open Markets',
-  openMarketsDescription: 'Markets that are currently live.',
-  openMarketsEmptyState: 'No open markets match the current filter.',
-  needsMarketTitle: 'Needs Market',
-  needsMarketDescription: 'Live Phase 2 endpoint questions that still need a market opened.',
-  resolvedMarketsTitle: 'Resolved Markets',
-  resolvedMarketsDescription: 'Primary-endpoint markets that have already been resolved.',
-  resolvedMarketsEmptyState: 'No resolved markets match the current filter.',
+  openMarketsTitle: 'Open Trials',
+  openMarketsDescription: 'Trials that are currently live.',
+  openMarketsEmptyState: 'No open trials match the current filter.',
+  needsMarketTitle: 'Needs Trial Market',
+  needsMarketDescription: 'Live Phase 2 questions that still need a trial opened for trading.',
+  resolvedMarketsTitle: 'Resolved Trials',
+  resolvedMarketsDescription: 'Trials that have already been resolved.',
+  resolvedMarketsEmptyState: 'No resolved trials match the current filter.',
 }
 
 type RunDailyCycleOptions = {
@@ -126,7 +126,7 @@ function formatUsdEstimate(value: number): string {
   }).format(value)
 }
 
-function filterEventsForRun(events: AdminMarketEvent[], nctNumber?: string): AdminMarketEvent[] {
+function filterEventsForRun(events: AdminTrialEvent[], nctNumber?: string): AdminTrialEvent[] {
   if (!nctNumber) {
     return events
   }
@@ -134,7 +134,7 @@ function filterEventsForRun(events: AdminMarketEvent[], nctNumber?: string): Adm
   return events.filter((event) => event.nctNumber.trim().toUpperCase() === nctNumber)
 }
 
-export function AdminMarketManager({
+export function AdminTrialManager({
   events: initialEvents,
   initialRunSnapshot = null,
   sections = DEFAULT_SECTIONS,
@@ -249,7 +249,7 @@ export function AdminMarketManager({
 
     const pollState = async () => {
       try {
-        const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+      const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
         const payload = await response.json().catch(() => ({}))
         if (!response.ok || cancelled) return
         applyRunSnapshot(payload?.snapshot ?? null)
@@ -299,14 +299,14 @@ export function AdminMarketManager({
     setUiError(null)
     setLoadingEventId(trialQuestionId)
     try {
-      const response = await fetch('/api/markets/open', {
+      const response = await fetch('/api/trials/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trialQuestionId }),
       })
 
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open market'))
+      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open trial market'))
 
       setEvents((prev) => prev.map((event) => (
         event.id === trialQuestionId
@@ -320,7 +320,7 @@ export function AdminMarketManager({
           : event
       )))
     } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed to open market')
+      setUiError(error instanceof Error ? error.message : 'Failed to open trial market')
     } finally {
       setLoadingEventId(null)
     }
@@ -404,7 +404,7 @@ export function AdminMarketManager({
     appendRunLog('Stop requested by admin; waiting for the current model step to finish')
 
     try {
-      const response = await fetch('/api/admin/markets/cancel-run', {
+      const response = await fetch('/api/admin/trials/cancel-run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -485,7 +485,7 @@ export function AdminMarketManager({
     }))
 
     try {
-      const response = await fetch('/api/markets/run-daily?stream=1', {
+      const response = await fetch('/api/trials/run-daily?stream=1', {
         method: 'POST',
         signal: controller.signal,
         headers: {
@@ -517,7 +517,7 @@ export function AdminMarketManager({
             orderedMarkets: event.orderedMarkets,
             openMarkets: event.openMarkets,
             totalActions: event.totalActions,
-            currentActivity: `Discovered ${event.openMarkets} open markets (${event.totalActions} actions)`,
+            currentActivity: `Discovered ${event.openMarkets} open trials (${event.totalActions} actions)`,
           } : prev)
           setExecutionPlan(buildExecutionPlan({
             events: relevantEvents,
@@ -526,7 +526,7 @@ export function AdminMarketManager({
             orderedMarkets: event.orderedMarkets,
             fallbackStatuses: ['OPEN'],
           }))
-          appendRunLog(`Found ${event.openMarkets} open markets (${event.totalActions} model actions)`)
+          appendRunLog(`Found ${event.openMarkets} open trials (${event.totalActions} model actions)`)
           return
         }
 
@@ -640,7 +640,7 @@ export function AdminMarketManager({
 
       if (cancelledMessage) {
         try {
-          const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+      const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
           const payload = await response.json().catch(() => ({}))
           if (response.ok) {
             applyRunSnapshot(payload?.snapshot ?? null)
@@ -657,7 +657,7 @@ export function AdminMarketManager({
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         try {
-          const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+      const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
           const payload = await response.json().catch(() => ({}))
           if (response.ok) {
             applyRunSnapshot(payload?.snapshot ?? null)
@@ -684,7 +684,7 @@ export function AdminMarketManager({
 
       if (message.toLowerCase().includes('already running')) {
         try {
-          const response = await fetch('/api/admin/markets/run-state', { cache: 'no-store' })
+      const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
           const payload = await response.json().catch(() => ({}))
           if (response.ok) {
             applyRunSnapshot(payload?.snapshot ?? null)
@@ -844,17 +844,17 @@ export function AdminMarketManager({
               <p className="text-xs text-[#8d2c22]">Enter an NCT id like NCT06870240.</p>
             ) : null}
             {scopedClaudeNctNumber && scopedClaudeOpenMarketCount === 0 ? (
-              <p className="text-xs text-[#8d2c22]">No open market currently matches {scopedClaudeNctNumber}.</p>
+        <p className="text-xs text-[#8d2c22]">No open trial currently matches {scopedClaudeNctNumber}.</p>
             ) : null}
             {scopedClaudeNctNumber && scopedClaudeOpenMarketCount > 0 ? (
               <p className="text-xs text-[#2f6f24]">
-                Ready to run Claude Opus 4.6 for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open market{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
+          Ready to run Claude Opus 4.6 for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open trial{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
               </p>
             ) : null}
           </div>
           <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
             <div>
-              <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Market Cycle</h3>
+            <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Trial Cycle</h3>
               <p className="mt-1 text-xs text-[#8a8075]">Target schedule: 6:00 AM ET.</p>
             </div>
           {runProgress && (
@@ -864,7 +864,7 @@ export function AdminMarketManager({
                 <p className="text-xs text-[#8a8075]">
                   {runProgress.runDate
                     ? `Run ${new Date(runProgress.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC`
-                    : 'Initializing run'} • {runProgress.openMarkets} open market{runProgress.openMarkets === 1 ? '' : 's'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
+                    : 'Initializing run'} • {runProgress.openMarkets} open trial{runProgress.openMarkets === 1 ? '' : 's'} • {runProgress.completedActions}/{runProgress.totalActions || '?'} actions • {displayElapsedSeconds}s elapsed
                 </p>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -1090,8 +1090,8 @@ export function AdminMarketManager({
               ) : (
                 <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#8a8075]">
                   {showingLastRunResults
-                    ? 'No markets were processed in the latest completed run.'
-                    : 'No open markets are queued for the next daily cycle yet.'}
+                    ? 'No trials were processed in the latest completed run.'
+                    : 'No open trials are queued for the next daily cycle yet.'}
                 </div>
               )}
             </div>
@@ -1150,7 +1150,7 @@ export function AdminMarketManager({
                   <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.durationSeconds}s</p>
                 </div>
                 <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
-                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Open Markets</p>
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Open Trials</p>
                   <p className="text-xs font-medium text-[#1a1a1a]">{lastRunSummary.openMarkets}</p>
                 </div>
                 <div className="rounded-none border border-[#e8ddd0] bg-white/70 px-2 py-1">
@@ -1340,7 +1340,7 @@ export function AdminMarketManager({
                             disabled={isOpening}
                             className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {isOpening ? 'Opening...' : 'Open Market'}
+                            {isOpening ? 'Opening...' : 'Open Trial Market'}
                           </button>
                         </div>
                       </div>
@@ -1448,3 +1448,5 @@ export function AdminMarketManager({
     </div>
   )
 }
+
+export const AdminMarketManager = AdminTrialManager

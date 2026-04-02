@@ -1,4 +1,4 @@
-import { and, desc, eq, gte } from 'drizzle-orm'
+import { and, desc, gte, inArray } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
@@ -9,6 +9,8 @@ import { analyticsEvents } from '@/lib/schema'
 import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
 
 export const dynamic = 'force-dynamic'
+
+const SEARCH_EVENT_TYPES = ['market_search', 'trial_search'] as const
 
 type SearchRollup = {
   query: string
@@ -34,7 +36,7 @@ async function getSearchAnalytics(days: number) {
     .select()
     .from(analyticsEvents)
     .where(and(
-      eq(analyticsEvents.type, 'market_search'),
+      inArray(analyticsEvents.type, [...SEARCH_EVENT_TYPES]),
       gte(analyticsEvents.createdAt, startUtcMidnight),
     ))
     .orderBy(desc(analyticsEvents.createdAt))
@@ -139,7 +141,7 @@ export default async function AdminSearchesPage({
   return (
     <AdminConsoleLayout
       title="Search Analytics"
-      description="See what visitors search for in the open-markets browser."
+      description="See what visitors search for in the trials browser."
       activeTab="searches"
     >
       <section className="mb-8">

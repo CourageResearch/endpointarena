@@ -97,17 +97,17 @@ export default async function AdminPredictionsPage() {
   return (
     <AdminConsoleLayout
       title="Decision Operations"
-      description="Create append-only model decision snapshots for live Phase 2 results markets."
+      description="Create append-only model decision snapshots for live Phase 2 trials."
       activeTab="predictions"
     >
       <section className="mb-6">
         <div className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-          <h2 className="text-sm font-semibold text-[#1a1a1a]">Open-Market Queue</h2>
-          <p className="mt-1 text-xs text-[#8a8075]">This view only includes pending trial questions with an open market.</p>
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">Open-Trial Queue</h2>
+          <p className="mt-1 text-xs text-[#8a8075]">This view only includes pending trial questions with an open trial.</p>
           <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="rounded-none border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
               <p className="text-xl font-semibold text-[#D39D2E]">{stats.openMarkets}</p>
-              <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Open Markets</p>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Open Trials</p>
             </div>
             <div className="rounded-none border border-[#EF6F67]/30 bg-[#EF6F67]/5 p-3">
               <p className="text-xl font-semibold text-[#EF6F67]">{stats.marketsMissingSnapshots}</p>
@@ -129,7 +129,7 @@ export default async function AdminPredictionsPage() {
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Snapshot Coverage</h2>
           <p className="text-xs text-[#8a8075]">
-            {stats.marketsWithSnapshots}/{stats.openMarkets} open markets have at least one decision snapshot
+            {stats.marketsWithSnapshots}/{stats.openMarkets} open trials have at least one decision snapshot
           </p>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-none bg-[#e8ddd0]">
@@ -139,7 +139,7 @@ export default async function AdminPredictionsPage() {
 
       <section className="mb-4">
         <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Decision Workflow</h2>
-        <p className="mt-1 text-sm text-[#8a8075]">Manual runs create append-only snapshots only. Trade execution stays in the daily market cycle.</p>
+        <p className="mt-1 text-sm text-[#8a8075]">Manual runs create append-only snapshots only. Trade execution stays in the daily trial cycle.</p>
       </section>
 
       <DecisionSnapshotRunner events={eventsForClient} />

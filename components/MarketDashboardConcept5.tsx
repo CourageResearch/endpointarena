@@ -22,7 +22,7 @@ import {
 } from '@/components/markets/dashboard/shared'
 import { MarketTradePanel } from '@/components/markets/dashboard/trade-panel'
 import { MarketDetailChart, TinyPriceSparkline } from '@/components/markets/marketOverviewCharts'
-import { useMarketOverview } from '@/components/markets/useMarketOverview'
+import { useTrialsOverview } from '@/components/markets/useMarketOverview'
 import { HeaderDots } from '@/components/site/chrome'
 import {
   daysUntilUtc,
@@ -226,7 +226,7 @@ function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentM
     })
 }
 
-type MarketDashboardConcept5Props = {
+type TrialDashboardProps = {
   initialMarketId?: string | null
   initialData?: OverviewResponse | null
   showMarketList?: boolean
@@ -234,16 +234,16 @@ type MarketDashboardConcept5Props = {
   viewMode?: 'full' | 'decision-snapshots'
 }
 
-export function MarketDashboardConcept5({
+export function TrialDashboard({
   initialMarketId = null,
   initialData = null,
   showMarketList = true,
   detailLayout = 'default',
   viewMode = 'full',
-}: MarketDashboardConcept5Props = {}) {
+}: TrialDashboardProps = {}) {
   const pathname = usePathname()
   const { status: sessionStatus } = useSession()
-  const { data, error, loading, reload } = useMarketOverview(initialData, initialMarketId)
+  const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId)
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialMarketId)
   const [marketSearch, setMarketSearch] = useState('')
   const [commentModelFilter, setCommentModelFilter] = useState<CommentModelFilter>('all')
@@ -387,7 +387,7 @@ export function MarketDashboardConcept5({
     async function loadTraderSnapshot() {
       setTraderSnapshotLoading(true)
       try {
-        const response = await fetch(`/api/markets/trade?marketId=${encodeURIComponent(currentMarketId)}`, {
+        const response = await fetch(`/api/trials/trade?marketId=${encodeURIComponent(currentMarketId)}`, {
           cache: 'no-store',
         })
         const payload = await response.json().catch(() => ({}))
@@ -481,31 +481,31 @@ export function MarketDashboardConcept5({
   }, [data?.recentActions, selectedEntry])
 
   if (loading) {
-    return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">Loading market...</div>
+    return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">Loading trial...</div>
   }
 
   if (error) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        Failed to load market: {error}
+        Failed to load trial: {error}
       </div>
     )
   }
 
   if (!data || marketEntries.length === 0) {
-    return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">No open markets available.</div>
+    return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">No open trials available.</div>
   }
 
   if (initialMarketMissing) {
     return (
       <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">
-        This market was not found or is no longer open. <Link href="/trials" className="underline">Back to trials</Link>.
+        This trial was not found or is no longer open. <Link href="/trials" className="underline">Back to trials</Link>.
       </div>
     )
   }
 
   if (!selectedEntry || !selectedStats) {
-    return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">No open markets available.</div>
+    return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">No open trials available.</div>
   }
 
   const selectedMarket = selectedEntry.market
@@ -709,7 +709,7 @@ export function MarketDashboardConcept5({
     }
 
     if (selectedMarket.status !== 'OPEN') {
-      setTradeError('Resolved markets are no longer open for trading')
+      setTradeError('Resolved trials are no longer open for trading')
       return
     }
 
@@ -728,7 +728,7 @@ export function MarketDashboardConcept5({
     setTradeNotice(null)
 
     try {
-      const response = await fetch('/api/markets/trade', {
+      const response = await fetch('/api/trials/trade', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1356,3 +1356,5 @@ export function MarketDashboardConcept5({
     </div>
   )
 }
+
+export const MarketDashboardConcept5 = TrialDashboard

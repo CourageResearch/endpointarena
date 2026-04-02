@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { AdminMarketManager } from '@/components/AdminMarketManager'
-import { getMarketAdminData, getMarketAdminStats } from '@/lib/admin-market-data'
+import { AdminTrialManager } from '@/components/AdminMarketManager'
+import { getTrialAdminData, getTrialAdminStats } from '@/lib/admin-market-data'
 import { getLatestMarketRunSnapshot } from '@/lib/market-run-logs'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export default async function AdminAiPage() {
   }
 
   const [events, initialRunSnapshot] = await Promise.all([
-    getMarketAdminData(),
+    getTrialAdminData(),
     getLatestMarketRunSnapshot(),
   ])
   const {
@@ -24,7 +24,7 @@ export default async function AdminAiPage() {
     pendingWithoutMarket,
     liveQuestions,
     liveQuestionsWithMarket,
-  } = getMarketAdminStats(events)
+  } = getTrialAdminStats(events)
 
   return (
     <AdminConsoleLayout
@@ -49,7 +49,7 @@ export default async function AdminAiPage() {
         </div>
       </section>
 
-      <AdminMarketManager
+      <AdminTrialManager
         events={events}
         initialRunSnapshot={initialRunSnapshot}
         sections={['dailyCycle']}

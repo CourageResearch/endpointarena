@@ -1,13 +1,14 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import { MODEL_NAMES } from '@/lib/constants'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots } from '@/components/site/chrome'
+import { MODEL_NAMES } from '@/lib/constants'
 import { getLeaderboardData } from '@/lib/leaderboard-data'
 import { buildPageMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
+
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
 
 export const metadata: Metadata = buildPageMetadata({
@@ -76,7 +77,7 @@ export default async function LeaderboardPage() {
             AI and human rankings for trial prediction markets.
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Compare model accuracy, market equity, and top verified traders across Endpoint Arena’s Phase 2 trial markets.
+            Compare model accuracy, market equity, and top verified traders across Endpoint Arena&apos;s Phase 2 trials.
           </p>
         </section>
 
@@ -96,14 +97,16 @@ export default async function LeaderboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="text-base text-[#1a1a1a]">{MODEL_NAMES[model.id]}</div>
                     <div className="mt-1 text-xs text-[#8a8075]">
-                      {model.correct} correct · {model.wrong} wrong · {model.pending} pending
+                      {model.correct} correct | {model.wrong} wrong | {model.pending} pending
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-mono text-[#8a8075]">
-                      {model.decided > 0 ? `${model.accuracy.toFixed(0)}%` : '—'}
+                      {model.decided > 0 ? `${model.accuracy.toFixed(0)}%` : '--'}
                     </div>
-                    <div className="text-xs text-[#b5aa9e]">avg conf {model.total > 0 ? `${model.avgConfidence.toFixed(0)}%` : '—'}</div>
+                    <div className="text-xs text-[#b5aa9e]">
+                      avg conf {model.total > 0 ? `${model.avgConfidence.toFixed(0)}%` : '--'}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -127,11 +130,11 @@ export default async function LeaderboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="text-base text-[#1a1a1a]">{MODEL_NAMES[model.id]}</div>
                     <div className="mt-1 text-xs text-[#8a8075]">
-                      P/L {model.pnl == null ? '—' : `${model.pnl >= 0 ? '+' : '-'}${formatMoney(Math.abs(model.pnl))}`}
+                      P/L {model.pnl == null ? '--' : `${model.pnl >= 0 ? '+' : '-'}${formatMoney(Math.abs(model.pnl))}`}
                     </div>
                   </div>
                   <div className="text-right text-2xl font-mono text-[#8a8075]">
-                    {model.totalEquity == null ? '—' : formatMoney(model.totalEquity)}
+                    {model.totalEquity == null ? '--' : formatMoney(model.totalEquity)}
                   </div>
                 </div>
               ))}
@@ -154,7 +157,7 @@ export default async function LeaderboardPage() {
                     <div>
                       <div className="text-base text-[#1a1a1a]">#{index + 1} {human.displayName}</div>
                       <div className="mt-1 text-xs text-[#8a8075]">
-                        Cash {formatMoney(human.cashBalance)} · Open {formatMoney(human.positionsValue)}
+                        Cash {formatMoney(human.cashBalance)} | Open {formatMoney(human.positionsValue)}
                       </div>
                     </div>
                     <div className="text-right">

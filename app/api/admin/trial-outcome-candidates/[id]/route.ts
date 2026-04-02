@@ -60,6 +60,7 @@ export async function PATCH(
     revalidatePath('/leaderboard')
     revalidatePath('/trials')
     revalidatePath('/admin/ai')
+    revalidatePath('/admin/trials')
     revalidatePath('/admin/markets')
     revalidatePath('/admin/outcomes')
 

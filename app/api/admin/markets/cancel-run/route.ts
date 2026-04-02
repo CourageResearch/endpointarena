@@ -17,18 +17,18 @@ export async function POST(request: NextRequest) {
 
     const stoppedRunId = await requestDailyRunStop(runId)
     if (!stoppedRunId) {
-      throw new ValidationError('No running daily market cycle was found to stop.')
+      throw new ValidationError('No running daily trial cycle was found to stop.')
     }
 
     return successResponse({
       runId: stoppedRunId,
-      message: 'Stop requested. The current in-flight model step will finish, then the daily cycle will halt.',
+      message: 'Stop requested. The current in-flight model step will finish, then the daily trial cycle will halt.',
     }, {
       headers: {
         'X-Request-Id': requestId,
       },
     })
   } catch (error) {
-    return errorResponse(error, requestId, 'Failed to stop daily market cycle')
+    return errorResponse(error, requestId, 'Failed to stop daily trial cycle')
   }
 }

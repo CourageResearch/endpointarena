@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { useMarketOverview } from '@/components/markets/useMarketOverview'
+import { useTrialsOverview } from '@/components/markets/useMarketOverview'
 import { MODEL_IDS, abbreviateType } from '@/lib/constants'
 import {
   daysUntilUtc,
@@ -71,9 +71,9 @@ const MARKET_CONTROL_SELECT_STYLE = {
 const ALL_TYPES_FILTER = '__all_types__'
 const TYPE_FILTER_PARAM = 'type'
 const TAB_FILTER_PARAM = 'tab'
-const PHASE_2_MARKETS_HEADING = 'Phase 2 Trials'
-const UPCOMING_MARKETS_HEADING = 'Phase 2 Upcoming Markets'
-const RESOLVED_MARKETS_HEADING = 'Phase 2 Resolved Markets'
+const PHASE_2_TRIALS_HEADING = 'Phase 2 Trials'
+const UPCOMING_TRIALS_HEADING = 'Phase 2 Upcoming Trials'
+const RESOLVED_TRIALS_HEADING = 'Phase 2 Resolved Trials'
 
 function isLocalhostHostname(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -603,7 +603,7 @@ function MarketTable({
     navigateToMarket(href)
   }
 
-  const resolvedHeading = heading ?? (tab === 'resolved' ? RESOLVED_MARKETS_HEADING : UPCOMING_MARKETS_HEADING)
+  const resolvedHeading = heading ?? (tab === 'resolved' ? RESOLVED_TRIALS_HEADING : UPCOMING_TRIALS_HEADING)
   const resolvedHeaderLinkHref = headerLinkHref ?? null
   const showHeaderLink = Boolean(resolvedHeaderLinkHref) && headerLinkPlacement === 'header'
   const showFooterLink = Boolean(resolvedHeaderLinkHref) && headerLinkPlacement === 'footer'
@@ -843,10 +843,10 @@ function MarketTable({
   )
 }
 
-export function MarketBrowseHomepage({
+export function TrialsBrowseHomepage({
   detailBasePath = '/trials',
   headerLinkHref,
-  headerLinkLabel = 'View all →',
+  headerLinkLabel = 'View all trials ->',
   headerLinkPlacement = 'header',
   initialOverview = null,
   initialTypeFilter = null,
@@ -874,7 +874,7 @@ export function MarketBrowseHomepage({
   showRowCount?: boolean
   variant?: 'full' | 'table'
 } = {}) {
-  const { data, error, loading } = useMarketOverview(initialOverview, undefined, { includeResolved })
+  const { data, error, loading } = useTrialsOverview(initialOverview, undefined, { includeResolved })
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -996,7 +996,7 @@ export function MarketBrowseHomepage({
     if (typeof window === 'undefined') return
     if (isLocalhostHostname(window.location.hostname)) return
 
-    const storageKey = `market-search:${pathname}:${normalizedSearchQuery.toLowerCase()}`
+    const storageKey = `trial-search:${pathname}:${normalizedSearchQuery.toLowerCase()}`
 
     try {
       if (window.sessionStorage.getItem(storageKey) === '1') {
@@ -1009,10 +1009,10 @@ export function MarketBrowseHomepage({
     const timer = window.setTimeout(() => {
       const payload = JSON.stringify({
         events: [{
-          type: 'market_search',
+          type: 'trial_search',
           url: pathname,
           referrer: typeof document !== 'undefined' ? document.referrer : undefined,
-          elementId: variant === 'table' ? 'open-markets-table-search' : 'open-markets-search',
+          elementId: variant === 'table' ? 'trials-home-table-search' : 'trials-home-search',
           searchQuery: normalizedSearchQuery,
           resultCount: visibleEntries.length,
         }],
@@ -1042,7 +1042,7 @@ export function MarketBrowseHomepage({
   if (loading) {
     return (
       <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading markets...</div>
+        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading trials...</div>
       </div>
     )
   }
@@ -1051,7 +1051,7 @@ export function MarketBrowseHomepage({
     return (
       <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
         <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          Failed to load markets: {error}
+          Failed to load trials: {error}
         </div>
       </div>
     )
@@ -1060,22 +1060,22 @@ export function MarketBrowseHomepage({
   if (!data) {
     return (
       <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No market data.</div>
+        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No trial data.</div>
       </div>
     )
   }
 
   const tableSearchControl = showSearchControl ? (
     <>
-      <label className="sr-only" htmlFor="open-markets-table-search">
-        Search all markets
+      <label className="sr-only" htmlFor="trials-home-table-search">
+        Search all trials
       </label>
       <input
-        id="open-markets-table-search"
+        id="trials-home-table-search"
         type="search"
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.target.value)}
-        placeholder="Search all markets..."
+        placeholder="Search all trials..."
         className={MARKET_TABLE_SEARCH_INPUT_CLASS_NAME}
         style={MARKET_TABLE_SEARCH_INPUT_STYLE}
         autoComplete="off"
@@ -1131,17 +1131,17 @@ export function MarketBrowseHomepage({
           headerLinkPlacement={headerLinkPlacement}
           maxRows={tableMaxRows}
           searchControl={tableSearchControl}
-          heading={PHASE_2_MARKETS_HEADING}
+          heading={PHASE_2_TRIALS_HEADING}
           headerTabs={tableStatusTabs}
           showRowCount={showRowCount}
           emptyMessage={
             entries.length === 0
               ? selectedTab === 'resolved'
-                ? 'No resolved markets yet.'
-                : 'No upcoming markets right now.'
+                ? 'No resolved trials yet.'
+                : 'No upcoming trials right now.'
               : selectedTab === 'resolved'
-                ? 'No resolved markets match that search.'
-                : 'No upcoming markets match that search.'
+                ? 'No resolved trials match that search.'
+                : 'No upcoming trials match that search.'
           }
         />
       </div>
@@ -1155,7 +1155,7 @@ export function MarketBrowseHomepage({
           <>
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">{UPCOMING_MARKETS_HEADING}</h2>
+                <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">{UPCOMING_TRIALS_HEADING}</h2>
                 <HeaderDots />
               </div>
               {headerLinkHref ? (
@@ -1171,9 +1171,9 @@ export function MarketBrowseHomepage({
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search..."
+                  placeholder="Search trials..."
                   className={`${MARKET_CONTROL_INPUT_CLASS_NAME} min-w-0 basis-0 flex-[1.1]`}
-                  aria-label="Search open markets"
+                  aria-label="Search open trials"
                   autoComplete="off"
                   spellCheck={false}
                 />
@@ -1182,7 +1182,7 @@ export function MarketBrowseHomepage({
                   onChange={(event) => handleTypeChange(event.target.value)}
                   className={`${MARKET_CONTROL_SELECT_CLASS_NAME} min-w-0 basis-0 flex-[0.9]`}
                   style={MARKET_CONTROL_SELECT_STYLE}
-                  aria-label="Filter open markets by type"
+                  aria-label="Filter open trials by type"
                 >
                   <option value={ALL_TYPES_FILTER}>All Types</option>
                   {typeOptions.map((type) => (
@@ -1194,18 +1194,18 @@ export function MarketBrowseHomepage({
               </div>
 
               <div className="shrink-0 whitespace-nowrap text-xs text-[#b5aa9e]">
-                {visibleEntries.length} of {entries.length} markets
+                {visibleEntries.length} of {entries.length} trials
               </div>
             </div>
           </>
         ) : null}
 
         {visibleEntries.length === 0 ? (
-          <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-            <div className="rounded-sm bg-white/95 px-4 py-12 text-center text-sm text-[#8a8075]">
-              {entries.length === 0 ? 'No upcoming markets right now.' : 'No upcoming markets match those filters.'}
+            <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
+              <div className="rounded-sm bg-white/95 px-4 py-12 text-center text-sm text-[#8a8075]">
+              {entries.length === 0 ? 'No upcoming trials right now.' : 'No upcoming trials match those filters.'}
+              </div>
             </div>
-          </div>
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1221,3 +1221,5 @@ export function MarketBrowseHomepage({
     </div>
   )
 }
+
+export const MarketBrowseHomepage = TrialsBrowseHomepage

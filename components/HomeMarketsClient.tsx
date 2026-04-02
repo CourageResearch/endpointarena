@@ -1,10 +1,10 @@
 'use client'
 
 import { Suspense } from 'react'
-import { MarketBrowseHomepage } from '@/components/MarketBrowseHomepage'
+import { TrialsBrowseHomepage } from '@/components/MarketBrowseHomepage'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
-export function HomeMarketsClient({
+export function HomeTrialsClient({
   detailBasePath,
   headerLinkHref,
   headerLinkLabel,
@@ -21,7 +21,7 @@ export function HomeMarketsClient({
 }) {
   return (
     <Suspense fallback={null}>
-      <MarketBrowseHomepage
+      <TrialsBrowseHomepage
         detailBasePath={detailBasePath}
         headerLinkHref={headerLinkHref}
         headerLinkLabel={headerLinkLabel}
@@ -36,3 +36,5 @@ export function HomeMarketsClient({
     </Suspense>
   )
 }
+
+export const HomeMarketsClient = HomeTrialsClient

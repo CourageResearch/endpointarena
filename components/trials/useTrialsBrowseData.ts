@@ -16,7 +16,7 @@ async function requestTrialsBrowseData(options: {
   const response = await fetch(url, { cache: 'no-store' })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload, 'Failed to load trial markets'))
+    throw new Error(getApiErrorMessage(payload, 'Failed to load trials'))
   }
   return payload as TrialsBrowseResponse
 }
@@ -46,7 +46,7 @@ export function useTrialsBrowseData(
         setError(null)
       } catch (err) {
         if (disposed) return
-        setError(err instanceof Error ? err.message : 'Failed to load trial markets')
+        setError(err instanceof Error ? err.message : 'Failed to load trials')
       } finally {
         if (disposed) return
         if (initial) setLoading(false)
@@ -72,7 +72,7 @@ export function useTrialsBrowseData(
       setData(next)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load trial markets')
+      setError(err instanceof Error ? err.message : 'Failed to load trials')
     } finally {
       setRefreshing(false)
       setLoading(false)

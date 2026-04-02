@@ -10,8 +10,8 @@ import type { TrialsBrowseResponse } from '@/lib/trials-browse-shared'
 export const revalidate = 300
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Phase 2 Trial Markets',
-  description: 'Browse live and resolved Phase 2 clinical trial markets, decision dates, prices, and AI consensus.',
+  title: 'Phase 2 Trials',
+  description: 'Browse live and resolved Phase 2 clinical trials, decision dates, prices, and AI consensus.',
   path: '/trials',
 })
 
@@ -58,10 +58,10 @@ export default async function TrialsPage({
             <HeaderDots />
           </div>
           <h1 className="max-w-3xl font-serif text-3xl leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl">
-            Phase 2 clinical trial prediction markets.
+            Phase 2 clinical trials
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Browse open and resolved trial markets, compare AI model calls, and inspect the public context behind each market.
+            Browse open and resolved trials, compare AI model calls, and inspect the public context behind each one.
           </p>
         </header>
 

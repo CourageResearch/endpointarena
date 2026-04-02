@@ -9,7 +9,7 @@ import type {
   DailyRunSummary,
 } from '@/lib/markets/types'
 
-export interface AdminMarketEvent {
+export interface AdminTrialEvent {
   id: string
   trialId: string
   trialQuestionId: string
@@ -747,3 +747,5 @@ export function getOutcomeStyle(outcome: string): string {
   const colors = OUTCOME_COLORS[outcome as keyof typeof OUTCOME_COLORS]
   return colors ? `${colors.bg} ${colors.text}` : 'bg-[#F5F2ED] text-[#8a8075]'
 }
+
+export type AdminMarketEvent = AdminTrialEvent

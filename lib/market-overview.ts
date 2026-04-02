@@ -419,3 +419,5 @@ export async function getMarketOverviewData(input: {
     recentRuns: recentRunRows,
   }
 }
+
+export const getTrialsOverviewData = getMarketOverviewData

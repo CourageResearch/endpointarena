@@ -15,6 +15,6 @@ export async function GET() {
       },
     })
   } catch (error) {
-    return errorResponse(error, requestId, 'Failed to load market run state')
+    return errorResponse(error, requestId, 'Failed to load trial run state')
   }
 }

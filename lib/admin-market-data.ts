@@ -1,12 +1,12 @@
 import { asc, inArray } from 'drizzle-orm'
 import { db, phase2Trials, predictionMarkets, trialQuestions } from '@/lib/db'
-import type { AdminMarketEvent } from '@/components/admin/market-manager-utils'
+import type { AdminTrialEvent } from '@/components/admin/market-manager-utils'
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import { estimateAdminAiRowCosts } from '@/lib/admin-ai-row-costs'
 
-export async function getMarketAdminData(): Promise<AdminMarketEvent[]> {
+export async function getTrialAdminData(): Promise<AdminTrialEvent[]> {
   const [rawQuestions, markets] = await Promise.all([
     db.query.trialQuestions.findMany({
       orderBy: [asc(trialQuestions.sortOrder), asc(trialQuestions.createdAt)],
@@ -30,7 +30,7 @@ export async function getMarketAdminData(): Promise<AdminMarketEvent[]> {
       .map((market) => [market.trialQuestionId as string, market]),
   )
 
-  const events: AdminMarketEvent[] = []
+  const events: AdminTrialEvent[] = []
 
   for (const question of questions) {
     const trial = trialById.get(question.trialId)
@@ -98,7 +98,7 @@ export async function getMarketAdminData(): Promise<AdminMarketEvent[]> {
   })
 }
 
-export function getMarketAdminStats(events: AdminMarketEvent[]) {
+export function getTrialAdminStats(events: AdminTrialEvent[]) {
   const openMarketEvents = events.filter((event) => event.marketStatus === 'OPEN')
   const liveQuestionEvents = events.filter((event) => event.questionStatus === 'live')
   const openMarketsNeedingReview = openMarketEvents.filter((event) => {
@@ -117,3 +117,6 @@ export function getMarketAdminStats(events: AdminMarketEvent[]) {
     upcomingOpenMarkets: Math.max(openMarketEvents.length - openMarketsNeedingReview, 0),
   }
 }
+
+export const getMarketAdminData = getTrialAdminData
+export const getMarketAdminStats = getTrialAdminStats

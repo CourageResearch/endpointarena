@@ -436,7 +436,7 @@ export default async function ProfilePage() {
             <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Current Holdings</h2>
-                <p className="text-xs text-[#8a8075]">Open markets only</p>
+                <p className="text-xs text-[#8a8075]">Open trials only</p>
               </div>
 
               {holdings.length === 0 ? (
@@ -446,7 +446,7 @@ export default async function ProfilePage() {
                   <table className="w-full min-w-[860px] text-sm">
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
-                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Trial</th>
                         <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
                         <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
                         <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Price</th>

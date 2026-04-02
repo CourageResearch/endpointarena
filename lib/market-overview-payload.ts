@@ -49,3 +49,6 @@ export function createDetailOverviewPayload(data: OverviewResponse | null): Over
     recentRuns: [],
   }
 }
+
+export const createBrowseTrialsOverviewPayload = createBrowseOverviewPayload
+export const createDetailTrialsOverviewPayload = createDetailOverviewPayload
