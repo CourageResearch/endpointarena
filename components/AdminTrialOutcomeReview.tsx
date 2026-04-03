@@ -692,7 +692,7 @@ export function AdminTrialOutcomeReview({
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload, 'Failed to review outcome item'))
+        throw new Error(getApiErrorMessage(payload, 'Failed to review oracle item'))
       }
 
       setCandidates((prev) => prev.filter((candidate) => candidate.id !== candidateId))
@@ -701,7 +701,7 @@ export function AdminTrialOutcomeReview({
       }
       router.refresh()
     } catch (reviewError) {
-      setError(reviewError instanceof Error ? reviewError.message : 'Failed to review outcome item')
+      setError(reviewError instanceof Error ? reviewError.message : 'Failed to review oracle item')
     } finally {
       setLoadingId(null)
     }
@@ -798,13 +798,13 @@ export function AdminTrialOutcomeReview({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Scoped Trial View</div>
-              <p className="mt-1">Showing outcome review data for {scopedViewNctNumber} only.</p>
+              <p className="mt-1">Showing oracle review data for {scopedViewNctNumber} only.</p>
             </div>
             <Link
               href="/admin/outcomes"
               className="inline-flex rounded-none border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
             >
-              View All Outcomes
+              View Full Oracle Queue
             </Link>
           </div>
         </div>
@@ -890,7 +890,7 @@ export function AdminTrialOutcomeReview({
 
               <MonitorSettingsField
                 label="Run every"
-                description="How often the scheduled Railway job should scan for new outcome work."
+                description="How often the scheduled Railway job should scan for new oracle work."
               >
                 <MonitorSettingsNumberInput
                   value={form.runIntervalHours}
@@ -1010,7 +1010,7 @@ export function AdminTrialOutcomeReview({
               </p>
             ) : (
               <p className="mt-1 text-xs text-[#8a8075]">
-                Run the Phase 2 outcome monitor manually to refresh the review queue without waiting for Railway cron.
+                Run the Phase 2 oracle monitor manually to refresh the review queue without waiting for Railway cron.
               </p>
             )}
           </div>
@@ -1021,7 +1021,7 @@ export function AdminTrialOutcomeReview({
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Full Run</div>
                   <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-                    Run the full Phase 2 outcome monitor across the current eligible queue.
+                    Run the full Phase 2 oracle monitor across the current eligible queue.
                   </p>
                 </div>
                 <div className="mt-auto space-y-2">
@@ -1052,7 +1052,7 @@ export function AdminTrialOutcomeReview({
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">One-Off NCT</div>
                   <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-                    Bypass the normal lookahead and recheck window, then scan only the live pending outcome question for that trial.
+                    Bypass the normal lookahead and recheck window, then scan only the live pending trial question for that trial.
                   </p>
                 </div>
 
@@ -1150,7 +1150,7 @@ export function AdminTrialOutcomeReview({
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-sm font-semibold text-[#1a1a1a]">Review Queue</h3>
+            <h3 className="text-sm font-semibold text-[#1a1a1a]">Oracle Queue</h3>
             <p className="mt-1 text-xs text-[#8a8075]">
               Settlement items only resolve a market after admin acceptance. Evidence-only items can be dismissed without settling.
             </p>
@@ -1164,13 +1164,13 @@ export function AdminTrialOutcomeReview({
               {scopedViewNctNumber
                 ? (
                     isRunActive
-                      ? 'No pending review items for this trial yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
-                      : 'No pending review items for this trial yet. Run the monitor to pull fresh evidence and populate this queue.'
+                      ? 'No pending oracle items for this trial yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
+                      : 'No pending oracle items for this trial yet. Run the monitor to pull fresh evidence and populate this queue.'
                   )
                 : (
                     isRunActive
-                      ? 'No pending review items yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
-                      : 'No pending review items yet. Run the monitor to pull fresh evidence and populate this queue.'
+                      ? 'No pending oracle items yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
+                      : 'No pending oracle items yet. Run the monitor to pull fresh evidence and populate this queue.'
                   )}
             </div>
           ) : visibleCandidates.map((candidate) => (

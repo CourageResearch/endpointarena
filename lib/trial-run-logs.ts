@@ -44,11 +44,6 @@ export type AdminTrialRunSnapshot = {
   logs: PersistedRunLogEntry[]
 }
 
-export type ResumableTrialRunDate = {
-  runDate: string
-  status: 'running' | 'failed'
-}
-
 function toIsoString(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
 }
@@ -293,44 +288,4 @@ export async function getLatestTrialRunSnapshot(): Promise<AdminTrialRunSnapshot
     runs: runsForDate,
     logs,
   })
-}
-
-export async function listRecentResumableTrialRunDates(limit = 3): Promise<ResumableTrialRunDate[]> {
-  const recentRuns = await db.query.marketRuns.findMany({
-    where: isTrialRunSql(),
-    orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
-    limit: Math.max(limit * 12, 24),
-  })
-
-  const resumableRuns: ResumableTrialRunDate[] = []
-  const seenRunDates = new Set<string>()
-
-  for (const run of recentRuns) {
-    const runDate = run.runDate.toISOString()
-    if (seenRunDates.has(runDate)) continue
-    seenRunDates.add(runDate)
-
-    let status: ResumableTrialRunDate['status'] | 'completed' = run.status === 'running'
-      ? 'running'
-      : run.status === 'failed'
-        ? 'failed'
-        : 'completed'
-    if (status === 'running') {
-      const staleFailed = await failStaleRunningRunIfNeeded(run)
-      status = staleFailed ? 'failed' : 'running'
-    }
-
-    if (status === 'completed') continue
-
-    resumableRuns.push({
-      runDate,
-      status,
-    })
-
-    if (resumableRuns.length >= limit) {
-      break
-    }
-  }
-
-  return resumableRuns
 }

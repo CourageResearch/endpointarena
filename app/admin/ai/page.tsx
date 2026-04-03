@@ -5,7 +5,7 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminTrialManager } from '@/components/AdminTrialManager'
 import { getTrialAdminData, getTrialAdminStats } from '@/lib/admin-trial-data'
-import { getLatestTrialRunSnapshot, listRecentResumableTrialRunDates } from '@/lib/trial-run-logs'
+import { getLatestTrialRunSnapshot } from '@/lib/trial-run-logs'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,10 +15,9 @@ export default async function AdminAiPage() {
     redirect('/login')
   }
 
-  const [events, initialRunSnapshot, initialResumableRunDates] = await Promise.all([
+  const [events, initialRunSnapshot] = await Promise.all([
     getTrialAdminData(),
     getLatestTrialRunSnapshot(),
-    listRecentResumableTrialRunDates(),
   ])
   const {
     openMarkets,
@@ -53,7 +52,6 @@ export default async function AdminAiPage() {
       <AdminTrialManager
         events={events}
         initialRunSnapshot={initialRunSnapshot}
-        initialResumableRunDates={initialResumableRunDates}
         sections={['dailyCycle']}
       />
     </AdminConsoleLayout>

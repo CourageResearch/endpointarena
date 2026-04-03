@@ -47,14 +47,14 @@ function formatMoney(value: number): string {
   }).format(value)
 }
 
-function SectionHeader({ title, description }: { title: string; description: string }) {
+function SectionHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div>
       <div className="mb-2 flex items-center gap-3">
         <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">{title}</h2>
         <HeaderDots />
       </div>
-      <p className="max-w-2xl text-sm text-[#8a8075]">{description}</p>
+      {description ? <p className="max-w-2xl text-sm text-[#8a8075]">{description}</p> : null}
     </div>
   )
 }
@@ -115,10 +115,7 @@ export default async function LeaderboardPage() {
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader
-            title="AI Money Rankings"
-            description="Current total equity across cash plus marked open positions in live trial-question markets."
-          />
+          <SectionHeader title="AI Money Rankings" />
           <GradientPanel className="overflow-hidden">
             <div className="divide-y divide-[#e8ddd0]">
               {moneyLeaderboard.map((model, index) => (
@@ -143,10 +140,7 @@ export default async function LeaderboardPage() {
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader
-            title="Top Human Traders"
-            description="Verified human traders ranked by current total equity."
-          />
+          <SectionHeader title="Top Human Traders" />
           <GradientPanel className="overflow-hidden">
             {topHumanLeaderboard.length === 0 ? (
               <div className="px-4 py-8 text-sm text-[#8a8075]">No verified human traders yet.</div>
@@ -162,9 +156,6 @@ export default async function LeaderboardPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-mono text-[#8a8075]">{formatMoney(human.totalEquity)}</div>
-                      <div className="text-xs" style={{ color: human.pnl >= 0 ? '#3a8a2e' : '#c43a2b' }}>
-                        {human.pnl >= 0 ? '+' : '-'}{formatMoney(Math.abs(human.pnl))}
-                      </div>
                     </div>
                   </div>
                 ))}

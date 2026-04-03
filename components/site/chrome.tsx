@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -84,15 +84,34 @@ export function SquareDivider({ className }: { className?: string }) {
   )
 }
 
+function GradientHairline({ className }: { className?: string }) {
+  const gradientId = useId().replace(/:/g, '')
+
+  return (
+    <svg
+      className={cn('block h-[1px] w-full', className)}
+      viewBox="0 0 100 1"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={BRAND_DOT_COLORS.coral} />
+          <stop offset="33.33%" stopColor={BRAND_DOT_COLORS.green} />
+          <stop offset="66.67%" stopColor={BRAND_DOT_COLORS.gold} />
+          <stop offset="100%" stopColor={BRAND_DOT_COLORS.blue} />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="1" fill={`url(#${gradientId})`} shapeRendering="crispEdges" />
+    </svg>
+  )
+}
+
 export function FooterGradientRule({ className }: { className?: string }) {
   return (
     <footer className={cn('w-full', className)}>
       <div className="w-full">
-        <div
-          className="h-px w-full"
-          style={{ background: BRAND_GRADIENT_HORIZONTAL }}
-          aria-hidden="true"
-        />
+        <GradientHairline />
         <div className="py-5 sm:py-6">
           <nav className="ml-auto flex w-full max-w-[620px] flex-wrap justify-end gap-x-12 gap-y-4">
             {FOOTER_COLUMNS.map((column, index) => (
@@ -110,11 +129,7 @@ export function FooterGradientRule({ className }: { className?: string }) {
             ))}
           </nav>
         </div>
-        <div
-          className="h-px w-full"
-          style={{ background: BRAND_GRADIENT_HORIZONTAL }}
-          aria-hidden="true"
-        />
+        <GradientHairline />
       </div>
     </footer>
   )

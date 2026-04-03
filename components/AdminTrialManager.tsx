@@ -41,12 +41,10 @@ import type {
   DailyRunPayload,
   DailyRunStreamEvent,
 } from '@/lib/markets/types'
-import type { ResumableTrialRunDate } from '@/lib/trial-run-logs'
 
 interface Props {
   events: AdminTrialEvent[]
   initialRunSnapshot?: AdminTrialRunSnapshot | null
-  initialResumableRunDates?: ResumableTrialRunDate[]
   sections?: AdminTrialManagerSection[]
   labels?: Partial<AdminTrialManagerLabels>
 }
@@ -91,7 +89,6 @@ const DEFAULT_LABELS: AdminTrialManagerLabels = {
 }
 
 type RunDailyCycleOptions = {
-  runDate?: string
   nctNumber?: string
   modelIds?: ModelId[]
   claudeProvider?: ClaudeProvider
@@ -137,29 +134,6 @@ function formatUsdEstimate(value: number): string {
   }).format(value)
 }
 
-function formatRunDateLabel(dateLike: string | Date | null | undefined): string | null {
-  if (!dateLike) return null
-
-  const parsed = dateLike instanceof Date ? dateLike : new Date(dateLike)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-
-  return formatUtcDate(parsed, { month: 'short', day: 'numeric', year: 'numeric' }, '')
-}
-
-function sortResumableRunDates(values: ResumableTrialRunDate[]): ResumableTrialRunDate[] {
-  const uniqueByRunDate = new Map<string, ResumableTrialRunDate>()
-
-  for (const value of values) {
-    uniqueByRunDate.set(value.runDate, value)
-  }
-
-  return Array.from(uniqueByRunDate.values()).sort((left, right) => (
-    new Date(right.runDate).getTime() - new Date(left.runDate).getTime()
-  ))
-}
-
 function filterEventsForRun(events: AdminTrialEvent[], nctNumber?: string): AdminTrialEvent[] {
   if (!nctNumber) {
     return events
@@ -171,7 +145,6 @@ function filterEventsForRun(events: AdminTrialEvent[], nctNumber?: string): Admi
 export function AdminTrialManager({
   events: initialEvents,
   initialRunSnapshot = null,
-  initialResumableRunDates = [],
   sections = DEFAULT_SECTIONS,
   labels,
 }: Props) {
@@ -200,12 +173,8 @@ export function AdminTrialManager({
   const [selectedClaudeProvider, setSelectedClaudeProvider] = useState<ClaudeProvider>(DEFAULT_CLAUDE_PROVIDER)
   const [hasLoadedClaudeProviderPreference, setHasLoadedClaudeProviderPreference] = useState(false)
   const [executionStepNowMs, setExecutionStepNowMs] = useState<number | null>(null)
-  const [resumableRunDates, setResumableRunDates] = useState<ResumableTrialRunDate[]>(() => (
-    sortResumableRunDates(initialResumableRunDates)
-  ))
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
-  const latestVisibleRunDate = runProgress?.runDate ?? null
   const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
   const scopedClaudeNctNumber = useMemo(() => parseScopedNctNumber(scopedClaudeNctInput), [scopedClaudeNctInput])
   const scopedClaudeEvents = useMemo(() => (
@@ -302,20 +271,6 @@ export function AdminTrialManager({
     setErrorConsole(buildErrorConsoleFromSnapshot(snapshot))
     setRunProgress(nextProgress)
     setExecutionPlan(buildExecutionPlanFromSnapshot(events, snapshot))
-    setResumableRunDates((prev) => {
-      const withoutSnapshotDate = prev.filter((entry) => entry.runDate !== snapshot.runDate)
-      if (snapshot.status === 'completed') {
-        return withoutSnapshotDate
-      }
-
-      return sortResumableRunDates([
-        ...withoutSnapshotDate,
-        {
-          runDate: snapshot.runDate,
-          status: snapshot.status,
-        },
-      ])
-    })
 
     if (snapshot.status === 'running') {
       setPreserveExecutionPlan(true)
@@ -330,15 +285,6 @@ export function AdminTrialManager({
     setIsStoppingDaily(false)
     setLastRunSummary(nextSummary)
     setElapsedSeconds(nextSummary?.durationSeconds ?? 0)
-  }
-
-  const getResumableRunDate = (options: RunDailyCycleOptions = {}): string | null => {
-    if (options.runDate || options.nctNumber || options.claudeProvider) return null
-    if (options.modelIds && options.modelIds.length > 0) return null
-    if (!latestVisibleRunDate || !runProgress || !preserveExecutionPlan) return null
-    if (runProgress.totalActions <= 0) return null
-    if (runProgress.completedActions >= runProgress.totalActions) return null
-    return latestVisibleRunDate
   }
 
   useEffect(() => {
@@ -544,43 +490,19 @@ export function AdminTrialManager({
     const startedAtMs = Date.now()
     let keepPersistedRunningState = false
     const controller = new AbortController()
-    const resumableRunDate = getResumableRunDate(options)
-    const effectiveRunDate = options.runDate ?? resumableRunDate ?? null
     const effectiveClaudeProvider = options.claudeProvider ?? activeClaudeProvider
-    const effectiveRunDateLabel = formatRunDateLabel(effectiveRunDate)
     const runDescriptionBase = options.nctNumber && options.modelIds?.length === 1 && options.modelIds[0] === 'claude-opus'
       ? effectiveClaudeProvider === 'web'
           ? `Claude Browser Opus 4.6 on ${options.nctNumber}`
           : `Claude Opus 4.6 via Anthropic API on ${options.nctNumber}`
       : 'daily trial cycle'
-    const runDescription = effectiveRunDateLabel
-      ? `${runDescriptionBase} for ${effectiveRunDateLabel} UTC`
-      : runDescriptionBase
+    const runDescription = runDescriptionBase
     const relevantEvents = filterEventsForRun(events, options.nctNumber)
-    const effectiveRunDateSeed = effectiveRunDate ?? new Date(startedAtMs).toISOString()
+    const effectiveRunDateSeed = new Date(startedAtMs).toISOString()
     const initialModelOrder = options.modelIds && options.modelIds.length > 0
       ? options.modelIds
       : rotateModelOrderLocal(effectiveRunDateSeed)
-    const continuationSeed = runProgress
-    const continuationBase = !options.nctNumber
-      && (!options.modelIds || options.modelIds.length === 0)
-      && Boolean(effectiveRunDate)
-      && effectiveRunDate === latestVisibleRunDate
-      && continuationSeed
-      && preserveExecutionPlan
-      ? {
-          completedActions: continuationSeed.completedActions,
-          totalActions: continuationSeed.totalActions,
-          okCount: continuationSeed.okCount,
-          errorCount: continuationSeed.errorCount,
-          skippedCount: continuationSeed.skippedCount,
-          openMarkets: continuationSeed.openMarkets,
-          orderedMarkets: continuationSeed.orderedMarkets,
-          executionPlan,
-        }
-      : null
     const requestBody = {
-      runDate: effectiveRunDate ?? undefined,
       nctNumber: options.nctNumber,
       modelIds: options.modelIds,
       claudeProvider: effectiveClaudeProvider,
@@ -597,22 +519,20 @@ export function AdminTrialManager({
     setErrorConsole([])
     setRunProgress({
       startedAtMs,
-      runDate: effectiveRunDate,
+      runDate: null,
       modelOrder: initialModelOrder,
-      orderedMarkets: continuationBase?.orderedMarkets ?? [],
-      openMarkets: continuationBase?.openMarkets ?? 0,
-      totalActions: continuationBase?.totalActions ?? 0,
-      completedActions: continuationBase?.completedActions ?? 0,
-      okCount: continuationBase?.okCount ?? 0,
-      errorCount: continuationBase?.errorCount ?? 0,
-      skippedCount: continuationBase?.skippedCount ?? 0,
+      orderedMarkets: [],
+      openMarkets: 0,
+      totalActions: 0,
+      completedActions: 0,
+      okCount: 0,
+      errorCount: 0,
+      skippedCount: 0,
       latestResult: null,
       latestError: null,
-      currentActivity: continuationBase
-        ? `Continuing ${runDescription}...`
-        : `Initializing ${runDescription}...`,
+      currentActivity: `Initializing ${runDescription}...`,
     })
-    setExecutionPlan(continuationBase?.executionPlan ?? buildExecutionPlan({
+    setExecutionPlan(buildExecutionPlan({
       events: relevantEvents,
       runDate: effectiveRunDateSeed,
       modelOrder: initialModelOrder,
@@ -653,21 +573,15 @@ export function AdminTrialManager({
             orderedMarkets: event.orderedMarkets,
             openMarkets: event.openMarkets,
             totalActions: event.totalActions,
-            completedActions: continuationBase?.completedActions ?? prev.completedActions,
-            okCount: continuationBase?.okCount ?? prev.okCount,
-            errorCount: continuationBase?.errorCount ?? prev.errorCount,
-            skippedCount: continuationBase?.skippedCount ?? prev.skippedCount,
             currentActivity: `Discovered ${event.openMarkets} open trials (${event.totalActions} actions)`,
           } : prev)
-          if (!continuationBase) {
-            setExecutionPlan(buildExecutionPlan({
-              events: relevantEvents,
-              runDate: event.runDate,
-              modelOrder: event.modelOrder,
-              orderedMarkets: event.orderedMarkets,
-              fallbackStatuses: ['OPEN'],
-            }))
-          }
+          setExecutionPlan(buildExecutionPlan({
+            events: relevantEvents,
+            runDate: event.runDate,
+            modelOrder: event.modelOrder,
+            orderedMarkets: event.orderedMarkets,
+            fallbackStatuses: ['OPEN'],
+          }))
           appendRunLog(`Found ${event.openMarkets} open trials (${event.totalActions} model actions)`)
           return
         }
@@ -679,8 +593,8 @@ export function AdminTrialManager({
 
             const next = {
               ...prev,
-              completedActions: (continuationBase?.completedActions ?? 0) + event.completedActions,
-              totalActions: continuationBase?.totalActions ?? event.totalActions,
+              completedActions: event.completedActions,
+              totalActions: event.totalActions,
               latestResult: event.result,
               currentActivity: `Completed ${MODEL_INFO[event.result.modelId].fullName}: ${event.result.action} (${statusLabel(event.result.status)})`,
             }
@@ -704,8 +618,8 @@ export function AdminTrialManager({
           const occurredAtMs = Date.now()
           setRunProgress((prev) => prev ? {
             ...prev,
-            completedActions: (continuationBase?.completedActions ?? 0) + event.completedActions,
-            totalActions: continuationBase?.totalActions ?? event.totalActions,
+            completedActions: event.completedActions,
+            totalActions: event.totalActions,
             currentActivity: event.message,
           } : prev)
           setExecutionPlan((prev) => applyActivityToExecutionPlan(prev, {
@@ -724,19 +638,17 @@ export function AdminTrialManager({
           setIsStoppingDaily(false)
           setRunProgress((prev) => prev ? {
             ...prev,
-            completedActions: (continuationBase?.completedActions ?? 0) + event.payload.processedActions,
+            completedActions: event.payload.processedActions,
             totalActions: event.payload.totalActions,
             modelOrder: event.payload.modelOrder,
             orderedMarkets: event.payload.orderedMarkets,
-            okCount: (continuationBase?.okCount ?? 0) + event.payload.summary.ok,
-            errorCount: (continuationBase?.errorCount ?? 0) + event.payload.summary.error,
-            skippedCount: (continuationBase?.skippedCount ?? 0) + event.payload.summary.skipped,
+            okCount: event.payload.summary.ok,
+            errorCount: event.payload.summary.error,
+            skippedCount: event.payload.summary.skipped,
             currentActivity: `${runDescription} completed`,
           } : prev)
           setExecutionPlan((prev) => finalizeExecutionPlan(prev))
-          if (!continuationBase) {
-            setSummaryFromPayload(event.payload, startedAtMs)
-          }
+          setSummaryFromPayload(event.payload, startedAtMs)
           appendRunLog(`${runDescription} completed`)
           return
         }
@@ -882,9 +794,6 @@ export function AdminTrialManager({
   const pendingActions = runProgress
     ? Math.max(0, (runProgress.totalActions || 0) - runProgress.completedActions)
     : 0
-  const resumableRunDate = !runningDaily ? getResumableRunDate() : null
-  const resumableRunDateLabel = formatRunDateLabel(resumableRunDate)
-  const alternateResumableRunDates = resumableRunDates.filter((entry) => entry.runDate !== resumableRunDate)
   const displayElapsedSeconds = runningDaily
     ? elapsedSeconds
     : (lastRunSummary?.durationSeconds ?? elapsedSeconds)
@@ -1000,7 +909,7 @@ export function AdminTrialManager({
               </div>
             </div>
             <p className="text-xs text-[#8a8075]">
-              Saved in this browser. Applies to daily runs, resume actions, and the scoped Claude run below.
+              Saved in this browser. Applies to daily runs and the scoped Claude run below.
             </p>
             {!CLAUDE_BROWSER_PROVIDER_AVAILABLE ? (
               <p className="text-xs text-[#8a8075]">
@@ -1018,9 +927,7 @@ export function AdminTrialManager({
             >
               {runningDaily
                 ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
-                : resumableRunDateLabel
-                  ? `Resume Daily Cycle (${resumableRunDateLabel} UTC)`
-                  : 'Run Daily Cycle Now'}
+                : 'Run Daily Cycle Now'}
             </button>
             {runningDaily ? (
               <button
@@ -1032,34 +939,7 @@ export function AdminTrialManager({
                 {isStoppingDaily ? 'Stopping...' : 'Pause'}
               </button>
             ) : null}
-            {!runningDaily ? alternateResumableRunDates.map((entry) => {
-              const runDateLabel = formatRunDateLabel(entry.runDate)
-              if (!runDateLabel) return null
-
-              return (
-                <button
-                  key={entry.runDate}
-                  type="button"
-                  onClick={() => {
-                    void runDailyCycle({ runDate: entry.runDate })
-                  }}
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c]"
-                >
-                  Resume {runDateLabel} UTC
-                </button>
-              )
-            }) : null}
           </div>
-          {resumableRunDateLabel && !runningDaily ? (
-            <p className="text-xs text-[#8a8075]">
-              Resumes the unfinished run from {resumableRunDateLabel} UTC and skips model actions that already completed.
-            </p>
-          ) : null}
-          {alternateResumableRunDates.length > 0 && !runningDaily ? (
-            <p className="text-xs text-[#8a8075]">
-              Older unfinished run dates stay available here, so you can resume yesterday before touching today&apos;s partial run.
-            </p>
-          ) : null}
           <div className="rounded-none border border-[#e8ddd0] bg-white/75 p-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <input
@@ -1105,7 +985,7 @@ export function AdminTrialManager({
           <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
             <div>
             <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Trial Cycle</h3>
-              <p className="mt-1 text-xs text-[#8a8075]">Target schedule: 6:00 AM ET.</p>
+              <p className="mt-1 text-xs text-[#8a8075]">Manual run only.</p>
             </div>
           {runProgress && (
             <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">

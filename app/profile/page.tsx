@@ -530,18 +530,6 @@ export default async function ProfilePage() {
             </section>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <Link
-                href="/trials"
-                className="inline-flex items-center rounded-sm border border-[#d9cdbf] bg-white px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
-              >
-                Browse trials
-              </Link>
-              <Link
-                href="/leaderboard"
-                className="inline-flex items-center rounded-sm border border-[#d9cdbf] bg-white px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
-              >
-                View leaderboard
-              </Link>
               <LogoutButton />
             </div>
           </section>

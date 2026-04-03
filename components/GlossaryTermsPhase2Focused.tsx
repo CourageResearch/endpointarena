@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { glossaryTermAnchor } from '@/lib/glossary'
 import { BRAND_GRADIENT, HeaderDots, SquareDivider } from '@/components/site/chrome'
+import { cn } from '@/lib/utils'
 
 type GlossaryTerm = {
   term: string
@@ -16,6 +17,44 @@ type ResolutionComparisonRow = {
   yesDetail: string
   noPhrases: string[]
   noDetail: string
+}
+
+function solidBorderBackground(color: string) {
+  return `linear-gradient(${color}, ${color})`
+}
+
+function GlossaryFrame({
+  children,
+  className,
+  borderBackground,
+  highlighted = false,
+  id,
+}: {
+  children: ReactNode
+  className?: string
+  borderBackground: string
+  highlighted?: boolean
+  id?: string
+}) {
+  return (
+    <div
+      id={id}
+      className={cn(
+        'rounded-sm border border-transparent transition-shadow duration-150',
+        className,
+        highlighted
+          ? 'shadow-[0_0_0_2px_rgba(211,157,46,0.12)]'
+          : 'hover:shadow-[0_1px_0_rgba(26,26,26,0.04)]'
+      )}
+      style={{
+        background: `linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box, ${borderBackground} border-box`,
+        backgroundClip: 'padding-box, border-box',
+        backgroundOrigin: 'padding-box, border-box',
+      }}
+    >
+      {children}
+    </div>
+  )
 }
 
 const MARKET_RESOLUTION_TERMS: GlossaryTerm[] = [
@@ -341,14 +380,11 @@ function GlossaryCard({
   const termAnchor = glossaryTermAnchor(term.term)
 
   return (
-    <div
+    <GlossaryFrame
       id={`term-${termAnchor}`}
-      className={`scroll-mt-32 rounded-sm p-[1px] transition-shadow duration-150 ${
-        isHighlighted
-          ? 'shadow-[0_0_0_2px_rgba(211,157,46,0.12)]'
-          : 'hover:shadow-[0_1px_0_rgba(26,26,26,0.04)]'
-      }`}
-      style={{ background: BRAND_GRADIENT }}
+      className="scroll-mt-32"
+      borderBackground={BRAND_GRADIENT}
+      highlighted={isHighlighted}
     >
       <div
         className={`h-full rounded-sm p-4 transition-colors duration-150 sm:p-6 ${
@@ -361,7 +397,7 @@ function GlossaryCard({
         ) : null}
         <p className="mt-3 text-sm leading-relaxed text-[#6f665b]">{term.definition}</p>
       </div>
-    </div>
+    </GlossaryFrame>
   )
 }
 
@@ -463,15 +499,12 @@ export function GlossaryTermsPhase2Focused() {
             const termAnchor = glossaryTermAnchor(term.term)
 
             return (
-              <div
+              <GlossaryFrame
                 key={term.term}
                 id={`term-${termAnchor}`}
-                className={`h-full scroll-mt-32 rounded-sm p-[1px] transition-shadow duration-150 ${
-                  isHighlighted
-                    ? 'shadow-[0_0_0_2px_rgba(211,157,46,0.12)]'
-                    : 'hover:shadow-[0_1px_0_rgba(26,26,26,0.04)]'
-                }`}
-                style={{ backgroundColor: panel.frameColor }}
+                className="h-full scroll-mt-32"
+                borderBackground={solidBorderBackground(panel.frameColor)}
+                highlighted={isHighlighted}
               >
                 <div
                   className={`flex h-full flex-col rounded-sm p-5 transition-colors duration-150 sm:p-6 ${
@@ -507,7 +540,7 @@ export function GlossaryTermsPhase2Focused() {
                     ))}
                   </div>
                 </div>
-              </div>
+              </GlossaryFrame>
             )
           })}
         </div>

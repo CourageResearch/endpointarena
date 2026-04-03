@@ -20,7 +20,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
   { id: 'ai', href: '/admin/ai', label: 'AI' },
   { id: 'trials', href: '/admin/trials', label: 'Trials' },
   { id: 'update', href: '/admin/update', label: 'Update' },
-  { id: 'outcomes', href: '/admin/outcomes', label: 'Outcomes' },
+  { id: 'outcomes', href: '/admin/outcomes', label: 'Oracle' },
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
