@@ -394,7 +394,7 @@ const TrialsBrowsePagination = memo(function TrialsBrowsePagination({
   const endRow = Math.min(currentPage * pageSize, totalRows)
 
   return (
-    <div className="flex flex-col gap-3 border-t border-[#e8ddd0] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="text-xs text-[#8a8075]">
         Showing {startRow}-{endRow} of {totalRows.toLocaleString('en-US')}
       </div>
@@ -591,7 +591,7 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
                           aria-label={`Open ${row.title}`}
                           onClick={() => navigateToMarket(marketHref)}
                           onKeyDown={(event) => handleRowKeyDown(event, marketHref)}
-                          className="cursor-pointer border-b border-[#e8ddd0] align-top transition-colors hover:bg-[#f7f1e8]/45 focus-visible:bg-[#f7f1e8]/45 focus-visible:outline-none"
+                          className="cursor-pointer border-b border-[#e8ddd0] align-top transition-colors last:border-b-0 hover:bg-[#f7f1e8]/45 focus-visible:bg-[#f7f1e8]/45 focus-visible:outline-none"
                         >
                           <td className="px-4 py-3.5">
                             <Link href={marketHref} className="block">
@@ -662,17 +662,20 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
                 </table>
               </div>
 
-              <TrialsBrowsePagination
-                currentPage={currentPage}
-                pageCount={pageCount}
-                pageSize={PAGE_SIZE}
-                totalRows={totalFilteredRows}
-                onPageChange={onPageChange}
-              />
             </>
           )}
         </div>
       </div>
+
+      {rows.length > 0 ? (
+        <TrialsBrowsePagination
+          currentPage={currentPage}
+          pageCount={pageCount}
+          pageSize={PAGE_SIZE}
+          totalRows={totalFilteredRows}
+          onPageChange={onPageChange}
+        />
+      ) : null}
     </section>
   )
 })
