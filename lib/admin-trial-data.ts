@@ -1,6 +1,6 @@
 import { asc, inArray } from 'drizzle-orm'
 import { db, phase2Trials, predictionMarkets, trialQuestions } from '@/lib/db'
-import type { AdminTrialEvent } from '@/components/admin/market-manager-utils'
+import type { AdminTrialEvent } from '@/components/admin/trial-manager-utils'
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'

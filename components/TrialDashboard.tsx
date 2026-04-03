@@ -542,6 +542,9 @@ export function TrialDashboard({
   const selectedTradeSide = toHumanTradeSide(tradeDirection, tradeOutcome)
   const marketDetailHref = `/trials/${encodeURIComponent(selectedMarket.marketId)}`
   const decisionSnapshotsHref = `${marketDetailHref}/decision-snapshots`
+  const oracleRunHref = selectedMarket.event?.nctId
+    ? `${marketDetailHref}/oracle-runs`
+    : null
   const yesPriceCents = Math.round(selectedMarket.priceYes * 100)
   const noPriceCents = Math.round((1 - selectedMarket.priceYes) * 100)
   const selectedOutcomePrice = tradeOutcome === 'yes' ? selectedMarket.priceYes : (1 - selectedMarket.priceYes)
@@ -866,7 +869,7 @@ export function TrialDashboard({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className={cn('text-xs leading-relaxed', active ? 'text-white/90' : 'text-[#2f2a24]')}>
-                            {entry.market.event?.drugName || 'Trial Market'}
+                            {entry.market.event?.drugName || 'Trial'}
                           </div>
                           <div className={cn('font-mono text-sm', active ? 'text-white' : 'text-[#181818]')}>
                             {formatPercent(entry.market.priceYes, 0)}
@@ -1340,13 +1343,21 @@ export function TrialDashboard({
 	              </div>
 	            ) : null}
               <div className="mt-10 px-1">
-                <div className="mx-1 flex justify-start">
+                <div className="mx-1 flex flex-col items-start gap-2">
                   <Link
                     href={decisionSnapshotsHref}
                     className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
                   >
                     Model Snapshots
                   </Link>
+                  {oracleRunHref ? (
+                    <Link
+                      href={oracleRunHref}
+                      className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
+                    >
+                      Oracle
+                    </Link>
+                  ) : null}
                 </div>
               </div>
 	          </section>

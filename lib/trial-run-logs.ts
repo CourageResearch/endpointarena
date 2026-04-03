@@ -26,7 +26,7 @@ export type PersistedRunLogEntry = {
   createdAt: string | null
 }
 
-export type AdminMarketRunSnapshot = {
+export type AdminTrialRunSnapshot = {
   runId: string
   runDate: string
   status: 'running' | 'completed' | 'failed'
@@ -42,6 +42,11 @@ export type AdminMarketRunSnapshot = {
   updatedAt: string | null
   completedAt: string | null
   logs: PersistedRunLogEntry[]
+}
+
+export type ResumableTrialRunDate = {
+  runDate: string
+  status: 'running' | 'failed'
 }
 
 function toIsoString(value: Date | null | undefined): string | null {
@@ -96,7 +101,7 @@ function mapRunLogEntry(log: RunLogWithActor): PersistedRunLogEntry {
 function buildSnapshotFromRuns(input: {
   runs: Array<typeof marketRuns.$inferSelect>
   logs: RunLogWithActor[]
-}): AdminMarketRunSnapshot | null {
+}): AdminTrialRunSnapshot | null {
   const { runs, logs } = input
   if (runs.length === 0) return null
 
@@ -140,6 +145,29 @@ function buildSnapshotFromRuns(input: {
   }
 }
 
+function isTrialRunSql() {
+  return sql`(
+    exists (
+      select 1
+      from market_run_logs mrl
+      where mrl.run_id = ${marketRuns.id}
+        and mrl.trial_question_id is not null
+    )
+    or exists (
+      select 1
+      from market_actions ma
+      where ma.run_id = ${marketRuns.id}
+        and ma.trial_question_id is not null
+    )
+    or exists (
+      select 1
+      from model_decision_snapshots mds
+      where mds.run_id = ${marketRuns.id}
+        and mds.trial_question_id is not null
+    )
+  )`
+}
+
 async function failStaleRunningRunIfNeeded(run: {
   id: string
   failureReason: string | null
@@ -166,7 +194,7 @@ async function failStaleRunningRunIfNeeded(run: {
   return updated.length > 0
 }
 
-export async function appendMarketRunLog(input: {
+export async function appendTrialRunLog(input: {
   runId: string
   logType: LogType
   message: string
@@ -204,7 +232,10 @@ export async function appendMarketRunLog(input: {
 
 async function getRunningMarketRunId(): Promise<string | null> {
   const activeRun = await db.query.marketRuns.findFirst({
-    where: eq(marketRuns.status, 'running'),
+    where: and(
+      eq(marketRuns.status, 'running'),
+      isTrialRunSql(),
+    ),
     orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],
   })
 
@@ -213,9 +244,12 @@ async function getRunningMarketRunId(): Promise<string | null> {
   return staleFailed ? null : activeRun.id
 }
 
-export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapshot | null> {
+export async function getLatestTrialRunSnapshot(): Promise<AdminTrialRunSnapshot | null> {
   let running = await db.query.marketRuns.findFirst({
-    where: eq(marketRuns.status, 'running'),
+    where: and(
+      eq(marketRuns.status, 'running'),
+      isTrialRunSql(),
+    ),
     orderBy: [desc(marketRuns.updatedAt), desc(marketRuns.createdAt)],
   })
 
@@ -227,20 +261,27 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
   }
 
   const latest = running ?? await db.query.marketRuns.findFirst({
+    where: isTrialRunSql(),
     orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
   })
 
   if (!latest) return null
 
   const runsForDate = await db.query.marketRuns.findMany({
-    where: eq(marketRuns.runDate, latest.runDate),
+    where: and(
+      eq(marketRuns.runDate, latest.runDate),
+      isTrialRunSql(),
+    ),
     orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
   })
   const runIds = runsForDate.map((run) => run.id)
   const logs = runIds.length === 0
     ? []
     : await db.query.marketRunLogs.findMany({
-        where: inArray(marketRunLogs.runId, runIds),
+        where: and(
+          inArray(marketRunLogs.runId, runIds),
+          sql`${marketRunLogs.trialQuestionId} is not null`,
+        ),
         orderBy: [desc(marketRunLogs.createdAt)],
         limit: 4000,
         with: {
@@ -252,4 +293,44 @@ export async function getLatestMarketRunSnapshot(): Promise<AdminMarketRunSnapsh
     runs: runsForDate,
     logs,
   })
+}
+
+export async function listRecentResumableTrialRunDates(limit = 3): Promise<ResumableTrialRunDate[]> {
+  const recentRuns = await db.query.marketRuns.findMany({
+    where: isTrialRunSql(),
+    orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
+    limit: Math.max(limit * 12, 24),
+  })
+
+  const resumableRuns: ResumableTrialRunDate[] = []
+  const seenRunDates = new Set<string>()
+
+  for (const run of recentRuns) {
+    const runDate = run.runDate.toISOString()
+    if (seenRunDates.has(runDate)) continue
+    seenRunDates.add(runDate)
+
+    let status: ResumableTrialRunDate['status'] | 'completed' = run.status === 'running'
+      ? 'running'
+      : run.status === 'failed'
+        ? 'failed'
+        : 'completed'
+    if (status === 'running') {
+      const staleFailed = await failStaleRunningRunIfNeeded(run)
+      status = staleFailed ? 'failed' : 'running'
+    }
+
+    if (status === 'completed') continue
+
+    resumableRuns.push({
+      runDate,
+      status,
+    })
+
+    if (resumableRuns.length >= limit) {
+      break
+    }
+  }
+
+  return resumableRuns
 }

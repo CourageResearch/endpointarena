@@ -48,7 +48,8 @@ export function ModelIcon({ id, className = 'w-full h-full' }: ModelIconProps) {
           : id.startsWith('deepseek') ? 'deepseek'
             : id.startsWith('llama') ? 'llama'
               : id.startsWith('kimi') ? 'kimi'
-                : id.startsWith('minimax') ? 'minimax'
+                : id.startsWith('glm') ? 'glm'
+                  : id.startsWith('minimax') ? 'minimax'
                   : id
 
   if (normalizedId === 'claude') {
@@ -93,6 +94,10 @@ export function ModelIcon({ id, className = 'w-full h-full' }: ModelIconProps) {
 
   if (normalizedId === 'kimi') {
     return <RasterLogoIcon src="/logos/models/kimi.png" className={className} />
+  }
+
+  if (normalizedId === 'glm') {
+    return <RasterLogoIcon src="/logos/models/glm.svg" className={className} />
   }
 
   if (normalizedId === 'minimax') {

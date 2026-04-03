@@ -290,7 +290,7 @@ async function main() {
         summary,
         notes: [
           'tradeRollbackUsd adds back trial-market buy spend and removes trial-market sell proceeds from shared model cash balances.',
-          'settlementRollbackUsd removes payouts from currently resolved trial markets before trial-linked rows are deleted.',
+          'settlementRollbackUsd removes payouts from currently resolved trials before trial-linked rows are deleted.',
           'market_daily_snapshots for the current DB date are deleted during apply so snapshots can be regenerated with corrected balances.',
         ],
       }, null, 2))

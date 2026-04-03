@@ -16,6 +16,8 @@ export type TrialMonitorConfig = {
   lookaheadDays: number
   overdueRecheckHours: number
   maxQuestionsPerRun: number
+  cronProcessingConcurrency: number
+  manualProcessingConcurrency: number
   verifierModelKey: string
   minCandidateConfidence: number
   createdAt: Date
@@ -29,6 +31,8 @@ export type TrialMonitorConfigPatchInput = Partial<{
   lookaheadDays: unknown
   overdueRecheckHours: unknown
   maxQuestionsPerRun: unknown
+  cronProcessingConcurrency: unknown
+  manualProcessingConcurrency: unknown
   verifierModelKey: unknown
   minCandidateConfidence: unknown
 }>
@@ -71,6 +75,8 @@ function mapRow(row: typeof trialMonitorConfigs.$inferSelect): TrialMonitorConfi
     lookaheadDays: row.lookaheadDays,
     overdueRecheckHours: row.overdueRecheckHours,
     maxQuestionsPerRun: row.maxQuestionsPerRun,
+    cronProcessingConcurrency: row.cronProcessingConcurrency,
+    manualProcessingConcurrency: row.manualProcessingConcurrency,
     verifierModelKey: row.verifierModelKey,
     minCandidateConfidence: row.minCandidateConfidence,
     createdAt: row.createdAt,
@@ -127,6 +133,20 @@ export async function updateTrialMonitorConfig(input: TrialMonitorConfigPatchInp
     const parsed = Math.round(coerceNumber(input.maxQuestionsPerRun, 'maxQuestionsPerRun'))
     if (parsed < 1 || parsed > 500) throw new ValidationError('maxQuestionsPerRun must be between 1 and 500')
     patch.maxQuestionsPerRun = parsed
+  }
+  if (input.cronProcessingConcurrency !== undefined) {
+    const parsed = Math.round(coerceNumber(input.cronProcessingConcurrency, 'cronProcessingConcurrency'))
+    if (parsed < 1 || parsed > 12) {
+      throw new ValidationError('cronProcessingConcurrency must be between 1 and 12')
+    }
+    patch.cronProcessingConcurrency = parsed
+  }
+  if (input.manualProcessingConcurrency !== undefined) {
+    const parsed = Math.round(coerceNumber(input.manualProcessingConcurrency, 'manualProcessingConcurrency'))
+    if (parsed < 1 || parsed > 12) {
+      throw new ValidationError('manualProcessingConcurrency must be between 1 and 12')
+    }
+    patch.manualProcessingConcurrency = parsed
   }
   if (input.verifierModelKey !== undefined) {
     const parsed = parseTrialMonitorVerifierModelKey(input.verifierModelKey, 'verifierModelKey')

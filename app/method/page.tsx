@@ -15,6 +15,14 @@ export const metadata: Metadata = buildPageMetadata({
   path: '/method',
 })
 
+const SOFT_OUTLINE_GRADIENT =
+  'linear-gradient(135deg, rgba(239, 111, 103, 0.7), rgba(93, 187, 99, 0.7), rgba(211, 157, 46, 0.7), rgba(91, 165, 237, 0.7))'
+
+const SOFT_OUTLINE_STYLE = {
+  background: SOFT_OUTLINE_GRADIENT,
+  padding: '0.5px',
+} as const
+
 async function getData() {
   const [trialQuestionCount, snapshotCount] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(trialQuestions),
@@ -183,19 +191,19 @@ export default async function MethodPage() {
             </div>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+            <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Problem with AI Benchmarks</h3>
               <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Most benchmarks test answers that already exist in training data. Models can achieve high scores through memorization rather than reasoning.</p>
               </div>
             </div>
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+            <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">The Solution</h3>
               <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Trial outcomes do not exist until the data lands. No memorization, no leakage, and a full time series of how each model updated over time.</p>
               </div>
             </div>
-            <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+            <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
               <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                 <h3 className="text-base font-semibold text-[#1a1a1a] mb-2">What We're Testing</h3>
                 <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Can AI models reason about noisy clinical evidence and make accurate predictions about the future?</p>
@@ -212,12 +220,12 @@ export default async function MethodPage() {
               <HeaderDots />
             </div>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+          <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
             <div className="bg-white/95 rounded-sm p-4 sm:p-8">
               <div className="space-y-6 sm:space-y-8">
                 {processSteps.map((step, index) => (
                   <div key={index} className="flex gap-3 sm:gap-6">
-                    <div className="w-8 h-8 p-[1px] rounded-sm shrink-0" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+                    <div className="w-8 h-8 rounded-sm shrink-0" style={SOFT_OUTLINE_STYLE}>
                       <div className="w-full h-full bg-white rounded-sm flex items-center justify-center text-sm font-bold">
                         {index + 1}
                       </div>
@@ -243,7 +251,7 @@ export default async function MethodPage() {
           </div>
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
             {models.map((model) => (
-              <div key={model.id} className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+              <div key={model.id} className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
                 <div className="bg-white/95 rounded-sm p-4 sm:p-6 h-full">
                   <div className="flex items-center gap-3 mb-6" title={model.version}>
                     <div className="w-10 h-10 text-[#8a8075]">
@@ -313,7 +321,7 @@ export default async function MethodPage() {
               <HeaderDots />
             </div>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+          <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[#e8ddd0] bg-[#f3ebe0]/50">
                 <span className="text-sm text-[#8a8075]">All models receive the same two-stage decision prompt</span>
@@ -386,7 +394,7 @@ Input JSON includes:
               <HeaderDots />
             </div>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+          <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
             <div className="bg-white/95 rounded-sm overflow-hidden">
               <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
 <span className="text-[#b5aa9e]">{'{'}</span>
@@ -432,7 +440,7 @@ Input JSON includes:
               <HeaderDots />
             </div>
           </div>
-          <div className="p-[1px] rounded-sm" style={{ background: 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)' }}>
+          <div className="rounded-sm" style={SOFT_OUTLINE_STYLE}>
             <div className="bg-white/95 rounded-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#e8ddd0]">
               <div className="p-4 sm:p-6">
                 <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{trialQuestionCount}</div>

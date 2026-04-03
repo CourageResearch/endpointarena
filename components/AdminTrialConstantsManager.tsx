@@ -3,21 +3,8 @@
 import { useMemo, useState } from 'react'
 import { getApiErrorMessage } from '@/lib/client-api'
 
-export interface MarketRuntimeConfigDto {
-  warmupRunCount: number
-  warmupMaxTradeUsd: number
-  warmupBuyCashFraction: number
-  steadyMaxTradeUsd: number
-  steadyBuyCashFraction: number
-  maxPositionPerSideShares: number
-  openingLmsrB: number
-  signupUserLimit: number
-  createdAt: string
-  updatedAt: string
-}
-
 interface Props {
-  initialConfig: MarketRuntimeConfigDto
+  initialConfig: TrialRuntimeConfigDto
   currentUsersCount: number
 }
 
@@ -48,7 +35,20 @@ function parseField(value: string, fieldLabel: string): number {
   return parsed
 }
 
-function toFormState(config: MarketRuntimeConfigDto): FormState {
+export interface TrialRuntimeConfigDto {
+  warmupRunCount: number
+  warmupMaxTradeUsd: number
+  warmupBuyCashFraction: number
+  steadyMaxTradeUsd: number
+  steadyBuyCashFraction: number
+  maxPositionPerSideShares: number
+  openingLmsrB: number
+  signupUserLimit: number
+  createdAt: string
+  updatedAt: string
+}
+
+function toFormState(config: TrialRuntimeConfigDto): FormState {
   return {
     warmupRunCount: String(config.warmupRunCount),
     warmupMaxTradeUsd: String(config.warmupMaxTradeUsd),
@@ -61,7 +61,7 @@ function toFormState(config: MarketRuntimeConfigDto): FormState {
   }
 }
 
-export function AdminMarketConstantsManager({ initialConfig, currentUsersCount }: Props) {
+export function AdminTrialConstantsManager({ initialConfig, currentUsersCount }: Props) {
   const [config, setConfig] = useState(initialConfig)
   const [form, setForm] = useState<FormState>(() => toFormState(initialConfig))
   const [isSaving, setIsSaving] = useState(false)
@@ -124,7 +124,7 @@ export function AdminMarketConstantsManager({ initialConfig, currentUsersCount }
         signupUserLimit: parseField(form.signupUserLimit, 'Signup user limit'),
       }
 
-      const response = await fetch('/api/admin/market-config', {
+      const response = await fetch('/api/admin/trial-config', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ export function AdminMarketConstantsManager({ initialConfig, currentUsersCount }
         throw new Error(getApiErrorMessage(data, 'Failed to update runtime settings'))
       }
 
-      const nextConfig = data.config as MarketRuntimeConfigDto
+      const nextConfig = data.config as TrialRuntimeConfigDto
       setConfig(nextConfig)
       setForm(toFormState(nextConfig))
       setSuccessMessage('Settings saved.')
@@ -244,7 +244,7 @@ export function AdminMarketConstantsManager({ initialConfig, currentUsersCount }
               onChange={(e) => updateField('maxPositionPerSideShares', e.target.value)}
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
-            <p className="text-xs text-[#8a8075]">Blocks additional buys once YES/NO holdings hit this cap in a market.</p>
+            <p className="text-xs text-[#8a8075]">Blocks additional buys once YES/NO holdings hit this cap in a trial.</p>
           </label>
 
           <label className="space-y-1.5">
@@ -257,7 +257,7 @@ export function AdminMarketConstantsManager({ initialConfig, currentUsersCount }
               onChange={(e) => updateField('openingLmsrB', e.target.value)}
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
-            <p className="text-xs text-[#8a8075]">Liquidity applied when a new market is opened.</p>
+            <p className="text-xs text-[#8a8075]">Liquidity applied when a new trial is opened.</p>
           </label>
 
           <label className="space-y-1.5">

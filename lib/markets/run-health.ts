@@ -1,3 +1,5 @@
+import type { ModelId } from '@/lib/constants'
+
 const DEFAULT_STALE_TIMEOUT_MINUTES = 20
 const MIN_STALE_TIMEOUT_MINUTES = 2
 const MAX_STALE_TIMEOUT_MINUTES = 180
@@ -21,6 +23,14 @@ function parseModelResponseTimeoutSeconds(raw: string | undefined): number {
   return parsed
 }
 
+function parseOptionalModelResponseTimeoutSeconds(raw: string | undefined): number | null {
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (!Number.isFinite(parsed)) return null
+  if (parsed < MIN_MODEL_RESPONSE_TIMEOUT_SECONDS) return MIN_MODEL_RESPONSE_TIMEOUT_SECONDS
+  if (parsed > MAX_MODEL_RESPONSE_TIMEOUT_SECONDS) return MAX_MODEL_RESPONSE_TIMEOUT_SECONDS
+  return parsed
+}
+
 export const MARKET_RUN_STALE_TIMEOUT_MINUTES = parseStaleTimeoutMinutes(
   process.env.MARKET_RUN_STALE_TIMEOUT_MINUTES
 )
@@ -32,4 +42,25 @@ const MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS = parseModelResponseTimeoutSeconds(
   process.env.MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS
 )
 
-export const MARKET_MODEL_RESPONSE_TIMEOUT_MS = MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS * 1000
+const MARKET_MODEL_RESPONSE_TIMEOUT_MS = MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS * 1000
+
+function toModelTimeoutEnvSuffix(modelId: ModelId): string {
+  return modelId
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase()
+}
+
+export function getMarketModelResponseTimeoutMs(modelId?: ModelId | null): number {
+  if (!modelId) return MARKET_MODEL_RESPONSE_TIMEOUT_MS
+
+  const specificTimeoutSeconds = parseOptionalModelResponseTimeoutSeconds(
+    process.env[`MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS_${toModelTimeoutEnvSuffix(modelId)}`],
+  )
+
+  if (specificTimeoutSeconds != null) {
+    return specificTimeoutSeconds * 1000
+  }
+
+  return MARKET_MODEL_RESPONSE_TIMEOUT_MS
+}

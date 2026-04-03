@@ -15,6 +15,20 @@
       "when": 1775074045812,
       "tag": "0001_rapid_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775193507248,
+      "tag": "0002_harsh_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775232779532,
+      "tag": "0003_small_rawhide_kid",
+      "breakpoints": true
     }
   ]
 }

@@ -19,9 +19,10 @@ import {
   formatProgressLog,
   formatUtcLogPrefix,
   getCurrentExecutionStep,
+  getExecutionStepDurationLabel,
   getExecutionStatusLabel,
   getExecutionStepTone,
-  getMarketStatusTone,
+  getTrialStatusTone,
   getOutcomeStyle,
   isAdminStoppedMessage,
   rotateModelOrderLocal,
@@ -30,20 +31,22 @@ import {
   summarizeNonOkModels,
   truncateText,
   type AdminTrialEvent,
+  type AdminTrialRunSnapshot,
   type DailyRunProgressState,
   type ErrorConsoleEntry,
-  type ExecutionPlanMarket,
+  type ExecutionPlanTrial,
   type LastRunSummaryState,
-} from '@/components/admin/market-manager-utils'
+} from '@/components/admin/trial-manager-utils'
 import type {
   DailyRunPayload,
   DailyRunStreamEvent,
 } from '@/lib/markets/types'
-import type { AdminMarketRunSnapshot } from '@/lib/market-run-logs'
+import type { ResumableTrialRunDate } from '@/lib/trial-run-logs'
 
 interface Props {
   events: AdminTrialEvent[]
-  initialRunSnapshot?: AdminMarketRunSnapshot | null
+  initialRunSnapshot?: AdminTrialRunSnapshot | null
+  initialResumableRunDates?: ResumableTrialRunDate[]
   sections?: AdminTrialManagerSection[]
   labels?: Partial<AdminTrialManagerLabels>
 }
@@ -80,21 +83,29 @@ const DEFAULT_LABELS: AdminTrialManagerLabels = {
   openMarketsTitle: 'Open Trials',
   openMarketsDescription: 'Trials that are currently live.',
   openMarketsEmptyState: 'No open trials match the current filter.',
-  needsMarketTitle: 'Needs Trial Market',
-  needsMarketDescription: 'Live Phase 2 questions that still need a trial opened for trading.',
+  needsMarketTitle: 'Trials Not Yet Open',
+  needsMarketDescription: 'Live Phase 2 questions that still need to be opened for trading.',
   resolvedMarketsTitle: 'Resolved Trials',
   resolvedMarketsDescription: 'Trials that have already been resolved.',
   resolvedMarketsEmptyState: 'No resolved trials match the current filter.',
 }
 
 type RunDailyCycleOptions = {
+  runDate?: string
   nctNumber?: string
   modelIds?: ModelId[]
-  claudeProvider?: 'api' | 'web'
+  claudeProvider?: ClaudeProvider
 }
 
-const DEFAULT_LOCAL_CLAUDE_PROVIDER: 'api' | 'web' | undefined =
-  process.env.NODE_ENV !== 'production' ? 'web' : undefined
+type ClaudeProvider = 'api' | 'web'
+
+const CLAUDE_PROVIDER_STORAGE_KEY = 'admin-ai:claude-provider'
+const DEFAULT_CLAUDE_PROVIDER: ClaudeProvider = 'api'
+const CLAUDE_BROWSER_PROVIDER_AVAILABLE = process.env.NODE_ENV !== 'production'
+
+function isClaudeProvider(value: unknown): value is ClaudeProvider {
+  return value === 'api' || value === 'web'
+}
 
 function normalizeScopedNctNumberInput(value: string): string {
   return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
@@ -126,6 +137,29 @@ function formatUsdEstimate(value: number): string {
   }).format(value)
 }
 
+function formatRunDateLabel(dateLike: string | Date | null | undefined): string | null {
+  if (!dateLike) return null
+
+  const parsed = dateLike instanceof Date ? dateLike : new Date(dateLike)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+
+  return formatUtcDate(parsed, { month: 'short', day: 'numeric', year: 'numeric' }, '')
+}
+
+function sortResumableRunDates(values: ResumableTrialRunDate[]): ResumableTrialRunDate[] {
+  const uniqueByRunDate = new Map<string, ResumableTrialRunDate>()
+
+  for (const value of values) {
+    uniqueByRunDate.set(value.runDate, value)
+  }
+
+  return Array.from(uniqueByRunDate.values()).sort((left, right) => (
+    new Date(right.runDate).getTime() - new Date(left.runDate).getTime()
+  ))
+}
+
 function filterEventsForRun(events: AdminTrialEvent[], nctNumber?: string): AdminTrialEvent[] {
   if (!nctNumber) {
     return events
@@ -137,6 +171,7 @@ function filterEventsForRun(events: AdminTrialEvent[], nctNumber?: string): Admi
 export function AdminTrialManager({
   events: initialEvents,
   initialRunSnapshot = null,
+  initialResumableRunDates = [],
   sections = DEFAULT_SECTIONS,
   labels,
 }: Props) {
@@ -152,7 +187,7 @@ export function AdminTrialManager({
   const [elapsedSeconds, setElapsedSeconds] = useState(() => buildRunSummaryFromSnapshot(initialRunSnapshot)?.durationSeconds ?? 0)
   const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
   const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
-  const [executionPlan, setExecutionPlan] = useState<ExecutionPlanMarket[]>(() => (
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlanTrial[]>(() => (
     initialRunSnapshot
       ? buildExecutionPlanFromSnapshot(initialEvents, initialRunSnapshot)
       : buildNextExecutionPlan(initialEvents)
@@ -162,8 +197,15 @@ export function AdminTrialManager({
   const [isStoppingDaily, setIsStoppingDaily] = useState(initialRunSnapshot?.status === 'running' && isAdminStoppedMessage(initialRunSnapshot?.failureReason))
   const [isStreamingRun, setIsStreamingRun] = useState(false)
   const [scopedClaudeNctInput, setScopedClaudeNctInput] = useState('')
+  const [selectedClaudeProvider, setSelectedClaudeProvider] = useState<ClaudeProvider>(DEFAULT_CLAUDE_PROVIDER)
+  const [hasLoadedClaudeProviderPreference, setHasLoadedClaudeProviderPreference] = useState(false)
+  const [executionStepNowMs, setExecutionStepNowMs] = useState<number | null>(null)
+  const [resumableRunDates, setResumableRunDates] = useState<ResumableTrialRunDate[]>(() => (
+    sortResumableRunDates(initialResumableRunDates)
+  ))
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
+  const latestVisibleRunDate = runProgress?.runDate ?? null
   const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
   const scopedClaudeNctNumber = useMemo(() => parseScopedNctNumber(scopedClaudeNctInput), [scopedClaudeNctInput])
   const scopedClaudeEvents = useMemo(() => (
@@ -172,6 +214,8 @@ export function AdminTrialManager({
   const scopedClaudeOpenMarketCount = useMemo(() => (
     scopedClaudeEvents.filter((event) => event.marketStatus === 'OPEN' && event.marketId).length
   ), [scopedClaudeEvents])
+  const activeClaudeProvider = CLAUDE_BROWSER_PROVIDER_AVAILABLE ? selectedClaudeProvider : DEFAULT_CLAUDE_PROVIDER
+  const activeClaudeProviderLabel = activeClaudeProvider === 'web' ? 'Claude Browser' : 'Anthropic API'
   const enabledSections = new Set(sections)
   const showDailyCycle = enabledSections.has('dailyCycle')
   const showSearch = enabledSections.has('search')
@@ -196,6 +240,29 @@ export function AdminTrialManager({
   }
 
   useEffect(() => {
+    try {
+      const storedProvider = window.localStorage.getItem(CLAUDE_PROVIDER_STORAGE_KEY)
+      if (isClaudeProvider(storedProvider)) {
+        setSelectedClaudeProvider(storedProvider)
+      }
+    } catch {
+      // Ignore storage read failures and fall back to the API default.
+    } finally {
+      setHasLoadedClaudeProviderPreference(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hasLoadedClaudeProviderPreference) return
+
+    try {
+      window.localStorage.setItem(CLAUDE_PROVIDER_STORAGE_KEY, selectedClaudeProvider)
+    } catch {
+      // Ignore storage write failures and keep the in-memory selection.
+    }
+  }, [hasLoadedClaudeProviderPreference, selectedClaudeProvider])
+
+  useEffect(() => {
     if (!runningDaily || runStartedAtMs === null) return
 
     setElapsedSeconds(Math.max(0, Math.floor((Date.now() - runStartedAtMs) / 1000)))
@@ -206,7 +273,21 @@ export function AdminTrialManager({
     return () => window.clearInterval(timer)
   }, [runningDaily, runStartedAtMs])
 
-  const applyRunSnapshot = (snapshot: AdminMarketRunSnapshot | null) => {
+  useEffect(() => {
+    if (!currentExecutionStep || (currentExecutionStep.status !== 'running' && currentExecutionStep.status !== 'waiting')) {
+      setExecutionStepNowMs(null)
+      return
+    }
+
+    setExecutionStepNowMs(Date.now())
+    const timer = window.setInterval(() => {
+      setExecutionStepNowMs(Date.now())
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [currentExecutionStep?.key, currentExecutionStep?.status])
+
+  const applyRunSnapshot = (snapshot: AdminTrialRunSnapshot | null) => {
     if (!snapshot) {
       setPreserveExecutionPlan(false)
       setIsStoppingDaily(false)
@@ -221,6 +302,20 @@ export function AdminTrialManager({
     setErrorConsole(buildErrorConsoleFromSnapshot(snapshot))
     setRunProgress(nextProgress)
     setExecutionPlan(buildExecutionPlanFromSnapshot(events, snapshot))
+    setResumableRunDates((prev) => {
+      const withoutSnapshotDate = prev.filter((entry) => entry.runDate !== snapshot.runDate)
+      if (snapshot.status === 'completed') {
+        return withoutSnapshotDate
+      }
+
+      return sortResumableRunDates([
+        ...withoutSnapshotDate,
+        {
+          runDate: snapshot.runDate,
+          status: snapshot.status,
+        },
+      ])
+    })
 
     if (snapshot.status === 'running') {
       setPreserveExecutionPlan(true)
@@ -235,6 +330,15 @@ export function AdminTrialManager({
     setIsStoppingDaily(false)
     setLastRunSummary(nextSummary)
     setElapsedSeconds(nextSummary?.durationSeconds ?? 0)
+  }
+
+  const getResumableRunDate = (options: RunDailyCycleOptions = {}): string | null => {
+    if (options.runDate || options.nctNumber || options.claudeProvider) return null
+    if (options.modelIds && options.modelIds.length > 0) return null
+    if (!latestVisibleRunDate || !runProgress || !preserveExecutionPlan) return null
+    if (runProgress.totalActions <= 0) return null
+    if (runProgress.completedActions >= runProgress.totalActions) return null
+    return latestVisibleRunDate
   }
 
   useEffect(() => {
@@ -306,7 +410,7 @@ export function AdminTrialManager({
       })
 
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open trial market'))
+      if (!response.ok) throw new Error(getApiErrorMessage(data, 'Failed to open trial'))
 
       setEvents((prev) => prev.map((event) => (
         event.id === trialQuestionId
@@ -320,7 +424,7 @@ export function AdminTrialManager({
           : event
       )))
     } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed to open trial market')
+      setUiError(error instanceof Error ? error.message : 'Failed to open trial')
     } finally {
       setLoadingEventId(null)
     }
@@ -410,11 +514,11 @@ export function AdminTrialManager({
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload, 'Failed to stop daily market cycle'))
+        throw new Error(getApiErrorMessage(payload, 'Failed to stop daily trial cycle'))
       }
     } catch (error) {
       setIsStoppingDaily(false)
-      setUiError(error instanceof Error ? error.message : 'Failed to stop daily market cycle')
+      setUiError(error instanceof Error ? error.message : 'Failed to stop daily trial cycle')
     }
   }
 
@@ -440,15 +544,43 @@ export function AdminTrialManager({
     const startedAtMs = Date.now()
     let keepPersistedRunningState = false
     const controller = new AbortController()
-    const effectiveClaudeProvider = options.claudeProvider ?? DEFAULT_LOCAL_CLAUDE_PROVIDER
-    const runDescription = options.nctNumber && options.modelIds?.length === 1 && options.modelIds[0] === 'claude-opus' && effectiveClaudeProvider === 'web'
-      ? `Claude.ai Opus 4.6 on ${options.nctNumber}`
-      : 'daily market cycle'
+    const resumableRunDate = getResumableRunDate(options)
+    const effectiveRunDate = options.runDate ?? resumableRunDate ?? null
+    const effectiveClaudeProvider = options.claudeProvider ?? activeClaudeProvider
+    const effectiveRunDateLabel = formatRunDateLabel(effectiveRunDate)
+    const runDescriptionBase = options.nctNumber && options.modelIds?.length === 1 && options.modelIds[0] === 'claude-opus'
+      ? effectiveClaudeProvider === 'web'
+          ? `Claude Browser Opus 4.6 on ${options.nctNumber}`
+          : `Claude Opus 4.6 via Anthropic API on ${options.nctNumber}`
+      : 'daily trial cycle'
+    const runDescription = effectiveRunDateLabel
+      ? `${runDescriptionBase} for ${effectiveRunDateLabel} UTC`
+      : runDescriptionBase
     const relevantEvents = filterEventsForRun(events, options.nctNumber)
+    const effectiveRunDateSeed = effectiveRunDate ?? new Date(startedAtMs).toISOString()
     const initialModelOrder = options.modelIds && options.modelIds.length > 0
       ? options.modelIds
-      : rotateModelOrderLocal(new Date(startedAtMs))
+      : rotateModelOrderLocal(effectiveRunDateSeed)
+    const continuationSeed = runProgress
+    const continuationBase = !options.nctNumber
+      && (!options.modelIds || options.modelIds.length === 0)
+      && Boolean(effectiveRunDate)
+      && effectiveRunDate === latestVisibleRunDate
+      && continuationSeed
+      && preserveExecutionPlan
+      ? {
+          completedActions: continuationSeed.completedActions,
+          totalActions: continuationSeed.totalActions,
+          okCount: continuationSeed.okCount,
+          errorCount: continuationSeed.errorCount,
+          skippedCount: continuationSeed.skippedCount,
+          openMarkets: continuationSeed.openMarkets,
+          orderedMarkets: continuationSeed.orderedMarkets,
+          executionPlan,
+        }
+      : null
     const requestBody = {
+      runDate: effectiveRunDate ?? undefined,
       nctNumber: options.nctNumber,
       modelIds: options.modelIds,
       claudeProvider: effectiveClaudeProvider,
@@ -465,22 +597,24 @@ export function AdminTrialManager({
     setErrorConsole([])
     setRunProgress({
       startedAtMs,
-      runDate: null,
+      runDate: effectiveRunDate,
       modelOrder: initialModelOrder,
-      orderedMarkets: [],
-      openMarkets: 0,
-      totalActions: 0,
-      completedActions: 0,
-      okCount: 0,
-      errorCount: 0,
-      skippedCount: 0,
+      orderedMarkets: continuationBase?.orderedMarkets ?? [],
+      openMarkets: continuationBase?.openMarkets ?? 0,
+      totalActions: continuationBase?.totalActions ?? 0,
+      completedActions: continuationBase?.completedActions ?? 0,
+      okCount: continuationBase?.okCount ?? 0,
+      errorCount: continuationBase?.errorCount ?? 0,
+      skippedCount: continuationBase?.skippedCount ?? 0,
       latestResult: null,
       latestError: null,
-      currentActivity: `Initializing ${runDescription}...`,
+      currentActivity: continuationBase
+        ? `Continuing ${runDescription}...`
+        : `Initializing ${runDescription}...`,
     })
-    setExecutionPlan(buildExecutionPlan({
+    setExecutionPlan(continuationBase?.executionPlan ?? buildExecutionPlan({
       events: relevantEvents,
-      runDate: new Date(startedAtMs),
+      runDate: effectiveRunDateSeed,
       modelOrder: initialModelOrder,
       fallbackStatuses: ['OPEN'],
     }))
@@ -508,6 +642,7 @@ export function AdminTrialManager({
       let buffer = ''
       let donePayload: DailyRunPayload | null = null
       let cancelledMessage: string | null = null
+      let pausedMessage: string | null = null
 
       const handleStreamEvent = (event: DailyRunStreamEvent): void => {
         if (event.type === 'start') {
@@ -518,27 +653,34 @@ export function AdminTrialManager({
             orderedMarkets: event.orderedMarkets,
             openMarkets: event.openMarkets,
             totalActions: event.totalActions,
+            completedActions: continuationBase?.completedActions ?? prev.completedActions,
+            okCount: continuationBase?.okCount ?? prev.okCount,
+            errorCount: continuationBase?.errorCount ?? prev.errorCount,
+            skippedCount: continuationBase?.skippedCount ?? prev.skippedCount,
             currentActivity: `Discovered ${event.openMarkets} open trials (${event.totalActions} actions)`,
           } : prev)
-          setExecutionPlan(buildExecutionPlan({
-            events: relevantEvents,
-            runDate: event.runDate,
-            modelOrder: event.modelOrder,
-            orderedMarkets: event.orderedMarkets,
-            fallbackStatuses: ['OPEN'],
-          }))
+          if (!continuationBase) {
+            setExecutionPlan(buildExecutionPlan({
+              events: relevantEvents,
+              runDate: event.runDate,
+              modelOrder: event.modelOrder,
+              orderedMarkets: event.orderedMarkets,
+              fallbackStatuses: ['OPEN'],
+            }))
+          }
           appendRunLog(`Found ${event.openMarkets} open trials (${event.totalActions} model actions)`)
           return
         }
 
         if (event.type === 'progress') {
+          const occurredAtMs = Date.now()
           setRunProgress((prev) => {
             if (!prev) return prev
 
             const next = {
               ...prev,
-              completedActions: event.completedActions,
-              totalActions: event.totalActions,
+              completedActions: (continuationBase?.completedActions ?? 0) + event.completedActions,
+              totalActions: continuationBase?.totalActions ?? event.totalActions,
               latestResult: event.result,
               currentActivity: `Completed ${MODEL_INFO[event.result.modelId].fullName}: ${event.result.action} (${statusLabel(event.result.status)})`,
             }
@@ -553,16 +695,17 @@ export function AdminTrialManager({
 
             return next
           })
-          setExecutionPlan((prev) => applyProgressToExecutionPlan(prev, event.result))
+          setExecutionPlan((prev) => applyProgressToExecutionPlan(prev, event.result, occurredAtMs))
           appendRunLog(formatProgressLog(event.result))
           return
         }
 
         if (event.type === 'activity') {
+          const occurredAtMs = Date.now()
           setRunProgress((prev) => prev ? {
             ...prev,
-            completedActions: event.completedActions,
-            totalActions: event.totalActions,
+            completedActions: (continuationBase?.completedActions ?? 0) + event.completedActions,
+            totalActions: continuationBase?.totalActions ?? event.totalActions,
             currentActivity: event.message,
           } : prev)
           setExecutionPlan((prev) => applyActivityToExecutionPlan(prev, {
@@ -570,6 +713,7 @@ export function AdminTrialManager({
             modelId: event.modelId,
             phase: event.phase,
             message: event.message,
+            occurredAtMs,
           }))
           appendRunLog(event.message)
           return
@@ -580,23 +724,37 @@ export function AdminTrialManager({
           setIsStoppingDaily(false)
           setRunProgress((prev) => prev ? {
             ...prev,
-            completedActions: event.payload.processedActions,
+            completedActions: (continuationBase?.completedActions ?? 0) + event.payload.processedActions,
             totalActions: event.payload.totalActions,
             modelOrder: event.payload.modelOrder,
             orderedMarkets: event.payload.orderedMarkets,
-            okCount: event.payload.summary.ok,
-            errorCount: event.payload.summary.error,
-            skippedCount: event.payload.summary.skipped,
+            okCount: (continuationBase?.okCount ?? 0) + event.payload.summary.ok,
+            errorCount: (continuationBase?.errorCount ?? 0) + event.payload.summary.error,
+            skippedCount: (continuationBase?.skippedCount ?? 0) + event.payload.summary.skipped,
             currentActivity: `${runDescription} completed`,
           } : prev)
           setExecutionPlan((prev) => finalizeExecutionPlan(prev))
-          setSummaryFromPayload(event.payload, startedAtMs)
+          if (!continuationBase) {
+            setSummaryFromPayload(event.payload, startedAtMs)
+          }
           appendRunLog(`${runDescription} completed`)
           return
         }
 
         if (event.type === 'cancelled') {
           cancelledMessage = event.message
+          setIsStoppingDaily(false)
+          setRunProgress((prev) => prev ? {
+            ...prev,
+            currentActivity: event.message,
+          } : prev)
+          setExecutionPlan((prev) => finalizeExecutionPlan(prev))
+          appendRunLog(event.message)
+          return
+        }
+
+        if (event.type === 'paused') {
+          pausedMessage = event.message
           setIsStoppingDaily(false)
           setRunProgress((prev) => prev ? {
             ...prev,
@@ -639,21 +797,31 @@ export function AdminTrialManager({
         handleStreamEvent(event)
       }
 
-      if (cancelledMessage) {
+      if (cancelledMessage || pausedMessage) {
         try {
-      const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
+          const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
           const payload = await response.json().catch(() => ({}))
           if (response.ok) {
             applyRunSnapshot(payload?.snapshot ?? null)
           }
         } catch {
-          // Preserve local stopped state if the snapshot refresh fails.
+          // Preserve local stopped/paused state if the snapshot refresh fails.
         }
         return
       }
 
       if (!donePayload) {
         throw new Error('Daily run ended before completion status was received')
+      }
+
+      try {
+        const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
+        const payload = await response.json().catch(() => ({}))
+        if (response.ok) {
+          applyRunSnapshot(payload?.snapshot ?? null)
+        }
+      } catch {
+        // Keep local completion state if the snapshot refresh fails.
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -714,6 +882,9 @@ export function AdminTrialManager({
   const pendingActions = runProgress
     ? Math.max(0, (runProgress.totalActions || 0) - runProgress.completedActions)
     : 0
+  const resumableRunDate = !runningDaily ? getResumableRunDate() : null
+  const resumableRunDateLabel = formatRunDateLabel(resumableRunDate)
+  const alternateResumableRunDates = resumableRunDates.filter((entry) => entry.runDate !== resumableRunDate)
   const displayElapsedSeconds = runningDaily
     ? elapsedSeconds
     : (lastRunSummary?.durationSeconds ?? elapsedSeconds)
@@ -788,6 +959,55 @@ export function AdminTrialManager({
       )}
       {showDailyCycle ? (
         <div className="space-y-3">
+          <div className="rounded-none border border-[#e8ddd0] bg-white/80 p-3 space-y-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Claude Provider</p>
+                <p className="mt-1 text-xs text-[#6f665b]">
+                  Choose how Claude runs launched from this page should execute.
+                </p>
+              </div>
+              <div
+                className="inline-flex overflow-hidden rounded-none border border-[#d9cdbf] bg-[#fdfbf8]"
+                role="group"
+                aria-label="Claude provider"
+              >
+                <button
+                  type="button"
+                  aria-pressed={activeClaudeProvider === 'api'}
+                  onClick={() => setSelectedClaudeProvider('api')}
+                  className={`inline-flex items-center justify-center whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors ${
+                    activeClaudeProvider === 'api'
+                      ? 'bg-[#f5eee5] text-[#3b342c]'
+                      : 'bg-[#fdfbf8] text-[#6f665b] hover:bg-[#f5eee5] hover:text-[#3b342c]'
+                  }`}
+                >
+                  Anthropic API
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={activeClaudeProvider === 'web'}
+                  onClick={() => setSelectedClaudeProvider('web')}
+                  disabled={!CLAUDE_BROWSER_PROVIDER_AVAILABLE}
+                  className={`inline-flex items-center justify-center whitespace-nowrap border-l border-[#d9cdbf] px-4 py-2 text-sm font-medium transition-colors ${
+                    activeClaudeProvider === 'web'
+                      ? 'bg-[#f5eee5] text-[#3b342c]'
+                      : 'bg-[#fdfbf8] text-[#6f665b] hover:bg-[#f5eee5] hover:text-[#3b342c]'
+                  } disabled:cursor-not-allowed disabled:bg-[#f7f1eb] disabled:text-[#b5aa9c]`}
+                >
+                  Claude Browser
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-[#8a8075]">
+              Saved in this browser. Applies to daily runs, resume actions, and the scoped Claude run below.
+            </p>
+            {!CLAUDE_BROWSER_PROVIDER_AVAILABLE ? (
+              <p className="text-xs text-[#8a8075]">
+                Claude Browser is local-only and unavailable in this environment. Anthropic API will be used here.
+              </p>
+            ) : null}
+          </div>
           <div className="flex flex-wrap items-center justify-start gap-2">
             <button
               onClick={() => {
@@ -798,7 +1018,9 @@ export function AdminTrialManager({
             >
               {runningDaily
                 ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
-                : 'Run Daily Cycle Now'}
+                : resumableRunDateLabel
+                  ? `Resume Daily Cycle (${resumableRunDateLabel} UTC)`
+                  : 'Run Daily Cycle Now'}
             </button>
             {runningDaily ? (
               <button
@@ -810,7 +1032,34 @@ export function AdminTrialManager({
                 {isStoppingDaily ? 'Stopping...' : 'Pause'}
               </button>
             ) : null}
+            {!runningDaily ? alternateResumableRunDates.map((entry) => {
+              const runDateLabel = formatRunDateLabel(entry.runDate)
+              if (!runDateLabel) return null
+
+              return (
+                <button
+                  key={entry.runDate}
+                  type="button"
+                  onClick={() => {
+                    void runDailyCycle({ runDate: entry.runDate })
+                  }}
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c]"
+                >
+                  Resume {runDateLabel} UTC
+                </button>
+              )
+            }) : null}
           </div>
+          {resumableRunDateLabel && !runningDaily ? (
+            <p className="text-xs text-[#8a8075]">
+              Resumes the unfinished run from {resumableRunDateLabel} UTC and skips model actions that already completed.
+            </p>
+          ) : null}
+          {alternateResumableRunDates.length > 0 && !runningDaily ? (
+            <p className="text-xs text-[#8a8075]">
+              Older unfinished run dates stay available here, so you can resume yesterday before touching today&apos;s partial run.
+            </p>
+          ) : null}
           <div className="rounded-none border border-[#e8ddd0] bg-white/75 p-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <input
@@ -829,17 +1078,17 @@ export function AdminTrialManager({
                   void runDailyCycle({
                     nctNumber: scopedClaudeNctNumber,
                     modelIds: ['claude-opus'],
-                    claudeProvider: 'web',
+                    claudeProvider: activeClaudeProvider,
                   })
                 }}
                 disabled={runningDaily || !scopedClaudeNctNumber || scopedClaudeOpenMarketCount === 0}
                 className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Run Claude.ai Opus
+                Run Claude Opus
               </button>
             </div>
             <p className="text-xs text-[#8a8075]">
-              Local only. Claude runs from this page use your Claude.ai browser session in app incognito mode with web search.
+              Uses the selected Claude provider above. Current choice: {activeClaudeProviderLabel}.
             </p>
             {scopedClaudeNctInput && !scopedClaudeNctNumber ? (
               <p className="text-xs text-[#8d2c22]">Enter an NCT id like NCT06870240.</p>
@@ -849,7 +1098,7 @@ export function AdminTrialManager({
             ) : null}
             {scopedClaudeNctNumber && scopedClaudeOpenMarketCount > 0 ? (
               <p className="text-xs text-[#2f6f24]">
-          Ready to run Claude Opus 4.6 for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open trial{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
+          Ready to run Claude Opus 4.6 via {activeClaudeProviderLabel} for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open trial{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
               </p>
             ) : null}
           </div>
@@ -970,20 +1219,20 @@ export function AdminTrialManager({
 
             <div className="mt-3">
               {executionPlan.length > 0 ? (
-                <div className="overflow-x-auto rounded-none border border-[#e8ddd0] bg-white">
-                  <table className="min-w-[1700px] w-full border-collapse">
+                <div className="max-h-[72vh] overflow-auto rounded-none border border-[#e8ddd0] bg-white">
+                  <table className="min-w-[1700px] w-full border-separate border-spacing-0">
                     <thead>
                       <tr className="bg-[#f8f4ee]">
-                        <th className="border-b border-[#e8ddd0] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
+                        <th className="sticky left-0 top-0 z-30 min-w-[260px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
                           Trial
                         </th>
-                        <th className="border-b border-l border-[#e8ddd0] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
+                        <th className="sticky top-0 z-20 min-w-[128px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
                           Progress
                         </th>
                         {executionModelOrder.map((modelId, index) => (
                           <th
                             key={modelId}
-                            className="border-b border-l border-[#e8ddd0] px-3 py-2 text-left align-top"
+                            className="sticky top-0 z-20 min-w-[180px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left align-top"
                           >
                             <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">
                               Model {index + 1}
@@ -1011,7 +1260,7 @@ export function AdminTrialManager({
 
                         return (
                           <tr key={market.marketId} className="align-top">
-                            <td className="border-t border-[#e8ddd0] px-3 py-3">
+                            <td className="sticky left-0 z-10 min-w-[260px] border-t border-[#e8ddd0] bg-white px-3 py-3 shadow-[1px_0_0_0_#e8ddd0]">
                               <p className="text-sm font-medium text-[#1a1a1a]">
                                 {market.marketSequence}. {market.shortTitle}
                               </p>
@@ -1056,6 +1305,7 @@ export function AdminTrialManager({
                               const detail = step.detail
                                 ? truncateText(step.detail, 88)
                                 : getExecutionStepFallbackDetail(step.status)
+                              const durationLabel = getExecutionStepDurationLabel(step, executionStepNowMs)
                               const estimatedStepCostUsd = market.estimatedModelRunCosts[modelId] ?? 0
 
                               return (
@@ -1074,6 +1324,11 @@ export function AdminTrialManager({
                                   {detail ? (
                                     <p className={`mt-2 text-xs leading-5 ${tone.label}`}>
                                       {detail}
+                                    </p>
+                                  ) : null}
+                                  {durationLabel ? (
+                                    <p className="mt-2 text-[11px] text-[#6f665b]">
+                                      {durationLabel}
                                     </p>
                                   ) : null}
                                   {estimatedStepCostUsd > 0 ? (
@@ -1223,7 +1478,7 @@ export function AdminTrialManager({
                     {sectionLabels.openMarketsEmptyState}
                   </div>
                 ) : openEvents.map((event) => {
-                  const statusTone = getMarketStatusTone(event.marketStatus)
+                  const statusTone = getTrialStatusTone(event.marketStatus)
                   const days = getDaysUntil(event.decisionDate)
                   const isClickable = Boolean(event.marketId)
 
@@ -1343,7 +1598,7 @@ export function AdminTrialManager({
                             disabled={isOpening}
                             className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {isOpening ? 'Opening...' : 'Open Trial Market'}
+                            {isOpening ? 'Opening...' : 'Open Trial'}
                           </button>
                         </div>
                       </div>
@@ -1371,7 +1626,7 @@ export function AdminTrialManager({
                   </div>
                 ) : adjudicationEvents.map((event) => {
                   const days = getDaysUntil(event.decisionDate)
-                  const statusTone = getMarketStatusTone(event.marketStatus)
+                  const statusTone = getTrialStatusTone(event.marketStatus)
                   const isClickable = Boolean(event.marketId)
 
                   return (

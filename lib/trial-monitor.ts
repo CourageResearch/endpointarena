@@ -14,7 +14,7 @@ import {
 import { ConfigurationError, ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '@/lib/errors'
 import { resolveMarketForTrialQuestion } from '@/lib/markets/engine'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
-import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
+import { getTrialMonitorConfig, type TrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
   ensureTrialMonitorVerifierConfigured,
@@ -35,8 +35,12 @@ const VERIFIER_MAX_OUTPUT_TOKENS = 3200
 const TRIAL_MONITOR_DEBUG_LOG_MAX_CHARS = 80_000
 const TRIAL_MONITOR_DEBUG_VALUE_MAX_CHARS = 12_000
 const TRIAL_MONITOR_DEBUG_SOURCE_URL_LIMIT = 40
-const TRIAL_MONITOR_DEFAULT_CONCURRENCY = 1
-const TRIAL_MONITOR_MANUAL_CONCURRENCY = 3
+const TRIAL_MONITOR_MIN_CONCURRENCY = 1
+const TRIAL_MONITOR_MAX_CONCURRENCY = 12
+const TRIAL_MONITOR_STOP_REQUEST_MESSAGE =
+  'Pause requested by admin. Finish the current in-flight trial check, then halt the run.'
+const TRIAL_MONITOR_PAUSED_MESSAGE =
+  'Trial monitor paused by admin after the current in-flight trial check.'
 type MonitorTriggerSource = 'cron' | 'manual'
 type CandidateEvidenceSourceType = 'clinicaltrials' | 'sponsor' | 'stored_source' | 'web_search'
 type VerifierClassification = 'yes' | 'no' | 'no_decision'
@@ -158,6 +162,7 @@ type MonitorDebugLogger = (entry: MonitorDebugEntry) => Promise<void>
 export type TrialMonitorRunResult = {
   executed: boolean
   reason?: 'disabled' | 'not_due'
+  status?: 'completed' | 'paused'
   runId?: string
   questionsScanned: number
   candidatesCreated: number
@@ -175,10 +180,18 @@ function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + (hours * HOUR_MS))
 }
 
-function getTrialMonitorRunConcurrency(triggerSource: MonitorTriggerSource): number {
-  return triggerSource === 'manual'
-    ? TRIAL_MONITOR_MANUAL_CONCURRENCY
-    : TRIAL_MONITOR_DEFAULT_CONCURRENCY
+function getTrialMonitorRunConcurrency(
+  config: Pick<TrialMonitorConfig, 'cronProcessingConcurrency' | 'manualProcessingConcurrency'>,
+  triggerSource: MonitorTriggerSource
+): number {
+  const configuredValue = triggerSource === 'manual'
+    ? config.manualProcessingConcurrency
+    : config.cronProcessingConcurrency
+
+  return Math.min(
+    TRIAL_MONITOR_MAX_CONCURRENCY,
+    Math.max(TRIAL_MONITOR_MIN_CONCURRENCY, Math.round(configuredValue))
+  )
 }
 
 function trimToNull(value: unknown): string | null {
@@ -789,7 +802,7 @@ async function startMonitorRun(triggerSource: MonitorTriggerSource) {
 }
 
 async function completeRun(runId: string, input: {
-  status: 'completed' | 'failed'
+  status: 'completed' | 'failed' | 'paused'
   questionsScanned: number
   candidatesCreated: number
   errorSummary?: string | null
@@ -804,6 +817,23 @@ async function completeRun(runId: string, input: {
       updatedAt: new Date(),
     })
     .where(eq(trialMonitorRuns.id, runId))
+}
+
+async function isTrialMonitorStopRequested(runId: string): Promise<boolean> {
+  const run = await db.query.trialMonitorRuns.findFirst({
+    where: eq(trialMonitorRuns.id, runId),
+    columns: {
+      status: true,
+      stopRequestedAt: true,
+    },
+  })
+
+  return Boolean(run && run.status === 'running' && run.stopRequestedAt)
+}
+
+function summarizeTrialMonitorErrors(errors: string[]): string | null {
+  if (errors.length === 0) return null
+  return errors.join('\n').slice(0, 1200)
 }
 
 function isQuestionEligible(question: TrialQuestionWithTrial, now: Date, lookaheadDays: number, overdueRecheckHours: number): boolean {
@@ -1506,7 +1536,7 @@ export async function runTrialMonitor(input: {
   nctNumber?: string | null
 }): Promise<TrialMonitorRunResult> {
   const config = await getTrialMonitorConfig()
-  const processingConcurrency = getTrialMonitorRunConcurrency(input.triggerSource)
+  const processingConcurrency = getTrialMonitorRunConcurrency(config, input.triggerSource)
   const scopedNctNumber = normalizeScopedTrialMonitorNctNumber(input.nctNumber ?? null)
   const questionSelection: TrialMonitorQuestionSelection = scopedNctNumber ? 'specific_nct' : 'eligible_queue'
   if (!config.enabled) {
@@ -1559,6 +1589,8 @@ export async function runTrialMonitor(input: {
   const errors: string[] = []
   let questionsScanned = 0
   let candidatesCreated = 0
+  let stopRequested = false
+  let stopRequestLogged = false
   const debugLog: MonitorDebugLogger = async (entry) => {
     try {
       await appendTrialMonitorRunDebugLog(run.id, entry)
@@ -1588,6 +1620,8 @@ export async function runTrialMonitor(input: {
         lookaheadDays: config.lookaheadDays,
         overdueRecheckHours: config.overdueRecheckHours,
         maxQuestionsPerRun: config.maxQuestionsPerRun,
+        cronProcessingConcurrency: config.cronProcessingConcurrency,
+        manualProcessingConcurrency: config.manualProcessingConcurrency,
         minCandidateConfidence: config.minCandidateConfidence,
         processingConcurrency,
         questionCount: questionsToScan.length,
@@ -1598,7 +1632,7 @@ export async function runTrialMonitor(input: {
     const persistRunProgress = async () => {
       const snapshotQuestionsScanned = questionsScanned
       const snapshotCandidatesCreated = candidatesCreated
-      const snapshotErrorSummary = errors.length > 0 ? errors.join('\n').slice(0, 1200) : null
+      const snapshotErrorSummary = summarizeTrialMonitorErrors(errors)
 
       persistRunProgressQueue = persistRunProgressQueue.then(async () => {
         await db.update(trialMonitorRuns)
@@ -1615,9 +1649,42 @@ export async function runTrialMonitor(input: {
     }
 
     let nextQuestionIndex = 0
+    const observeStopRequest = async (): Promise<boolean> => {
+      if (stopRequested) {
+        return true
+      }
+
+      const requested = await isTrialMonitorStopRequested(run.id)
+      if (!requested) {
+        return false
+      }
+
+      stopRequested = true
+      if (!stopRequestLogged) {
+        stopRequestLogged = true
+        await debugLog({
+          level: 'warn',
+          stage: 'run',
+          message: 'Trial monitor pause requested by admin.',
+          details: {
+            stopRequestMessage: TRIAL_MONITOR_STOP_REQUEST_MESSAGE,
+            questionsScanned,
+            candidatesCreated,
+            errorCount: errors.length,
+          },
+        })
+      }
+
+      return true
+    }
+
     const workerCount = Math.min(processingConcurrency, Math.max(questionsToScan.length, 1))
     const worker = async () => {
       while (true) {
+        if (await observeStopRequest()) {
+          return
+        }
+
         const question = questionsToScan[nextQuestionIndex++]
         if (!question) {
           return
@@ -1648,11 +1715,43 @@ export async function runTrialMonitor(input: {
     await Promise.all(Array.from({ length: workerCount }, () => worker()))
     await persistRunProgressQueue
 
+    if (stopRequested) {
+      await completeRun(run.id, {
+        status: 'paused',
+        questionsScanned,
+        candidatesCreated,
+        errorSummary: summarizeTrialMonitorErrors(errors),
+      })
+
+      await debugLog({
+        level: 'warn',
+        stage: 'run',
+        message: 'Trial monitor run paused by admin.',
+        details: {
+          pauseMessage: TRIAL_MONITOR_PAUSED_MESSAGE,
+          questionsScanned,
+          candidatesCreated,
+          errorCount: errors.length,
+          errorSummary: errors,
+        },
+      })
+
+      return {
+        executed: true,
+        status: 'paused',
+        runId: run.id,
+        questionsScanned,
+        candidatesCreated,
+        scopedNctNumber: scopedNctNumber ?? undefined,
+        errors,
+      }
+    }
+
     await completeRun(run.id, {
       status: 'completed',
       questionsScanned,
       candidatesCreated,
-      errorSummary: errors.length > 0 ? errors.join('\n').slice(0, 1200) : null,
+      errorSummary: summarizeTrialMonitorErrors(errors),
     })
 
     await debugLog({
@@ -1669,6 +1768,7 @@ export async function runTrialMonitor(input: {
 
     return {
       executed: true,
+      status: 'completed',
       runId: run.id,
       questionsScanned,
       candidatesCreated,
@@ -1724,6 +1824,44 @@ export async function listRecentTrialMonitorRuns() {
     orderBy: [desc(trialMonitorRuns.startedAt)],
     limit: 20,
   })
+}
+
+export async function requestTrialMonitorStop(runId?: string | null): Promise<string | null> {
+  const activeRun = runId
+    ? await db.query.trialMonitorRuns.findFirst({
+        where: and(
+          eq(trialMonitorRuns.id, runId),
+          eq(trialMonitorRuns.status, 'running'),
+        ),
+        columns: {
+          id: true,
+          stopRequestedAt: true,
+        },
+      })
+    : await db.query.trialMonitorRuns.findFirst({
+        where: eq(trialMonitorRuns.status, 'running'),
+        orderBy: [desc(trialMonitorRuns.updatedAt), desc(trialMonitorRuns.startedAt)],
+        columns: {
+          id: true,
+          stopRequestedAt: true,
+        },
+      })
+
+  if (!activeRun) return null
+  if (activeRun.stopRequestedAt) return activeRun.id
+
+  const [updated] = await db.update(trialMonitorRuns)
+    .set({
+      stopRequestedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(trialMonitorRuns.id, activeRun.id),
+      eq(trialMonitorRuns.status, 'running'),
+    ))
+    .returning({ id: trialMonitorRuns.id })
+
+  return updated?.id ?? null
 }
 
 export async function deleteTrialMonitorRun(runId: string) {

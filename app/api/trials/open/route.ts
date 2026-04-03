@@ -31,6 +31,6 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    return errorResponse(error, requestId, 'Failed to open trial market')
+    return errorResponse(error, requestId, 'Failed to open trial')
   }
 }

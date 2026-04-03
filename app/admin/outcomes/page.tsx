@@ -43,11 +43,39 @@ function extractScopedNctNumberFromRunDebugLog(debugLog: string | null | undefin
   return nctMatch?.[1] ?? null
 }
 
-export default async function AdminOutcomesPage() {
+function parseScopedNctSearchParam(value: string | string[] | undefined): string | null {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  if (typeof rawValue !== 'string') {
+    return null
+  }
+
+  const normalizedValue = rawValue.trim().toUpperCase().replace(/\s+/g, '')
+  return /^NCT\d{8}$/.test(normalizedValue) ? normalizedValue : null
+}
+
+function parseBooleanSearchParam(value: string | string[] | undefined): boolean {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  return rawValue === '1' || rawValue === 'true'
+}
+
+export default async function AdminOutcomesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    nct?: string | string[]
+    autorun?: string | string[]
+  }>
+}) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
     redirect('/login')
   }
+
+  const resolvedSearchParams = await searchParams
+  const initialScopedNctNumber = parseScopedNctSearchParam(resolvedSearchParams.nct)
+  const autoRunScopedNctNumber = initialScopedNctNumber && parseBooleanSearchParam(resolvedSearchParams.autorun)
+    ? initialScopedNctNumber
+    : null
 
   const [config, candidates, recentRuns, eligibleQuestions, historyEntries] = await Promise.all([
     getTrialMonitorConfig(),
@@ -77,6 +105,8 @@ export default async function AdminOutcomesPage() {
           lookaheadDays: config.lookaheadDays,
           overdueRecheckHours: config.overdueRecheckHours,
           maxQuestionsPerRun: config.maxQuestionsPerRun,
+          cronProcessingConcurrency: config.cronProcessingConcurrency,
+          manualProcessingConcurrency: config.manualProcessingConcurrency,
           verifierModelKey: normalizedVerifierModelKey,
           minCandidateConfidence: config.minCandidateConfidence,
           updatedAt: config.updatedAt.toISOString(),
@@ -114,7 +144,7 @@ export default async function AdminOutcomesPage() {
         recentRuns={recentRuns.map((run) => ({
           id: run.id,
           triggerSource: run.triggerSource as 'cron' | 'manual',
-          status: run.status as 'running' | 'completed' | 'failed',
+          status: run.status as 'running' | 'completed' | 'failed' | 'paused',
           verifierModelLabel: extractVerifierModelLabelFromRunDebugLog(run.debugLog),
           scopedNctNumber: extractScopedNctNumberFromRunDebugLog(run.debugLog),
           questionsScanned: run.questionsScanned,
@@ -123,6 +153,7 @@ export default async function AdminOutcomesPage() {
           startedAt: run.startedAt.toISOString(),
           updatedAt: run.updatedAt.toISOString(),
           completedAt: run.completedAt ? run.completedAt.toISOString() : null,
+          stopRequestedAt: run.stopRequestedAt ? run.stopRequestedAt.toISOString() : null,
         }))}
         initialEligibleQuestions={eligibleQuestions.map((question) => ({
           id: question.id,
@@ -168,6 +199,8 @@ export default async function AdminOutcomesPage() {
               }
             : null,
         }))}
+        initialScopedNctNumber={initialScopedNctNumber}
+        autoRunScopedNctNumber={autoRunScopedNctNumber}
       />
     </AdminConsoleLayout>
   )

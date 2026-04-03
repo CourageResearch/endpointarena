@@ -78,6 +78,10 @@ export type DailyRunStreamEvent =
       message: string
     }
   | {
+      type: 'paused'
+      message: string
+    }
+  | {
       type: 'error'
       message: string
     }

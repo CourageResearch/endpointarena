@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
 import { formatLocalDateTime } from '@/lib/date'
@@ -13,6 +13,8 @@ type TrialMonitorConfigDto = {
   lookaheadDays: number
   overdueRecheckHours: number
   maxQuestionsPerRun: number
+  cronProcessingConcurrency: number
+  manualProcessingConcurrency: number
   verifierModelKey: string
   minCandidateConfidence: number
   updatedAt: string
@@ -49,7 +51,7 @@ type Candidate = {
 type RunRow = {
   id: string
   triggerSource: 'cron' | 'manual'
-  status: 'running' | 'completed' | 'failed'
+  status: 'running' | 'completed' | 'failed' | 'paused'
   verifierModelLabel: string
   scopedNctNumber: string | null
   questionsScanned: number
@@ -58,6 +60,7 @@ type RunRow = {
   startedAt: string
   updatedAt: string
   completedAt: string | null
+  stopRequestedAt: string | null
 }
 
 type EligibleQuestion = {
@@ -83,6 +86,8 @@ interface Props {
   recentRuns: RunRow[]
   initialEligibleQuestions: EligibleQuestion[]
   historyEntries: AdminTrialOutcomeHistoryEntry[]
+  initialScopedNctNumber?: string | null
+  autoRunScopedNctNumber?: string | null
 }
 
 type ConfigFormState = {
@@ -90,6 +95,8 @@ type ConfigFormState = {
   runIntervalHours: string
   lookaheadDays: string
   maxQuestionsPerRun: string
+  cronProcessingConcurrency: string
+  manualProcessingConcurrency: string
   verifierModelKey: string
 }
 
@@ -98,12 +105,15 @@ type ConfigSavePayload = {
   runIntervalHours: number
   lookaheadDays: number
   maxQuestionsPerRun: number
+  cronProcessingConcurrency: number
+  manualProcessingConcurrency: number
   verifierModelKey: string
 }
 
 type TrialMonitorRunResult = {
   executed: boolean
   reason?: 'disabled' | 'not_due'
+  status?: 'completed' | 'paused'
   questionsScanned: number
   candidatesCreated: number
   errors: string[]
@@ -111,12 +121,16 @@ type TrialMonitorRunResult = {
   scopedNctNumber?: string
 }
 
+type ConfigStatusTone = 'muted' | 'saving' | 'saved' | 'invalid' | 'error'
+
 function toFormState(config: TrialMonitorConfigDto): ConfigFormState {
   return {
     enabled: config.enabled,
     runIntervalHours: String(config.runIntervalHours),
     lookaheadDays: String(config.lookaheadDays),
     maxQuestionsPerRun: String(config.maxQuestionsPerRun),
+    cronProcessingConcurrency: String(config.cronProcessingConcurrency),
+    manualProcessingConcurrency: String(config.manualProcessingConcurrency),
     verifierModelKey: config.verifierModelKey,
   }
 }
@@ -127,6 +141,8 @@ function toConfigSavePayload(config: TrialMonitorConfigDto): ConfigSavePayload {
     runIntervalHours: config.runIntervalHours,
     lookaheadDays: config.lookaheadDays,
     maxQuestionsPerRun: config.maxQuestionsPerRun,
+    cronProcessingConcurrency: config.cronProcessingConcurrency,
+    manualProcessingConcurrency: config.manualProcessingConcurrency,
     verifierModelKey: config.verifierModelKey,
   }
 }
@@ -153,6 +169,14 @@ function parseScopedNctNumber(value: string): string | null {
   return /^NCT\d{8}$/.test(normalized) ? normalized : null
 }
 
+function matchesScopedNctNumber(value: string | null | undefined, scopedNctNumber: string | null): boolean {
+  if (!scopedNctNumber) {
+    return true
+  }
+
+  return parseScopedNctNumber(value ?? '') === scopedNctNumber
+}
+
 function getConfigValidationMessage(form: ConfigFormState): string | null {
   if (parseBoundedInteger(form.runIntervalHours, 1, 168) == null) {
     return 'Cron interval must be between 1 and 168 hours.'
@@ -162,6 +186,12 @@ function getConfigValidationMessage(form: ConfigFormState): string | null {
   }
   if (parseBoundedInteger(form.maxQuestionsPerRun, 1, 500) == null) {
     return 'Max questions per run must be between 1 and 500.'
+  }
+  if (parseBoundedInteger(form.cronProcessingConcurrency, 1, 12) == null) {
+    return 'Cron parallelism must be between 1 and 12 workers.'
+  }
+  if (parseBoundedInteger(form.manualProcessingConcurrency, 1, 12) == null) {
+    return 'Manual parallelism must be between 1 and 12 workers.'
   }
   if (!form.verifierModelKey.trim()) {
     return 'Verifier model is required.'
@@ -173,12 +203,16 @@ function getConfigPayloadFromForm(form: ConfigFormState): ConfigSavePayload | nu
   const runIntervalHours = parseBoundedInteger(form.runIntervalHours, 1, 168)
   const lookaheadDays = parseBoundedInteger(form.lookaheadDays, 0, 365)
   const maxQuestionsPerRun = parseBoundedInteger(form.maxQuestionsPerRun, 1, 500)
+  const cronProcessingConcurrency = parseBoundedInteger(form.cronProcessingConcurrency, 1, 12)
+  const manualProcessingConcurrency = parseBoundedInteger(form.manualProcessingConcurrency, 1, 12)
   const verifierModelKey = form.verifierModelKey.trim()
 
   if (
     runIntervalHours == null ||
     lookaheadDays == null ||
     maxQuestionsPerRun == null ||
+    cronProcessingConcurrency == null ||
+    manualProcessingConcurrency == null ||
     !verifierModelKey
   ) {
     return null
@@ -189,19 +223,43 @@ function getConfigPayloadFromForm(form: ConfigFormState): ConfigSavePayload | nu
     runIntervalHours,
     lookaheadDays,
     maxQuestionsPerRun,
+    cronProcessingConcurrency,
+    manualProcessingConcurrency,
     verifierModelKey,
   }
 }
 
-function getRunStatusTone(status: RunRow['status']): string {
-  switch (status) {
+function getRunStatusTone(run: Pick<RunRow, 'status' | 'stopRequestedAt'>): string {
+  if (run.status === 'running' && run.stopRequestedAt) {
+    return 'bg-[#D39D2E]/10 text-[#8b6b21]'
+  }
+
+  switch (run.status) {
     case 'completed':
       return 'bg-[#3a8a2e]/10 text-[#2f6f24]'
     case 'failed':
       return 'bg-[#EF6F67]/10 text-[#8d2c22]'
+    case 'paused':
+      return 'bg-[#D39D2E]/10 text-[#8b6b21]'
     default:
       return 'bg-[#5BA5ED]/10 text-[#265f8f]'
   }
+}
+
+function getRunStatusLabel(run: Pick<RunRow, 'status' | 'stopRequestedAt'>): string {
+  if (run.status === 'running' && run.stopRequestedAt) {
+    return 'Pause Requested'
+  }
+  if (run.status === 'paused') {
+    return 'Paused'
+  }
+  if (run.status === 'failed') {
+    return 'Failed'
+  }
+  if (run.status === 'completed') {
+    return 'Completed'
+  }
+  return 'Running'
 }
 
 function splitRunErrors(summary: string): string[] {
@@ -236,6 +294,115 @@ function getCandidateBadge(candidate: Candidate): { label: string; className: st
   }
 }
 
+const monitorSettingControlClassName =
+  'h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]'
+
+function MonitorSettingsGroup({
+  title,
+  description,
+  stackFields = false,
+  children,
+}: {
+  title: string
+  description: string
+  stackFields?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div className="flex h-full flex-col gap-3 border border-[#e8ddd0] bg-[#fcfaf7] p-4">
+      <div className="space-y-1">
+        <h4 className="text-sm font-semibold text-[#1a1a1a]">{title}</h4>
+        <p className="text-xs leading-5 text-[#6f6458]">{description}</p>
+      </div>
+      <div className={stackFields ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function MonitorSettingsField({
+  label,
+  description,
+  children,
+  fullWidth = false,
+  inlineControl = false,
+}: {
+  label: string
+  description: string
+  children: ReactNode
+  fullWidth?: boolean
+  inlineControl?: boolean
+}) {
+  return (
+    <label
+      className={[
+        inlineControl
+          ? 'grid grid-cols-[minmax(0,1fr)_10rem] items-center gap-3 rounded-none border border-[#e6dbce] bg-white px-3 py-3'
+          : 'flex flex-col gap-2 rounded-none border border-[#e6dbce] bg-white px-3 py-3',
+        fullWidth ? 'sm:col-span-2' : '',
+      ].join(' ').trim()}
+    >
+      <div className={inlineControl ? '' : 'space-y-1'}>
+        <span className="block text-sm font-medium text-[#1a1a1a]">{label}</span>
+        {description ? (
+          <span className="block text-xs leading-5 text-[#7b7065]">{description}</span>
+        ) : null}
+      </div>
+      <div className={inlineControl ? 'w-full justify-self-end' : ''}>
+        {children}
+      </div>
+    </label>
+  )
+}
+
+function MonitorSettingsNumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  unit,
+}: {
+  value: string
+  onChange: (value: string) => void
+  min: number
+  max: number
+  unit?: string
+}) {
+  if (!unit) {
+    return (
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={1}
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={monitorSettingControlClassName}
+      />
+    )
+  }
+
+  return (
+    <div className="flex items-center rounded-none border border-[#d9cdbf] bg-white transition-colors focus-within:border-[#1a1a1a]">
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={1}
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 w-full border-0 bg-transparent px-3 text-sm text-[#1a1a1a] outline-none"
+      />
+      <span className="shrink-0 border-l border-[#e8ddd0] bg-[#fcfaf7] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[#7b7065]">
+        {unit}
+      </span>
+    </div>
+  )
+}
+
 export function AdminTrialOutcomeReview({
   initialConfig,
   verifierModelOptions,
@@ -243,6 +410,8 @@ export function AdminTrialOutcomeReview({
   recentRuns,
   initialEligibleQuestions,
   historyEntries,
+  initialScopedNctNumber = null,
+  autoRunScopedNctNumber = null,
 }: Props) {
   const router = useRouter()
   const [form, setForm] = useState<ConfigFormState>(() => toFormState(initialConfig))
@@ -256,14 +425,30 @@ export function AdminTrialOutcomeReview({
   const [runMessage, setRunMessage] = useState<string | null>(null)
   const [isSavingConfig, setIsSavingConfig] = useState(false)
   const [configStatusMessage, setConfigStatusMessage] = useState('Changes save automatically.')
-  const [configStatusTone, setConfigStatusTone] = useState<'muted' | 'saving' | 'saved' | 'invalid' | 'error'>('muted')
+  const [configStatusTone, setConfigStatusTone] = useState<ConfigStatusTone>('muted')
   const [lastSavedConfigSignature, setLastSavedConfigSignature] = useState(() => serializeConfigPayload(toConfigSavePayload(initialConfig)))
   const [isRunningMonitor, setIsRunningMonitor] = useState(false)
-  const [scopedNctNumber, setScopedNctNumber] = useState('')
+  const [isStoppingRun, setIsStoppingRun] = useState(false)
+  const [scopedNctNumber, setScopedNctNumber] = useState(initialScopedNctNumber ?? '')
   const autosaveTimerRef = useRef<number | null>(null)
   const activeConfigSaveRef = useRef<Promise<void> | null>(null)
+  const autoRunHandledRef = useRef(false)
+  const scopedViewNctNumber = parseScopedNctNumber(initialScopedNctNumber ?? '')
+  const visibleCandidates = scopedViewNctNumber
+    ? candidates.filter((candidate) => matchesScopedNctNumber(candidate.trial.nctNumber, scopedViewNctNumber))
+    : candidates
+  const visibleRuns = scopedViewNctNumber
+    ? runs.filter((run) => matchesScopedNctNumber(run.scopedNctNumber, scopedViewNctNumber))
+    : runs
+  const visibleEligibleQuestions = scopedViewNctNumber
+    ? eligibleQuestions.filter((question) => matchesScopedNctNumber(question.trial.nctNumber, scopedViewNctNumber))
+    : eligibleQuestions
+  const visibleHistoryEntries = scopedViewNctNumber
+    ? historyEntries.filter((entry) => matchesScopedNctNumber(entry.trial.nctNumber, scopedViewNctNumber))
+    : historyEntries
   const activeRun = runs.find((run) => run.status === 'running') ?? null
   const isRunActive = isRunningMonitor || Boolean(activeRun)
+  const isPauseRequested = isStoppingRun || Boolean(activeRun?.stopRequestedAt)
 
   useEffect(() => {
     if (!isRunActive) return
@@ -294,6 +479,16 @@ export function AdminTrialOutcomeReview({
     setEligibleQuestions(initialEligibleQuestions)
   }, [initialEligibleQuestions])
 
+  useEffect(() => {
+    setScopedNctNumber(initialScopedNctNumber ?? '')
+  }, [initialScopedNctNumber])
+
+  useEffect(() => {
+    if (!isRunActive) {
+      setIsStoppingRun(false)
+    }
+  }, [isRunActive])
+
   const formatRunResult = (result: TrialMonitorRunResult): string => {
     const runLabel = result.scopedNctNumber
       ? `One-off run for ${result.scopedNctNumber}`
@@ -308,6 +503,12 @@ export function AdminTrialOutcomeReview({
         return `${runLabel} skipped because the next scheduled run is not due until ${nextEligible}.`
       }
       return `${runLabel} skipped.`
+    }
+
+    if (result.status === 'paused') {
+      const base = `${runLabel} paused after scanning ${result.questionsScanned} question${result.questionsScanned === 1 ? '' : 's'} and creating ${result.candidatesCreated} queue item${result.candidatesCreated === 1 ? '' : 's'}.`
+      if (result.errors.length === 0) return base
+      return `${base} ${result.errors.length} question${result.errors.length === 1 ? '' : 's'} had errors before the pause.`
     }
 
     const base = `${runLabel} finished: scanned ${result.questionsScanned} question${result.questionsScanned === 1 ? '' : 's'} and created ${result.candidatesCreated} queue item${result.candidatesCreated === 1 ? '' : 's'}.`
@@ -462,6 +663,21 @@ export function AdminTrialOutcomeReview({
     }
   }
 
+  const triggerScopedAutoRun = useEffectEvent(async (nctNumber: string) => {
+    setScopedNctNumber(nctNumber)
+    router.replace(`/admin/outcomes?nct=${encodeURIComponent(nctNumber)}`)
+    await runMonitor({ nctNumber })
+  })
+
+  useEffect(() => {
+    if (!autoRunScopedNctNumber || autoRunHandledRef.current) {
+      return
+    }
+
+    autoRunHandledRef.current = true
+    void triggerScopedAutoRun(autoRunScopedNctNumber)
+  }, [autoRunScopedNctNumber, triggerScopedAutoRun])
+
   const reviewCandidate = async (candidateId: string, action: 'accept' | 'reject' | 'dismiss' | 'clear_for_rerun') => {
     setError(null)
     setSuccessMessage(null)
@@ -516,6 +732,47 @@ export function AdminTrialOutcomeReview({
     }
   }
 
+  const pauseMonitor = async (runId?: string) => {
+    if (isStoppingRun) return
+
+    setError(null)
+    setSuccessMessage(null)
+    setRunMessage('Pause requested. The current in-flight trial check will finish, then the monitor will halt.')
+    setIsStoppingRun(true)
+
+    try {
+      const response = await fetch('/api/admin/trial-monitor/cancel-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(runId ? { runId } : {}),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Failed to pause trial monitor'))
+      }
+
+      const stoppedRunId = typeof payload.runId === 'string' ? payload.runId : runId ?? null
+      if (stoppedRunId) {
+        const stopRequestedAt = new Date().toISOString()
+        setRuns((prev) => prev.map((run) => (
+          run.id === stoppedRunId
+            ? { ...run, stopRequestedAt }
+            : run
+        )))
+      }
+
+      setRunMessage(
+        typeof payload.message === 'string'
+          ? payload.message
+          : 'Pause requested. The current in-flight trial check will finish, then the monitor will halt.'
+      )
+      router.refresh()
+    } catch (pauseError) {
+      setIsStoppingRun(false)
+      setError(pauseError instanceof Error ? pauseError.message : 'Failed to pause trial monitor')
+    }
+  }
+
   return (
     <div className="space-y-6">
       {error ? (
@@ -536,14 +793,33 @@ export function AdminTrialOutcomeReview({
         </div>
       ) : null}
 
+      {scopedViewNctNumber ? (
+        <div className="rounded-none border border-[#d9cdbf] bg-[#fffdf9] px-3 py-2 text-sm text-[#6f665b]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Scoped Trial View</div>
+              <p className="mt-1">Showing outcome review data for {scopedViewNctNumber} only.</p>
+            </div>
+            <Link
+              href="/admin/outcomes"
+              className="inline-flex rounded-none border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+            >
+              View All Outcomes
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {isRunActive ? (
         <section className="rounded-none border border-[#5BA5ED]/35 bg-[#f3f8fe] p-4 text-[#245f94]">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-[#1f5a8c]">Monitor Run In Progress</h3>
               <p className="mt-1 text-sm">
-                {activeRun
-                  ? `${activeRun.scopedNctNumber ? `Scoped to ${activeRun.scopedNctNumber}. ` : ''}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
+                {isPauseRequested
+                  ? 'Pause requested. The monitor is finishing any in-flight trial checks before it halts.'
+                  : activeRun
+                    ? `${activeRun.scopedNctNumber ? `Scoped to ${activeRun.scopedNctNumber}. ` : ''}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
                   : 'Starting the monitor run and waiting for the first heartbeat from the server.'}
               </p>
               <p className="mt-2 text-xs text-[#5b7ea6]">
@@ -551,29 +827,31 @@ export function AdminTrialOutcomeReview({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-sm lg:min-w-[320px]">
-              <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
-                <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Started</div>
-                <div className="mt-1 font-medium text-[#245f94]">
-                  {activeRun ? formatLocalDateTime(activeRun.startedAt) : 'Starting...'}
+            <div className="flex flex-col gap-3 text-sm lg:min-w-[320px]">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Started</div>
+                  <div className="mt-1 font-medium text-[#245f94]">
+                    {activeRun ? formatLocalDateTime(activeRun.startedAt) : 'Starting...'}
+                  </div>
                 </div>
-              </div>
-              <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
-                <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Last Heartbeat</div>
-                <div className="mt-1 font-medium text-[#245f94]">
-                  {activeRun ? formatLocalDateTime(activeRun.updatedAt) : 'Waiting...'}
+                <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Last Heartbeat</div>
+                  <div className="mt-1 font-medium text-[#245f94]">
+                    {activeRun ? formatLocalDateTime(activeRun.updatedAt) : 'Waiting...'}
+                  </div>
                 </div>
-              </div>
-              <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
-                <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Queue Items Created</div>
-                <div className="mt-1 font-medium text-[#245f94]">
-                  {activeRun ? activeRun.candidatesCreated : '—'}
+                <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Queue Items Created</div>
+                  <div className="mt-1 font-medium text-[#245f94]">
+                    {activeRun ? activeRun.candidatesCreated : '—'}
+                  </div>
                 </div>
-              </div>
-              <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
-                <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Questions Scanned</div>
-                <div className="mt-1 font-medium text-[#245f94]">
-                  {activeRun ? activeRun.questionsScanned : '—'}
+                <div className="rounded-none border border-[#5BA5ED]/25 bg-white/60 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#5b7ea6]">Questions Scanned</div>
+                  <div className="mt-1 font-medium text-[#245f94]">
+                    {activeRun ? activeRun.questionsScanned : '—'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -583,115 +861,139 @@ export function AdminTrialOutcomeReview({
 
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-3">
         <div className="flex flex-col gap-2.5">
-          <div className="max-w-2xl">
-            <h3 className="text-sm font-semibold text-[#1a1a1a]">Monitor Settings</h3>
+          <div className="max-w-3xl">
+            <h3 className="text-base font-semibold text-[#1a1a1a]">Monitor settings</h3>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,0.93fr)_minmax(0,0.93fr)_minmax(0,0.93fr)_minmax(0,1.41fr)]">
-            <label className="flex flex-col gap-2 border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-2.5">
-              <div className="space-y-0.5">
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Monitor Enabled</span>
-              </div>
-              <select
-                value={form.enabled ? 'true' : 'false'}
-                onChange={(event) => {
-                  const nextEnabled = event.target.value === 'true'
-                  setForm((current) => ({ ...current, enabled: nextEnabled }))
-                }}
-                className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
+          <div className="grid gap-3 xl:grid-cols-3">
+            <MonitorSettingsGroup
+              title="Schedule"
+              description=""
+              stackFields
+            >
+              <MonitorSettingsField
+                label="Enabled"
+                description="Turns the automatic trial monitor on or off."
               >
-                <option value="true">On</option>
-                <option value="false">Off</option>
-              </select>
-            </label>
+                <select
+                  value={form.enabled ? 'true' : 'false'}
+                  onChange={(event) => {
+                    const nextEnabled = event.target.value === 'true'
+                    setForm((current) => ({ ...current, enabled: nextEnabled }))
+                  }}
+                  className={monitorSettingControlClassName}
+                >
+                  <option value="true">On</option>
+                  <option value="false">Off</option>
+                </select>
+              </MonitorSettingsField>
 
-            <label className="flex flex-col gap-2 border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-2.5">
-              <div className="space-y-0.5">
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Cron Interval</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
+              <MonitorSettingsField
+                label="Run every"
+                description="How often the scheduled Railway job should scan for new outcome work."
+              >
+                <MonitorSettingsNumberInput
+                  value={form.runIntervalHours}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, runIntervalHours: value }))
+                  }}
                   min={1}
                   max={168}
-                  value={form.runIntervalHours}
-                  onChange={(event) => {
-                    setForm((current) => ({ ...current, runIntervalHours: event.target.value }))
-                  }}
-                  className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
+                  unit="hours"
                 />
-                <span className="shrink-0 pt-0.5 text-[11px] uppercase tracking-[0.08em] text-[#b0a497]">Hrs</span>
-              </div>
-            </label>
+              </MonitorSettingsField>
 
-            <label className="flex flex-col gap-2 border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-2.5">
-              <div className="space-y-0.5">
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Lookahead Window</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
+              <MonitorSettingsField
+                label="Scan ahead"
+                description=""
+              >
+                <MonitorSettingsNumberInput
+                  value={form.lookaheadDays}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, lookaheadDays: value }))
+                  }}
                   min={0}
                   max={365}
-                  value={form.lookaheadDays}
-                  onChange={(event) => {
-                    setForm((current) => ({ ...current, lookaheadDays: event.target.value }))
-                  }}
-                  className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
+                  unit="days"
                 />
-                <span className="shrink-0 pt-0.5 text-[11px] uppercase tracking-[0.08em] text-[#b0a497]">Days</span>
-              </div>
-            </label>
+              </MonitorSettingsField>
+            </MonitorSettingsGroup>
 
-            <label className="flex flex-col gap-2 border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-2.5">
-              <div className="space-y-0.5">
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Max Questions / Run</span>
-              </div>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={form.maxQuestionsPerRun}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, maxQuestionsPerRun: event.target.value }))
-                }}
-                className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
-              />
-            </label>
-
-            <label className="flex flex-col gap-2 border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-2.5">
-              <div className="space-y-0.5">
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Verifier Model</span>
-              </div>
-              <select
-                value={form.verifierModelKey}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, verifierModelKey: event.target.value }))
-                }}
-                className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
-              >
-                {verifierModelOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="border-t border-[#efe5d8] pt-2">
-            <p
-              className={[
-                'text-xs',
-                configStatusTone === 'saving' ? 'text-[#8a8075]' : '',
-                configStatusTone === 'saved' ? 'text-[#2f6f24]' : '',
-                configStatusTone === 'invalid' ? 'text-[#8b6b21]' : '',
-                configStatusTone === 'error' ? 'text-[#8d2c22]' : '',
-                configStatusTone === 'muted' ? 'text-[#8a8075]' : '',
-              ].join(' ').trim()}
+            <MonitorSettingsGroup
+              title="Processing"
+              description=""
+              stackFields
             >
-              {configStatusMessage}
-            </p>
+              <MonitorSettingsField
+                label="Question cap"
+                description=""
+                inlineControl
+              >
+                <MonitorSettingsNumberInput
+                  value={form.maxQuestionsPerRun}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, maxQuestionsPerRun: value }))
+                  }}
+                  min={1}
+                  max={500}
+                />
+              </MonitorSettingsField>
+
+              <MonitorSettingsField
+                label="Scheduled worker"
+                description=""
+                inlineControl
+              >
+                <MonitorSettingsNumberInput
+                  value={form.cronProcessingConcurrency}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, cronProcessingConcurrency: value }))
+                  }}
+                  min={1}
+                  max={12}
+                />
+              </MonitorSettingsField>
+
+              <MonitorSettingsField
+                label="Manual worker"
+                description=""
+                inlineControl
+              >
+                <MonitorSettingsNumberInput
+                  value={form.manualProcessingConcurrency}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, manualProcessingConcurrency: value }))
+                  }}
+                  min={1}
+                  max={12}
+                />
+              </MonitorSettingsField>
+            </MonitorSettingsGroup>
+
+            <MonitorSettingsGroup
+              title="Verification"
+              description=""
+            >
+              <MonitorSettingsField
+                label="Verifier model"
+                description=""
+                fullWidth
+              >
+                <select
+                  value={form.verifierModelKey}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, verifierModelKey: event.target.value }))
+                  }}
+                  className={monitorSettingControlClassName}
+                >
+                  {verifierModelOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </MonitorSettingsField>
+            </MonitorSettingsGroup>
           </div>
         </div>
       </section>
@@ -702,7 +1004,9 @@ export function AdminTrialOutcomeReview({
             <h3 className="text-sm font-semibold text-[#1a1a1a]">Monitor Actions</h3>
             {isRunActive ? (
               <p className="mt-1 text-xs text-[#8a8075]">
-                The monitor is currently running. Progress above updates automatically and new queue items will land here once the run finishes.
+                {isPauseRequested
+                  ? 'Pause requested. Progress above updates automatically while the current in-flight trial checks finish.'
+                  : 'The monitor is currently running. Progress above updates automatically and new queue items will land here once the run finishes.'}
               </p>
             ) : (
               <p className="mt-1 text-xs text-[#8a8075]">
@@ -720,7 +1024,7 @@ export function AdminTrialOutcomeReview({
                     Run the full Phase 2 outcome monitor across the current eligible queue.
                   </p>
                 </div>
-                <div className="mt-auto">
+                <div className="mt-auto space-y-2">
                   <button
                     type="button"
                     onClick={() => void runMonitor()}
@@ -729,6 +1033,16 @@ export function AdminTrialOutcomeReview({
                   >
                     {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run Full Monitor'}
                   </button>
+                  {isRunActive ? (
+                    <button
+                      type="button"
+                      onClick={() => void pauseMonitor(activeRun?.id ?? undefined)}
+                      disabled={isPauseRequested}
+                      className="w-full rounded-none border border-[#d2ba8b] bg-[#fff9ef] px-3 py-2 text-xs font-medium text-[#8b6b21] transition-colors hover:bg-[#fff2d6] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPauseRequested ? 'Pause Requested...' : 'Pause After Current Check'}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -779,16 +1093,18 @@ export function AdminTrialOutcomeReview({
           </div>
           <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-right">
             <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queued Now</div>
-            <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{eligibleQuestions.length}</div>
+            <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{visibleEligibleQuestions.length}</div>
           </div>
         </div>
 
         <div className="mt-4 space-y-3">
-          {eligibleQuestions.length === 0 ? (
+          {visibleEligibleQuestions.length === 0 ? (
             <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-              No trial questions are currently eligible for the next monitor pass.
+              {scopedViewNctNumber
+                ? 'This trial is not currently eligible for the next monitor pass.'
+                : 'No trial questions are currently eligible for the next monitor pass.'}
             </div>
-          ) : eligibleQuestions.map((question) => {
+          ) : visibleEligibleQuestions.map((question) => {
             const normalizedQuestionNctNumber = parseScopedNctNumber(question.trial.nctNumber ?? '')
 
             return (
@@ -839,17 +1155,25 @@ export function AdminTrialOutcomeReview({
               Settlement items only resolve a market after admin acceptance. Evidence-only items can be dismissed without settling.
             </p>
           </div>
-          <div className="text-sm text-[#8a8075]">{candidates.length} pending</div>
+          <div className="text-sm text-[#8a8075]">{visibleCandidates.length} pending</div>
         </div>
 
         <div className="mt-4 space-y-4">
-          {candidates.length === 0 ? (
+          {visibleCandidates.length === 0 ? (
             <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-              {isRunActive
-                ? 'No pending review items yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
-                : 'No pending review items yet. Run the monitor to pull fresh evidence and populate this queue.'}
+              {scopedViewNctNumber
+                ? (
+                    isRunActive
+                      ? 'No pending review items for this trial yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
+                      : 'No pending review items for this trial yet. Run the monitor to pull fresh evidence and populate this queue.'
+                  )
+                : (
+                    isRunActive
+                      ? 'No pending review items yet. This run is still in progress, and new queue items will appear here automatically if the verifier finds any.'
+                      : 'No pending review items yet. Run the monitor to pull fresh evidence and populate this queue.'
+                  )}
             </div>
-          ) : candidates.map((candidate) => (
+          ) : visibleCandidates.map((candidate) => (
             <article key={candidate.id} className="rounded-none border border-[#e8ddd0] bg-white p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -966,14 +1290,16 @@ export function AdminTrialOutcomeReview({
         </div>
       </section>
 
-      <AdminTrialOutcomeHistory entries={historyEntries} />
+      <AdminTrialOutcomeHistory entries={visibleHistoryEntries} />
 
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
         <h3 className="text-sm font-semibold text-[#1a1a1a]">Recent Monitor Runs</h3>
         <div className="mt-4 space-y-3">
-          {runs.length === 0 ? (
-            <div className="text-sm text-[#8a8075]">No monitor runs yet.</div>
-          ) : runs.map((run) => (
+          {visibleRuns.length === 0 ? (
+            <div className="text-sm text-[#8a8075]">
+              {scopedViewNctNumber ? 'No monitor runs for this trial yet.' : 'No monitor runs yet.'}
+            </div>
+          ) : visibleRuns.map((run) => (
             <div key={run.id} className="rounded-none border border-[#e8ddd0] bg-white p-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
@@ -986,8 +1312,8 @@ export function AdminTrialOutcomeReview({
                         {run.scopedNctNumber}
                       </span>
                     ) : null}
-                    <span className={`rounded-none px-2 py-1 text-xs font-medium ${getRunStatusTone(run.status)}`}>
-                      {run.status === 'running' ? 'Running' : run.status === 'failed' ? 'Failed' : 'Completed'}
+                    <span className={`rounded-none px-2 py-1 text-xs font-medium ${getRunStatusTone(run)}`}>
+                      {getRunStatusLabel(run)}
                     </span>
                     <span className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-2 py-1 text-xs font-medium text-[#6f665b]">
                       {run.verifierModelLabel}
@@ -997,6 +1323,9 @@ export function AdminTrialOutcomeReview({
                     <span>Started {formatLocalDateTime(run.startedAt)}</span>
                     {run.status === 'running' ? (
                       <span>Last heartbeat {formatLocalDateTime(run.updatedAt)}</span>
+                    ) : null}
+                    {run.status === 'running' && run.stopRequestedAt ? (
+                      <span>Pause requested {formatLocalDateTime(run.stopRequestedAt)}</span>
                     ) : null}
                     {run.completedAt ? (
                       <span>Completed {formatLocalDateTime(run.completedAt)}</span>
@@ -1016,14 +1345,25 @@ export function AdminTrialOutcomeReview({
                       <div className="text-[10px] uppercase tracking-[0.06em] text-[#8a8075]">Queue Items</div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={run.status === 'running' || deletingRunId === run.id}
-                    onClick={() => deleteRun(run.id)}
-                    className="flex min-h-[56px] items-center justify-center rounded-none border border-[#f0b7b1] bg-[#fff8f7] px-4 py-2 text-xs font-medium text-[#b83f34] transition-colors hover:bg-[#fff1ef] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {deletingRunId === run.id ? 'Deleting...' : 'Delete'}
-                  </button>
+                  {run.status === 'running' ? (
+                    <button
+                      type="button"
+                      disabled={run.stopRequestedAt != null || (isPauseRequested && activeRun?.id === run.id)}
+                      onClick={() => void pauseMonitor(run.id)}
+                      className="flex min-h-[56px] items-center justify-center rounded-none border border-[#d2ba8b] bg-[#fff9ef] px-4 py-2 text-xs font-medium text-[#8b6b21] transition-colors hover:bg-[#fff2d6] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {run.stopRequestedAt || (isPauseRequested && activeRun?.id === run.id) ? 'Pause Requested...' : 'Pause'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={deletingRunId === run.id}
+                      onClick={() => deleteRun(run.id)}
+                      className="flex min-h-[56px] items-center justify-center rounded-none border border-[#f0b7b1] bg-[#fff8f7] px-4 py-2 text-xs font-medium text-[#b83f34] transition-colors hover:bg-[#fff1ef] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deletingRunId === run.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  )}
                 </div>
               </div>
               {run.errorSummary ? (

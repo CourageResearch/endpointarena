@@ -35,6 +35,7 @@ type MarketCardEntry = {
 }
 
 type MarketBrowseTab = 'upcoming' | 'resolved'
+type HeaderLinkPlacement = 'header' | 'footer' | 'both'
 type MarketTableSortKey = 'market' | 'primaryCompletion' | 'resolvedAt' | 'outcome' | 'yes' | 'no' | 'volume' | 'aiYes' | 'aiNo'
 type MarketTableSortDirection = 'asc' | 'desc'
 type MarketTableSortState = {
@@ -314,7 +315,7 @@ function getModelDecisionMap(entry: MarketCardEntry): Map<string, 'APPROVE' | 'R
 }
 
 function getCompanyName(entry: MarketCardEntry): string {
-  return entry.market.event?.sponsorName?.trim() || entry.market.event?.companyName?.trim() || 'Trial market'
+  return entry.market.event?.sponsorName?.trim() || entry.market.event?.companyName?.trim() || 'Trial'
 }
 
 function getConsensusStats(entry: MarketCardEntry) {
@@ -339,7 +340,7 @@ function getConsensusStats(entry: MarketCardEntry) {
         ? 'text-[#9b3028]'
         : 'text-[#8a8075]'
   const summary = !hasAnyModelCall
-    ? `${totalModelCount} AI models tracked. Waiting for the first market run.`
+    ? `${totalModelCount} AI models tracked. Waiting for the first trial run.`
     : approveCount > rejectCount
       ? `${approveCount} of ${totalModelCount} AI models currently lean yes.`
       : rejectCount > approveCount
@@ -466,7 +467,7 @@ function MarketCard({
         </div>
 
         <div className="mt-3">
-          <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Market Odds</div>
+          <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Trial Odds</div>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-sm border border-[#e8ddd0] bg-white/90 px-3 py-3 transition-colors duration-150 group-hover:border-[#dfd1bf] group-hover:bg-[#fbf8f4] group-focus-visible:border-[#dfd1bf] group-focus-visible:bg-[#fbf8f4]">
               <div className="text-[10px] uppercase tracking-[0.2em] text-[#b5aa9e]">Yes</div>
@@ -538,7 +539,7 @@ function MarketTable({
   detailBasePath: string
   headerLinkHref?: string
   headerLinkLabel?: string
-  headerLinkPlacement?: 'header' | 'footer'
+  headerLinkPlacement?: HeaderLinkPlacement
   maxRows?: number
   searchControl?: ReactNode
   emptyMessage?: string
@@ -605,8 +606,8 @@ function MarketTable({
 
   const resolvedHeading = heading ?? (tab === 'resolved' ? RESOLVED_TRIALS_HEADING : UPCOMING_TRIALS_HEADING)
   const resolvedHeaderLinkHref = headerLinkHref ?? null
-  const showHeaderLink = Boolean(resolvedHeaderLinkHref) && headerLinkPlacement === 'header'
-  const showFooterLink = Boolean(resolvedHeaderLinkHref) && headerLinkPlacement === 'footer'
+  const showHeaderLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'header' || headerLinkPlacement === 'both')
+  const showFooterLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'footer' || headerLinkPlacement === 'both')
 
   return (
     <section className="mt-10">
@@ -646,7 +647,7 @@ function MarketTable({
         <div className="rounded-sm bg-white/95">
           {visibleRows.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-[#8a8075]">
-              {emptyMessage || `No ${tab === 'resolved' ? 'resolved' : 'upcoming'} markets match the current filters.`}
+              {emptyMessage || `No ${tab === 'resolved' ? 'resolved' : 'upcoming'} trials match the current filters.`}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -862,7 +863,7 @@ export function TrialsBrowseHomepage({
   detailBasePath?: string
   headerLinkHref?: string
   headerLinkLabel?: string
-  headerLinkPlacement?: 'header' | 'footer'
+  headerLinkPlacement?: HeaderLinkPlacement
   initialOverview?: OverviewResponse | null
   initialTypeFilter?: string | null
   initialStatusTab?: string | null

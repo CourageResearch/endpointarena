@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-export const TRIAL_PUBLIC_STATE_SCHEMA_VERSION = 1
+export const TRIAL_PUBLIC_STATE_SCHEMA_VERSION = 2
 
 export type TrialPublicStateCounts = {
   phase2_trials: number
@@ -19,6 +19,14 @@ export type TrialPublicStateCounts = {
   accepted_candidates: number
   trial_outcome_candidate_evidence: number
   trial_monitor_runs: number
+  trial_question_outcome_history: number
+  trial_sync_runs: number
+  trial_sync_run_items: number
+  trial_market_runs: number
+  trial_market_run_logs: number
+  trial_market_actions: number
+  trial_model_decision_snapshots: number
+  trial_market_positions: number
 }
 
 export type TrialMonitorConfigBundleRow = {
@@ -156,6 +164,167 @@ export type TrialMonitorRunBundleRow = {
   updated_at: string
 }
 
+export type TrialQuestionOutcomeHistoryBundleRow = {
+  id: string
+  trial_question_id: string
+  previous_outcome: string | null
+  previous_outcome_date: string | null
+  next_outcome: string
+  next_outcome_date: string | null
+  changed_at: string
+  change_source: string
+  changed_by_user_id: string | null
+  changed_by_user_email: string | null
+  review_candidate_id: string | null
+  notes: string | null
+}
+
+export type TrialSyncRunBundleRow = {
+  id: string
+  trigger_source: string
+  mode: string
+  status: string
+  source_data_timestamp: string | null
+  studies_fetched: number
+  studies_matched: number
+  trials_upserted: number
+  questions_upserted: number
+  markets_opened: number
+  error_summary: string | null
+  started_at: string
+  completed_at: string | null
+  updated_at: string
+}
+
+export type TrialSyncRunItemBundleRow = {
+  id: string
+  run_id: string
+  trial_id: string | null
+  nct_number: string
+  short_title: string
+  sponsor_name: string
+  current_status: string
+  est_primary_completion_date: string
+  change_type: string
+  change_summary: string | null
+  created_at: string
+}
+
+export type TrialMarketRunBundleRow = {
+  id: string
+  run_date: string
+  status: string
+  open_markets: number
+  total_actions: number
+  processed_actions: number
+  ok_count: number
+  error_count: number
+  skipped_count: number
+  failure_reason: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+export type TrialMarketRunLogBundleRow = {
+  id: string
+  run_id: string
+  log_type: string
+  message: string
+  completed_actions: number | null
+  total_actions: number | null
+  ok_count: number | null
+  error_count: number | null
+  skipped_count: number | null
+  market_id: string | null
+  trial_question_id: string | null
+  actor_id: string | null
+  activity_phase: string | null
+  action: string | null
+  action_status: string | null
+  amount_usd: number | null
+  created_at: string
+}
+
+export type TrialMarketActionBundleRow = {
+  id: string
+  run_id: string | null
+  market_id: string
+  trial_question_id: string | null
+  actor_id: string
+  run_date: string
+  action_source: string
+  action: string
+  usd_amount: number
+  shares_delta: number
+  price_before: number
+  price_after: number
+  explanation: string
+  status: string
+  error_code: string | null
+  error_details: string | null
+  error: string | null
+  created_at: string
+}
+
+export type TrialModelDecisionSnapshotBundleRow = {
+  id: string
+  run_id: string | null
+  run_date: string
+  market_id: string
+  trial_question_id: string | null
+  actor_id: string
+  run_source: string
+  approval_probability: number
+  yes_probability: number | null
+  binary_call: string
+  confidence: number
+  reasoning: string
+  proposed_action_type: string
+  proposed_amount_usd: number
+  proposed_explanation: string
+  market_price_yes: number | null
+  market_price_no: number | null
+  cash_available: number | null
+  yes_shares_held: number | null
+  no_shares_held: number | null
+  max_buy_usd: number | null
+  max_sell_yes_usd: number | null
+  max_sell_no_usd: number | null
+  duration_ms: number | null
+  input_tokens: number | null
+  output_tokens: number | null
+  total_tokens: number | null
+  reasoning_tokens: number | null
+  estimated_cost_usd: number | null
+  cost_source: string | null
+  cache_creation_input_tokens_5m: number | null
+  cache_creation_input_tokens_1h: number | null
+  cache_read_input_tokens: number | null
+  web_search_requests: number | null
+  inference_geo: string | null
+  linked_market_action_id: string | null
+  created_at: string
+}
+
+export type TrialMarketPositionBundleRow = {
+  id: string
+  market_id: string
+  actor_id: string
+  yes_shares: number
+  no_shares: number
+  created_at: string
+  updated_at: string
+}
+
+export type TrialModelActorBundleRow = {
+  actor_id: string
+  model_key: string
+  display_name: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type TrialPublicStateBundle = {
   metadata: {
     schema_version: number
@@ -174,6 +343,15 @@ export type TrialPublicStateBundle = {
   trialOutcomeCandidates: TrialOutcomeCandidateBundleRow[]
   trialOutcomeCandidateEvidence: TrialOutcomeCandidateEvidenceBundleRow[]
   trialMonitorRuns: TrialMonitorRunBundleRow[]
+  trialQuestionOutcomeHistory: TrialQuestionOutcomeHistoryBundleRow[]
+  trialSyncRuns: TrialSyncRunBundleRow[]
+  trialSyncRunItems: TrialSyncRunItemBundleRow[]
+  trialMarketRuns: TrialMarketRunBundleRow[]
+  trialMarketRunLogs: TrialMarketRunLogBundleRow[]
+  trialMarketActions: TrialMarketActionBundleRow[]
+  trialModelDecisionSnapshots: TrialModelDecisionSnapshotBundleRow[]
+  trialMarketPositions: TrialMarketPositionBundleRow[]
+  modelActors: TrialModelActorBundleRow[]
 }
 
 function normalizeJsonValue(value: unknown): unknown {
@@ -211,6 +389,14 @@ export function computeTrialPublicStateCounts(bundle: Pick<
   | 'trialOutcomeCandidates'
   | 'trialOutcomeCandidateEvidence'
   | 'trialMonitorRuns'
+  | 'trialQuestionOutcomeHistory'
+  | 'trialSyncRuns'
+  | 'trialSyncRunItems'
+  | 'trialMarketRuns'
+  | 'trialMarketRunLogs'
+  | 'trialMarketActions'
+  | 'trialModelDecisionSnapshots'
+  | 'trialMarketPositions'
 >): TrialPublicStateCounts {
   const counts: TrialPublicStateCounts = {
     phase2_trials: bundle.phase2Trials.length,
@@ -228,6 +414,14 @@ export function computeTrialPublicStateCounts(bundle: Pick<
     accepted_candidates: 0,
     trial_outcome_candidate_evidence: bundle.trialOutcomeCandidateEvidence.length,
     trial_monitor_runs: bundle.trialMonitorRuns.length,
+    trial_question_outcome_history: bundle.trialQuestionOutcomeHistory.length,
+    trial_sync_runs: bundle.trialSyncRuns.length,
+    trial_sync_run_items: bundle.trialSyncRunItems.length,
+    trial_market_runs: bundle.trialMarketRuns.length,
+    trial_market_run_logs: bundle.trialMarketRunLogs.length,
+    trial_market_actions: bundle.trialMarketActions.length,
+    trial_model_decision_snapshots: bundle.trialModelDecisionSnapshots.length,
+    trial_market_positions: bundle.trialMarketPositions.length,
   }
 
   for (const question of bundle.trialQuestions) {
@@ -293,6 +487,15 @@ export function assertTrialPublicStateBundle(value: unknown): asserts value is T
     'trialOutcomeCandidates',
     'trialOutcomeCandidateEvidence',
     'trialMonitorRuns',
+    'trialQuestionOutcomeHistory',
+    'trialSyncRuns',
+    'trialSyncRunItems',
+    'trialMarketRuns',
+    'trialMarketRunLogs',
+    'trialMarketActions',
+    'trialModelDecisionSnapshots',
+    'trialMarketPositions',
+    'modelActors',
   ] as const
 
   for (const key of requiredArrayKeys) {
