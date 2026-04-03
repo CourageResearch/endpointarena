@@ -25,7 +25,7 @@ export function HomeTrialsClient({
         detailBasePath={detailBasePath}
         headerLinkHref={headerLinkHref}
         headerLinkLabel={headerLinkLabel}
-        headerLinkPlacement="footer"
+        headerLinkPlacement="both"
         initialOverview={initialOverview}
         initialTypeFilter={initialTypeFilter}
         initialTableMaxRows={5}

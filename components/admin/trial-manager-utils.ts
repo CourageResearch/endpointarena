@@ -77,6 +77,8 @@ export interface ExecutionPlanStep {
   globalSequence: number
   status: ExecutionStepStatus
   detail: string | null
+  startedAtMs: number | null
+  durationMs: number | null
 }
 
 export interface ExecutionPlanTrial {
@@ -104,6 +106,11 @@ export function isAdminStoppedMessage(message: string | null | undefined): boole
   return normalized.includes('stop requested by admin') || normalized.includes('stopped by admin')
 }
 
+function isPausedRunMessage(message: string | null | undefined): boolean {
+  if (!message) return false
+  return message.toLowerCase().startsWith('daily trial cycle paused after a model-step failure.')
+}
+
 function normalizeRunDateLocal(input?: string | Date | null): Date {
   const parsed = input ? new Date(input) : new Date()
   if (Number.isNaN(parsed.getTime())) {
@@ -121,18 +128,103 @@ export function rotateModelOrderLocal(runDate?: string | Date | null): ModelId[]
   return MODEL_IDS.map((_, index) => MODEL_IDS[(index + offset) % MODEL_IDS.length])
 }
 
-function extractSnapshotModelOrder(snapshot: AdminMarketRunSnapshot): ModelId[] {
+const MODEL_ID_BY_FULL_NAME = new Map<string, ModelId>()
+
+for (const modelId of MODEL_IDS) {
+  MODEL_ID_BY_FULL_NAME.set(MODEL_INFO[modelId].fullName, modelId)
+}
+
+function extractLatestRunLogs(snapshot: AdminMarketRunSnapshot): AdminMarketRunSnapshot['logs'] {
+  const latestRunLogs = snapshot.logs.filter((log) => log.runId === snapshot.runId)
+  return latestRunLogs.length > 0 ? latestRunLogs : snapshot.logs
+}
+
+function extractLoggedModelOrder(message: string): ModelId[] {
+  const match = message.match(/\b(?:Model order|Models?):\s*(.+?)(?:\s+\|\s+|$)/i)
+  if (!match?.[1]) return []
+
   const seen = new Set<ModelId>()
   const orderedModelIds: ModelId[] = []
 
-  for (const log of [...snapshot.logs].reverse()) {
+  for (const label of match[1].split(',').map((value) => value.trim()).filter(Boolean)) {
+    const modelId = MODEL_ID_BY_FULL_NAME.get(label) ?? toModelId(label)
+    if (!modelId || seen.has(modelId)) continue
+    seen.add(modelId)
+    orderedModelIds.push(modelId)
+  }
+
+  return orderedModelIds
+}
+
+function inferExpectedModelCount(
+  snapshot: AdminMarketRunSnapshot,
+  logs: AdminMarketRunSnapshot['logs']
+): number | null {
+  const totalActions = logs.find((log) => typeof log.totalActions === 'number' && log.totalActions > 0)?.totalActions
+    ?? snapshot.totalActions
+
+  if (snapshot.openMarkets <= 0 || totalActions <= 0) {
+    return null
+  }
+
+  const expectedModelCount = totalActions / snapshot.openMarkets
+  if (!Number.isInteger(expectedModelCount) || expectedModelCount <= 0) {
+    return null
+  }
+
+  return Math.min(expectedModelCount, MODEL_IDS.length)
+}
+
+function completeModelOrder(
+  runDate: string,
+  initialOrder: ModelId[],
+  expectedModelCount: number | null,
+): ModelId[] {
+  const fallbackOrder = rotateModelOrderLocal(runDate)
+  if (initialOrder.length === 0) {
+    return expectedModelCount ? fallbackOrder.slice(0, expectedModelCount) : fallbackOrder
+  }
+
+  if (!expectedModelCount || initialOrder.length >= expectedModelCount) {
+    return initialOrder
+  }
+
+  const seen = new Set(initialOrder)
+  const completedOrder = [...initialOrder]
+
+  for (const modelId of fallbackOrder) {
+    if (seen.has(modelId)) continue
+    seen.add(modelId)
+    completedOrder.push(modelId)
+    if (completedOrder.length >= expectedModelCount) break
+  }
+
+  return completedOrder
+}
+
+function extractSnapshotModelOrder(snapshot: AdminMarketRunSnapshot): ModelId[] {
+  const latestRunLogs = extractLatestRunLogs(snapshot)
+  const explicitModelOrder = latestRunLogs
+    .filter((log) => log.logType === 'system')
+    .map((log) => extractLoggedModelOrder(log.message))
+    .find((modelOrder) => modelOrder.length > 0)
+
+  const expectedModelCount = inferExpectedModelCount(snapshot, latestRunLogs)
+  if (explicitModelOrder) {
+    return completeModelOrder(snapshot.runDate, explicitModelOrder, expectedModelCount)
+  }
+
+  const seen = new Set<ModelId>()
+  const orderedModelIds: ModelId[] = []
+
+  for (const log of [...latestRunLogs].reverse()) {
     const modelId = toModelId(log.modelId)
     if (!modelId || seen.has(modelId)) continue
     seen.add(modelId)
     orderedModelIds.push(modelId)
   }
 
-  return orderedModelIds.length > 0 ? orderedModelIds : rotateModelOrderLocal(snapshot.runDate)
+  return completeModelOrder(snapshot.runDate, orderedModelIds, expectedModelCount)
 }
 
 function extractSnapshotOrderedMarkets(
@@ -258,6 +350,8 @@ export function buildExecutionPlan(input: {
         globalSequence,
         status: 'queued',
         detail: null,
+        startedAtMs: null,
+        durationMs: null,
       } satisfies ExecutionPlanStep
     })
 
@@ -282,10 +376,23 @@ function clearActiveExecutionSteps(plan: ExecutionPlanMarket[]): ExecutionPlanMa
     ...market,
     steps: market.steps.map((step) => (
       step.status === 'running' || step.status === 'waiting'
-        ? { ...step, status: 'queued' as const }
+        ? { ...step, status: 'queued' as const, startedAtMs: null, durationMs: null }
         : step
     )),
   }))
+}
+
+function findExecutionPlanStep(
+  plan: ExecutionPlanMarket[],
+  marketId: string,
+  modelId: ModelId,
+): ExecutionPlanStep | null {
+  for (const market of plan) {
+    const step = market.steps.find((candidate) => candidate.marketId === marketId && candidate.modelId === modelId)
+    if (step) return step
+  }
+
+  return null
 }
 
 function updateExecutionPlanStep(
@@ -315,25 +422,48 @@ export function applyActivityToExecutionPlan(
     modelId?: ModelId
     phase?: DailyRunActivityPhase
     message: string
+    occurredAtMs?: number | null
   }
 ): ExecutionPlanMarket[] {
   if (!input.marketId || !input.modelId || !input.phase) return plan
+  const previousStep = findExecutionPlanStep(plan, input.marketId, input.modelId)
   const clearedPlan = clearActiveExecutionSteps(plan)
   const nextStatus: ExecutionStepStatus = input.phase === 'waiting' ? 'waiting' : 'running'
+  const startedAtMs = previousStep && (previousStep.status === 'running' || previousStep.status === 'waiting')
+    ? (previousStep.startedAtMs ?? input.occurredAtMs ?? Date.now())
+    : (input.occurredAtMs ?? Date.now())
 
   return updateExecutionPlanStep(clearedPlan, input.marketId, input.modelId, (step) => ({
     ...step,
     status: nextStatus,
     detail: input.message,
+    startedAtMs,
+    durationMs: null,
   }))
 }
 
-export function applyProgressToExecutionPlan(plan: ExecutionPlanMarket[], result: DailyRunResult): ExecutionPlanMarket[] {
+export function applyProgressToExecutionPlan(
+  plan: ExecutionPlanMarket[],
+  result: DailyRunResult,
+  occurredAtMs?: number | null,
+): ExecutionPlanMarket[] {
+  const previousStep = findExecutionPlanStep(plan, result.marketId, result.modelId)
   const clearedPlan = clearActiveExecutionSteps(plan)
+  const startedAtMs = result.status === 'skipped'
+    ? (previousStep?.startedAtMs ?? null)
+    : (previousStep?.startedAtMs ?? null)
+  const durationMs = result.status === 'skipped'
+    ? (previousStep?.durationMs ?? null)
+    : (startedAtMs != null && occurredAtMs != null
+        ? Math.max(0, occurredAtMs - startedAtMs)
+        : previousStep?.durationMs ?? null)
+
   return updateExecutionPlanStep(clearedPlan, result.marketId, result.modelId, (step) => ({
     ...step,
     status: result.status,
     detail: result.detail,
+    startedAtMs,
+    durationMs,
   }))
 }
 
@@ -420,6 +550,13 @@ function formatUtcLogPrefixFromIso(value: string | null | undefined): string {
   return formatUtcLogPrefix(parsed)
 }
 
+function toEpochMs(value: string | null | undefined): number | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.getTime()
+}
+
 function toModelId(value: string | null | undefined): ModelId | null {
   if (!value) return null
   return Object.prototype.hasOwnProperty.call(MODEL_INFO, value) ? value as ModelId : null
@@ -462,10 +599,15 @@ export function buildErrorConsoleFromSnapshot(snapshot: AdminMarketRunSnapshot |
   if (snapshot.status !== 'running' && snapshot.failureReason) {
     const exists = errors.some((entry) => entry.message.includes(snapshot.failureReason ?? ''))
     if (!exists) {
+      const runStatusLabel = isAdminStoppedMessage(snapshot.failureReason)
+        ? 'RUN STOPPED'
+        : isPausedRunMessage(snapshot.failureReason)
+          ? 'RUN PAUSED'
+          : 'RUN FAILED'
       errors.unshift({
         id: `${snapshot.runId}-failure`,
         utcTime: formatUtcLogPrefixFromIso(snapshot.updatedAt || snapshot.completedAt || snapshot.createdAt),
-        message: `${isAdminStoppedMessage(snapshot.failureReason) ? 'RUN STOPPED' : 'RUN FAILED'} - ${snapshot.failureReason}`,
+        message: `${runStatusLabel} - ${snapshot.failureReason}`,
       })
     }
   }
@@ -631,7 +773,7 @@ export function buildExecutionPlanFromSnapshot(
         amountUsd: log.amountUsd ?? 0,
         status: log.actionStatus,
         detail: log.message,
-      })
+      }, toEpochMs(log.createdAt))
       continue
     }
 
@@ -641,6 +783,7 @@ export function buildExecutionPlanFromSnapshot(
         modelId,
         phase: log.activityPhase,
         message: log.message,
+        occurredAtMs: toEpochMs(log.createdAt),
       })
     }
   }
@@ -724,6 +867,41 @@ export function getExecutionStatusLabel(status: ExecutionStepStatus): string {
   if (status === 'running') return 'Running'
   if (status === 'waiting') return 'Waiting'
   return 'Queued'
+}
+
+function formatStepDuration(durationMs: number): string {
+  if (durationMs < 1000) return '<1s'
+
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+  }
+
+  if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`
+  }
+
+  return `${seconds}s`
+}
+
+export function getExecutionStepDurationLabel(
+  step: ExecutionPlanStep,
+  nowMs?: number | null,
+): string | null {
+  if ((step.status === 'running' || step.status === 'waiting') && step.startedAtMs != null) {
+    if (nowMs == null) return null
+    return `${formatStepDuration(Math.max(0, nowMs - step.startedAtMs))} elapsed`
+  }
+
+  if (step.durationMs != null) {
+    return `${formatStepDuration(step.durationMs)} runtime`
+  }
+
+  return null
 }
 
 export function getTrialStatusTone(status: AdminMarketEvent['marketStatus']): string {

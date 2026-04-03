@@ -150,6 +150,8 @@ export const trialMonitorConfigs = pgTable('trial_monitor_configs', {
   lookaheadDays: integer('lookahead_days').notNull().default(30),
   overdueRecheckHours: integer('overdue_recheck_hours').notNull().default(24),
   maxQuestionsPerRun: integer('max_questions_per_run').notNull().default(25),
+  cronProcessingConcurrency: integer('cron_processing_concurrency').notNull().default(1),
+  manualProcessingConcurrency: integer('manual_processing_concurrency').notNull().default(3),
   verifierModelKey: text('verifier_model_key').notNull().default('gpt-5.4'),
   minCandidateConfidence: real('min_candidate_confidence').notNull().default(0.8),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
@@ -170,6 +172,14 @@ export const trialMonitorConfigs = pgTable('trial_monitor_configs', {
   maxQuestionsPerRunCheck: check(
     'trial_monitor_configs_max_questions_per_run_check',
     sql`${table.maxQuestionsPerRun} >= 1 AND ${table.maxQuestionsPerRun} <= 500`
+  ),
+  cronProcessingConcurrencyCheck: check(
+    'trial_monitor_configs_cron_processing_concurrency_check',
+    sql`${table.cronProcessingConcurrency} >= 1 AND ${table.cronProcessingConcurrency} <= 12`
+  ),
+  manualProcessingConcurrencyCheck: check(
+    'trial_monitor_configs_manual_processing_concurrency_check',
+    sql`${table.manualProcessingConcurrency} >= 1 AND ${table.manualProcessingConcurrency} <= 12`
   ),
   minCandidateConfidenceCheck: check(
     'trial_monitor_configs_min_candidate_confidence_check',
@@ -286,6 +296,7 @@ export const trialMonitorRuns = pgTable('trial_monitor_runs', {
   debugLog: text('debug_log'),
   startedAt: utcTimestamp('started_at').notNull().$defaultFn(() => new Date()),
   completedAt: utcTimestamp('completed_at'),
+  stopRequestedAt: utcTimestamp('stop_requested_at'),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   triggerSourceCheck: check(
@@ -294,7 +305,7 @@ export const trialMonitorRuns = pgTable('trial_monitor_runs', {
   ),
   statusCheck: check(
     'trial_monitor_runs_status_check',
-    sql`${table.status} IN ('running', 'completed', 'failed')`
+    sql`${table.status} IN ('running', 'completed', 'failed', 'paused')`
   ),
   questionsScannedCheck: check(
     'trial_monitor_runs_questions_scanned_check',

@@ -3,7 +3,14 @@ import OpenAI from 'openai'
 import { GoogleGenAI } from '@google/genai'
 import type { ModelId } from '@/lib/constants'
 import { askClaudeWeb } from './claude-web-runner'
-import { buildModelDecisionPrompt, parseModelDecisionResponse, type ModelDecisionInput, type ModelDecisionResult } from './model-decision-prompt'
+import {
+  buildFireworksModelDecisionJsonSchema,
+  buildModelDecisionJsonSchema,
+  buildModelDecisionPrompt,
+  parseModelDecisionResponse,
+  type ModelDecisionInput,
+  type ModelDecisionResult,
+} from './model-decision-prompt'
 
 interface ProviderUsageSnapshot {
   inputTokens: number | null
@@ -35,7 +42,10 @@ export interface ModelDecisionGeneratorOptions {
 
 interface OpenAICompatibleResponseFormat {
   type: 'json_object' | 'json_schema'
-  json_schema?: Record<string, unknown>
+  json_schema?: {
+    name: string
+    schema: Record<string, unknown>
+  }
 }
 
 const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1'
@@ -45,6 +55,7 @@ const GLM_MODEL = 'accounts/fireworks/models/glm-5'
 const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 const KIMI_MODEL = 'accounts/fireworks/models/kimi-k2p5'
 const MINIMAX_MODEL = 'accounts/fireworks/models/minimax-m2p5'
+const FIREWORKS_DECISION_SCHEMA_NAME = 'trial_market_decision'
 const DEFAULT_USAGE: ProviderUsageSnapshot = {
   inputTokens: null,
   outputTokens: null,
@@ -262,6 +273,18 @@ async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDeci
     max_output_tokens: 8000,
     tools: [{ type: 'web_search' }],
     reasoning: { effort: 'high' },
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'trial_market_decision',
+        strict: true,
+        description: 'Structured market forecast and action decision for a biotech trial question.',
+        schema: buildModelDecisionJsonSchema(
+          input.constraints.allowedActions,
+          input.constraints.explanationMaxChars,
+        ),
+      },
+    },
   } as any)
 
   const content = extractResponseText(response)
@@ -374,6 +397,16 @@ async function generateFireworksDecision(args: {
   return buildOutput(content, args.input, parseUsageFromChatCompletion(completion))
 }
 
+function buildFireworksDecisionResponseFormat(input: ModelDecisionInput): OpenAICompatibleResponseFormat {
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: FIREWORKS_DECISION_SCHEMA_NAME,
+      schema: buildFireworksModelDecisionJsonSchema(input.constraints.allowedActions),
+    },
+  }
+}
+
 async function generateOpenAICompatibleDecision(args: {
   apiKey: string | undefined
   baseURL: string
@@ -423,7 +456,7 @@ async function generateDeepSeekDecision(input: ModelDecisionInput): Promise<Mode
     maxTokens: 4096,
     temperature: 0.6,
     reasoningEffort: 'none',
-    responseFormat: { type: 'json_object' },
+    responseFormat: buildFireworksDecisionResponseFormat(input),
   })
 }
 
@@ -448,7 +481,7 @@ async function generateGlm5Decision(input: ModelDecisionInput): Promise<ModelDec
     maxTokens: 4096,
     temperature: 0.6,
     reasoningEffort: 'none',
-    responseFormat: { type: 'json_object' },
+    responseFormat: buildFireworksDecisionResponseFormat(input),
   })
 }
 
@@ -459,7 +492,7 @@ async function generateKimiDecision(input: ModelDecisionInput): Promise<ModelDec
     errorLabel: 'Kimi K2.5',
     maxTokens: 4096,
     temperature: 0.6,
-    responseFormat: { type: 'json_object' },
+    responseFormat: buildFireworksDecisionResponseFormat(input),
   })
 }
 
@@ -471,7 +504,7 @@ async function generateMiniMaxDecision(input: ModelDecisionInput): Promise<Model
     maxTokens: 4096,
     temperature: 0.7,
     reasoningEffort: 'low',
-    responseFormat: { type: 'json_object' },
+    responseFormat: buildFireworksDecisionResponseFormat(input),
   })
 }
 

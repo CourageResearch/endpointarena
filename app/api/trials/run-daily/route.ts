@@ -6,7 +6,12 @@ import { ValidationError } from '@/lib/errors'
 import { executeDailyRun } from '@/lib/markets/daily-run'
 import { normalizeRunDate } from '@/lib/markets/engine'
 import type { DailyRunStreamEvent } from '@/lib/markets/types'
-import { DAILY_RUN_STOPPED_REASON, isDailyRunStoppedError } from '@/lib/markets/run-control'
+import {
+  DAILY_RUN_STOPPED_REASON,
+  isDailyRunPausedError,
+  isDailyRunPausedMessage,
+  isDailyRunStoppedError,
+} from '@/lib/markets/run-control'
 
 const NDJSON_ENCODER = new TextEncoder()
 
@@ -158,10 +163,16 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             const message = error instanceof Error ? error.message : `Failed to run daily trial cycle (request ${requestId})`
             const stoppedByAdmin = isDailyRunStoppedError(error) || message === DAILY_RUN_STOPPED_REASON
+            const pausedByFailure = isDailyRunPausedError(error) || isDailyRunPausedMessage(message)
 
             if (stoppedByAdmin) {
               writeEvent({
                 type: 'cancelled',
+                message,
+              })
+            } else if (pausedByFailure) {
+              writeEvent({
+                type: 'paused',
                 message,
               })
             } else {

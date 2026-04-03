@@ -84,6 +84,8 @@ async function main() {
       lookahead_days integer NOT NULL DEFAULT 30,
       overdue_recheck_hours integer NOT NULL DEFAULT 24,
       max_questions_per_run integer NOT NULL DEFAULT 25,
+      cron_processing_concurrency integer NOT NULL DEFAULT 1,
+      manual_processing_concurrency integer NOT NULL DEFAULT 3,
       verifier_model_key text NOT NULL DEFAULT 'gpt-5.4',
       min_candidate_confidence real NOT NULL DEFAULT 0.8,
       created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -92,10 +94,18 @@ async function main() {
       CONSTRAINT trial_monitor_configs_lookahead_days_check CHECK (lookahead_days >= 0 AND lookahead_days <= 365),
       CONSTRAINT trial_monitor_configs_overdue_recheck_hours_check CHECK (overdue_recheck_hours >= 1 AND overdue_recheck_hours <= 720),
       CONSTRAINT trial_monitor_configs_max_questions_per_run_check CHECK (max_questions_per_run >= 1 AND max_questions_per_run <= 500),
+      CONSTRAINT trial_monitor_configs_cron_processing_concurrency_check CHECK (cron_processing_concurrency >= 1 AND cron_processing_concurrency <= 12),
+      CONSTRAINT trial_monitor_configs_manual_processing_concurrency_check CHECK (manual_processing_concurrency >= 1 AND manual_processing_concurrency <= 12),
       CONSTRAINT trial_monitor_configs_min_candidate_confidence_check CHECK (min_candidate_confidence >= 0 AND min_candidate_confidence <= 1)
     )
   `)
   await exec(`ALTER TABLE trial_monitor_configs ADD COLUMN IF NOT EXISTS web_search_enabled boolean NOT NULL DEFAULT true`)
+  await exec(`ALTER TABLE trial_monitor_configs ADD COLUMN IF NOT EXISTS cron_processing_concurrency integer NOT NULL DEFAULT 1`)
+  await exec(`ALTER TABLE trial_monitor_configs ADD COLUMN IF NOT EXISTS manual_processing_concurrency integer NOT NULL DEFAULT 3`)
+  await exec(`ALTER TABLE trial_monitor_configs DROP CONSTRAINT IF EXISTS trial_monitor_configs_cron_processing_concurrency_check`)
+  await exec(`ALTER TABLE trial_monitor_configs ADD CONSTRAINT trial_monitor_configs_cron_processing_concurrency_check CHECK (cron_processing_concurrency >= 1 AND cron_processing_concurrency <= 12)`)
+  await exec(`ALTER TABLE trial_monitor_configs DROP CONSTRAINT IF EXISTS trial_monitor_configs_manual_processing_concurrency_check`)
+  await exec(`ALTER TABLE trial_monitor_configs ADD CONSTRAINT trial_monitor_configs_manual_processing_concurrency_check CHECK (manual_processing_concurrency >= 1 AND manual_processing_concurrency <= 12)`)
   await exec(`
     DO $$
     BEGIN
@@ -124,14 +134,18 @@ async function main() {
       debug_log text,
       started_at timestamp with time zone NOT NULL DEFAULT now(),
       completed_at timestamp with time zone,
+      stop_requested_at timestamp with time zone,
       updated_at timestamp with time zone NOT NULL DEFAULT now(),
       CONSTRAINT trial_monitor_runs_trigger_source_check CHECK (trigger_source IN ('cron', 'manual')),
-      CONSTRAINT trial_monitor_runs_status_check CHECK (status IN ('running', 'completed', 'failed')),
+      CONSTRAINT trial_monitor_runs_status_check CHECK (status IN ('running', 'completed', 'failed', 'paused')),
       CONSTRAINT trial_monitor_runs_questions_scanned_check CHECK (questions_scanned >= 0),
       CONSTRAINT trial_monitor_runs_candidates_created_check CHECK (candidates_created >= 0)
     )
   `)
   await exec(`ALTER TABLE trial_monitor_runs ADD COLUMN IF NOT EXISTS debug_log text`)
+  await exec(`ALTER TABLE trial_monitor_runs ADD COLUMN IF NOT EXISTS stop_requested_at timestamp with time zone`)
+  await exec(`ALTER TABLE trial_monitor_runs DROP CONSTRAINT IF EXISTS trial_monitor_runs_status_check`)
+  await exec(`ALTER TABLE trial_monitor_runs ADD CONSTRAINT trial_monitor_runs_status_check CHECK (status IN ('running', 'completed', 'failed', 'paused'))`)
   await exec(`CREATE INDEX IF NOT EXISTS trial_monitor_runs_started_at_idx ON trial_monitor_runs (started_at)`)
   await exec(`
     CREATE TABLE IF NOT EXISTS trial_sync_configs (

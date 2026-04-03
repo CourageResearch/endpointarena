@@ -5,6 +5,8 @@ const DAILY_RUN_STOP_REQUEST_REASON =
   'Stop requested by admin. Finish the current in-flight model step, then halt the run.'
 export const DAILY_RUN_STOPPED_REASON =
   'Daily trial cycle stopped by admin after the current in-flight model step.'
+const DAILY_RUN_PAUSED_REASON_PREFIX =
+  'Daily trial cycle paused after a model-step failure.'
 
 class DailyRunStoppedError extends Error {
   constructor(message: string = DAILY_RUN_STOPPED_REASON) {
@@ -13,8 +15,27 @@ class DailyRunStoppedError extends Error {
   }
 }
 
+class DailyRunPausedError extends Error {
+  constructor(message: string) {
+    super(`${DAILY_RUN_PAUSED_REASON_PREFIX} ${message}`)
+    this.name = 'DailyRunPausedError'
+  }
+}
+
 export function isDailyRunStoppedError(error: unknown): error is DailyRunStoppedError {
   return error instanceof DailyRunStoppedError
+}
+
+export function isDailyRunPausedError(error: unknown): error is DailyRunPausedError {
+  return error instanceof DailyRunPausedError
+}
+
+export function isDailyRunPausedMessage(message: string | null | undefined): boolean {
+  return typeof message === 'string' && message.startsWith(DAILY_RUN_PAUSED_REASON_PREFIX)
+}
+
+export function createDailyRunPausedError(message: string): Error {
+  return new DailyRunPausedError(message)
 }
 
 export async function requestDailyRunStop(runId?: string | null): Promise<string | null> {

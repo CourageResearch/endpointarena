@@ -63,6 +63,60 @@ export interface ModelDecisionResult {
 
 const DEFAULT_EXPLANATION_MAX_CHARS = 220
 
+type ModelDecisionParseErrorInput = {
+  rawResponse: string
+  normalizedJson?: string | null
+  repairedJson?: string | null
+}
+
+class ModelDecisionParseError extends Error {
+  rawResponse: string
+  normalizedJson: string | null
+  repairedJson: string | null
+
+  constructor(message: string, input: ModelDecisionParseErrorInput) {
+    super(message)
+    this.name = 'ModelDecisionParseError'
+    this.rawResponse = input.rawResponse
+    this.normalizedJson = input.normalizedJson ?? null
+    this.repairedJson = input.repairedJson ?? null
+  }
+}
+
+function truncateDebugText(value: string, maxChars: number): string {
+  const normalized = value
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+    .trim()
+
+  if (normalized.length <= maxChars) return normalized
+  return `${normalized.slice(0, maxChars - 3)}...`
+}
+
+export function getModelDecisionParseErrorDetails(
+  error: unknown,
+  maxChars = 2400,
+): string | null {
+  if (!(error instanceof ModelDecisionParseError)) return null
+
+  const parts = [
+    `rawResponse=${truncateDebugText(error.rawResponse, maxChars)}`,
+  ]
+
+  if (error.normalizedJson && error.normalizedJson !== error.rawResponse.trim()) {
+    parts.push(`normalizedJson=${truncateDebugText(error.normalizedJson, maxChars)}`)
+  }
+
+  if (
+    error.repairedJson &&
+    error.repairedJson !== error.normalizedJson &&
+    error.repairedJson !== error.rawResponse.trim()
+  ) {
+    parts.push(`repairedJson=${truncateDebugText(error.repairedJson, maxChars)}`)
+  }
+
+  return parts.join('\n\n')
+}
+
 function extractBalancedJsonObject(raw: string, startIndex: number): string | null {
   let depth = 0
   let inString = false
@@ -262,45 +316,187 @@ Return exactly:
 }`
 }
 
-export function parseModelDecisionResponse(raw: string, allowedActions: readonly MarketActionType[], explanationMaxChars = DEFAULT_EXPLANATION_MAX_CHARS): ModelDecisionResult {
-  const normalized = extractJsonBlock(raw)
-  let parsed: {
-    forecast?: Record<string, unknown>
-    action?: Record<string, unknown>
-  }
-
-  try {
-    parsed = JSON.parse(normalized)
-  } catch {
-    const repaired = normalized
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
-      .replace(/\s+/g, ' ')
-    parsed = JSON.parse(repaired)
-  }
-
-  const forecastPayload = parsed.forecast ?? {}
-  const yesProbability = clampProbability(forecastPayload.yesProbability ?? forecastPayload.approvalProbability)
-  const binaryCall = sanitizeBinaryCall(forecastPayload.binaryCall, yesProbability)
-  const confidence = clampConfidence(forecastPayload.confidence)
-  const reasoning = sanitizeReasoning(forecastPayload.reasoning)
-
-  const actionPayload = parsed.action ?? {}
-  const actionType = sanitizeActionType(actionPayload.type, allowedActions.length > 0 ? allowedActions : MARKET_ACTIONS)
-  const amountUsd = actionType === 'HOLD' ? 0 : sanitizeAmount(actionPayload.amountUsd)
-  const explanation = sanitizeExplanation(actionPayload.explanation, explanationMaxChars)
+export function buildModelDecisionJsonSchema(
+  allowedActions: readonly MarketActionType[],
+  explanationMaxChars = DEFAULT_EXPLANATION_MAX_CHARS,
+): Record<string, unknown> {
+  const actionEnum = (allowedActions.length > 0 ? allowedActions : MARKET_ACTIONS) as readonly string[]
 
   return {
-    forecast: {
-      approvalProbability: yesProbability,
-      yesProbability,
-      binaryCall,
-      confidence,
-      reasoning,
+    type: 'object',
+    additionalProperties: false,
+    required: ['forecast', 'action'],
+    properties: {
+      forecast: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['yesProbability', 'binaryCall', 'confidence', 'reasoning'],
+        properties: {
+          yesProbability: {
+            type: 'number',
+            minimum: 0,
+            maximum: 1,
+          },
+          binaryCall: {
+            type: 'string',
+            enum: ['yes', 'no'],
+          },
+          confidence: {
+            type: 'integer',
+            minimum: 50,
+            maximum: 100,
+          },
+          reasoning: {
+            type: 'string',
+            minLength: 20,
+          },
+        },
+      },
+      action: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['type', 'amountUsd', 'explanation'],
+        properties: {
+          type: {
+            type: 'string',
+            enum: [...actionEnum],
+          },
+          amountUsd: {
+            type: 'number',
+            minimum: 0,
+          },
+          explanation: {
+            type: 'string',
+            minLength: 1,
+            maxLength: explanationMaxChars,
+          },
+        },
+      },
     },
-    action: {
-      type: actionType,
-      amountUsd,
-      explanation,
+  }
+}
+
+export function buildFireworksModelDecisionJsonSchema(
+  allowedActions: readonly MarketActionType[],
+): Record<string, unknown> {
+  const actionEnum = (allowedActions.length > 0 ? allowedActions : MARKET_ACTIONS) as readonly string[]
+
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['forecast', 'action'],
+    properties: {
+      forecast: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['yesProbability', 'binaryCall', 'confidence', 'reasoning'],
+        properties: {
+          yesProbability: {
+            type: 'number',
+            minimum: 0,
+            maximum: 1,
+          },
+          binaryCall: {
+            type: 'string',
+            enum: ['yes', 'no'],
+          },
+          confidence: {
+            type: 'integer',
+            minimum: 50,
+            maximum: 100,
+          },
+          reasoning: {
+            type: 'string',
+          },
+        },
+      },
+      action: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['type', 'amountUsd', 'explanation'],
+        properties: {
+          type: {
+            type: 'string',
+            enum: [...actionEnum],
+          },
+          amountUsd: {
+            type: 'number',
+            minimum: 0,
+          },
+          explanation: {
+            type: 'string',
+          },
+        },
+      },
     },
+  }
+}
+
+export function parseModelDecisionResponse(raw: string, allowedActions: readonly MarketActionType[], explanationMaxChars = DEFAULT_EXPLANATION_MAX_CHARS): ModelDecisionResult {
+  try {
+    const normalized = extractJsonBlock(raw)
+    let repaired: string | null = null
+    let parsed: {
+      forecast?: Record<string, unknown>
+      action?: Record<string, unknown>
+    }
+
+    try {
+      parsed = JSON.parse(normalized)
+    } catch (initialError) {
+      repaired = normalized
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+        .replace(/\s+/g, ' ')
+
+      try {
+        parsed = JSON.parse(repaired)
+      } catch (repairError) {
+        const message = repairError instanceof Error
+          ? repairError.message
+          : initialError instanceof Error
+            ? initialError.message
+            : 'Invalid JSON response'
+        throw new ModelDecisionParseError(message, {
+          rawResponse: raw,
+          normalizedJson: normalized,
+          repairedJson: repaired,
+        })
+      }
+    }
+
+    const forecastPayload = parsed.forecast ?? {}
+    const yesProbability = clampProbability(forecastPayload.yesProbability ?? forecastPayload.approvalProbability)
+    const binaryCall = sanitizeBinaryCall(forecastPayload.binaryCall, yesProbability)
+    const confidence = clampConfidence(forecastPayload.confidence)
+    const reasoning = sanitizeReasoning(forecastPayload.reasoning)
+
+    const actionPayload = parsed.action ?? {}
+    const actionType = sanitizeActionType(actionPayload.type, allowedActions.length > 0 ? allowedActions : MARKET_ACTIONS)
+    const amountUsd = actionType === 'HOLD' ? 0 : sanitizeAmount(actionPayload.amountUsd)
+    const explanation = sanitizeExplanation(actionPayload.explanation, explanationMaxChars)
+
+    return {
+      forecast: {
+        approvalProbability: yesProbability,
+        yesProbability,
+        binaryCall,
+        confidence,
+        reasoning,
+      },
+      action: {
+        type: actionType,
+        amountUsd,
+        explanation,
+      },
+    }
+  } catch (error) {
+    if (error instanceof ModelDecisionParseError) {
+      throw error
+    }
+
+    const message = error instanceof Error ? error.message : 'Failed to parse model response'
+    throw new ModelDecisionParseError(message, {
+      rawResponse: raw,
+    })
   }
 }

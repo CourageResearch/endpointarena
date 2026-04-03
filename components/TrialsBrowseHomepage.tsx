@@ -35,6 +35,7 @@ type MarketCardEntry = {
 }
 
 type MarketBrowseTab = 'upcoming' | 'resolved'
+type HeaderLinkPlacement = 'header' | 'footer' | 'both'
 type MarketTableSortKey = 'market' | 'primaryCompletion' | 'resolvedAt' | 'outcome' | 'yes' | 'no' | 'volume' | 'aiYes' | 'aiNo'
 type MarketTableSortDirection = 'asc' | 'desc'
 type MarketTableSortState = {
@@ -538,7 +539,7 @@ function MarketTable({
   detailBasePath: string
   headerLinkHref?: string
   headerLinkLabel?: string
-  headerLinkPlacement?: 'header' | 'footer'
+  headerLinkPlacement?: HeaderLinkPlacement
   maxRows?: number
   searchControl?: ReactNode
   emptyMessage?: string
@@ -605,8 +606,8 @@ function MarketTable({
 
   const resolvedHeading = heading ?? (tab === 'resolved' ? RESOLVED_TRIALS_HEADING : UPCOMING_TRIALS_HEADING)
   const resolvedHeaderLinkHref = headerLinkHref ?? null
-  const showHeaderLink = Boolean(resolvedHeaderLinkHref) && headerLinkPlacement === 'header'
-  const showFooterLink = Boolean(resolvedHeaderLinkHref) && headerLinkPlacement === 'footer'
+  const showHeaderLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'header' || headerLinkPlacement === 'both')
+  const showFooterLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'footer' || headerLinkPlacement === 'both')
 
   return (
     <section className="mt-10">
@@ -862,7 +863,7 @@ export function TrialsBrowseHomepage({
   detailBasePath?: string
   headerLinkHref?: string
   headerLinkLabel?: string
-  headerLinkPlacement?: 'header' | 'footer'
+  headerLinkPlacement?: HeaderLinkPlacement
   initialOverview?: OverviewResponse | null
   initialTypeFilter?: string | null
   initialStatusTab?: string | null
