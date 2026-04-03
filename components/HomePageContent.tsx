@@ -9,8 +9,8 @@ function HeroGradientStem() {
 
   return (
     <svg
-      className="hidden w-[2px] shrink-0 self-stretch sm:block"
-      viewBox="0 0 2 100"
+      className="hidden w-px shrink-0 self-stretch sm:block"
+      viewBox="0 0 1 100"
       preserveAspectRatio="none"
       aria-hidden="true"
     >
@@ -22,7 +22,7 @@ function HeroGradientStem() {
           <stop offset="100%" stopColor="#5BA5ED" />
         </linearGradient>
       </defs>
-      <rect width="2" height="100" fill={`url(#${gradientId})`} shapeRendering="crispEdges" />
+      <rect width="1" height="100" fill={`url(#${gradientId})`} shapeRendering="crispEdges" />
     </svg>
   )
 }

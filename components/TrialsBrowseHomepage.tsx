@@ -54,7 +54,6 @@ type MarketTableRow = {
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
 const PANEL_BORDER_STYLE = {
   background: PANEL_GRADIENT,
-  paddingTop: '0.5px',
 } as const
 const MARKET_CONTROL_INPUT_CLASS_NAME = 'min-w-0 h-16 rounded-none border border-[#e7ddd0] bg-white/92 px-4 text-[17px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const MARKET_CONTROL_SELECT_CLASS_NAME = `${MARKET_CONTROL_INPUT_CLASS_NAME} appearance-none pr-14`

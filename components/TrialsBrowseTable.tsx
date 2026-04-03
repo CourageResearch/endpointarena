@@ -39,7 +39,6 @@ const TO_FILTER_PARAM = 'to'
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
 const PANEL_BORDER_STYLE = {
   background: PANEL_GRADIENT,
-  paddingTop: '0.5px',
 } as const
 const SEARCH_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3.5 py-2.5 text-[14px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const DATE_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3 py-2 text-[13px] leading-tight text-[#2f2a24] focus:border-[#8a8075] focus:bg-white focus:outline-none'
