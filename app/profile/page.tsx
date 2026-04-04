@@ -11,7 +11,7 @@ import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { authOptions } from '@/lib/auth'
-import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
+import { db, fdaCalendarEvents, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
@@ -31,6 +31,7 @@ type ProfileTradeAction = (typeof PROFILE_TRADE_ACTIONS)[number]
 
 type ProfileHoldingRow = {
   marketId: string
+  marketHref: string | null
   drugName: string
   companyName: string
   ticker: string
@@ -46,6 +47,7 @@ type ProfileTradeRow = {
   id: string
   timestamp: Date
   marketId: string
+  marketHref: string | null
   drugName: string
   companyName: string
   ticker: string
@@ -171,15 +173,43 @@ async function getProfileTradingData(userId: string): Promise<{
         },
       })
     : []
-  const questions = filterSupportedTrialQuestions(rawQuestions)
-  const supportedQuestionIds = new Set(questions.map((question) => question.id))
-  const supportedMarkets = markets.filter((market) => (
-    typeof market.trialQuestionId === 'string' && supportedQuestionIds.has(market.trialQuestionId)
+  const eventIds = Array.from(new Set(
+    markets
+      .map((market) => market.fdaEventId)
+      .filter((value): value is string => Boolean(value)),
   ))
+  const events = eventIds.length > 0
+    ? await db.query.fdaCalendarEvents.findMany({
+        where: inArray(fdaCalendarEvents.id, eventIds),
+      })
+    : []
+  const supportedQuestionIds = new Set(filterSupportedTrialQuestions(rawQuestions).map((question) => question.id))
+  const marketById = new Map(markets.map((market) => [market.id, market]))
+  const openMarketById = new Map(markets.filter((market) => market.status === 'OPEN').map((market) => [market.id, market]))
+  const questionById = new Map(rawQuestions.map((question) => [question.id, question]))
+  const eventById = new Map(events.map((event) => [event.id, event]))
 
-  const marketById = new Map(supportedMarkets.map((market) => [market.id, market]))
-  const openMarketById = new Map(supportedMarkets.filter((market) => market.status === 'OPEN').map((market) => [market.id, market]))
-  const questionById = new Map(questions.map((question) => [question.id, question]))
+  const getMarketDisplay = (market: typeof markets[number]) => {
+    if (typeof market.trialQuestionId === 'string') {
+      const question = questionById.get(market.trialQuestionId)
+      return {
+        marketHref: supportedQuestionIds.has(market.trialQuestionId) ? `/trials/${market.id}` : null,
+        drugName: question?.trial.shortTitle?.trim() || 'Unknown trial',
+        companyName: question?.trial.sponsorName?.trim() || '—',
+        ticker: question?.trial.sponsorTicker?.trim() || '—',
+        decisionDate: question?.trial.estPrimaryCompletionDate ?? null,
+      }
+    }
+
+    const event = market.fdaEventId ? eventById.get(market.fdaEventId) : null
+    return {
+      marketHref: null,
+      drugName: event?.drugName?.trim() || 'Unknown event',
+      companyName: event?.companyName?.trim() || '—',
+      ticker: toTicker(event?.symbols),
+      decisionDate: event?.decisionDate ?? null,
+    }
+  }
 
   const holdings = rawPositions
     .flatMap<ProfileHoldingRow>((position) => {
@@ -190,25 +220,23 @@ async function getProfileTradingData(userId: string): Promise<{
       const noShares = Math.max(0, position.noShares)
       if (yesShares <= 0 && noShares <= 0) return []
 
-      const question = typeof market.trialQuestionId === 'string' ? questionById.get(market.trialQuestionId) : null
-      const drugName = question?.trial.shortTitle?.trim() || 'Unknown market'
-      const companyName = question?.trial.sponsorName?.trim() || '—'
-      const ticker = question?.trial.sponsorTicker?.trim() || '—'
+      const display = getMarketDisplay(market)
       const priceYes = market.priceYes
       const priceNo = 1 - market.priceYes
       const markValueUsd = (yesShares * priceYes) + (noShares * priceNo)
 
       return [{
         marketId: market.id,
-        drugName,
-        companyName,
-        ticker,
+        marketHref: display.marketHref,
+        drugName: display.drugName,
+        companyName: display.companyName,
+        ticker: display.ticker,
         yesShares,
         noShares,
         priceYes,
         priceNo,
         markValueUsd,
-        decisionDate: question?.trial.estPrimaryCompletionDate ?? null,
+        decisionDate: display.decisionDate,
       }]
     })
     .sort((a, b) => b.markValueUsd - a.markValueUsd)
@@ -218,18 +246,23 @@ async function getProfileTradingData(userId: string): Promise<{
       if (!PROFILE_TRADE_ACTIONS.includes(action.action as ProfileTradeAction)) return []
 
       const market = marketById.get(action.marketId)
-      const question = market && typeof market.trialQuestionId === 'string'
-        ? questionById.get(market.trialQuestionId)
-        : null
+      const display = market ? getMarketDisplay(market) : {
+        marketHref: null,
+        drugName: 'Unknown market',
+        companyName: '—',
+        ticker: '—',
+        decisionDate: null,
+      }
       const timestamp = action.createdAt ?? action.runDate
 
       return [{
         id: action.id,
         timestamp,
         marketId: action.marketId,
-        drugName: question?.trial.shortTitle?.trim() || 'Unknown market',
-        companyName: question?.trial.sponsorName?.trim() || '—',
-        ticker: question?.trial.sponsorTicker?.trim() || '—',
+        marketHref: display.marketHref,
+        drugName: display.drugName,
+        companyName: display.companyName,
+        ticker: display.ticker,
         action: action.action as ProfileTradeAction,
         usdAmount: Math.max(0, action.usdAmount),
         shares: Math.abs(action.sharesDelta),
@@ -436,7 +469,7 @@ export default async function ProfilePage() {
             <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Current Holdings</h2>
-                <p className="text-xs text-[#8a8075]">Open trials only</p>
+                <p className="text-xs text-[#8a8075]">All open portfolio positions</p>
               </div>
 
               {holdings.length === 0 ? (
@@ -446,7 +479,7 @@ export default async function ProfilePage() {
                   <table className="w-full min-w-[860px] text-sm">
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
-                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Trial</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
                         <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
                         <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
                         <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Price</th>
@@ -458,12 +491,21 @@ export default async function ProfilePage() {
                       {holdings.map((holding) => (
                         <tr key={`${holding.marketId}-${holding.ticker}`} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
                           <td className="px-3 py-2 text-[#1a1a1a]">
-                            <Link
-                              href={`/trials/${holding.marketId}`}
-                              className="font-medium transition-colors hover:text-[#6d645a]"
-                            >
-                              {holding.drugName}
-                            </Link>
+                            {holding.marketHref ? (
+                              <Link
+                                href={holding.marketHref}
+                                className="font-medium transition-colors hover:text-[#6d645a]"
+                              >
+                                {holding.drugName}
+                              </Link>
+                            ) : (
+                              <span className="font-medium">{holding.drugName}</span>
+                            )}
+                            <div className="mt-0.5 text-xs text-[#8a8075]">
+                              {holding.companyName}
+                              {holding.ticker !== '—' ? ` (${holding.ticker})` : ''}
+                              {holding.decisionDate ? ` • ${formatShortDate(holding.decisionDate)}` : ''}
+                            </div>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.yesShares)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.noShares)}</td>
@@ -509,12 +551,20 @@ export default async function ProfilePage() {
                               <LocalDateTime value={trade.timestamp.toISOString()} />
                             </td>
                             <td className="px-3 py-2 text-[#1a1a1a]">
-                              <Link
-                                href={`/trials/${trade.marketId}`}
-                                className="font-medium transition-colors hover:text-[#6d645a]"
-                              >
-                                {trade.drugName}
-                              </Link>
+                              {trade.marketHref ? (
+                                <Link
+                                  href={trade.marketHref}
+                                  className="font-medium transition-colors hover:text-[#6d645a]"
+                                >
+                                  {trade.drugName}
+                                </Link>
+                              ) : (
+                                <span className="font-medium">{trade.drugName}</span>
+                              )}
+                              <div className="mt-0.5 text-xs text-[#8a8075]">
+                                {trade.companyName}
+                                {trade.ticker !== '—' ? ` (${trade.ticker})` : ''}
+                              </div>
                             </td>
                             <td className={`px-3 py-2 font-medium ${actionTone}`}>{toTradeActionLabel(trade.action)}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatUsd(trade.usdAmount)}</td>

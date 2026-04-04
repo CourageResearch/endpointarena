@@ -96,6 +96,7 @@ export async function loadOpenMarketActorState(input: {
   accountMaps: ReturnType<typeof buildActorAccountMaps>
   positionsByMarketActor: Map<string, PositionWithActor>
   positionsValueByActorId: Map<string, number>
+  portfolioPositionsValueByActorId: Map<string, number>
 }> {
   const includeMarketIds = Array.from(new Set(
     (input.includeMarketIds ?? []).filter((value): value is string => typeof value === 'string' && value.length > 0),
@@ -119,7 +120,7 @@ export async function loadOpenMarketActorState(input: {
         isNotNull(predictionMarkets.trialQuestionId),
       )
 
-  const [accounts, rawVisibleMarkets] = await Promise.all([
+  const [accounts, rawVisibleMarkets, allOpenMarkets] = await Promise.all([
     db.query.marketAccounts.findMany({
       with: {
         actor: true,
@@ -127,6 +128,9 @@ export async function loadOpenMarketActorState(input: {
     }),
     db.query.predictionMarkets.findMany({
       where: marketWhere,
+    }),
+    db.query.predictionMarkets.findMany({
+      where: eq(predictionMarkets.status, 'OPEN'),
     }),
   ])
 
@@ -152,17 +156,29 @@ export async function loadOpenMarketActorState(input: {
   const actuallyOpenMarkets = openMarkets.filter((market) => market.status === 'OPEN')
 
   const openMarketIds = openMarkets.map((market) => market.id)
-  const positions = openMarketIds.length > 0
-    ? await db.query.marketPositions.findMany({
-        where: inArray(marketPositions.marketId, openMarketIds),
-        with: {
-          actor: true,
-        },
-      })
-    : []
+  const allOpenMarketIds = allOpenMarkets.map((market) => market.id)
+  const [positions, allOpenPositions] = await Promise.all([
+    openMarketIds.length > 0
+      ? db.query.marketPositions.findMany({
+          where: inArray(marketPositions.marketId, openMarketIds),
+          with: {
+            actor: true,
+          },
+        })
+      : Promise.resolve([]),
+    allOpenMarketIds.length > 0
+      ? db.query.marketPositions.findMany({
+          where: inArray(marketPositions.marketId, allOpenMarketIds),
+          with: {
+            actor: true,
+          },
+        })
+      : Promise.resolve([]),
+  ])
 
   const marketById = new Map(openMarkets.map((market) => [market.id, market]))
   const actuallyOpenMarketById = new Map(actuallyOpenMarkets.map((market) => [market.id, market]))
+  const allOpenMarketById = new Map(allOpenMarkets.map((market) => [market.id, market]))
 
   return {
     accounts,
@@ -175,6 +191,10 @@ export async function loadOpenMarketActorState(input: {
     positionsValueByActorId: buildPositionsValueByActorId({
       positions,
       marketById: actuallyOpenMarketById,
+    }),
+    portfolioPositionsValueByActorId: buildPositionsValueByActorId({
+      positions: allOpenPositions,
+      marketById: allOpenMarketById,
     }),
   }
 }

@@ -80,7 +80,7 @@ export async function getTrialsOverviewData(input: {
     openMarketIds: visibleMarketIds,
     marketById,
     positionsByMarketActor,
-    positionsValueByActorId,
+    portfolioPositionsValueByActorId,
   } = openMarketState
   const questionIds = Array.from(new Set(
     visibleMarkets.map((market) => market.trialQuestionId).filter((value): value is string => Boolean(value)),
@@ -180,7 +180,7 @@ export async function getTrialsOverviewData(input: {
       const modelId = toModelId(account.actor.modelKey ?? '')
       if (!modelId) return []
 
-      const positionsValue = positionsValueByActorId.get(account.actorId) ?? 0
+      const positionsValue = portfolioPositionsValueByActorId.get(account.actorId) ?? 0
       return [{
         actorId: account.actorId,
         modelId,

@@ -13,7 +13,7 @@ const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'AI Accuracy Leaderboard',
-  description: 'See how AI models and verified human traders rank on Endpoint Arena by accuracy and market performance.',
+  description: 'See how AI models and verified human traders rank on Endpoint Arena by trial accuracy and overall market performance.',
   path: '/leaderboard',
 })
 
@@ -74,10 +74,10 @@ export default async function LeaderboardPage() {
             <HeaderDots />
           </div>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-[#1a1a1a] sm:text-4xl">
-            AI and human rankings for trial prediction markets.
+            AI and human rankings across Endpoint Arena markets.
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Compare model accuracy, market equity, and top verified traders across Endpoint Arena&apos;s Phase 2 trials.
+            Compare model accuracy on Phase 2 trials with current portfolio equity across all open markets.
           </p>
         </section>
 
@@ -115,7 +115,10 @@ export default async function LeaderboardPage() {
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader title="AI Money Rankings" />
+          <SectionHeader
+            title="AI Money Rankings"
+            description="Ranked by current total equity across all open Endpoint Arena markets."
+          />
           <GradientPanel className="overflow-hidden">
             <div className="divide-y divide-[#e8ddd0]">
               {moneyLeaderboard.map((model, index) => (
@@ -140,7 +143,10 @@ export default async function LeaderboardPage() {
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader title="Top Human Traders" />
+          <SectionHeader
+            title="Top Human Traders"
+            description="Verified traders ranked by current total portfolio equity."
+          />
           <GradientPanel className="overflow-hidden">
             {topHumanLeaderboard.length === 0 ? (
               <div className="px-4 py-8 text-sm text-[#8a8075]">No verified human traders yet.</div>

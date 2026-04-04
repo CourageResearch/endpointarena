@@ -123,7 +123,7 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
     .map(([id, stats]) => {
       const account = openMarketState.accountMaps.byModelKey.get(id)
       const decided = stats.correct + stats.wrong
-      const positionsValue = account ? (openMarketState.positionsValueByActorId.get(account.actorId) ?? 0) : 0
+      const positionsValue = account ? (openMarketState.portfolioPositionsValueByActorId.get(account.actorId) ?? 0) : 0
       return {
         id,
         correct: stats.correct,
@@ -153,7 +153,7 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
     .map((user) => {
       const account = openMarketState.accountMaps.byUserId.get(user.id)
       const cashBalance = account?.cashBalance ?? 0
-      const positionsValue = account ? (openMarketState.positionsValueByActorId.get(account.actorId) ?? 0) : 0
+      const positionsValue = account ? (openMarketState.portfolioPositionsValueByActorId.get(account.actorId) ?? 0) : 0
       const startingCash = account?.startingCash ?? 0
       const totalEquity = cashBalance + positionsValue
       const pnl = totalEquity - startingCash
