@@ -66,7 +66,8 @@ const CHECKS: Check[] = [
       select count(*)::int as value
       from market_actions a
       left join fda_calendar_events e on e.id = a.fda_event_id
-      where e.id is null
+      where a.fda_event_id is not null
+        and e.id is null
     `,
   },
   {
@@ -173,17 +174,58 @@ const CHECKS: Check[] = [
     `,
   },
   {
-    id: 'open_market_missing_positions',
+    id: 'trade_pairs_missing_positions',
+    severity: 'error',
+    sql: `
+      with traded_pairs as (
+        select distinct market_id, actor_id
+        from market_actions
+        where status = 'ok'
+          and action in ('BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO')
+      )
+      select count(*)::int as value
+      from traded_pairs tp
+      left join market_positions p
+        on p.market_id = tp.market_id
+       and p.actor_id = tp.actor_id
+      where p.id is null
+    `,
+  },
+  {
+    id: 'negative_position_shares',
     severity: 'error',
     sql: `
       select count(*)::int as value
-      from prediction_markets m
-      join market_accounts a on true
-      left join market_positions p
-        on p.market_id = m.id
-       and p.actor_id = a.actor_id
-      where m.status = 'OPEN'
-        and p.id is null
+      from market_positions
+      where yes_shares < -0.000001
+         or no_shares < -0.000001
+    `,
+  },
+  {
+    id: 'daily_snapshot_equity_drift',
+    severity: 'warn',
+    sql: `
+      select count(*)::int as value
+      from market_daily_snapshots
+      where abs(total_equity - (cash_balance + positions_value)) > 0.05
+    `,
+  },
+  {
+    id: 'daily_snapshot_missing_for_accounts',
+    severity: 'warn',
+    sql: `
+      with latest_snapshot_date as (
+        select max(snapshot_date) as snapshot_date
+        from market_daily_snapshots
+      )
+      select count(*)::int as value
+      from market_accounts a
+      cross join latest_snapshot_date lsd
+      left join market_daily_snapshots s
+        on s.actor_id = a.actor_id
+       and s.snapshot_date = lsd.snapshot_date
+      where lsd.snapshot_date is not null
+        and s.actor_id is null
     `,
   },
   {

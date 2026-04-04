@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { accounts, db, marketAccounts, marketActions, marketActors, users } from '@/lib/db'
+import { accounts, db, marketAccounts, marketActions, marketActors, marketPositions, predictionMarkets, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
@@ -133,6 +133,7 @@ async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
   if (userIds.length === 0) {
     return {
       cashBalanceByUserId: new Map<string, number>(),
+      positionsValueByUserId: new Map<string, number>(),
       tradeCountByUserId: new Map<string, number>(),
     }
   }
@@ -142,10 +143,26 @@ async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
       .select({
         userId: marketActors.userId,
         cashBalance: marketAccounts.cashBalance,
+        positionsValue: sql<number>`
+          coalesce(
+            sum(
+              case
+                when ${predictionMarkets.status} = 'OPEN' then
+                  (${marketPositions.yesShares} * ${predictionMarkets.priceYes})
+                  + (${marketPositions.noShares} * (1 - ${predictionMarkets.priceYes}))
+                else 0
+              end
+            ),
+            0
+          )
+        `,
       })
       .from(marketAccounts)
       .innerJoin(marketActors, eq(marketActors.id, marketAccounts.actorId))
-      .where(inArray(marketActors.userId, userIds)),
+      .leftJoin(marketPositions, eq(marketPositions.actorId, marketAccounts.actorId))
+      .leftJoin(predictionMarkets, eq(predictionMarkets.id, marketPositions.marketId))
+      .where(inArray(marketActors.userId, userIds))
+      .groupBy(marketActors.userId, marketAccounts.cashBalance),
     db
       .select({
         userId: marketActors.userId,
@@ -164,6 +181,7 @@ async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
 
   return {
     cashBalanceByUserId: new Map(accountRows.flatMap((row) => row.userId ? [[row.userId, row.cashBalance] as const] : [])),
+    positionsValueByUserId: new Map(accountRows.flatMap((row) => row.userId ? [[row.userId, Number(row.positionsValue ?? 0)] as const] : [])),
     tradeCountByUserId: new Map(tradeRows.flatMap((row) => row.userId ? [[row.userId, Number(row.tradeCount)] as const] : [])),
   }
 }
@@ -243,7 +261,7 @@ export default async function AdminUsersPage({
   const sortDirection = parseSortDirection(firstSearchParam(resolvedSearchParams.dir), sortKey)
   const { users: userRows, total } = await getUsersData()
   await backfillMissingXUsernames(userRows)
-  const { cashBalanceByUserId, tradeCountByUserId } = await getUserTradingStats(userRows)
+  const { cashBalanceByUserId, positionsValueByUserId, tradeCountByUserId } = await getUserTradingStats(userRows)
   const currentAdminEmail = session.user.email.trim().toLowerCase()
   const protectedAdminEmail = ADMIN_EMAIL.toLowerCase()
 
@@ -252,7 +270,9 @@ export default async function AdminUsersPage({
     const country = normalizeUnknownToDash(formatStoredCountry(user.signupLocation))
     const region = normalizeUnknownToDash(formatStoredRegion(user.signupState))
     const xLabel = user.xUsername ? `@${user.xUsername}` : (user.xUserId ? 'Connected' : '—')
-    const money = cashBalanceByUserId.get(user.id) ?? 0
+    const cashBalance = cashBalanceByUserId.get(user.id) ?? 0
+    const positionsValue = positionsValueByUserId.get(user.id) ?? 0
+    const totalEquity = cashBalance + positionsValue
     const trades = tradeCountByUserId.get(user.id) ?? 0
     const emailLower = user.email?.trim().toLowerCase() ?? null
     const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
@@ -264,7 +284,9 @@ export default async function AdminUsersPage({
       country,
       region,
       xLabel,
-      money,
+      cashBalance,
+      positionsValue,
+      totalEquity,
       trades,
       isProtectedUser,
       createdAtMs,
@@ -275,7 +297,7 @@ export default async function AdminUsersPage({
     let result = 0
     switch (sortKey) {
       case 'money':
-        result = compareNumbers(a.money, b.money)
+        result = compareNumbers(a.totalEquity, b.totalEquity)
         break
       case 'tx':
         result = compareNumbers(a.trades, b.trades)
@@ -306,7 +328,7 @@ export default async function AdminUsersPage({
 
   const sortDescriptionByKey: Record<UserSortKey, string> = {
     created: sortDirection === 'asc' ? 'Oldest first' : 'Newest first',
-    money: `Money (${sortDirection})`,
+    money: `Equity (${sortDirection})`,
     tx: `TX (${sortDirection})`,
     country: `Country (${sortDirection})`,
     region: `Region (${sortDirection})`,
@@ -374,7 +396,7 @@ export default async function AdminUsersPage({
                       href={buildSortHref({ currentSortKey: sortKey, currentSortDirection: sortDirection, targetSortKey: 'money' })}
                       className="inline-flex w-full items-center justify-end transition-colors hover:text-[#8a8075]"
                     >
-                      Money{sortDirectionMark('money')}
+                      Equity{sortDirectionMark('money')}
                     </Link>
                   </th>
                   <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
@@ -389,7 +411,7 @@ export default async function AdminUsersPage({
                 </tr>
               </thead>
               <tbody>
-                {sortedRows.map(({ user, email, country, region, xLabel, money, trades, isProtectedUser }) => {
+                {sortedRows.map(({ user, email, country, region, xLabel, cashBalance, positionsValue, totalEquity, trades, isProtectedUser }) => {
                   return (
                     <tr key={user.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
                       <td className="px-1.5 py-2 text-[#8a8075] whitespace-nowrap text-xs">
@@ -414,7 +436,12 @@ export default async function AdminUsersPage({
                       <td className="px-1.5 py-2 text-[#8a8075]">
                         <span className="block truncate" title={xLabel}>{xLabel}</span>
                       </td>
-                      <td className="px-1.5 py-2 text-right tabular-nums text-[#1a1a1a] whitespace-nowrap">{formatMoney(money)}</td>
+                      <td
+                        className="px-1.5 py-2 text-right tabular-nums text-[#1a1a1a] whitespace-nowrap"
+                        title={`Cash ${formatMoney(cashBalance)} | Open ${formatMoney(positionsValue)}`}
+                      >
+                        {formatMoney(totalEquity)}
+                      </td>
                       <td className="px-1.5 py-2 text-right tabular-nums text-[#8a8075] whitespace-nowrap">{trades.toLocaleString()}</td>
                       <td className="px-1.5 py-2 text-right whitespace-nowrap">
                         {isProtectedUser ? (
