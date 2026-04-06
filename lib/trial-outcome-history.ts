@@ -1,4 +1,4 @@
-import { desc, eq, ne } from 'drizzle-orm'
+import { and, desc, eq, ne } from 'drizzle-orm'
 import {
   db,
   trialOutcomeCandidates,
@@ -110,11 +110,25 @@ export async function recordTrialQuestionOutcomeHistory(input: {
   return true
 }
 
-export async function listRecentTrialQuestionOutcomeHistory(limit = 120): Promise<TrialQuestionOutcomeHistoryListItem[]> {
+async function listTrialQuestionOutcomeHistoryInternal(input?: {
+  limit?: number
+  trialQuestionId?: string
+}): Promise<TrialQuestionOutcomeHistoryListItem[]> {
+  const limit = input?.limit
+  const trialQuestionId = input?.trialQuestionId
   const [storedEntries, acceptedCandidates, resolvedQuestions] = await Promise.all([
     db.query.trialQuestionOutcomeHistory.findMany({
+      ...(trialQuestionId
+        ? {
+            where: eq(trialQuestionOutcomeHistory.trialQuestionId, trialQuestionId),
+          }
+        : {}),
       orderBy: [desc(trialQuestionOutcomeHistory.changedAt)],
-      limit: Math.max(limit * 2, 120),
+      ...(typeof limit === 'number'
+        ? {
+            limit: Math.max(limit * 2, 120),
+          }
+        : {}),
       with: {
         question: {
           with: {
@@ -144,7 +158,12 @@ export async function listRecentTrialQuestionOutcomeHistory(limit = 120): Promis
       },
     }),
     db.query.trialOutcomeCandidates.findMany({
-      where: eq(trialOutcomeCandidates.status, 'accepted'),
+      where: trialQuestionId
+        ? and(
+            eq(trialOutcomeCandidates.status, 'accepted'),
+            eq(trialOutcomeCandidates.trialQuestionId, trialQuestionId),
+          )
+        : eq(trialOutcomeCandidates.status, 'accepted'),
       orderBy: [desc(trialOutcomeCandidates.reviewedAt), desc(trialOutcomeCandidates.createdAt)],
       with: {
         question: {
@@ -166,7 +185,12 @@ export async function listRecentTrialQuestionOutcomeHistory(limit = 120): Promis
       },
     }),
     db.query.trialQuestions.findMany({
-      where: ne(trialQuestions.outcome, 'Pending'),
+      where: trialQuestionId
+        ? and(
+            ne(trialQuestions.outcome, 'Pending'),
+            eq(trialQuestions.id, trialQuestionId),
+          )
+        : ne(trialQuestions.outcome, 'Pending'),
       orderBy: [desc(trialQuestions.outcomeDate), desc(trialQuestions.updatedAt)],
       with: {
         trial: true,
@@ -327,7 +351,18 @@ export async function listRecentTrialQuestionOutcomeHistory(limit = 120): Promis
       }
     })
 
-  return [...storedHistoryEntries, ...legacyAcceptedEntries, ...legacySnapshotEntries]
+  const entries = [...storedHistoryEntries, ...legacyAcceptedEntries, ...legacySnapshotEntries]
     .sort((left, right) => compareDatesDescending(left.changedAt, right.changedAt))
-    .slice(0, limit)
+
+  return typeof limit === 'number'
+    ? entries.slice(0, limit)
+    : entries
+}
+
+export async function listRecentTrialQuestionOutcomeHistory(limit = 120): Promise<TrialQuestionOutcomeHistoryListItem[]> {
+  return listTrialQuestionOutcomeHistoryInternal({ limit })
+}
+
+export async function listTrialQuestionOutcomeHistory(trialQuestionId: string): Promise<TrialQuestionOutcomeHistoryListItem[]> {
+  return listTrialQuestionOutcomeHistoryInternal({ trialQuestionId })
 }

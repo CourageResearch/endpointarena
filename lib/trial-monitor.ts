@@ -1,5 +1,4 @@
-import crypto from 'node:crypto'
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, like, ne, or, sql } from 'drizzle-orm'
 import Anthropic from '@anthropic-ai/sdk'
 import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
@@ -13,6 +12,7 @@ import {
 } from '@/lib/db'
 import { ConfigurationError, ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '@/lib/errors'
 import { resolveMarketForTrialQuestion } from '@/lib/markets/engine'
+import { buildTrialOutcomeEvidenceHash } from '@/lib/trial-outcome-candidate-hash'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 import { getTrialMonitorConfig, type TrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
@@ -69,6 +69,26 @@ export type EligibleTrialOutcomeQuestion = {
     sponsorTicker: string | null
     nctNumber: string | null
     estPrimaryCompletionDate: Date
+    lastMonitoredAt: Date | null
+  }
+}
+
+export type ManualTrialOutcomeQueueItem = {
+  id: string
+  prompt: string
+  trial: {
+    id: string
+    shortTitle: string
+    sponsorName: string
+    sponsorTicker: string | null
+    nctNumber: string
+    exactPhase: string
+    indication: string
+    intervention: string
+    primaryEndpoint: string
+    currentStatus: string
+    estPrimaryCompletionDate: Date
+    briefSummary: string
     lastMonitoredAt: Date | null
   }
 }
@@ -726,16 +746,6 @@ function buildTrialContextLines(question: TrialQuestionWithTrial): string[] {
     `Estimated Primary Completion: ${question.trial.estPrimaryCompletionDate.toISOString().slice(0, 10)}`,
     `Brief Summary: ${question.trial.briefSummary}`,
   ]
-}
-
-function buildEvidenceHash(outcome: CandidateOutcome, evidenceUrls: string[]): string {
-  const normalized = Array.from(new Set(
-    evidenceUrls.map((url) => url.trim().toLowerCase()).filter(Boolean),
-  )).sort()
-
-  return crypto.createHash('sha256')
-    .update(JSON.stringify({ outcome, urls: normalized }))
-    .digest('hex')
 }
 
 async function withVerifierTimeout<T>(promise: Promise<T>, trialTitle: string): Promise<T> {
@@ -1404,7 +1414,7 @@ async function processTrialMonitorQuestion(input: {
         ? 'NO'
         : 'NO_DECISION'
     const proposedOutcome: CandidateOutcome = settlementOutcome
-    const evidenceHash = buildEvidenceHash(proposedOutcome, decision.evidence.map((entry) => entry.url))
+    const evidenceHash = buildTrialOutcomeEvidenceHash(proposedOutcome, decision.evidence.map((entry) => entry.url))
     const existingCandidate = await db.query.trialOutcomeCandidates.findFirst({
       where: and(
         eq(trialOutcomeCandidates.trialQuestionId, question.id),
@@ -1525,6 +1535,31 @@ export async function listEligibleTrialOutcomeQuestions(): Promise<EligibleTrial
       sponsorTicker: question.trial.sponsorTicker,
       nctNumber: question.trial.nctNumber,
       estPrimaryCompletionDate: question.trial.estPrimaryCompletionDate,
+      lastMonitoredAt: question.trial.lastMonitoredAt,
+    },
+  }))
+}
+
+export async function listEligibleTrialOutcomeQuestionsForManualResearch(): Promise<ManualTrialOutcomeQueueItem[]> {
+  const config = await getTrialMonitorConfig()
+  const questions = await getEligibleTrialOutcomeQuestionsInternal(config)
+
+  return questions.map((question) => ({
+    id: question.id,
+    prompt: normalizeTrialQuestionPrompt(question.prompt),
+    trial: {
+      id: question.trial.id,
+      shortTitle: question.trial.shortTitle,
+      sponsorName: question.trial.sponsorName,
+      sponsorTicker: question.trial.sponsorTicker,
+      nctNumber: normalizeClinicalTrialsNctNumber(question.trial.nctNumber),
+      exactPhase: question.trial.exactPhase,
+      indication: question.trial.indication,
+      intervention: question.trial.intervention,
+      primaryEndpoint: question.trial.primaryEndpoint,
+      currentStatus: question.trial.currentStatus,
+      estPrimaryCompletionDate: question.trial.estPrimaryCompletionDate,
+      briefSummary: question.trial.briefSummary,
       lastMonitoredAt: question.trial.lastMonitoredAt,
     },
   }))
@@ -1819,10 +1854,46 @@ export async function listPendingTrialOutcomeCandidates() {
   })
 }
 
+export async function listTrialOutcomeCandidatesForTrialQuestion(trialQuestionId: string) {
+  return db.query.trialOutcomeCandidates.findMany({
+    where: eq(trialOutcomeCandidates.trialQuestionId, trialQuestionId),
+    with: {
+      question: {
+        with: {
+          trial: true,
+          markets: {
+            columns: {
+              id: true,
+            },
+          },
+        },
+      },
+      evidence: true,
+    },
+    orderBy: [desc(trialOutcomeCandidates.createdAt)],
+  })
+}
+
 export async function listRecentTrialMonitorRuns() {
   return db.query.trialMonitorRuns.findMany({
     orderBy: [desc(trialMonitorRuns.startedAt)],
     limit: 20,
+  })
+}
+
+export async function listTrialMonitorRunsForTrialQuestion(input: {
+  trialQuestionId: string
+  nctNumber?: string | null
+}) {
+  const normalizedNctNumber = normalizeScopedTrialMonitorNctNumber(input.nctNumber ?? null)
+  return db.query.trialMonitorRuns.findMany({
+    where: normalizedNctNumber
+      ? or(
+          like(trialMonitorRuns.debugLog, `%${input.trialQuestionId}%`),
+          like(trialMonitorRuns.debugLog, `%${normalizedNctNumber}%`),
+        )
+      : like(trialMonitorRuns.debugLog, `%${input.trialQuestionId}%`),
+    orderBy: [desc(trialMonitorRuns.startedAt)],
   })
 }
 
