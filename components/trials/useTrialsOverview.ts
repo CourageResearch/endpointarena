@@ -32,6 +32,7 @@ export function useTrialsOverview(
   marketId?: string | null,
   options: {
     includeResolved?: boolean
+    autoRefresh?: boolean
   } = {},
 ) {
   const [data, setData] = useState<OverviewResponse | null>(initialData)
@@ -61,16 +62,27 @@ export function useTrialsOverview(
       }
     }
 
-    void run(initialData == null)
-    const timer = window.setInterval(() => {
+    const shouldAutoRefresh = options.autoRefresh !== false
+
+    if (initialData == null) {
+      void run(true)
+    } else if (shouldAutoRefresh) {
       void run(false)
-    }, 60_000)
+    }
+
+    const timer = shouldAutoRefresh
+      ? window.setInterval(() => {
+          void run(false)
+        }, 60_000)
+      : null
 
     return () => {
       disposed = true
-      window.clearInterval(timer)
+      if (timer !== null) {
+        window.clearInterval(timer)
+      }
     }
-  }, [initialData, marketId, options.includeResolved])
+  }, [initialData, marketId, options.autoRefresh, options.includeResolved])
 
   const reload = async () => {
     setRefreshing(true)

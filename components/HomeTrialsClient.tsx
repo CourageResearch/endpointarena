@@ -22,6 +22,7 @@ export function HomeTrialsClient({
   return (
     <Suspense fallback={null}>
       <TrialsBrowseHomepage
+        autoRefresh={false}
         detailBasePath={detailBasePath}
         headerLinkHref={headerLinkHref}
         headerLinkLabel={headerLinkLabel}

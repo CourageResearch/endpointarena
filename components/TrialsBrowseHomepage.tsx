@@ -35,6 +35,7 @@ type MarketCardEntry = {
 }
 
 type MarketBrowseTab = 'upcoming' | 'resolved'
+type UpcomingSortMode = 'earliest' | 'latest' | 'controversial' | 'volume' | 'move'
 type HeaderLinkPlacement = 'header' | 'footer' | 'both'
 type MarketTableSortKey = 'market' | 'primaryCompletion' | 'resolvedAt' | 'outcome' | 'yes' | 'no' | 'volume' | 'aiYes' | 'aiNo'
 type MarketTableSortDirection = 'asc' | 'desc'
@@ -58,6 +59,7 @@ const PANEL_BORDER_STYLE = {
 const MARKET_CONTROL_INPUT_CLASS_NAME = 'min-w-0 h-16 rounded-none border border-[#e7ddd0] bg-white/92 px-4 text-[17px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const MARKET_CONTROL_SELECT_CLASS_NAME = `${MARKET_CONTROL_INPUT_CLASS_NAME} appearance-none pr-14`
 const MARKET_TABLE_SEARCH_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3.5 py-2.5 text-[14px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
+const MARKET_TABLE_SORT_SELECT_CLASS_NAME = `${MARKET_TABLE_SEARCH_INPUT_CLASS_NAME} min-w-[14rem] appearance-none pr-10 text-[#2f2a24]`
 const MARKET_TABLE_SEARCH_INPUT_STYLE = {
   fontSize: '14px',
 }
@@ -74,6 +76,13 @@ const TAB_FILTER_PARAM = 'tab'
 const PHASE_2_TRIALS_HEADING = 'Phase 2 Trials'
 const UPCOMING_TRIALS_HEADING = 'Phase 2 Upcoming Trials'
 const RESOLVED_TRIALS_HEADING = 'Phase 2 Resolved Trials'
+const UPCOMING_SORT_OPTIONS: ReadonlyArray<{ value: UpcomingSortMode; label: string }> = [
+  { value: 'earliest', label: 'Earliest date' },
+  { value: 'latest', label: 'Latest date' },
+  { value: 'controversial', label: 'Most controversial' },
+  { value: 'volume', label: 'Highest volume' },
+  { value: 'move', label: 'Biggest move' },
+]
 
 function isLocalhostHostname(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -142,14 +151,65 @@ function buildMarketCardEntries(openMarkets: OpenMarketRow[], recentActions: Rec
   })
 }
 
-function sortUpcomingEntries(entries: MarketCardEntry[]): MarketCardEntry[] {
+function compareUpcomingDays(a: number | null, b: number | null, direction: MarketTableSortDirection): number {
+  const aIsMissing = a === null || Number.isNaN(a)
+  const bIsMissing = b === null || Number.isNaN(b)
+
+  if (aIsMissing && bIsMissing) return 0
+  if (aIsMissing) return 1
+  if (bIsMissing) return -1
+
+  return direction === 'asc' ? a - b : b - a
+}
+
+function compareUpcomingEntries(a: MarketCardEntry, b: MarketCardEntry, sortMode: UpcomingSortMode): number {
+  switch (sortMode) {
+    case 'earliest': {
+      const dateComparison = compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
+      if (dateComparison !== 0) return dateComparison
+      if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
+      if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
+      return b.absMove - a.absMove
+    }
+    case 'latest': {
+      const dateComparison = compareUpcomingDays(a.daysUntil, b.daysUntil, 'desc')
+      if (dateComparison !== 0) return dateComparison
+      if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
+      if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
+      return b.absMove - a.absMove
+    }
+    case 'controversial': {
+      const aGap = Math.abs(a.yesPrice - a.noPrice)
+      const bGap = Math.abs(b.yesPrice - b.noPrice)
+      if (aGap !== bGap) return aGap - bGap
+      if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
+      if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
+      return compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
+    }
+    case 'volume':
+      if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
+      if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
+      return compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
+    case 'move':
+      if (b.absMove !== a.absMove) return b.absMove - a.absMove
+      if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
+      return compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
+    default: {
+      const dateComparison = compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
+      if (dateComparison !== 0) return dateComparison
+      if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
+      if (b.absMove !== a.absMove) return b.absMove - a.absMove
+      return b.volumeUsd - a.volumeUsd
+    }
+  }
+}
+
+function sortUpcomingEntries(entries: MarketCardEntry[], sortMode: UpcomingSortMode): MarketCardEntry[] {
   const copy = [...entries]
   return copy.sort((a, b) => {
-    const aDays = a.daysUntil ?? Number.POSITIVE_INFINITY
-    const bDays = b.daysUntil ?? Number.POSITIVE_INFINITY
-    if (aDays !== bDays) return aDays - bDays
-    if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
-    return b.absMove - a.absMove
+    const comparison = compareUpcomingEntries(a, b, sortMode)
+    if (comparison !== 0) return comparison
+    return (a.market.event?.drugName || a.question).localeCompare(b.market.event?.drugName || b.question, 'en', { sensitivity: 'base' })
   })
 }
 
@@ -531,6 +591,7 @@ function MarketTable({
   emptyMessage,
   heading,
   headerTabs,
+  sortResetKey,
   showRowCount = true,
 }: {
   entries: MarketCardEntry[]
@@ -544,6 +605,7 @@ function MarketTable({
   emptyMessage?: string
   heading?: string
   headerTabs?: ReactNode
+  sortResetKey?: string | number
   showRowCount?: boolean
 }) {
   const router = useRouter()
@@ -566,7 +628,7 @@ function MarketTable({
   }, [entries])
 
   const sortedRows = useMemo(() => {
-    return sortMarketTableRows(tableRows, sortState, tab)
+    return sortState ? sortMarketTableRows(tableRows, sortState, tab) : tableRows
   }, [sortState, tab, tableRows])
 
   const visibleRows = useMemo(() => {
@@ -591,7 +653,7 @@ function MarketTable({
 
   useEffect(() => {
     setSortState(null)
-  }, [tab])
+  }, [sortResetKey, tab])
 
   function navigateToMarket(href: string) {
     router.push(href)
@@ -634,7 +696,7 @@ function MarketTable({
             {headerTabs ? <div className="shrink-0">{headerTabs}</div> : null}
 
             {searchControl ? (
-              <div className="w-full max-w-[26rem]">
+              <div className="w-full max-w-[42rem]">
                 {searchControl}
               </div>
             ) : null}
@@ -853,6 +915,7 @@ export function TrialsBrowseHomepage({
   initialStatusTab = null,
   initialTableMaxRows,
   includeResolved = false,
+  autoRefresh = true,
   showStatusTabs = false,
   showSearchControl = true,
   showTopControls = true,
@@ -868,17 +931,22 @@ export function TrialsBrowseHomepage({
   initialStatusTab?: string | null
   initialTableMaxRows?: number
   includeResolved?: boolean
+  autoRefresh?: boolean
   showStatusTabs?: boolean
   showSearchControl?: boolean
   showTopControls?: boolean
   showRowCount?: boolean
   variant?: 'full' | 'table'
 } = {}) {
-  const { data, error, loading } = useTrialsOverview(initialOverview, undefined, { includeResolved })
+  const { data, error, loading } = useTrialsOverview(initialOverview, undefined, {
+    includeResolved,
+    autoRefresh,
+  })
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
+  const [upcomingSortMode, setUpcomingSortMode] = useState<UpcomingSortMode>('controversial')
   const [selectedTypeParam, setSelectedTypeParam] = useState<string | null>(initialTypeFilter)
   const [selectedTabParam, setSelectedTabParam] = useState<string | null>(initialStatusTab)
   const deferredSearchQuery = useDeferredValue(searchQuery)
@@ -988,8 +1056,8 @@ export function TrialsBrowseHomepage({
   const visibleEntries = useMemo(() => {
     return selectedTab === 'resolved'
       ? sortResolvedEntries(filteredEntries)
-      : sortUpcomingEntries(filteredEntries)
-  }, [filteredEntries, selectedTab])
+      : sortUpcomingEntries(filteredEntries, upcomingSortMode)
+  }, [filteredEntries, selectedTab, upcomingSortMode])
 
   useEffect(() => {
     if (normalizedSearchQuery.length < 2) return
@@ -1066,22 +1134,47 @@ export function TrialsBrowseHomepage({
   }
 
   const tableSearchControl = showSearchControl ? (
-    <>
-      <label className="sr-only" htmlFor="trials-home-table-search">
-        Search all trials
-      </label>
-      <input
-        id="trials-home-table-search"
-        type="search"
-        value={searchQuery}
-        onChange={(event) => setSearchQuery(event.target.value)}
-        placeholder="Search all trials..."
-        className={MARKET_TABLE_SEARCH_INPUT_CLASS_NAME}
-        style={MARKET_TABLE_SEARCH_INPUT_STYLE}
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </>
+    <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="min-w-0 flex-1">
+        <label className="sr-only" htmlFor="trials-home-table-search">
+          Search all trials
+        </label>
+        <input
+          id="trials-home-table-search"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search all trials..."
+          className={MARKET_TABLE_SEARCH_INPUT_CLASS_NAME}
+          style={MARKET_TABLE_SEARCH_INPUT_STYLE}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+
+      {selectedTab === 'upcoming' ? (
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor="trials-home-table-sort">
+            Sort upcoming trials
+          </label>
+          <select
+            id="trials-home-table-sort"
+            value={upcomingSortMode}
+            onChange={(event) => setUpcomingSortMode(event.target.value as UpcomingSortMode)}
+            className={MARKET_TABLE_SORT_SELECT_CLASS_NAME}
+            style={MARKET_CONTROL_SELECT_STYLE}
+            aria-label="Sort upcoming trials"
+            title="Sort upcoming trials"
+          >
+            {UPCOMING_SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+    </div>
   ) : undefined
 
   const tableStatusTabs = showStatusTabs ? (
@@ -1133,6 +1226,7 @@ export function TrialsBrowseHomepage({
           searchControl={tableSearchControl}
           heading={PHASE_2_TRIALS_HEADING}
           headerTabs={tableStatusTabs}
+          sortResetKey={`${selectedTab}:${upcomingSortMode}`}
           showRowCount={showRowCount}
           emptyMessage={
             entries.length === 0
