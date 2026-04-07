@@ -59,7 +59,7 @@ function normalizeScopedNctNumber(value: string): string {
   return value.trim().toUpperCase()
 }
 
-export function resolveDailyRunModelOrder(runDate: Date, requestedModelIds?: ModelId[]): ModelId[] {
+function resolveDailyRunModelOrder(runDate: Date, requestedModelIds?: ModelId[]): ModelId[] {
   if (requestedModelIds && requestedModelIds.length > 0) {
     return Array.from(new Set(requestedModelIds))
   }

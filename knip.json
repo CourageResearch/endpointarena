@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreFiles": [
+    ".claude/worktrees/**",
     "_archive/**",
     "scripts/audit-market-db-v2.ts",
     "scripts/backfill-phase2-public-sponsor-tickers.ts",
@@ -8,11 +9,22 @@
     "scripts/cleanup-local-mock-market-data.ts",
     "scripts/create-local-db.ts",
     "scripts/download-clinicaltrials-gov-snapshot.ts",
+    "scripts/export-admin-ai-automation-packet.ts",
+    "scripts/export-manual-trial-outcome-queue.ts",
     "scripts/export-trial-public-state.ts",
+    "scripts/import-admin-ai-automation-decisions.ts",
+    "scripts/import-manual-trial-outcomes.ts",
     "scripts/report-public-sponsor-coverage.ts",
-    "scripts/sync-clinicaltrials-gov.ts"
+    "scripts/sync-clinicaltrials-gov.ts",
+    "lib/manual-trial-outcome-import.ts"
   ],
   "ignoreIssues": {
+    "lib/trial-monitor.ts": [
+      "exports"
+    ],
+    "lib/trial-outcome-candidate-hash.ts": [
+      "exports"
+    ],
     "scripts/*-utils.ts": [
       "exports"
     ]
