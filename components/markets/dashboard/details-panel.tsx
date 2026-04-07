@@ -58,28 +58,6 @@ function getSourceTypeLabel(sourceType: PublicOutcomeEvidenceRow['sourceType']):
   return 'Sponsor'
 }
 
-function getTrialStatusTextClass(status: string | null | undefined) {
-  const normalized = status?.trim().toLowerCase() ?? ''
-
-  if (normalized === 'recruiting' || normalized === 'not yet recruiting' || normalized === 'enrolling by invitation') {
-    return 'text-[#675d52]'
-  }
-  if (normalized === 'active not recruiting') {
-    return 'text-[#2e6793]'
-  }
-  if (normalized === 'completed') {
-    return 'text-[#675d52]'
-  }
-  if (normalized === 'terminated' || normalized === 'withdrawn') {
-    return REJECT_TEXT_CLASS
-  }
-  if (normalized === 'suspended' || normalized === 'unknown') {
-    return 'text-[#946d16]'
-  }
-
-  return 'text-[#675d52]'
-}
-
 function DetailValue({
   label,
   children,
@@ -320,11 +298,11 @@ export function MarketDetailsPanel({
 
           <DetailValue label="Trial Status" className="sm:min-w-[10rem] sm:flex-[0_1_10rem] lg:min-w-[9.5rem] lg:flex-[0_1_9.5rem]">
             {currentStatus ? (
-              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, getTrialStatusTextClass(currentStatus))}>
+              <span className={cn('whitespace-nowrap font-sans', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS)}>
                 {currentStatus}
               </span>
             ) : (
-              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, 'text-[#9c9287]')}>Unavailable</span>
+              <span className={cn('whitespace-nowrap font-sans', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, 'text-[#9c9287]')}>Unavailable</span>
             )}
           </DetailValue>
 

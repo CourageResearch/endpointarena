@@ -14,16 +14,115 @@ import { buildPageMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Brand Kit',
-  description: 'Current Endpoint Arena brand colors, gradients, logo treatment, and UI brand tokens.',
+  description: 'Current Endpoint Arena brand colors, typography, gradients, layout rules, and copyable UI prompt tokens.',
   path: '/brand',
 })
 
 const BRAND_COLORS = [
   { name: 'Coral', hex: '#EF6F67' },
-  { name: 'Green', hex: '#5DBB63' },
   { name: 'Mustard', hex: '#D39D2E' },
+  { name: 'Green', hex: '#5DBB63' },
   { name: 'Blue', hex: '#5BA5ED' },
 ] as const
+
+const BRAND_FONTS = [
+  {
+    label: 'Primary Sans',
+    name: 'Inter',
+    variable: '--font-sans',
+    usage: 'Used for navigation, product UI, headings, and body copy.',
+    sampleClassName: 'font-sans',
+    sample: 'Endpoint Arena benchmarks AI models on live clinical trial markets.',
+  },
+  {
+    label: 'Mono Support',
+    name: 'DM Mono',
+    variable: '--font-mono',
+    usage: 'Used for codes, numeric tokens, URLs, percentages, and hex values.',
+    sampleClassName: 'font-mono',
+    sample: 'NCT01234567 | YES 63 | /trials/NCT01234567 | #5BA5ED',
+  },
+] as const
+
+const INFOGRAPHIC_STYLE_TOKENS = [
+  { label: 'Canvas background', value: '#F5F2ED' },
+  { label: 'Primary text', value: '#1A1A1A' },
+  { label: 'Muted copy', value: '#8A8075' },
+  { label: 'Eyebrow labels', value: '#B5AA9E' },
+  { label: 'Primary border', value: '#E8DDD0' },
+  { label: 'Surface fill', value: 'white / 80% to 95%' },
+  { label: 'Corner radius', value: '0 everywhere' },
+  { label: 'Content frame', value: 'max-w-5xl centered' },
+  { label: 'Section labels', value: '10-11px uppercase, tracking 0.16-0.20em' },
+  { label: 'Headings', value: 'Inter, medium/semibold, tight tracking' },
+  { label: 'Mono values', value: 'DM Mono for IDs, stats, URLs, codes' },
+  { label: 'Accent pattern', value: 'Coral -> Green -> Mustard -> Blue' },
+] as const
+
+const INFOGRAPHIC_PROMPT = `Generate a clean static image in the visual style of Endpoint Arena.
+
+Desired look:
+- Premium editorial analytics UI.
+- Calm, credible, precise, minimal.
+- Feels like a product screenshot or research dashboard, not an ad.
+
+Core visual system:
+- Background: warm off-white #F5F2ED.
+- Main cards: white or near-white.
+- Borders: thin 1px lines in #E8DDD0.
+- Corners: square everywhere.
+- Text: dark charcoal #1A1A1A.
+- Secondary text: muted taupe #8A8075.
+- Small labels / eyebrows: #B5AA9E, uppercase, wide tracking.
+
+Accent palette:
+- Coral #EF6F67
+- Green #5DBB63
+- Mustard #D39D2E
+- Blue #5BA5ED
+
+Accent behavior:
+- Use color sparingly.
+- Keep most of the image neutral.
+- Put accent color in thin rules, tiny square markers, chart highlights, small data chips, and subtle stepped square motifs.
+- If a gradient appears, keep it thin and restrained in this order: coral -> green -> mustard -> blue.
+- Do not flood the whole composition with color.
+
+Typography feel:
+- Use a clean modern sans-serif similar to Inter for headlines and body copy.
+- Use a restrained monospace similar to DM Mono only for IDs, metrics, URLs, percentages, prices, and technical values.
+- Tight hierarchy, disciplined spacing, neat alignment.
+
+Composition:
+- Centered content frame with generous whitespace.
+- Modular layout built from aligned panels, tables, metric rows, timelines, rankings, annotations, and chart blocks.
+- Strong grid structure.
+- Flat 2D product design only.
+- The image should feel native to a serious data product focused on clinical trial markets and model benchmarking.
+
+Brand motifs:
+- Tiny square markers instead of circular dots.
+- Occasional four-square sequences stepping upward from left to right.
+- Quiet chart language: bars, rules, blocks, grids, and labels.
+
+Avoid:
+- No purple.
+- No dark mode.
+- No neon.
+- No glossy hero art.
+- No soft rounded SaaS cards.
+- No glassmorphism.
+- No 3D effects.
+- No photorealism.
+- No playful illustration style.
+- No generic startup landing page aesthetic.
+
+Important:
+- Prioritize overall style, layout, spacing, color discipline, and materials over exact text rendering.
+- If the model struggles with text, keep labels short and UI-like rather than paragraph-heavy.
+
+Subject to render:
+[Replace this block with the exact scene, infographic topic, metrics, timeline, or dashboard content you want.]`
 
 function SectionHeader({
   label,
@@ -60,6 +159,47 @@ function ColorSwatch({ name, hex }: { name: string; hex: string }) {
   )
 }
 
+function FontCard({
+  label,
+  name,
+  variable,
+  usage,
+  sampleClassName,
+  sample,
+}: {
+  label: string
+  name: string
+  variable: string
+  usage: string
+  sampleClassName: string
+  sample: string
+}) {
+  return (
+    <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4">
+      <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">{label}</div>
+      <div className="mt-2 text-2xl text-[#1a1a1a]">{name}</div>
+      <p className="mt-2 text-sm leading-relaxed text-[#8a8075]">{usage}</p>
+      <div className="mt-4 rounded-lg border border-[#e8ddd0] bg-[#F5F2ED]/65 px-4 py-3">
+        <p className={`${sampleClassName} text-lg leading-relaxed text-[#1a1a1a]`}>{sample}</p>
+      </div>
+      <div className="mt-4 rounded-lg border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-1">
+        <TokenRow label="Font token" value={variable} />
+      </div>
+    </GradientBorder>
+  )
+}
+
+function PromptBlock({ value }: { value: string }) {
+  return (
+    <textarea
+      readOnly
+      value={value}
+      className="min-h-[560px] w-full resize-y border border-[#e8ddd0] bg-[#fcfaf7] p-4 font-mono text-xs leading-6 text-[#1a1a1a] focus:outline-none"
+      aria-label="Copyable infographic prompt"
+    />
+  )
+}
+
 function TokenRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[#e8ddd0] py-2 last:border-b-0">
@@ -81,16 +221,16 @@ export default function BrandPage() {
             <HeaderDots />
           </div>
           <p className="max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Current brand system in production. This page reflects the selected navbar logo treatment (Option 3)
-            plus the palette, gradients, and components currently in use.
+            Current brand system in production. This page now includes a literal copy-paste style brief for generating
+            infographics that match the app.
           </p>
         </section>
 
         <section className="mb-10">
           <SectionHeader
             label="Current"
-            title="Active Navbar Logo (Option 3)"
-            description="Wordmark uses text-[15px], font-medium, and the muted brand text color."
+            title="Active Navbar Logo"
+            description="Wordmark uses text-[15px], font-medium, muted text color, and the four-square mark."
           />
           <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -119,7 +259,7 @@ export default function BrandPage() {
           <SectionHeader
             label="Palette"
             title="Active Brand Colors"
-            description="Four-color system used in the mark, header dots, dividers, and brand gradients."
+            description="Four-color system used in the mark, header dots, dividers, and restrained chart or category accents."
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {BRAND_COLORS.map((color) => (
@@ -128,12 +268,57 @@ export default function BrandPage() {
           </div>
         </section>
 
+        <section className="mb-10">
+          <SectionHeader
+            label="Typography"
+            title="Product Fonts"
+            description="Inter is the primary product font. DM Mono is only for values that should read as technical or data-oriented."
+          />
+          <div className="grid gap-4 min-[520px]:grid-cols-2">
+            {BRAND_FONTS.map((font) => (
+              <FontCard
+                key={font.variable}
+                label={font.label}
+                name={font.name}
+                variable={font.variable}
+                usage={font.usage}
+                sampleClassName={font.sampleClassName}
+                sample={font.sample}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="mb-10 grid gap-4 min-[520px]:grid-cols-2 lg:gap-6">
+          <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
+            <SectionHeader
+              label="Material"
+              title="UI Style Tokens"
+              description="These are the exact surface, border, type, and layout rules that make the app feel native."
+            />
+            <div className="rounded-lg border border-[#e8ddd0] bg-white px-3 py-1">
+              {INFOGRAPHIC_STYLE_TOKENS.map((token) => (
+                <TokenRow key={token.label} label={token.label} value={token.value} />
+              ))}
+            </div>
+          </GradientBorder>
+
+          <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
+            <SectionHeader
+              label="Prompt"
+              title="Universal Style Prompt"
+              description="Paste this into Midjourney, Grok, OpenAI image tools, or similar generators, then swap the final block with your subject."
+            />
+            <PromptBlock value={INFOGRAPHIC_PROMPT} />
+          </GradientBorder>
+        </section>
+
         <section className="mb-10 grid gap-4 min-[520px]:grid-cols-2 lg:gap-6">
           <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
             <SectionHeader
               label="Gradients"
               title="Brand Gradient Tokens"
-              description="Used for navbar underlines, borders, and decorative rules."
+              description="Used sparingly for navbar underlines, borders, and decorative rules rather than large fills."
             />
             <div className="space-y-4">
               <div>
@@ -167,7 +352,7 @@ export default function BrandPage() {
               <TokenRow label="Mark size (navbar)" value="26px x 26px" />
               <TokenRow label="Wordmark size" value="text-[15px]" />
               <TokenRow label="Word weight" value="font-medium" />
-              <TokenRow label="Word color" value="#8a8075" />
+              <TokenRow label="Word color" value="#8A8075" />
               <TokenRow label="Gap (mark to wordmark)" value="gap-2" />
               <TokenRow label="Focus ring accent" value="#5BA5ED / 40%" />
             </div>

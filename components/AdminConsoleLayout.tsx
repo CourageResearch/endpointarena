@@ -5,27 +5,31 @@ import { db, contactMessages, crashEvents, users, waitlistEntries } from '@/lib/
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
+import {
+  ADMIN_ACTIVITY_DAY_FILTERS,
+  ADMIN_CRASH_DAY_FILTERS,
+  buildAdminDayFilterHref,
+  type AdminDayFilterOption,
+} from '@/lib/admin-search-params'
 
-type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'ai' | 'trials' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'update'
+type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes'
 
 interface AdminConsoleLayoutProps {
   title: string
-  description: string
   activeTab: AdminTab
+  days?: number
   topActions?: ReactNode
   children: ReactNode
 }
 
-const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string }> = [
+const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string; dayFilters?: readonly AdminDayFilterOption[] }> = [
   { id: 'ai', href: '/admin/ai', label: 'AI' },
-  { id: 'trials', href: '/admin/trials', label: 'Trials' },
-  { id: 'update', href: '/admin/update', label: 'Update' },
   { id: 'outcomes', href: '/admin/outcomes', label: 'Oracle' },
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },
-  { id: 'analytics', href: '/admin/analytics', label: 'Analytics' },
-  { id: 'searches', href: '/admin/searches', label: 'Searches' },
-  { id: 'crashes', href: '/admin/crashes', label: 'Crashes' },
+  { id: 'analytics', href: '/admin/analytics', label: 'Analytics', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
+  { id: 'searches', href: '/admin/searches', label: 'Searches', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
+  { id: 'crashes', href: '/admin/crashes', label: 'Crashes', dayFilters: ADMIN_CRASH_DAY_FILTERS },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
 ]
@@ -91,8 +95,8 @@ async function getCrashes24hCount() {
 
 export async function AdminConsoleLayout({
   title,
-  description,
   activeTab,
+  days,
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
@@ -112,7 +116,7 @@ export async function AdminConsoleLayout({
     return (
       <Link
         key={tab.id}
-        href={tab.href}
+        href={buildAdminDayFilterHref(tab.href, days, tab.dayFilters ?? [])}
         aria-current={isActive ? 'page' : undefined}
         className={`inline-flex min-h-[40px] shrink-0 items-center gap-1.5 border-b-2 px-1.5 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
           isActive
@@ -186,7 +190,6 @@ export async function AdminConsoleLayout({
                 <HeaderDots />
               </div>
               <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
-              <p className="mt-2 max-w-2xl text-sm text-[#8a8075]">{description}</p>
             </div>
           </div>
           <div className="mt-1">

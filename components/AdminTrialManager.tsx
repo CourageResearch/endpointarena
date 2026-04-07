@@ -41,6 +41,12 @@ import type {
   DailyRunPayload,
   DailyRunStreamEvent,
 } from '@/lib/markets/types'
+import {
+  getDailyRunAutomationModelLabel,
+  getDailyRunAutomationSourceLabel,
+  type DailyRunAutomationPreview,
+  type DailyRunAutomationSource,
+} from '@/lib/markets/automation-handoff-shared'
 
 interface Props {
   events: AdminTrialEvent[]
@@ -91,18 +97,24 @@ const DEFAULT_LABELS: AdminTrialManagerLabels = {
 type RunDailyCycleOptions = {
   nctNumber?: string
   modelIds?: ModelId[]
-  claudeProvider?: ClaudeProvider
 }
 
-type ClaudeProvider = 'api' | 'web'
-
-const CLAUDE_PROVIDER_STORAGE_KEY = 'admin-ai:claude-provider'
-const DEFAULT_CLAUDE_PROVIDER: ClaudeProvider = 'api'
-const CLAUDE_BROWSER_PROVIDER_AVAILABLE = process.env.NODE_ENV !== 'production'
-
-function isClaudeProvider(value: unknown): value is ClaudeProvider {
-  return value === 'api' || value === 'web'
+type AutomationExportState = {
+  filePath: string
+  exportsDir: string
+  decisionsDir: string
+  archiveDir: string
+  taskCount: number
+  modelLabel: string
 }
+
+type AutomationApplyState = {
+  archivePath: string
+  readyCount: number
+  duplicateCount: number
+}
+
+const DEFAULT_AUTOMATION_SOURCE: DailyRunAutomationSource = 'claude-code-subscription'
 
 function normalizeScopedNctNumberInput(value: string): string {
   return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
@@ -170,9 +182,16 @@ export function AdminTrialManager({
   const [isStoppingDaily, setIsStoppingDaily] = useState(initialRunSnapshot?.status === 'running' && isAdminStoppedMessage(initialRunSnapshot?.failureReason))
   const [isStreamingRun, setIsStreamingRun] = useState(false)
   const [scopedClaudeNctInput, setScopedClaudeNctInput] = useState('')
-  const [selectedClaudeProvider, setSelectedClaudeProvider] = useState<ClaudeProvider>(DEFAULT_CLAUDE_PROVIDER)
-  const [hasLoadedClaudeProviderPreference, setHasLoadedClaudeProviderPreference] = useState(false)
   const [executionStepNowMs, setExecutionStepNowMs] = useState<number | null>(null)
+  const [automationSource, setAutomationSource] = useState<DailyRunAutomationSource>(DEFAULT_AUTOMATION_SOURCE)
+  const [isExportingAutomation, setIsExportingAutomation] = useState(false)
+  const [automationExportState, setAutomationExportState] = useState<AutomationExportState | null>(null)
+  const [automationDecisionFile, setAutomationDecisionFile] = useState<File | null>(null)
+  const [automationDecisionText, setAutomationDecisionText] = useState('')
+  const [automationPreview, setAutomationPreview] = useState<DailyRunAutomationPreview | null>(null)
+  const [isPreviewingAutomation, setIsPreviewingAutomation] = useState(false)
+  const [isApplyingAutomation, setIsApplyingAutomation] = useState(false)
+  const [automationApplyState, setAutomationApplyState] = useState<AutomationApplyState | null>(null)
 
   const runStartedAtMs = runProgress?.startedAtMs ?? null
   const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
@@ -183,8 +202,8 @@ export function AdminTrialManager({
   const scopedClaudeOpenMarketCount = useMemo(() => (
     scopedClaudeEvents.filter((event) => event.marketStatus === 'OPEN' && event.marketId).length
   ), [scopedClaudeEvents])
-  const activeClaudeProvider = CLAUDE_BROWSER_PROVIDER_AVAILABLE ? selectedClaudeProvider : DEFAULT_CLAUDE_PROVIDER
-  const activeClaudeProviderLabel = activeClaudeProvider === 'web' ? 'Claude Browser' : 'Anthropic API'
+  const automationSourceLabel = useMemo(() => getDailyRunAutomationSourceLabel(automationSource), [automationSource])
+  const automationModelLabel = useMemo(() => getDailyRunAutomationModelLabel(automationSource), [automationSource])
   const enabledSections = new Set(sections)
   const showDailyCycle = enabledSections.has('dailyCycle')
   const showSearch = enabledSections.has('search')
@@ -207,29 +226,6 @@ export function AdminTrialManager({
     event.preventDefault()
     navigateToMarket(marketId)
   }
-
-  useEffect(() => {
-    try {
-      const storedProvider = window.localStorage.getItem(CLAUDE_PROVIDER_STORAGE_KEY)
-      if (isClaudeProvider(storedProvider)) {
-        setSelectedClaudeProvider(storedProvider)
-      }
-    } catch {
-      // Ignore storage read failures and fall back to the API default.
-    } finally {
-      setHasLoadedClaudeProviderPreference(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!hasLoadedClaudeProviderPreference) return
-
-    try {
-      window.localStorage.setItem(CLAUDE_PROVIDER_STORAGE_KEY, selectedClaudeProvider)
-    } catch {
-      // Ignore storage write failures and keep the in-memory selection.
-    }
-  }, [hasLoadedClaudeProviderPreference, selectedClaudeProvider])
 
   useEffect(() => {
     if (!runningDaily || runStartedAtMs === null) return
@@ -468,6 +464,129 @@ export function AdminTrialManager({
     }
   }
 
+  const readAutomationImportContents = async (): Promise<{
+    contents: string
+    filename: string | null
+  }> => {
+    if (automationDecisionFile) {
+      const fileText = (await automationDecisionFile.text()).trim()
+      if (!fileText) {
+        throw new Error('Selected decision file is empty')
+      }
+
+      return {
+        contents: fileText,
+        filename: automationDecisionFile.name,
+      }
+    }
+
+    const pastedText = automationDecisionText.trim()
+    if (!pastedText) {
+      throw new Error('Choose a decision JSON file or paste decision JSON first')
+    }
+
+    return {
+      contents: pastedText,
+      filename: null,
+    }
+  }
+
+  const refreshLatestRunSnapshot = async () => {
+    const response = await fetch('/api/admin/trials/run-state', { cache: 'no-store' })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(getApiErrorMessage(payload, 'Failed to refresh latest run state'))
+    }
+
+    applyRunSnapshot(payload?.snapshot ?? null)
+  }
+
+  const exportAutomationPacket = async () => {
+    setUiError(null)
+    setAutomationApplyState(null)
+    setAutomationPreview(null)
+    setIsExportingAutomation(true)
+
+    try {
+      const response = await fetch('/api/admin/trials/automation-export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: automationSource,
+          nctNumber: scopedClaudeNctNumber ?? undefined,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Failed to export automation packet'))
+      }
+
+      setAutomationExportState({
+        filePath: payload.filePath,
+        exportsDir: payload.paths?.exportsDir ?? '',
+        decisionsDir: payload.paths?.decisionsDir ?? '',
+        archiveDir: payload.paths?.archiveDir ?? '',
+        taskCount: payload.packet?.taskCount ?? 0,
+        modelLabel: automationModelLabel,
+      })
+    } catch (error) {
+      setUiError(error instanceof Error ? error.message : 'Failed to export automation packet')
+    } finally {
+      setIsExportingAutomation(false)
+    }
+  }
+
+  const runAutomationImport = async (mode: 'dry-run' | 'apply') => {
+    setUiError(null)
+    if (mode === 'dry-run') {
+      setAutomationApplyState(null)
+      setIsPreviewingAutomation(true)
+    } else {
+      setIsApplyingAutomation(true)
+    }
+
+    try {
+      const { contents, filename } = await readAutomationImportContents()
+      const response = await fetch(`/api/admin/trials/automation-import?mode=${mode}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: automationSource,
+          contents,
+          filename,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, `Failed to ${mode === 'dry-run' ? 'preview' : 'apply'} automation decisions`))
+      }
+
+      setAutomationPreview(payload.preview ?? null)
+
+      if (mode === 'apply') {
+        setAutomationApplyState({
+          archivePath: payload.archivePath ?? '',
+          readyCount: payload.preview?.readyCount ?? 0,
+          duplicateCount: payload.preview?.duplicateCount ?? 0,
+        })
+        await refreshLatestRunSnapshot()
+        router.refresh()
+      }
+    } catch (error) {
+      setUiError(error instanceof Error ? error.message : `Failed to ${mode === 'dry-run' ? 'preview' : 'apply'} automation decisions`)
+    } finally {
+      if (mode === 'dry-run') {
+        setIsPreviewingAutomation(false)
+      } else {
+        setIsApplyingAutomation(false)
+      }
+    }
+  }
+
   const setSummaryFromPayload = (payload: DailyRunPayload, startedAtMs: number) => {
     const counts = payload.summary ?? summarizeCounts(payload.results)
     const durationSeconds = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000))
@@ -490,11 +609,8 @@ export function AdminTrialManager({
     const startedAtMs = Date.now()
     let keepPersistedRunningState = false
     const controller = new AbortController()
-    const effectiveClaudeProvider = options.claudeProvider ?? activeClaudeProvider
     const runDescriptionBase = options.nctNumber && options.modelIds?.length === 1 && options.modelIds[0] === 'claude-opus'
-      ? effectiveClaudeProvider === 'web'
-          ? `Claude Browser Opus 4.6 on ${options.nctNumber}`
-          : `Claude Opus 4.6 via Anthropic API on ${options.nctNumber}`
+      ? `Claude Opus 4.6 via Anthropic API on ${options.nctNumber}`
       : 'daily trial cycle'
     const runDescription = runDescriptionBase
     const relevantEvents = filterEventsForRun(events, options.nctNumber)
@@ -505,7 +621,6 @@ export function AdminTrialManager({
     const requestBody = {
       nctNumber: options.nctNumber,
       modelIds: options.modelIds,
-      claudeProvider: effectiveClaudeProvider,
     }
 
     setUiError(null)
@@ -868,55 +983,6 @@ export function AdminTrialManager({
       )}
       {showDailyCycle ? (
         <div className="space-y-3">
-          <div className="rounded-none border border-[#e8ddd0] bg-white/80 p-3 space-y-3">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Claude Provider</p>
-                <p className="mt-1 text-xs text-[#6f665b]">
-                  Choose how Claude runs launched from this page should execute.
-                </p>
-              </div>
-              <div
-                className="inline-flex overflow-hidden rounded-none border border-[#d9cdbf] bg-[#fdfbf8]"
-                role="group"
-                aria-label="Claude provider"
-              >
-                <button
-                  type="button"
-                  aria-pressed={activeClaudeProvider === 'api'}
-                  onClick={() => setSelectedClaudeProvider('api')}
-                  className={`inline-flex items-center justify-center whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors ${
-                    activeClaudeProvider === 'api'
-                      ? 'bg-[#f5eee5] text-[#3b342c]'
-                      : 'bg-[#fdfbf8] text-[#6f665b] hover:bg-[#f5eee5] hover:text-[#3b342c]'
-                  }`}
-                >
-                  Anthropic API
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={activeClaudeProvider === 'web'}
-                  onClick={() => setSelectedClaudeProvider('web')}
-                  disabled={!CLAUDE_BROWSER_PROVIDER_AVAILABLE}
-                  className={`inline-flex items-center justify-center whitespace-nowrap border-l border-[#d9cdbf] px-4 py-2 text-sm font-medium transition-colors ${
-                    activeClaudeProvider === 'web'
-                      ? 'bg-[#f5eee5] text-[#3b342c]'
-                      : 'bg-[#fdfbf8] text-[#6f665b] hover:bg-[#f5eee5] hover:text-[#3b342c]'
-                  } disabled:cursor-not-allowed disabled:bg-[#f7f1eb] disabled:text-[#b5aa9c]`}
-                >
-                  Claude Browser
-                </button>
-              </div>
-            </div>
-            <p className="text-xs text-[#8a8075]">
-              Saved in this browser. Applies to daily runs and the scoped Claude run below.
-            </p>
-            {!CLAUDE_BROWSER_PROVIDER_AVAILABLE ? (
-              <p className="text-xs text-[#8a8075]">
-                Claude Browser is local-only and unavailable in this environment. Anthropic API will be used here.
-              </p>
-            ) : null}
-          </div>
           <div className="flex flex-wrap items-center justify-start gap-2">
             <button
               onClick={() => {
@@ -958,7 +1024,6 @@ export function AdminTrialManager({
                   void runDailyCycle({
                     nctNumber: scopedClaudeNctNumber,
                     modelIds: ['claude-opus'],
-                    claudeProvider: activeClaudeProvider,
                   })
                 }}
                 disabled={runningDaily || !scopedClaudeNctNumber || scopedClaudeOpenMarketCount === 0}
@@ -967,9 +1032,6 @@ export function AdminTrialManager({
                 Run Claude Opus
               </button>
             </div>
-            <p className="text-xs text-[#8a8075]">
-              Uses the selected Claude provider above. Current choice: {activeClaudeProviderLabel}.
-            </p>
             {scopedClaudeNctInput && !scopedClaudeNctNumber ? (
               <p className="text-xs text-[#8d2c22]">Enter an NCT id like NCT06870240.</p>
             ) : null}
@@ -978,14 +1040,178 @@ export function AdminTrialManager({
             ) : null}
             {scopedClaudeNctNumber && scopedClaudeOpenMarketCount > 0 ? (
               <p className="text-xs text-[#2f6f24]">
-          Ready to run Claude Opus 4.6 via {activeClaudeProviderLabel} for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open trial{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
+          Ready to run Claude Opus 4.6 via Anthropic API for {scopedClaudeNctNumber} across {scopedClaudeOpenMarketCount} open trial{scopedClaudeOpenMarketCount === 1 ? '' : 's'}.
               </p>
+            ) : null}
+          </div>
+          <div className="rounded-none border border-[#e8ddd0] bg-white/75 p-3 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1a1a1a]">Automation Handoff</h3>
+              <p className="mt-1 text-xs text-[#8a8075]">
+                Export a subscription-backed research packet for {automationSourceLabel}, let the automation write decisions JSON, then dry-run or apply it here.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <label className="flex min-w-[220px] flex-col gap-1 text-xs text-[#8a8075]">
+                <span>Automation Source</span>
+                <select
+                  value={automationSource}
+                  onChange={(event) => {
+                    setAutomationSource(event.target.value as DailyRunAutomationSource)
+                    setAutomationPreview(null)
+                    setAutomationApplyState(null)
+                  }}
+                  className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-2 text-sm text-[#1a1a1a] outline-none"
+                >
+                  <option value="claude-code-subscription">Claude Code subscription</option>
+                  <option value="codex-subscription">Codex subscription</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  void exportAutomationPacket()
+                }}
+                disabled={isExportingAutomation || runningDaily || isPreviewingAutomation || isApplyingAutomation || (Boolean(scopedClaudeNctInput) && !scopedClaudeNctNumber)}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isExportingAutomation ? 'Exporting...' : `Export ${automationModelLabel} Packet`}
+              </button>
+            </div>
+            <p className="text-xs text-[#8a8075]">
+              Scope: {scopedClaudeNctNumber ? `${scopedClaudeNctNumber}` : 'all open trials'} for {automationModelLabel}.
+            </p>
+            {automationExportState ? (
+              <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/8 px-3 py-2 text-xs text-[#2f6f24]">
+                <p>
+                  Exported {automationExportState.taskCount} task{automationExportState.taskCount === 1 ? '' : 's'} to {automationExportState.filePath}
+                </p>
+                <p className="mt-1 text-[#5f564c]">
+                  Drop automation outputs into {automationExportState.decisionsDir}. Applied files are archived in {automationExportState.archiveDir}.
+                </p>
+              </div>
+            ) : null}
+            <div className="grid gap-3 lg:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs text-[#8a8075]">
+                <span>Decision JSON File</span>
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    setAutomationDecisionFile(file)
+                    setAutomationPreview(null)
+                    setAutomationApplyState(null)
+                  }}
+                  className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-2 text-sm text-[#1a1a1a] outline-none file:mr-3 file:border-0 file:bg-transparent file:px-0 file:py-0 file:text-sm file:font-medium"
+                />
+                {automationDecisionFile ? (
+                  <span className="text-[11px] text-[#6f665b]">{automationDecisionFile.name}</span>
+                ) : null}
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-[#8a8075]">
+                <span>Or Paste Decision JSON</span>
+                <textarea
+                  value={automationDecisionText}
+                  onChange={(event) => {
+                    setAutomationDecisionText(event.target.value)
+                    setAutomationDecisionFile(null)
+                    setAutomationPreview(null)
+                    setAutomationApplyState(null)
+                  }}
+                  rows={5}
+                  placeholder='{"workflow":"admin-ai-automation-handoff","source":"codex-subscription","decisions":[...]}'
+                  className="min-h-[120px] rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-2 text-sm text-[#1a1a1a] outline-none placeholder:text-[#a39789]"
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void runAutomationImport('dry-run')
+                }}
+                disabled={isPreviewingAutomation || isApplyingAutomation || runningDaily}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isPreviewingAutomation ? 'Previewing...' : 'Dry Run Import'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void runAutomationImport('apply')
+                }}
+                disabled={isApplyingAutomation || isPreviewingAutomation || runningDaily}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#1a1a1a] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isApplyingAutomation ? 'Applying...' : 'Apply Imported Decisions'}
+              </button>
+            </div>
+            {automationPreview ? (
+              <div className="rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+                  <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Source</p>
+                    <p className="text-xs font-medium text-[#1a1a1a]">{automationPreview.sourceLabel}</p>
+                  </div>
+                  <div className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Model</p>
+                    <p className="text-xs font-medium text-[#1a1a1a]">{automationPreview.modelLabel}</p>
+                  </div>
+                  <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-[#2f6f24]">Ready</p>
+                    <p className="text-xs font-medium text-[#2f6f24]">{automationPreview.readyCount}</p>
+                  </div>
+                  <div className="rounded-none border border-[#b5aa9e]/40 bg-[#f5f2ed] px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Duplicate</p>
+                    <p className="text-xs font-medium text-[#6f665b]">{automationPreview.duplicateCount}</p>
+                  </div>
+                  <div className="rounded-none border border-[#c43a2b]/30 bg-[#c43a2b]/10 px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-[#8d2c22]">Invalid</p>
+                    <p className="text-xs font-medium text-[#8d2c22]">{automationPreview.invalidCount}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-[#8a8075]">
+                  {automationPreview.totalDecisions} imported decision{automationPreview.totalDecisions === 1 ? '' : 's'} for {new Date(automationPreview.runDate).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} UTC.
+                </p>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {automationPreview.items.map((item) => (
+                    <div key={item.taskKey} className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium text-[#1a1a1a]">{item.shortTitle}</p>
+                        <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${
+                          item.status === 'ready'
+                            ? 'border-[#3a8a2e]/30 bg-[#3a8a2e]/10 text-[#2f6f24]'
+                            : item.status === 'duplicate'
+                              ? 'border-[#b5aa9e]/40 bg-[#f5f2ed] text-[#6f665b]'
+                              : 'border-[#c43a2b]/30 bg-[#fff3f1] text-[#8d2c22]'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[#6f665b]">
+                        {item.nctNumber ? `${item.nctNumber} • ` : ''}{item.actionType} ${item.amountUsd.toFixed(2)}
+                      </p>
+                      <p className="mt-1 text-[#8a8075]">{item.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {automationApplyState ? (
+              <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/8 px-3 py-2 text-xs text-[#2f6f24]">
+                <p>
+                  Applied {automationApplyState.readyCount} imported decision{automationApplyState.readyCount === 1 ? '' : 's'}.
+                  {automationApplyState.duplicateCount > 0 ? ` ${automationApplyState.duplicateCount} duplicate step${automationApplyState.duplicateCount === 1 ? '' : 's'} were left as-is.` : ''}
+                </p>
+                <p className="mt-1 text-[#5f564c]">Archived input at {automationApplyState.archivePath}</p>
+              </div>
             ) : null}
           </div>
           <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">
             <div>
             <h3 className="text-sm font-semibold text-[#1a1a1a]">Daily Trial Cycle</h3>
-              <p className="mt-1 text-xs text-[#8a8075]">Manual run only.</p>
+              <p className="mt-1 text-xs text-[#8a8075]">Manual run or imported subscription-backed decision file.</p>
             </div>
           {runProgress && (
             <div className="mt-3 rounded-none border border-[#e8ddd0] bg-white/70 p-3 space-y-3">

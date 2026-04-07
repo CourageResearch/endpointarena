@@ -2,7 +2,6 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { GoogleGenAI } from '@google/genai'
 import type { ModelId } from '@/lib/constants'
-import { askClaudeWeb } from './claude-web-runner'
 import {
   buildFireworksModelDecisionJsonSchema,
   buildModelDecisionJsonSchema,
@@ -32,12 +31,8 @@ export interface ModelDecisionGeneration {
 }
 
 interface ModelDecisionGeneratorConfig {
-  generator: (input: ModelDecisionInput, options?: ModelDecisionGeneratorOptions) => Promise<ModelDecisionGeneration>
-  enabled: (options?: ModelDecisionGeneratorOptions) => boolean
-}
-
-export interface ModelDecisionGeneratorOptions {
-  claudeProvider?: 'api' | 'web'
+  generator: (input: ModelDecisionInput) => Promise<ModelDecisionGeneration>
+  enabled: () => boolean
 }
 
 interface OpenAICompatibleResponseFormat {
@@ -216,16 +211,6 @@ function buildOutput(
   }
 }
 
-function buildClaudeWebDecisionPrompt(input: ModelDecisionInput): string {
-  return [
-    'Use Claude web search before answering.',
-    'Search the live public web for recent, decision-relevant information about this trial, sponsor, indication, endpoint, and timeline.',
-    'After searching, follow the instructions below exactly and return valid JSON only.',
-    '',
-    buildModelDecisionPrompt(input),
-  ].join('\n')
-}
-
 async function generateClaudeApiDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
@@ -248,19 +233,9 @@ async function generateClaudeApiDecision(input: ModelDecisionInput): Promise<Mod
   return buildOutput(content, input, parseUsageFromClaudeMessage(message, toolUseCount))
 }
 
-async function generateClaudeWebDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  const content = await askClaudeWeb(buildClaudeWebDecisionPrompt(input))
-  return buildOutput(content, input, null, 'subscription')
-}
-
 async function generateClaudeDecision(
   input: ModelDecisionInput,
-  options: ModelDecisionGeneratorOptions = {},
 ): Promise<ModelDecisionGeneration> {
-  if (options.claudeProvider === 'web') {
-    return generateClaudeWebDecision(input)
-  }
-
   return generateClaudeApiDecision(input)
 }
 
@@ -510,21 +485,14 @@ async function generateMiniMaxDecision(input: ModelDecisionInput): Promise<Model
 
 export function getModelDecisionGeneratorDisabledReason(
   modelId: ModelId,
-  options: ModelDecisionGeneratorOptions = {},
 ): string {
-  if (modelId === 'claude-opus' && options.claudeProvider === 'web') {
-    return 'claude-opus web generator is only supported in local development'
-  }
-
   return `${modelId} generator is disabled because its API key is not configured`
 }
 
 export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorConfig> = {
   'claude-opus': {
     generator: generateClaudeDecision,
-    enabled: (options) => options?.claudeProvider === 'web'
-      ? process.env.NODE_ENV !== 'production'
-      : !!process.env.ANTHROPIC_API_KEY,
+    enabled: () => !!process.env.ANTHROPIC_API_KEY,
   },
   'gpt-5.2': {
     generator: generateGptDecision,

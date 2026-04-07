@@ -57,7 +57,6 @@ export default async function AdminWaitlistPage() {
   return (
     <AdminConsoleLayout
       title="Waitlist"
-      description="Track signups, monitor recent growth, and reach out to members."
       activeTab="waitlist"
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">

@@ -798,7 +798,7 @@ export function AdminTrialOutcomeReview({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Scoped Trial View</div>
-              <p className="mt-1">Showing oracle review data for {scopedViewNctNumber} only.</p>
+              <p className="mt-1">Showing oracle data for {scopedViewNctNumber} only.</p>
             </div>
             <Link
               href="/admin/outcomes"

@@ -39,8 +39,6 @@ type Props = {
   entries: AdminTrialOutcomeHistoryEntry[]
 }
 
-type TimeWindow = 'all' | '1' | '7' | '30'
-
 function getOutcomeBadgeClass(outcome: 'Pending' | 'YES' | 'NO' | null): string {
   if (outcome === 'YES') {
     return 'bg-[#3a8a2e]/10 text-[#2f6f24]'
@@ -98,13 +96,6 @@ function entryMatchesSearch(entry: AdminTrialOutcomeHistoryEntry, search: string
   return haystack.includes(search)
 }
 
-function entryMatchesWindow(entry: AdminTrialOutcomeHistoryEntry, windowValue: TimeWindow, now: number): boolean {
-  if (windowValue === 'all') return true
-  const days = Number(windowValue)
-  if (!Number.isFinite(days)) return true
-  return now - new Date(entry.changedAt).getTime() <= days * 24 * 60 * 60 * 1000
-}
-
 function formatChangedBy(entry: AdminTrialOutcomeHistoryEntry): string | null {
   if (entry.changedByName && entry.changedByEmail) {
     return `${entry.changedByName} (${entry.changedByEmail})`
@@ -116,68 +107,39 @@ function formatChangedBy(entry: AdminTrialOutcomeHistoryEntry): string | null {
 
 export function AdminTrialOutcomeHistory({ entries }: Props) {
   const [search, setSearch] = useState('')
-  const [timeWindow, setTimeWindow] = useState<TimeWindow>('all')
   const normalizedSearch = search.trim().toLowerCase()
-  const now = Date.now()
-
-  const filteredEntries = entries.filter((entry) => (
-    entryMatchesSearch(entry, normalizedSearch) &&
-    entryMatchesWindow(entry, timeWindow, now)
-  ))
-  const entriesInLast24Hours = entries.filter((entry) => now - new Date(entry.changedAt).getTime() <= 24 * 60 * 60 * 1000)
-  const changedAgainCount = entries.filter((entry) => entry.currentOutcome !== entry.nextOutcome).length
+  const hasActiveSearch = normalizedSearch.length > 0
+  const filteredEntries = hasActiveSearch
+    ? entries.filter((entry) => entryMatchesSearch(entry, normalizedSearch))
+    : []
 
   return (
     <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl">
-          <h3 className="text-sm font-semibold text-[#1a1a1a]">Outcome History</h3>
-          <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-            Every new admin change and accepted review is logged here. Older rows marked legacy are derived from accepted reviews
-            or resolved question state that existed before explicit audit logging was added.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 text-right text-sm">
-          <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Loaded</div>
-            <div className="mt-1 font-medium text-[#1a1a1a]">{entries.length}</div>
-          </div>
-          <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Last 24h</div>
-            <div className="mt-1 font-medium text-[#1a1a1a]">{entriesInLast24Hours.length}</div>
-          </div>
-          <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Changed Again</div>
-            <div className="mt-1 font-medium text-[#1a1a1a]">{changedAgainCount}</div>
-          </div>
-        </div>
+      <div className="max-w-3xl">
+        <h3 className="text-sm font-semibold text-[#1a1a1a]">Outcome History</h3>
+        <p className="mt-1 text-xs leading-5 text-[#8a8075]">
+          Search accepted reviews and recorded outcome changes without loading the full history list by default.
+        </p>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="mt-4">
         <input
           type="text"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search by trial, sponsor, NCT, prompt, or outcome"
-          className="h-11 rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors placeholder:text-[#9a9084] focus:border-[#1a1a1a]"
+          className="h-11 w-full rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors placeholder:text-[#9a9084] focus:border-[#1a1a1a]"
         />
-        <select
-          value={timeWindow}
-          onChange={(event) => setTimeWindow(event.target.value as TimeWindow)}
-          className="h-11 rounded-none border border-[#d9cdbf] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
-        >
-          <option value="all">All History</option>
-          <option value="1">Last 24 Hours</option>
-          <option value="7">Last 7 Days</option>
-          <option value="30">Last 30 Days</option>
-        </select>
       </div>
 
       <div className="mt-4 space-y-4">
-        {filteredEntries.length === 0 ? (
+        {!hasActiveSearch ? (
           <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-            No outcome history entries match the current filters.
+            Start typing to search outcome history.
+          </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
+            No outcome history entries match the current search.
           </div>
         ) : filteredEntries.map((entry) => {
           const sourceBadge = getSourceBadge(entry.changeSource)

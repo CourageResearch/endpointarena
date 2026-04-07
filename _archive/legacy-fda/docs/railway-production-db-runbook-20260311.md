@@ -54,7 +54,7 @@ Historical note: this document originally captured the March 2026 single-DB cuto
     - required trial-era env vars exist
     - Phase 2 trial schema tables exist
     - public smoke routes return success: `/`, `/trials`, `/fda-calendar`
-    - admin smoke routes return success or redirect to login: `/admin`, `/admin/update`, `/admin/outcomes`, `/admin/settings`
+    - admin smoke routes return success or redirect to login: `/admin`, `/admin/outcomes`, `/admin/settings`
     - one `/trials/[marketId]` detail page when a trial market exists
 - Alert-signal check:
   - `npm run ops:check-prod-alerts`
@@ -92,7 +92,6 @@ Historical note: this document originally captured the March 2026 single-DB cuto
 16. Validate while maintenance is still enabled:
    - `/api/health`
    - `/admin`
-   - `/admin/update`
    - `/admin/markets`
    - `/admin/outcomes`
    - one manual daily cycle from `/admin/markets`
@@ -107,7 +106,6 @@ Historical note: this document originally captured the March 2026 single-DB cuto
    - `/trials`
    - one `/trials/[marketId]`
    - `/fda-calendar`
-   - `/admin/update`
    - `/admin/outcomes`
    - `/admin/settings`
 
@@ -121,7 +119,6 @@ Historical note: this document originally captured the March 2026 single-DB cuto
   - `/`
   - `/trials`
   - one `/trials/[marketId]`
-  - `/admin/update`
   - `/admin/outcomes`
   - `/admin/settings`
 

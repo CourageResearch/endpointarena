@@ -97,7 +97,6 @@ export default async function AdminPredictionsPage() {
   return (
     <AdminConsoleLayout
       title="Decision Operations"
-      description="Create append-only model decision snapshots for live Phase 2 trials."
       activeTab="predictions"
     >
       <section className="mb-6">

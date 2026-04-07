@@ -337,7 +337,6 @@ export default async function AdminUsersPage({
   return (
     <AdminConsoleLayout
       title="Users"
-      description="View registered users and remove accounts when needed."
       activeTab="users"
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">

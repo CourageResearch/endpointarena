@@ -50,7 +50,8 @@ const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMo
     provider: 'xai',
     providerLabel: 'xAI',
     envKey: 'XAI_API_KEY',
-    model: 'grok-4.20-beta-latest-non-reasoning',
+    // xAI structured outputs with built-in web search currently work on the Grok 4 fast family.
+    model: 'grok-4-1-fast-non-reasoning',
   },
   'gemini-3-pro': {
     key: 'gemini-3-pro',

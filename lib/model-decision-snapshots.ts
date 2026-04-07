@@ -18,7 +18,6 @@ import {
   getModelDecisionGeneratorDisabledReason,
   MODEL_DECISION_GENERATORS,
   type ModelDecisionGeneration,
-  type ModelDecisionGeneratorOptions,
 } from '@/lib/predictions/model-decision-generators'
 import { buildModelDecisionPrompt, type ModelDecisionInput, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
 
@@ -317,7 +316,7 @@ function resolveUsageForStorage(args: {
   }
 }
 
-export async function generateAndStoreModelDecisionSnapshot(args: {
+type ModelDecisionSnapshotArgs = {
   runSource: DecisionRunSource
   runId?: string | null
   modelId: ModelId
@@ -330,18 +329,49 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
   account: typeof marketAccounts.$inferSelect
   position: typeof marketPositions.$inferSelect
   runtimeConfig: MarketRuntimeConfig
-  generatorOptions?: ModelDecisionGeneratorOptions
-}): Promise<{
+}
+
+type StoredDecisionSnapshotResult = Promise<{
   snapshot: typeof modelDecisionSnapshots.$inferSelect
   decision: ModelDecisionResult
   prediction: Prediction
   input: ModelDecisionInput
-}> {
-  const generator = MODEL_DECISION_GENERATORS[args.modelId]
-  if (!generator?.enabled(args.generatorOptions)) {
-    throw new Error(getModelDecisionGeneratorDisabledReason(args.modelId, args.generatorOptions))
-  }
+}>
 
+function buildModelDecisionSnapshotPrediction(args: {
+  modelId: ModelId
+  decision: ModelDecisionResult
+  durationMs: number | null
+  snapshot: typeof modelDecisionSnapshots.$inferSelect
+  runSource: DecisionRunSource
+}): Prediction {
+  return {
+    predictorId: args.modelId,
+    prediction: args.decision.forecast.binaryCall,
+    confidence: args.decision.forecast.confidence,
+    reasoning: args.decision.forecast.reasoning,
+    durationMs: args.durationMs,
+    correct: computeCorrectness(args.decision.forecast.binaryCall, 'Pending'),
+    createdAt: args.snapshot.createdAt?.toISOString(),
+    source: 'snapshot',
+    runSource: args.runSource,
+    approvalProbability: args.decision.forecast.approvalProbability,
+    yesProbability: args.decision.forecast.yesProbability ?? args.decision.forecast.approvalProbability,
+    action: {
+      type: args.decision.action.type,
+      amountUsd: args.decision.action.amountUsd,
+      explanation: args.decision.action.explanation,
+    },
+    linkedMarketActionId: null,
+    history: [mapSnapshotPrediction(args.snapshot, args.modelId, 'Pending')],
+  }
+}
+
+export function buildModelDecisionSnapshotInput(args: ModelDecisionSnapshotArgs): {
+  input: ModelDecisionInput
+  normalizedRunDate: Date
+  tradeCaps: ReturnType<typeof calculateExecutableTradeCaps>
+} {
   const normalizedRunDate = normalizeRunDate(args.runDate)
   const tradeCaps = calculateExecutableTradeCaps({
     state: {
@@ -402,9 +432,84 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
     },
   }
 
+  return {
+    input,
+    normalizedRunDate,
+    tradeCaps,
+  }
+}
+
+async function insertStoredModelDecisionSnapshot(args: {
+  snapshotArgs: ModelDecisionSnapshotArgs
+  decision: ModelDecisionResult
+  durationMs: number | null
+  usage: PersistedRunUsage
+  input: ModelDecisionInput
+  tradeCaps: ReturnType<typeof calculateExecutableTradeCaps>
+}): StoredDecisionSnapshotResult {
+  const normalizedRunDate = normalizeRunDate(args.snapshotArgs.runDate)
+  const [snapshot] = await db.insert(modelDecisionSnapshots).values({
+    runId: args.snapshotArgs.runSource === 'cycle' ? args.snapshotArgs.runId ?? null : null,
+    runDate: normalizedRunDate,
+    marketId: args.snapshotArgs.market.id,
+    trialQuestionId: args.snapshotArgs.trialQuestionId ?? null,
+    actorId: args.snapshotArgs.actorId,
+    runSource: args.snapshotArgs.runSource,
+    approvalProbability: args.decision.forecast.approvalProbability,
+    yesProbability: args.decision.forecast.yesProbability ?? args.decision.forecast.approvalProbability,
+    binaryCall: args.decision.forecast.binaryCall,
+    confidence: args.decision.forecast.confidence,
+    reasoning: args.decision.forecast.reasoning,
+    proposedActionType: args.decision.action.type,
+    proposedAmountUsd: args.decision.action.amountUsd,
+    proposedExplanation: args.decision.action.explanation,
+    marketPriceYes: args.snapshotArgs.market.priceYes,
+    marketPriceNo: 1 - args.snapshotArgs.market.priceYes,
+    cashAvailable: args.snapshotArgs.account.cashBalance,
+    yesSharesHeld: args.snapshotArgs.position.yesShares,
+    noSharesHeld: args.snapshotArgs.position.noShares,
+    maxBuyUsd: args.tradeCaps.maxBuyUsd,
+    maxSellYesUsd: args.tradeCaps.maxSellYesUsd,
+    maxSellNoUsd: args.tradeCaps.maxSellNoUsd,
+    durationMs: args.durationMs,
+    inputTokens: args.usage.inputTokens,
+    outputTokens: args.usage.outputTokens,
+    totalTokens: args.usage.totalTokens,
+    reasoningTokens: args.usage.reasoningTokens,
+    estimatedCostUsd: args.usage.estimatedCostUsd,
+    costSource: args.usage.costSource,
+    cacheCreationInputTokens5m: args.usage.cacheCreationInputTokens5m,
+    cacheCreationInputTokens1h: args.usage.cacheCreationInputTokens1h,
+    cacheReadInputTokens: args.usage.cacheReadInputTokens,
+    webSearchRequests: args.usage.webSearchRequests,
+    inferenceGeo: args.usage.inferenceGeo,
+  }).returning()
+
+  return {
+    snapshot,
+    decision: args.decision,
+    input: args.input,
+    prediction: buildModelDecisionSnapshotPrediction({
+      modelId: args.snapshotArgs.modelId,
+      decision: args.decision,
+      durationMs: args.durationMs,
+      snapshot,
+      runSource: args.snapshotArgs.runSource,
+    }),
+  }
+}
+
+export async function generateAndStoreModelDecisionSnapshot(args: ModelDecisionSnapshotArgs): StoredDecisionSnapshotResult {
+  const generator = MODEL_DECISION_GENERATORS[args.modelId]
+  if (!generator?.enabled()) {
+    throw new Error(getModelDecisionGeneratorDisabledReason(args.modelId))
+  }
+
+  const { input, tradeCaps } = buildModelDecisionSnapshotInput(args)
+
   const prompt = buildModelDecisionPrompt(input)
   const startedAt = Date.now()
-  const generated = await generator.generator(input, args.generatorOptions)
+  const generated = await generator.generator(input)
   const durationMs = Date.now() - startedAt
   const usage = resolveUsageForStorage({
     modelId: args.modelId,
@@ -414,68 +519,42 @@ export async function generateAndStoreModelDecisionSnapshot(args: {
     billingMode: generated.billingMode,
   })
 
-  const [snapshot] = await db.insert(modelDecisionSnapshots).values({
-    runId: args.runSource === 'cycle' ? args.runId ?? null : null,
-    runDate: normalizedRunDate,
-    marketId: args.market.id,
-    trialQuestionId: args.trialQuestionId ?? null,
-    actorId: args.actorId,
-    runSource: args.runSource,
-    approvalProbability: generated.result.forecast.approvalProbability,
-    yesProbability: generated.result.forecast.yesProbability ?? generated.result.forecast.approvalProbability,
-    binaryCall: generated.result.forecast.binaryCall,
-    confidence: generated.result.forecast.confidence,
-    reasoning: generated.result.forecast.reasoning,
-    proposedActionType: generated.result.action.type,
-    proposedAmountUsd: generated.result.action.amountUsd,
-    proposedExplanation: generated.result.action.explanation,
-    marketPriceYes: args.market.priceYes,
-    marketPriceNo: 1 - args.market.priceYes,
-    cashAvailable: args.account.cashBalance,
-    yesSharesHeld: args.position.yesShares,
-    noSharesHeld: args.position.noShares,
-    maxBuyUsd: tradeCaps.maxBuyUsd,
-    maxSellYesUsd: tradeCaps.maxSellYesUsd,
-    maxSellNoUsd: tradeCaps.maxSellNoUsd,
-    durationMs,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    totalTokens: usage.totalTokens,
-    reasoningTokens: usage.reasoningTokens,
-    estimatedCostUsd: usage.estimatedCostUsd,
-    costSource: usage.costSource,
-    cacheCreationInputTokens5m: usage.cacheCreationInputTokens5m,
-    cacheCreationInputTokens1h: usage.cacheCreationInputTokens1h,
-    cacheReadInputTokens: usage.cacheReadInputTokens,
-    webSearchRequests: usage.webSearchRequests,
-    inferenceGeo: usage.inferenceGeo,
-  }).returning()
-
-  return {
-    snapshot,
+  return insertStoredModelDecisionSnapshot({
+    snapshotArgs: args,
     decision: generated.result,
+    durationMs,
+    usage,
     input,
-    prediction: {
-      predictorId: args.modelId,
-      prediction: generated.result.forecast.binaryCall,
-      confidence: generated.result.forecast.confidence,
-      reasoning: generated.result.forecast.reasoning,
-      durationMs,
-      correct: computeCorrectness(generated.result.forecast.binaryCall, 'Pending'),
-      createdAt: snapshot.createdAt?.toISOString(),
-      source: 'snapshot',
-      runSource: args.runSource,
-      approvalProbability: generated.result.forecast.approvalProbability,
-      yesProbability: generated.result.forecast.yesProbability ?? generated.result.forecast.approvalProbability,
-      action: {
-        type: generated.result.action.type,
-        amountUsd: generated.result.action.amountUsd,
-        explanation: generated.result.action.explanation,
-      },
-      linkedMarketActionId: null,
-      history: [mapSnapshotPrediction(snapshot, args.modelId, 'Pending')],
+    tradeCaps,
+  })
+}
+
+export async function storeImportedModelDecisionSnapshot(args: ModelDecisionSnapshotArgs & {
+  decision: ModelDecisionResult
+  durationMs?: number | null
+}): StoredDecisionSnapshotResult {
+  const { input, tradeCaps } = buildModelDecisionSnapshotInput(args)
+
+  return insertStoredModelDecisionSnapshot({
+    snapshotArgs: args,
+    decision: args.decision,
+    durationMs: args.durationMs ?? null,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      reasoningTokens: null,
+      estimatedCostUsd: 0,
+      costSource: 'subscription',
+      cacheCreationInputTokens5m: null,
+      cacheCreationInputTokens1h: null,
+      cacheReadInputTokens: null,
+      webSearchRequests: null,
+      inferenceGeo: null,
     },
-  }
+    input,
+    tradeCaps,
+  })
 }
 
 export async function linkSnapshotToMarketAction(snapshotId: string, marketActionId: string | null): Promise<void> {

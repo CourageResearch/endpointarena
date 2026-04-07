@@ -7,6 +7,12 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
 import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
+import {
+  ADMIN_ACTIVITY_DAY_FILTERS,
+  buildAdminDayFilterHref,
+  type PageSearchParams,
+  parseAdminDayFilter,
+} from '@/lib/admin-search-params'
 
 export const dynamic = 'force-dynamic'
 
@@ -127,22 +133,22 @@ function formatWhen(value: Date | null): string {
 export default async function AdminSearchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>
+  searchParams?: Promise<PageSearchParams>
 }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
     redirect('/login')
   }
 
-  const params = await searchParams
-  const days = params.days === '30' ? 30 : 7
+  const resolvedSearchParams = (await searchParams) ?? {}
+  const days = parseAdminDayFilter(resolvedSearchParams.days, ADMIN_ACTIVITY_DAY_FILTERS, 7)
   const data = await getSearchAnalytics(days)
 
   return (
     <AdminConsoleLayout
       title="Search Analytics"
-      description="See what visitors search for in the trials browser."
       activeTab="searches"
+      days={days}
     >
       <section className="mb-8">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Summary</h2>
@@ -170,26 +176,19 @@ export default async function AdminSearchesPage({
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Top Queries</h2>
           <div className="flex flex-wrap gap-2">
-            <a
-              href="/admin/searches?days=7"
-              className={`rounded-none border px-3 py-1.5 text-sm transition-colors ${
-                days === 7
+            {ADMIN_ACTIVITY_DAY_FILTERS.map((option) => (
+              <a
+                key={option.value}
+                href={buildAdminDayFilterHref('/admin/searches', option.value, ADMIN_ACTIVITY_DAY_FILTERS)}
+                className={`rounded-none border px-3 py-1.5 text-sm transition-colors ${
+                  days === option.value
                   ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'
                   : 'border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:bg-white hover:text-[#1a1a1a]'
-              }`}
-            >
-              7 days
-            </a>
-            <a
-              href="/admin/searches?days=30"
-              className={`rounded-none border px-3 py-1.5 text-sm transition-colors ${
-                days === 30
-                  ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'
-                  : 'border-[#e8ddd0] bg-white/80 text-[#8a8075] hover:bg-white hover:text-[#1a1a1a]'
-              }`}
-            >
-              30 days
-            </a>
+                }`}
+              >
+                {option.label}
+              </a>
+            ))}
           </div>
         </div>
 

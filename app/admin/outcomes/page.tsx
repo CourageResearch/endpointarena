@@ -94,8 +94,7 @@ export default async function AdminOutcomesPage({
 
   return (
     <AdminConsoleLayout
-      title="Oracle Review"
-      description="Review evidence-backed oracle queue items and resolve markets after checking the source material."
+      title="Oracle"
       activeTab="outcomes"
     >
       <AdminTrialOutcomeReview

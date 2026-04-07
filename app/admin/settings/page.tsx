@@ -41,7 +41,6 @@ export default async function AdminSettingsPage() {
   return (
     <AdminConsoleLayout
       title="Runtime Settings"
-      description="Tune trial controls and signup access without redeploying."
       activeTab="settings"
     >
       <section className="mb-4">

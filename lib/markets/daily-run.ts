@@ -1,22 +1,16 @@
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import {
   db,
   marketAccounts,
   marketActions,
   marketPositions,
   marketRuns,
-  phase2Trials,
   predictionMarkets,
-  trialQuestions,
 } from '@/lib/db'
-import { isModelId, MODEL_INFO, type ModelId } from '@/lib/constants'
+import { MODEL_INFO, type ModelId } from '@/lib/constants'
 import {
   calculateExecutableTradeCaps,
-  ensureMarketAccounts,
-  ensureMarketPositions,
-  normalizeRunDate,
   recordMarketActionError,
-  rotateModelOrder,
   runBuyAction,
   runHoldAction,
   runSellAction,
@@ -29,6 +23,7 @@ import { getMarketModelResponseTimeoutMs, MARKET_RUN_STALE_TIMEOUT_MINUTES, MARK
 import {
   generateAndStoreModelDecisionSnapshot,
   linkSnapshotToMarketAction,
+  storeImportedModelDecisionSnapshot,
 } from '@/lib/model-decision-snapshots'
 import {
   createDailyRunPausedError,
@@ -39,26 +34,28 @@ import {
 import {
   getModelDecisionGeneratorDisabledReason,
   MODEL_DECISION_GENERATORS,
-  type ModelDecisionGeneratorOptions,
 } from '@/lib/predictions/model-decision-generators'
-import { getModelActorIds } from '@/lib/market-actors'
 import { appendTrialRunLog } from '@/lib/trial-run-logs'
-import { getModelDecisionParseErrorDetails } from '@/lib/predictions/model-decision-prompt'
-import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
-
-type Phase2OpenMarket = typeof predictionMarkets.$inferSelect & {
-  trialQuestionId: string
-}
-
-type TrialQuestionWithTrial = typeof trialQuestions.$inferSelect & {
-  trial: typeof phase2Trials.$inferSelect
-}
+import { getModelDecisionParseErrorDetails, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
+import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
+import { prepareDailyRunContext } from '@/lib/markets/daily-run-planning'
+import {
+  getDailyRunAutomationSourceLabel,
+  type DailyRunAutomationSource,
+} from '@/lib/markets/automation-handoff-shared'
 
 export interface DailyRunExecutionOptions {
   hooks?: DailyRunHooks
   nctNumber?: string
   modelIds?: ModelId[]
-  claudeProvider?: ModelDecisionGeneratorOptions['claudeProvider']
+  marketIds?: string[]
+  importedDecisions?: Map<string, ImportedDailyRunDecision>
+  importedDecisionSource?: DailyRunAutomationSource | null
+}
+
+type ImportedDailyRunDecision = {
+  source: DailyRunAutomationSource
+  decision: ModelDecisionResult
 }
 
 function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
@@ -68,41 +65,6 @@ function summarizeResults(results: DailyRunResult[]): DailyRunSummary {
     if (result.status === 'skipped') acc.skipped += 1
     return acc
   }, { ok: 0, error: 0, skipped: 0 })
-}
-
-function normalizeScopedNctNumber(value: string): string {
-  return value.trim().toUpperCase()
-}
-
-function resolveDailyRunModelOrder(runDate: Date, requestedModelIds?: ModelId[]): ModelId[] {
-  if (requestedModelIds && requestedModelIds.length > 0) {
-    return Array.from(new Set(requestedModelIds))
-  }
-
-  const defaultOrder = rotateModelOrder(runDate)
-  const rawModelIds = process.env.MARKET_RUN_MODEL_IDS?.trim()
-  if (!rawModelIds) {
-    return defaultOrder
-  }
-
-  const allowedModelIds = Array.from(new Set(
-    rawModelIds
-      .split(',')
-      .map((value) => value.trim())
-      .filter((value): value is ModelId => isModelId(value)),
-  ))
-
-  if (allowedModelIds.length === 0) {
-    throw new Error('MARKET_RUN_MODEL_IDS did not include any valid model ids')
-  }
-
-  const allowedModelIdSet = new Set<ModelId>(allowedModelIds)
-  const filteredOrder = defaultOrder.filter((modelId) => allowedModelIdSet.has(modelId))
-  if (filteredOrder.length === 0) {
-    throw new Error('MARKET_RUN_MODEL_IDS did not overlap with the active daily-run model order')
-  }
-
-  return filteredOrder
 }
 
 function inferErrorCode(message: string): string {
@@ -284,84 +246,23 @@ export async function executeDailyRun(
     hooks,
     nctNumber,
     modelIds,
-    claudeProvider,
+    marketIds,
+    importedDecisionSource,
   } = options
-  const normalizedRunDate = normalizeRunDate(runDate)
-  const runDateIso = normalizedRunDate.toISOString()
-  const modelOrder = resolveDailyRunModelOrder(normalizedRunDate, modelIds)
-  const generatorOptions: ModelDecisionGeneratorOptions | undefined = claudeProvider
-    ? { claudeProvider }
-    : undefined
-  const scopedNctNumber = nctNumber ? normalizeScopedNctNumber(nctNumber) : null
-
-  const [runtimeConfig, rawOpenMarkets] = await Promise.all([
-    getMarketRuntimeConfig(),
-    db.query.predictionMarkets.findMany({
-      where: and(
-        eq(predictionMarkets.status, 'OPEN'),
-        isNotNull(predictionMarkets.trialQuestionId),
-      ),
-    }),
-  ])
-
-  const openMarkets = rawOpenMarkets.filter((market): market is Phase2OpenMarket => (
-    typeof market.trialQuestionId === 'string' && market.trialQuestionId.length > 0
-  ))
-
-  const openQuestionIds = Array.from(new Set(openMarkets.map((market) => market.trialQuestionId)))
-  const rawOpenQuestions = openQuestionIds.length > 0
-    ? await db.query.trialQuestions.findMany({
-        where: inArray(trialQuestions.id, openQuestionIds),
-        with: {
-          trial: true,
-        },
-      }) as TrialQuestionWithTrial[]
-    : []
-  const openQuestions = filterSupportedTrialQuestions(rawOpenQuestions)
-  const supportedQuestionIds = new Set(openQuestions.map((question) => question.id))
-  const supportedOpenMarkets = openMarkets.filter((market) => supportedQuestionIds.has(market.trialQuestionId))
-
-  const questionById = new Map(openQuestions.map((question) => [question.id, question]))
-  const orderedOpenMarkets = [...supportedOpenMarkets].sort((a, b) => {
-    const aQuestion = questionById.get(a.trialQuestionId)
-    const bQuestion = questionById.get(b.trialQuestionId)
-    const aDecisionTime = aQuestion?.trial.estPrimaryCompletionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-    const bDecisionTime = bQuestion?.trial.estPrimaryCompletionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-    if (aDecisionTime !== bDecisionTime) return aDecisionTime - bDecisionTime
-
-    const aOpenedTime = a.openedAt?.getTime() ?? 0
-    const bOpenedTime = b.openedAt?.getTime() ?? 0
-    if (aOpenedTime !== bOpenedTime) return aOpenedTime - bOpenedTime
-
-    return a.id.localeCompare(b.id)
+  const prepared = await prepareDailyRunContext(runDate, {
+    nctNumber,
+    modelIds,
+    marketIds,
   })
-  const scopedOpenMarkets = scopedNctNumber
-    ? orderedOpenMarkets.filter((market) => questionById.get(market.trialQuestionId)?.trial.nctNumber.toUpperCase() === scopedNctNumber)
-    : orderedOpenMarkets
-
-  if (scopedNctNumber && scopedOpenMarkets.length === 0) {
-    throw new Error(`No open trial found for ${scopedNctNumber}`)
-  }
-
-  const orderedMarketPlan = scopedOpenMarkets
-    .map((market) => {
-      const question = questionById.get(market.trialQuestionId)
-      if (!question) return null
-
-      return {
-        marketId: market.id,
-        trialQuestionId: market.trialQuestionId,
-        trialId: question.trial.id,
-        shortTitle: question.trial.shortTitle,
-        sponsorName: question.trial.sponsorName,
-        decisionDate: question.trial.estPrimaryCompletionDate.toISOString(),
-      } satisfies DailyRunPlannedMarket
-    })
-    .filter((entry): entry is DailyRunPlannedMarket => entry !== null)
-
-  await ensureMarketAccounts()
-  await Promise.all(scopedOpenMarkets.map((market) => ensureMarketPositions(market.id)))
-  const actorIdByModelId = await getModelActorIds(modelOrder)
+  const normalizedRunDate = prepared.normalizedRunDate
+  const runDateIso = prepared.runDateIso
+  const runtimeConfig = prepared.runtimeConfig
+  const modelOrder = prepared.modelOrder
+  const scopedNctNumber = prepared.scopedNctNumber
+  const scopedOpenMarkets = prepared.scopedOpenMarkets
+  const orderedMarketPlan = prepared.orderedMarketPlan as DailyRunPlannedMarket[]
+  const questionById = prepared.questionById
+  const actorIdByModelId = prepared.actorIdByModelId
 
   const totalActions = scopedOpenMarkets.length * modelOrder.length
   const runRecord = await startRunRecord({
@@ -391,7 +292,7 @@ export async function executeDailyRun(
   const runConfigMessageParts = [
     modelOrder.length > 0 ? `Models: ${modelOrder.map((modelId) => MODEL_INFO[modelId].fullName).join(', ')}` : null,
     scopedNctNumber ? `Trial ${scopedNctNumber}` : null,
-    claudeProvider ? `Claude provider: ${claudeProvider}` : null,
+    importedDecisionSource ? `Imported via ${getDailyRunAutomationSourceLabel(importedDecisionSource)}` : null,
   ].filter((value): value is string => Boolean(value))
 
   if (runConfigMessageParts.length > 0) {
@@ -412,6 +313,7 @@ export async function executeDailyRun(
   let okCount = 0
   let errorCount = 0
   let skippedCount = 0
+  const importedDecisions = options.importedDecisions ?? null
 
   const persistRunHeartbeat = async (): Promise<void> => {
     await db.update(marketRuns)
@@ -517,6 +419,8 @@ export async function executeDailyRun(
         if (!actorId) {
           throw new Error(`Halting daily run: market actor is missing for model ${modelId}`)
         }
+        const importedTaskKey = `${market.id}:${modelId}`
+        const importedDecision = importedDecisions?.get(importedTaskKey) ?? null
 
         const existing = await db.query.marketActions.findFirst({
           where: and(
@@ -583,9 +487,35 @@ export async function executeDailyRun(
           pauseDailyRun(`${MODEL_INFO[modelId].fullName} could not continue on ${marketQuestion.trial.shortTitle}: ${message}`)
         }
 
+        if (importedDecisions && !importedDecision) {
+          const message = 'Missing imported decision for this market/model step'
+          await recordMarketActionError({
+            runId: runRecord.id,
+            marketId: market.id,
+            trialQuestionId: market.trialQuestionId,
+            actorId,
+            runDate: normalizedRunDate,
+            priceYes: market.priceYes,
+            message,
+            code: inferErrorCode(message),
+          })
+
+          await pushResult({
+            marketId: market.id,
+            trialQuestionId: market.trialQuestionId,
+            actorId,
+            modelId,
+            action: 'HOLD',
+            amountUsd: 0,
+            status: 'error',
+            detail: message,
+          })
+          pauseDailyRun(`${MODEL_INFO[modelId].fullName} could not continue on ${marketQuestion.trial.shortTitle}: ${message}`)
+        }
+
         const generator = MODEL_DECISION_GENERATORS[modelId]
-        if (!generator?.enabled(generatorOptions)) {
-          const message = getModelDecisionGeneratorDisabledReason(modelId, generatorOptions)
+        if (!importedDecision && !generator?.enabled()) {
+          const message = getModelDecisionGeneratorDisabledReason(modelId)
           await recordMarketActionError({
             runId: runRecord.id,
             marketId: market.id,
@@ -614,10 +544,15 @@ export async function executeDailyRun(
         try {
           const modelName = MODEL_INFO[modelId].fullName
           const marketOrdinal = marketIndex + 1
+          const importedSourceLabel = importedDecision
+            ? getDailyRunAutomationSourceLabel(importedDecision.source)
+            : null
           await emitActivity({
             completedActions: processedActions,
             totalActions,
-      message: `Running ${modelName} on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${scopedOpenMarkets.length} trials)`,
+            message: importedSourceLabel
+              ? `Applying ${importedSourceLabel} ${modelName} decision on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${scopedOpenMarkets.length} trials)`
+              : `Running ${modelName} on ${marketQuestion.trial.shortTitle} (${marketOrdinal}/${scopedOpenMarkets.length} trials)`,
             marketId: market.id,
             trialQuestionId: market.trialQuestionId,
             actorId,
@@ -643,53 +578,70 @@ export async function executeDailyRun(
             continue
           }
 
-          const waitStartedAtMs = Date.now()
-          await emitActivity({
-            completedActions: processedActions,
-            totalActions,
-            message: `Waiting for ${modelName} response... 0s`,
-            marketId: market.id,
-            trialQuestionId: market.trialQuestionId,
-            actorId,
-            modelId,
-            phase: 'waiting',
-          })
+          const generatedDecision = importedDecision
+            ? await storeImportedModelDecisionSnapshot({
+                runSource: 'cycle',
+                runId: runRecord.id,
+                modelId,
+                actorId,
+                runDate: normalizedRunDate,
+                trial: marketQuestion.trial,
+                trialQuestionId: marketQuestion.id,
+                questionPrompt: normalizeTrialQuestionPrompt(marketQuestion.prompt),
+                market: latestMarket,
+                account,
+                position,
+                runtimeConfig,
+                decision: importedDecision.decision,
+              })
+            : await (async () => {
+                const waitStartedAtMs = Date.now()
+                await emitActivity({
+                  completedActions: processedActions,
+                  totalActions,
+                  message: `Waiting for ${modelName} response... 0s`,
+                  marketId: market.id,
+                  trialQuestionId: market.trialQuestionId,
+                  actorId,
+                  modelId,
+                  phase: 'waiting',
+                })
 
-          const waitHeartbeat = setInterval(() => {
-            const waitSeconds = Math.max(1, Math.round((Date.now() - waitStartedAtMs) / 1000))
-            void emitActivity({
-              completedActions: processedActions,
-              totalActions,
-              message: `Waiting for ${modelName} response... ${waitSeconds}s`,
-              marketId: market.id,
-              trialQuestionId: market.trialQuestionId,
-              actorId,
-              modelId,
-              phase: 'waiting',
-            })
-          }, 5000)
+                const waitHeartbeat = setInterval(() => {
+                  const waitSeconds = Math.max(1, Math.round((Date.now() - waitStartedAtMs) / 1000))
+                  void emitActivity({
+                    completedActions: processedActions,
+                    totalActions,
+                    message: `Waiting for ${modelName} response... ${waitSeconds}s`,
+                    marketId: market.id,
+                    trialQuestionId: market.trialQuestionId,
+                    actorId,
+                    modelId,
+                    phase: 'waiting',
+                  })
+                }, 5000)
 
-          const generatedDecision = await withTimeout(
-            generateAndStoreModelDecisionSnapshot({
-              runSource: 'cycle',
-              runId: runRecord.id,
-              modelId,
-              actorId,
-              runDate: normalizedRunDate,
-              trial: marketQuestion.trial,
-              trialQuestionId: marketQuestion.id,
-              questionPrompt: normalizeTrialQuestionPrompt(marketQuestion.prompt),
-              market: latestMarket,
-              account,
-              position,
-              runtimeConfig,
-              generatorOptions,
-            }),
-            getMarketModelResponseTimeoutMs(modelId),
-            `${modelName} response`,
-          ).finally(() => {
-            clearInterval(waitHeartbeat)
-          })
+                return withTimeout(
+                  generateAndStoreModelDecisionSnapshot({
+                    runSource: 'cycle',
+                    runId: runRecord.id,
+                    modelId,
+                    actorId,
+                    runDate: normalizedRunDate,
+                    trial: marketQuestion.trial,
+                    trialQuestionId: marketQuestion.id,
+                    questionPrompt: normalizeTrialQuestionPrompt(marketQuestion.prompt),
+                    market: latestMarket,
+                    account,
+                    position,
+                    runtimeConfig,
+                  }),
+                  getMarketModelResponseTimeoutMs(modelId),
+                  `${modelName} response`,
+                ).finally(() => {
+                  clearInterval(waitHeartbeat)
+                })
+              })()
 
           await throwIfDailyRunStopRequested(runRecord.id)
           generatedSnapshotId = generatedDecision.snapshot.id

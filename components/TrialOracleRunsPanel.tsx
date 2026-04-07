@@ -81,22 +81,6 @@ type OracleHistoryEntry = {
   } | null
 }
 
-function getPendingCandidateBadge(candidate: OracleCandidate): { label: string; className: string } {
-  if (candidate.proposedOutcome === 'YES' || candidate.proposedOutcome === 'NO') {
-    return {
-      label: candidate.proposedOutcome === 'YES' ? 'Pending YES' : 'Pending NO',
-      className: candidate.proposedOutcome === 'YES'
-        ? 'bg-[#3a8a2e]/10 text-[#2f6f24]'
-        : 'bg-[#EF6F67]/10 text-[#8d2c22]',
-    }
-  }
-
-  return {
-    label: 'Pending NO_DECISION',
-    className: 'bg-[#F5F2ED] text-[#7a7065]',
-  }
-}
-
 function getOutcomeBadge(outcome: OracleOutcomeValue): {
   label: string
   className: string
@@ -126,21 +110,12 @@ function getCandidateStatusBadge(status: OracleCandidateStatus): { label: string
   }
 }
 
-function getRunFindingTone(finding: OracleRunFinding): string {
-  if (!finding) return 'bg-[#F5F2ED] text-[#7a7065]'
-  if (finding.kind === 'created') return 'bg-[#3a8a2e]/10 text-[#2f6f24]'
-  if (finding.kind === 'duplicate') return 'bg-[#D39D2E]/10 text-[#8b6b21]'
-  if (finding.kind === 'failed') return 'bg-[#EF6F67]/10 text-[#8d2c22]'
-  if (finding.kind === 'no_evidence') return 'bg-[#F5F2ED] text-[#7a7065]'
-  return 'bg-[#5BA5ED]/10 text-[#245f94]'
-}
-
 function getHistorySourceLabel(source: OracleHistoryEntry['changeSource']): string {
   switch (source) {
     case 'accepted_candidate':
-      return 'Accepted Oracle Review'
+      return 'Accepted Oracle'
     case 'accepted_candidate_legacy':
-      return 'Accepted Oracle Review (Legacy)'
+      return 'Accepted Oracle (Legacy)'
     case 'manual_admin':
       return 'Manual Outcome Update'
     default:
@@ -154,24 +129,6 @@ function getOutcomeHistoryBadgeClass(outcome: 'Pending' | 'YES' | 'NO' | null): 
   return 'bg-[#F5F2ED] text-[#7a7065]'
 }
 
-function getRunStatusTone(run: OracleRun): string {
-  if (run.status === 'running' && run.stopRequestedAt) {
-    return 'bg-[#D39D2E]/10 text-[#8b6b21]'
-  }
-  if (run.status === 'completed') return 'bg-[#3a8a2e]/10 text-[#2f6f24]'
-  if (run.status === 'failed') return 'bg-[#EF6F67]/10 text-[#8d2c22]'
-  if (run.status === 'paused') return 'bg-[#D39D2E]/10 text-[#8b6b21]'
-  return 'bg-[#5BA5ED]/10 text-[#245f94]'
-}
-
-function getRunStatusLabel(run: OracleRun): string {
-  if (run.status === 'running' && run.stopRequestedAt) return 'Pause Requested'
-  if (run.status === 'paused') return 'Paused'
-  if (run.status === 'failed') return 'Failed'
-  if (run.status === 'completed') return 'Completed'
-  return 'Running'
-}
-
 function getSourceTypeLabel(sourceType: OracleCandidate['evidence'][number]['sourceType']): string {
   if (sourceType === 'clinicaltrials') return 'ClinicalTrials'
   if (sourceType === 'stored_source') return 'Stored Source'
@@ -181,13 +138,11 @@ function getSourceTypeLabel(sourceType: OracleCandidate['evidence'][number]['sou
 
 export function TrialOracleRunsPanel({
   selectedMarket,
-  pendingCandidates,
   allFindings,
   runHistory,
   historyEntries,
 }: {
   selectedMarket: OpenMarketRow
-  pendingCandidates: OracleCandidate[]
   allFindings: OracleFinding[]
   runHistory: OracleRun[]
   historyEntries: OracleHistoryEntry[]
@@ -210,15 +165,11 @@ export function TrialOracleRunsPanel({
             </Link>
             <h1 className="mt-3 text-2xl font-semibold leading-tight text-[#1a1a1a]">Oracle Runs</h1>
             <p className="mt-2 text-sm leading-6 text-[#6f665b]">
-              Full oracle run history and finding ledger for {trialTitle}{nctNumber ? ` (${nctNumber})` : ''}.
+              Oracle findings and outcome history for {trialTitle}{nctNumber ? ` (${nctNumber})` : ''}.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-right sm:grid-cols-4">
-            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queue</div>
-              <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{pendingCandidates.length}</div>
-            </div>
+          <div className="grid grid-cols-2 gap-3 text-right sm:grid-cols-3">
             <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
               <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Runs</div>
               <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{runHistory.length}</div>
@@ -240,149 +191,6 @@ export function TrialOracleRunsPanel({
       {selectedMarket.resolution ? (
         <MarketResolutionPanel selectedMarket={selectedMarket} />
       ) : null}
-
-      <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-[#1a1a1a]">Oracle Run History</div>
-          <HeaderDots />
-        </div>
-        <p className="mt-2 text-xs leading-5 text-[#8a8075]">
-          Every stored oracle run we can attribute to this trial, including what the run found and whether it created, matched, or skipped a finding. When older run metadata is missing, the page reconstructs a historical entry from the stored finding so the audit trail stays complete.
-        </p>
-
-        <div className="mt-4 space-y-4">
-          {runHistory.length === 0 ? (
-            <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-              No oracle runs have been recorded for this trial yet.
-            </div>
-          ) : runHistory.map((run) => (
-            <article key={run.id} className="rounded-none border border-[#e8ddd0] bg-white p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-none px-2 py-1 text-xs font-medium ${getRunStatusTone(run)}`}>
-                  {getRunStatusLabel(run)}
-                </span>
-                <span className="rounded-none border border-[#d8ccb9] bg-[#faf7f2] px-2 py-1 text-xs text-[#7a7065]">
-                  {run.verifierModelLabel}
-                </span>
-                {run.isReconstructed ? (
-                  <span className="rounded-none border border-[#d8ccb9] bg-[#faf7f2] px-2 py-1 text-xs text-[#7a7065]">
-                    Reconstructed
-                  </span>
-                ) : null}
-                {run.finding ? (
-                  <span className={`rounded-none px-2 py-1 text-xs font-medium ${getRunFindingTone(run.finding)}`}>
-                    {run.finding.label}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#8a8075]">
-                <span>Started {formatLocalDateTime(run.startedAt)}</span>
-                {run.completedAt ? <span>Completed {formatLocalDateTime(run.completedAt)}</span> : null}
-                <span>Scanned {run.questionsScanned}</span>
-                <span>Created {run.candidatesCreated}</span>
-              </div>
-
-              {run.finding ? (
-                <div className="mt-4 rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {run.finding.proposedOutcome ? (
-                      <span className={`rounded-none px-2 py-1 text-xs font-medium ${getOutcomeBadge(run.finding.proposedOutcome).className}`}>
-                        {getOutcomeBadge(run.finding.proposedOutcome).label}
-                      </span>
-                    ) : null}
-                    {typeof run.finding.confidence === 'number' ? (
-                      <span className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1 text-xs text-[#7a7065]">
-                        {Math.round(run.finding.confidence * 100)}% confidence
-                      </span>
-                    ) : null}
-                    {run.finding.candidateStatus ? (
-                      <span className={`rounded-none px-2 py-1 text-xs font-medium ${getCandidateStatusBadge(run.finding.candidateStatus).className}`}>
-                        {getCandidateStatusBadge(run.finding.candidateStatus).label}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#5b5148]">
-                    {run.finding.summary}
-                  </p>
-                </div>
-              ) : null}
-
-              {run.errorSummary ? (
-                <div className="mt-4 rounded-none border border-[#f1c1bc] bg-[#fff6f5] p-3 text-sm leading-6 text-[#8d2c22]">
-                  {run.errorSummary}
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-[#1a1a1a]">Oracle Queue</div>
-          <HeaderDots />
-        </div>
-        <p className="mt-2 text-xs leading-5 text-[#8a8075]">
-          Pending oracle findings for this trial. This mirrors the evidence queue admins review before settling a market.
-        </p>
-
-        <div className="mt-4 space-y-4">
-          {pendingCandidates.length === 0 ? (
-            <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-              No pending oracle queue items for this trial right now.
-            </div>
-          ) : pendingCandidates.map((candidate) => {
-            const badge = getPendingCandidateBadge(candidate)
-
-            return (
-              <article key={candidate.id} className="rounded-none border border-[#e8ddd0] bg-white p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-none px-2 py-1 text-xs font-medium ${badge.className}`}>
-                    {badge.label}
-                  </span>
-                  {candidate.confidence > 0 ? (
-                    <span className="rounded-none border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-1 text-xs text-[#8a8075]">
-                      {Math.round(candidate.confidence * 100)}% confidence
-                    </span>
-                  ) : null}
-                  <span className="rounded-none border border-[#d8ccb9] bg-[#faf7f2] px-2 py-1 text-xs text-[#7a7065]">
-                    {candidate.verifierModelLabel}
-                  </span>
-                </div>
-
-                <p className="mt-2 text-sm text-[#6f665b]">{candidate.questionPrompt}</p>
-                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#5b5148]">{candidate.summary}</p>
-                <p className="mt-2 text-xs text-[#8a8075]">Queued {formatLocalDateTime(candidate.createdAt)}</p>
-
-                <div className="mt-4 space-y-3">
-                  {candidate.evidence.map((evidence) => (
-                    <a
-                      key={evidence.id}
-                      href={evidence.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-4 transition-colors hover:bg-[#f5eee5]"
-                    >
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-xs uppercase tracking-[0.08em] text-[#b5aa9e]">
-                          {getSourceTypeLabel(evidence.sourceType)}
-                        </span>
-                        <span className="text-xs text-[#8a8075]">{evidence.domain}</span>
-                        {evidence.publishedAt ? (
-                          <span className="text-xs text-[#8a8075]">{formatLocalDateTime(evidence.publishedAt)}</span>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 text-base font-medium leading-7 text-[#1a1a1a]">{evidence.title}</div>
-                      <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[#6f665b]">{evidence.excerpt}</div>
-                    </a>
-                  ))}
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      </section>
 
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
         <div className="flex items-center gap-3">
@@ -475,7 +283,7 @@ export function TrialOracleRunsPanel({
           <HeaderDots />
         </div>
         <p className="mt-2 text-xs leading-5 text-[#8a8075]">
-          Public history of accepted oracle reviews and recorded outcome changes for this trial.
+          Public history of accepted oracles and recorded outcome changes for this trial.
         </p>
 
         <div className="mt-4 space-y-4">

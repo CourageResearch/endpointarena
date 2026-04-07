@@ -7,6 +7,12 @@ import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
+import {
+  ADMIN_ACTIVITY_DAY_FILTERS,
+  buildAdminDayFilterHref,
+  type PageSearchParams,
+  parseAdminDayFilter,
+} from '@/lib/admin-search-params'
 
 export const dynamic = 'force-dynamic'
 
@@ -139,23 +145,23 @@ async function getAnalyticsData(days: number) {
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>
+  searchParams?: Promise<PageSearchParams>
 }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
     redirect('/login')
   }
 
-  const params = await searchParams
-  const days = params.days === '30' ? 30 : 7
+  const resolvedSearchParams = (await searchParams) ?? {}
+  const days = parseAdminDayFilter(resolvedSearchParams.days, ADMIN_ACTIVITY_DAY_FILTERS, 7)
   const data = await getAnalyticsData(days)
   const maxDailyViews = Math.max(...data.dailyViews.map(d => d.count), 1)
 
   return (
     <AdminConsoleLayout
       title="Traffic Analytics"
-      description="Track page activity, click behavior, referrers, and geo distribution."
       activeTab="analytics"
+      days={days}
     >
 
         {/* Summary Cards */}
@@ -186,26 +192,19 @@ export default async function AnalyticsPage({
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Views Over Time</h2>
             <div className="flex flex-wrap gap-2">
-              <a
-                href="/admin/analytics?days=7"
-                className={`px-3 py-1.5 rounded-none text-sm border transition-colors ${
-                  days === 7
+              {ADMIN_ACTIVITY_DAY_FILTERS.map((option) => (
+                <a
+                  key={option.value}
+                  href={buildAdminDayFilterHref('/admin/analytics', option.value, ADMIN_ACTIVITY_DAY_FILTERS)}
+                  className={`px-3 py-1.5 rounded-none text-sm border transition-colors ${
+                    days === option.value
                     ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
                     : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
-                }`}
-              >
-                7 days
-              </a>
-              <a
-                href="/admin/analytics?days=30"
-                className={`px-3 py-1.5 rounded-none text-sm border transition-colors ${
-                  days === 30
-                    ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
-                    : 'bg-white/80 hover:bg-white border-[#e8ddd0] text-[#8a8075] hover:text-[#1a1a1a]'
-                }`}
-              >
-                30 days
-              </a>
+                  }`}
+                >
+                  {option.label}
+                </a>
+              ))}
             </div>
           </div>
           <div className="bg-white/80 border border-[#e8ddd0] rounded-none p-4">

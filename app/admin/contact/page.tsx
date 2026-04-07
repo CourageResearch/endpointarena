@@ -47,7 +47,6 @@ export default async function AdminContactPage() {
   return (
     <AdminConsoleLayout
       title="Contact Messages"
-      description="Review inbound contact requests and remove handled items."
       activeTab="contact"
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">

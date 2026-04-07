@@ -461,7 +461,6 @@ export default async function TrialOracleRunsPage({
       })),
   }))
 
-  const pendingCandidates = allFindings.filter((candidate) => candidate.status === 'pending_review')
   const findingsById = new Map(allFindings.map((candidate) => [candidate.id, candidate]))
   const attributedRunHistory = allRuns.map((run) => ({
     id: run.id,
@@ -543,7 +542,6 @@ export default async function TrialOracleRunsPage({
       <main className={`${SITE_CONTAINER_CLASS} py-8 sm:py-12`}>
         <TrialOracleRunsPanel
           selectedMarket={selectedMarket}
-          pendingCandidates={pendingCandidates}
           allFindings={allFindings}
           runHistory={runHistory}
           historyEntries={mappedHistoryEntries}

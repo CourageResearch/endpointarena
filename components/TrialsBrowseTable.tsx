@@ -42,9 +42,49 @@ const PANEL_BORDER_STYLE = {
 } as const
 const SEARCH_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3.5 py-2.5 text-[14px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const DATE_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3 py-2 text-[13px] leading-tight text-[#2f2a24] focus:border-[#8a8075] focus:bg-white focus:outline-none'
+const SORT_SELECT_CLASS_NAME = `${SEARCH_INPUT_CLASS_NAME} min-w-[12rem] appearance-none pr-10 text-[#2f2a24]`
 const SEARCH_INPUT_STYLE = {
   fontSize: '14px',
 }
+const SORT_SELECT_STYLE = {
+  backgroundImage:
+    'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27 fill=%27none%27 stroke=%27%232b2b2b%27 stroke-width=%271.8%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M5 7.5l5 5 5-5%27/%3E%3C/svg%3E")',
+  backgroundPosition: 'right 0.9rem center',
+  backgroundRepeat: 'no-repeat',
+  backgroundSize: '16px 16px',
+} as const
+const UPCOMING_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'default', label: 'Default order' },
+  { value: 'market:asc', label: 'Trial A-Z' },
+  { value: 'market:desc', label: 'Trial Z-A' },
+  { value: 'primaryCompletion:asc', label: 'Date earliest first' },
+  { value: 'primaryCompletion:desc', label: 'Date latest first' },
+  { value: 'yes:desc', label: 'Yes highest first' },
+  { value: 'yes:asc', label: 'Yes lowest first' },
+  { value: 'no:desc', label: 'No highest first' },
+  { value: 'no:asc', label: 'No lowest first' },
+  { value: 'volume:desc', label: 'Volume highest first' },
+  { value: 'volume:asc', label: 'Volume lowest first' },
+  { value: 'aiYes:desc', label: 'AI yes highest first' },
+  { value: 'aiYes:asc', label: 'AI yes lowest first' },
+  { value: 'aiNo:desc', label: 'AI no highest first' },
+  { value: 'aiNo:asc', label: 'AI no lowest first' },
+]
+const RESOLVED_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'default', label: 'Default order' },
+  { value: 'market:asc', label: 'Trial A-Z' },
+  { value: 'market:desc', label: 'Trial Z-A' },
+  { value: 'resolvedAt:desc', label: 'Resolved newest first' },
+  { value: 'resolvedAt:asc', label: 'Resolved oldest first' },
+  { value: 'outcome:asc', label: 'Outcome A-Z' },
+  { value: 'outcome:desc', label: 'Outcome Z-A' },
+  { value: 'volume:desc', label: 'Volume highest first' },
+  { value: 'volume:asc', label: 'Volume lowest first' },
+  { value: 'aiYes:desc', label: 'AI yes highest first' },
+  { value: 'aiYes:asc', label: 'AI yes lowest first' },
+  { value: 'aiNo:desc', label: 'AI no highest first' },
+  { value: 'aiNo:asc', label: 'AI no lowest first' },
+]
 
 function isLocalhostHostname(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -111,6 +151,27 @@ function getInitialSortDirection(key: TrialsBrowseSortKey): TrialsBrowseSortDire
   if (key === 'resolvedAt') return 'desc'
   if (key === 'outcome') return 'asc'
   return 'desc'
+}
+
+function getSortOptions(tab: TrialsBrowseTab): ReadonlyArray<{ value: string; label: string }> {
+  return tab === 'resolved' ? RESOLVED_SORT_OPTIONS : UPCOMING_SORT_OPTIONS
+}
+
+function getSortControlValue(sortState: TrialsBrowseSortState, tab: TrialsBrowseTab): string {
+  if (!sortState) return 'default'
+
+  const value = `${sortState.key}:${sortState.direction}`
+  return getSortOptions(tab).some((option) => option.value === value) ? value : 'default'
+}
+
+function parseSortControlValue(value: string, tab: TrialsBrowseTab): TrialsBrowseSortState {
+  if (value === 'default') return null
+
+  const matchingOption = getSortOptions(tab).find((option) => option.value === value)
+  if (!matchingOption) return null
+
+  const [key, direction] = value.split(':') as [TrialsBrowseSortKey, TrialsBrowseSortDirection]
+  return { key, direction }
 }
 
 function sortUpcomingRows(rows: IndexedTrialsBrowseRow[]): IndexedTrialsBrowseRow[] {
@@ -265,6 +326,8 @@ function TrialsBrowseSearchControls({
   toDateValue,
   onTabChange,
   onAppliedSearchQueryChange,
+  sortState,
+  onSortStateChange,
 }: {
   fromDateValue: string
   onClearDateRange: () => void
@@ -273,9 +336,12 @@ function TrialsBrowseSearchControls({
   toDateValue: string
   onTabChange: (tab: TrialsBrowseTab) => void
   onAppliedSearchQueryChange: (value: string) => void
+  sortState: TrialsBrowseSortState
+  onSortStateChange: (next: TrialsBrowseSortState) => void
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
+  const sortOptions = getSortOptions(selectedTab)
 
   useEffect(() => {
     startTransition(() => {
@@ -335,6 +401,26 @@ function TrialsBrowseSearchControls({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-[12rem]">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]" htmlFor="trials-browse-sort">
+              Sort
+            </label>
+            <select
+              id="trials-browse-sort"
+              value={getSortControlValue(sortState, selectedTab)}
+              onChange={(event) => onSortStateChange(parseSortControlValue(event.target.value, selectedTab))}
+              className={SORT_SELECT_CLASS_NAME}
+              style={SORT_SELECT_STYLE}
+              aria-label={selectedTab === 'resolved' ? 'Sort resolved trials' : 'Sort open trials'}
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="min-w-[10rem]">
             <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]" htmlFor="trials-browse-date-from">
               From
@@ -982,6 +1068,8 @@ export function TrialsBrowseTable({
         toDateValue={selectedToDateParam ?? ''}
         onTabChange={handleTabChange}
         onAppliedSearchQueryChange={setAppliedSearchQuery}
+        sortState={sortState}
+        onSortStateChange={setSortState}
       />
 
       <TrialsBrowseTableSection

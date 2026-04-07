@@ -3,7 +3,7 @@
 Use one row per day for routine production checks.
 Historical note: the active production surface is the Phase 2 trial rollout. Legacy event-monitor items below are only for reviewing the March 2026 FDA-era rollout and cleanup history.
 
-| Date (ET) | Checked By | Active Commit | Active Deployment ID | DATABASE_URL Host | MAINTENANCE_MODE | `/api/health` | Login + `/admin/update` | `/trials` list/detail render | DB connectivity errors (last 24h) | Auth callback errors (last 24h) | Action/Notes |
+| Date (ET) | Checked By | Active Commit | Active Deployment ID | DATABASE_URL Host | MAINTENANCE_MODE | `/api/health` | Login + admin smoke routes | `/trials` list/detail render | DB connectivity errors (last 24h) | Auth callback errors (last 24h) | Action/Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | YYYY-MM-DD | name | hash | deployment-id | postgres-yn1r.railway.internal | false | 200 | pass/fail | pass/fail | count | count | notes |
 
@@ -11,7 +11,7 @@ Historical note: the active production surface is the Phase 2 trial rollout. Leg
 1. Run `npm run ops:check-prod-cutover`.
 2. Run `npm run ops:check-prod-alerts`.
 3. Confirm `DATABASE_URL` still resolves to the `postgres-green` host.
-4. Confirm the trial-era smoke pages still load: `/`, `/trials`, one `/trials/[marketId]`, `/admin/update`, `/admin/outcomes`, and `/admin/settings`.
+4. Confirm the trial-era smoke pages still load: `/`, `/trials`, one `/trials/[marketId]`, `/admin/outcomes`, and `/admin/settings`.
 5. Log any failures and whether rollback criteria were met.
 
 ## Release-day extras

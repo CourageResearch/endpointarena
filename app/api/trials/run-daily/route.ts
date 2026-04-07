@@ -74,18 +74,6 @@ function resolveModelIds(input: unknown): ModelId[] | undefined {
   return normalized.length > 0 ? normalized : undefined
 }
 
-function resolveClaudeProvider(input: unknown): 'api' | 'web' | undefined {
-  if (input == null || input === '') {
-    return undefined
-  }
-
-  if (input === 'api' || input === 'web') {
-    return input
-  }
-
-  throw new ValidationError('claudeProvider must be either "api" or "web"')
-}
-
 export async function POST(request: NextRequest) {
   const requestId = createRequestId()
   const streamMode = new URL(request.url).searchParams.get('stream') === '1'
@@ -97,16 +85,10 @@ export async function POST(request: NextRequest) {
       runDate?: string
       nctNumber?: string
       modelIds?: string[]
-      claudeProvider?: 'api' | 'web'
     }>(request, {})
     const runDate = resolveRunDate(body.runDate)
     const nctNumber = resolveScopedNctNumber(body.nctNumber)
     const modelIds = resolveModelIds(body.modelIds)
-    const claudeProvider = resolveClaudeProvider(body.claudeProvider)
-
-    if (claudeProvider === 'web' && process.env.NODE_ENV === 'production') {
-      throw new ValidationError('claudeProvider="web" is currently only supported in local development')
-    }
 
     if (streamMode) {
       const stream = new ReadableStream<Uint8Array>({
@@ -127,7 +109,6 @@ export async function POST(request: NextRequest) {
             const payload = await executeDailyRun(runDate, {
               nctNumber,
               modelIds,
-              claudeProvider,
               hooks: {
                 onStart: (start) => {
                   writeEvent({ type: 'start', ...start })
@@ -208,7 +189,6 @@ export async function POST(request: NextRequest) {
     const payload = await executeDailyRun(runDate, {
       nctNumber,
       modelIds,
-      claudeProvider,
     })
     return successResponse(payload, {
       headers: {

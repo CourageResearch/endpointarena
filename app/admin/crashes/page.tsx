@@ -5,24 +5,15 @@ import { authOptions } from '@/lib/auth'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { getRecentCrashEvents } from '@/lib/crash-events'
+import {
+  ADMIN_CRASH_DAY_FILTERS,
+  buildPathWithSearchParams,
+  firstSearchParam,
+  type PageSearchParams,
+  parseAdminDayFilter,
+} from '@/lib/admin-search-params'
 
 export const dynamic = 'force-dynamic'
-
-type SearchParamValue = string | string[] | undefined
-type PageSearchParams = Record<string, SearchParamValue>
-
-function firstSearchParam(value: SearchParamValue): string {
-  if (Array.isArray(value)) {
-    return typeof value[0] === 'string' ? value[0] : ''
-  }
-  return typeof value === 'string' ? value : ''
-}
-
-function parseDays(value: string): number {
-  const parsed = Number.parseInt(value, 10)
-  if (parsed === 1 || parsed === 7 || parsed === 30) return parsed
-  return 7
-}
 
 function normalizeSearch(value: string): string {
   return value.trim().slice(0, 120)
@@ -140,7 +131,7 @@ export default async function AdminCrashesPage({
   }
 
   const resolvedSearchParams = (await searchParams) ?? {}
-  const days = parseDays(firstSearchParam(resolvedSearchParams.days))
+  const days = parseAdminDayFilter(resolvedSearchParams.days, ADMIN_CRASH_DAY_FILTERS, 7)
   const query = normalizeSearch(firstSearchParam(resolvedSearchParams.q))
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
@@ -156,17 +147,11 @@ export default async function AdminCrashesPage({
   const eventsLast24h = rows.filter((row) => row.createdAt && row.createdAt >= last24hStart).length
   const digests = new Set(rows.map((row) => row.digest).filter((digest): digest is string => Boolean(digest)))
 
-  const dayLinks = [
-    { label: '24h', value: 1 },
-    { label: '7d', value: 7 },
-    { label: '30d', value: 30 },
-  ]
-
   return (
     <AdminConsoleLayout
       title="Crash Tracker"
-      description="Inspect server/client crashes with digest, stack hints, route context, and repeat frequency."
       activeTab="crashes"
+      days={days}
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-none border border-[#EF6F67]/35 bg-[#EF6F67]/10 p-3">
@@ -216,15 +201,15 @@ export default async function AdminCrashesPage({
           </div>
         </form>
         <div className="mt-3 flex flex-wrap gap-2">
-          {dayLinks.map((option) => {
+          {ADMIN_CRASH_DAY_FILTERS.map((option) => {
             const active = days === option.value
-            const params = new URLSearchParams()
-            params.set('days', String(option.value))
-            if (query) params.set('q', query)
             return (
               <a
                 key={option.value}
-                href={`/admin/crashes?${params.toString()}`}
+                href={buildPathWithSearchParams('/admin/crashes', {
+                  days: option.value,
+                  q: query || undefined,
+                })}
                 className={`rounded-none border px-3 py-1.5 text-xs transition-colors ${
                   active
                     ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'

@@ -150,6 +150,8 @@ type StructuredVerifierSource = {
   domain: string
 }
 
+type StructuredOutputProvider = 'default' | 'xai'
+
 type StructuredVerifierOutput = {
   classification: VerifierClassification
   confidence: number
@@ -943,14 +945,15 @@ function buildOnePassVerificationPrompt(
   ].join('\n')
 }
 
-function createVerifierSourceSchema() {
+function createVerifierSourceSchema(provider: StructuredOutputProvider = 'default') {
+  const supportsStringLengthBounds = provider !== 'xai'
   return {
     type: 'object',
     additionalProperties: false,
     properties: {
       title: {
         type: 'string',
-        maxLength: MAX_VERIFIER_TITLE_CHARS,
+        ...(supportsStringLengthBounds ? { maxLength: MAX_VERIFIER_TITLE_CHARS } : {}),
       },
       url: { type: 'string' },
       publishedAt: {
@@ -961,7 +964,7 @@ function createVerifierSourceSchema() {
       },
       excerpt: {
         type: 'string',
-        maxLength: MAX_VERIFIER_EXCERPT_CHARS,
+        ...(supportsStringLengthBounds ? { maxLength: MAX_VERIFIER_EXCERPT_CHARS } : {}),
       },
       sourceType: {
         type: 'string',
@@ -976,9 +979,13 @@ function createVerifierSourceSchema() {
 function createVerifierJsonSchema(input: {
   includeConfidenceBounds?: boolean
   includeSourceCountBounds?: boolean
+  provider?: StructuredOutputProvider
 } = {}) {
   const includeConfidenceBounds = input.includeConfidenceBounds !== false
   const includeSourceCountBounds = input.includeSourceCountBounds !== false
+  const provider = input.provider ?? 'default'
+  const supportsStringLengthBounds = provider !== 'xai'
+  const supportsArrayItemBounds = provider !== 'xai'
 
   return {
     type: 'object',
@@ -1003,12 +1010,12 @@ function createVerifierJsonSchema(input: {
       },
       reasoning: {
         type: 'string',
-        maxLength: MAX_VERIFIER_REASONING_CHARS,
+        ...(supportsStringLengthBounds ? { maxLength: MAX_VERIFIER_REASONING_CHARS } : {}),
       },
       sources: {
         type: 'array',
-        items: createVerifierSourceSchema(),
-        ...(includeSourceCountBounds ? {
+        items: createVerifierSourceSchema(provider),
+        ...(includeSourceCountBounds && supportsArrayItemBounds ? {
           minItems: 1,
           maxItems: MAX_VERIFIER_SOURCE_COUNT,
         } : {}),
@@ -1018,12 +1025,12 @@ function createVerifierJsonSchema(input: {
   }
 }
 
-function createVerifierResponseFormat() {
+function createVerifierResponseFormat(provider: StructuredOutputProvider = 'default') {
   return {
     type: 'json_schema' as const,
     name: 'trial_outcome_one_pass',
     strict: true,
-    schema: createVerifierJsonSchema(),
+    schema: createVerifierJsonSchema({ provider }),
   }
 }
 
@@ -1094,12 +1101,12 @@ async function runProviderVerificationPrompt(
         baseURL: 'https://api.x.ai/v1',
       })
       const response = await withVerifierTimeout(
-        client.responses.create({
+        client.responses.parse({
           model: spec.model,
           input: prompt,
           max_output_tokens: VERIFIER_MAX_OUTPUT_TOKENS,
           text: {
-            format: createVerifierResponseFormat(),
+            format: createVerifierResponseFormat('xai'),
             verbosity: 'low',
           },
           tools: [{ type: 'web_search' as const }],
@@ -1108,8 +1115,9 @@ async function runProviderVerificationPrompt(
         trialTitle,
       )
 
+      const parsedOutput = response.output_parsed
       return {
-        rawText: extractResponseText(response),
+        rawText: parsedOutput ? JSON.stringify(parsedOutput) : extractResponseText(response),
         providerResponseId: typeof response?.id === 'string' ? response.id : null,
         sourceUrls: extractWebSearchSourceUrls(response),
         sourceExtractionMethod: 'xai_web_search_sources',
