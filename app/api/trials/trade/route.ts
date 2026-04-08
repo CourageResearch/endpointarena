@@ -132,6 +132,13 @@ async function getTraderSnapshot(actorId: string, marketId: string): Promise<{
   }
 }
 
+function isMarketClosedToTrading(market: {
+  status: string
+  trialQuestion?: { outcome: string } | null
+}): boolean {
+  return market.status !== 'OPEN' || market.trialQuestion?.outcome !== 'Pending'
+}
+
 export async function GET(request: Request) {
   const requestId = createRequestId()
 
@@ -146,10 +153,21 @@ export async function GET(request: Request) {
 
     const market = await db.query.predictionMarkets.findFirst({
       where: eq(predictionMarkets.id, marketId),
+      with: {
+        trialQuestion: {
+          columns: {
+            outcome: true,
+          },
+        },
+      },
     })
 
     if (!market) {
       throw new NotFoundError('Market not found')
+    }
+
+    if (isMarketClosedToTrading(market)) {
+      throw new ConflictError('This market is no longer open')
     }
 
     const actor = await ensureHumanMarketActor(userId)
@@ -207,13 +225,20 @@ export async function POST(request: Request) {
 
     const market = await db.query.predictionMarkets.findFirst({
       where: eq(predictionMarkets.id, marketId),
+      with: {
+        trialQuestion: {
+          columns: {
+            outcome: true,
+          },
+        },
+      },
     })
 
     if (!market) {
       throw new NotFoundError('Market not found')
     }
 
-    if (market.status !== 'OPEN') {
+    if (isMarketClosedToTrading(market)) {
       throw new ConflictError('This market is no longer open')
     }
 

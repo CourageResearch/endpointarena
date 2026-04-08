@@ -176,6 +176,24 @@ export interface OverviewResponse {
   recentRuns: OverviewRunRow[]
 }
 
+export function getResolvedTrialOutcome(outcome: string | null | undefined): 'YES' | 'NO' | null {
+  const normalized = String(outcome ?? '').trim().toUpperCase()
+  if (normalized === 'YES' || normalized === 'NO') {
+    return normalized
+  }
+  return null
+}
+
+export function isMarketClosedToTrading(input: {
+  status?: string | null
+  event?: { outcome?: string | null } | null
+} | null | undefined): boolean {
+  if (!input) {
+    return false
+  }
+  return input.status === 'RESOLVED' || getResolvedTrialOutcome(input.event?.outcome) !== null
+}
+
 const REASON_PREVIEW_MAX_CHARS = 220
 const EMPTY_HISTORY_SNAPSHOT_DATE = '1970-01-01T00:00:00.000Z'
 

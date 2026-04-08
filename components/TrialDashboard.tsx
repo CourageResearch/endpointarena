@@ -33,6 +33,7 @@ import {
   getMarketQuestion,
   getMarketSubtitle,
   getPriceMoveFromHistory,
+  isMarketClosedToTrading,
   type OverviewResponse,
   type OpenMarketRow,
   type RecentMarketActionRow,
@@ -374,7 +375,7 @@ export function TrialDashboard({
       sessionStatus !== 'authenticated'
       || !verificationStatus?.verified
       || !marketId
-      || selectedMarketForTrader?.status !== 'OPEN'
+      || isMarketClosedToTrading(selectedMarketForTrader)
     ) {
       setTraderSnapshot(null)
       setTraderSnapshotLoading(false)
@@ -417,7 +418,13 @@ export function TrialDashboard({
     return () => {
       cancelled = true
     }
-  }, [selectedEntry?.market.marketId, selectedEntry?.market.status, sessionStatus, verificationStatus?.verified])
+  }, [
+    selectedEntry?.market.marketId,
+    selectedEntry?.market.status,
+    selectedEntry?.market.event?.outcome,
+    sessionStatus,
+    verificationStatus?.verified,
+  ])
 
   const selectedMarketActions = useMemo(() => {
     if (!selectedEntry) return []
@@ -534,7 +541,7 @@ export function TrialDashboard({
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
   const isTradeVerified = Boolean(verificationStatus?.verified)
-  const isResolvedMarket = selectedMarket.status === 'RESOLVED'
+  const isResolvedMarket = isMarketClosedToTrading(selectedMarket)
   const showDetailSidebar = useStackedLayout
   const MarketTitleTag = showMarketList ? 'h3' : 'h1'
   const applicationTypeMeta = selectedMarket.event?.applicationType
@@ -560,6 +567,7 @@ export function TrialDashboard({
   const parsedTradeAmount = Number.parseFloat(tradeAmountUsd)
   const tradeAmountValue = Number.isFinite(parsedTradeAmount) ? Math.max(0, parsedTradeAmount) : 0
   const canSubmitTrade = isTradeVerified
+    && !isResolvedMarket
     && !tradeSubmitting
     && tradeAmountValue > 0
     && (tradeDirection === 'buy' ? availableTradeUsd > 0.0001 : heldSharesForSelectedOutcome > 0.0001)
@@ -713,7 +721,7 @@ export function TrialDashboard({
       return
     }
 
-    if (selectedMarket.status !== 'OPEN') {
+    if (isMarketClosedToTrading(selectedMarket)) {
       setTradeError('Resolved trials are no longer open for trading')
       return
     }

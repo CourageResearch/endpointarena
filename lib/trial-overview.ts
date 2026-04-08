@@ -8,7 +8,12 @@ import {
   trialOutcomeCandidates,
   trialQuestions,
 } from '@/lib/db'
-import type { OverviewResponse } from '@/lib/markets/overview-shared'
+import {
+  getResolvedTrialOutcome,
+  isMarketClosedToTrading,
+  type MarketResolutionRow,
+  type OverviewResponse,
+} from '@/lib/markets/overview-shared'
 import { getMarketDecisionHistoryByMarketIds } from '@/lib/model-decision-snapshots'
 import type { ModelDecisionSnapshot, PredictionHistoryEntry } from '@/lib/types'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
@@ -200,8 +205,39 @@ export async function getTrialsOverviewData(input: {
     const trial = question ? trialById.get(question.trialId) : null
     if (!question || !trial) return []
     const acceptedCandidate = latestAcceptedCandidateByQuestionId.get(questionId)
-    const resolvedOutcome: 'YES' | 'NO' | null = market.resolvedOutcome === 'YES' || market.resolvedOutcome === 'NO'
+    const marketResolvedOutcome: 'YES' | 'NO' | null = market.resolvedOutcome === 'YES' || market.resolvedOutcome === 'NO'
       ? market.resolvedOutcome
+      : null
+    const questionResolvedOutcome = getResolvedTrialOutcome(question.outcome)
+    const displayResolvedOutcome = marketResolvedOutcome ?? questionResolvedOutcome
+    const resolution: MarketResolutionRow | null = displayResolvedOutcome
+      ? {
+          outcome: displayResolvedOutcome,
+          resolvedAt: toIsoString(market.resolvedAt)
+            ?? toIsoString(question.outcomeDate)
+            ?? toIsoString(acceptedCandidate?.proposedOutcomeDate)
+            ?? toIsoString(acceptedCandidate?.reviewedAt),
+          acceptedReview: acceptedCandidate
+            ? {
+                summary: acceptedCandidate.summary,
+                confidence: acceptedCandidate.confidence,
+                proposedOutcomeDate: toIsoString(acceptedCandidate.proposedOutcomeDate),
+                reviewedAt: toIsoString(acceptedCandidate.reviewedAt),
+                evidence: acceptedCandidate.evidence
+                  .slice()
+                  .sort((left, right) => left.displayOrder - right.displayOrder)
+                  .map((evidence) => ({
+                    sourceType: evidence.sourceType as 'clinicaltrials' | 'sponsor' | 'stored_source' | 'web_search',
+                    title: evidence.title,
+                    url: evidence.url,
+                    publishedAt: toIsoString(evidence.publishedAt),
+                    excerpt: evidence.excerpt,
+                    domain: evidence.domain,
+                    displayOrder: evidence.displayOrder,
+                  })),
+              }
+            : null,
+        }
       : null
 
     const allQuestions = (questionsByTrialId.get(trial.id) || [])
@@ -289,32 +325,7 @@ export async function getTrialsOverviewData(input: {
         questionStatus: question.status as 'live' | 'coming_soon',
         allQuestions,
       },
-      resolution: market.status === 'RESOLVED'
-        ? {
-            outcome: resolvedOutcome,
-            resolvedAt: toIsoString(market.resolvedAt),
-            acceptedReview: acceptedCandidate
-              ? {
-                  summary: acceptedCandidate.summary,
-                  confidence: acceptedCandidate.confidence,
-                  proposedOutcomeDate: toIsoString(acceptedCandidate.proposedOutcomeDate),
-                  reviewedAt: toIsoString(acceptedCandidate.reviewedAt),
-                  evidence: acceptedCandidate.evidence
-                    .slice()
-                    .sort((left, right) => left.displayOrder - right.displayOrder)
-                    .map((evidence) => ({
-                      sourceType: evidence.sourceType as 'clinicaltrials' | 'sponsor' | 'stored_source' | 'web_search',
-                      title: evidence.title,
-                      url: evidence.url,
-                      publishedAt: toIsoString(evidence.publishedAt),
-                      excerpt: evidence.excerpt,
-                      domain: evidence.domain,
-                      displayOrder: evidence.displayOrder,
-                    })),
-                }
-              : null,
-          }
-        : null,
+      resolution,
       modelStates,
       priceHistory: (marketSnapshotsByMarket.get(market.id) || [])
         .slice(0, 90)
@@ -405,8 +416,8 @@ export async function getTrialsOverviewData(input: {
     completedAt: toIsoString(run.completedAt),
   }))
 
-  const openMarketRows = marketRows.filter((market) => market.status === 'OPEN')
-  const resolvedMarketRows = marketRows.filter((market) => market.status === 'RESOLVED')
+  const openMarketRows = marketRows.filter((market) => !isMarketClosedToTrading(market))
+  const resolvedMarketRows = marketRows.filter((market) => isMarketClosedToTrading(market))
 
   return {
     success: true,

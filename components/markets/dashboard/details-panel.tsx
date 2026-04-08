@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
 import { glossaryTermAnchor } from '@/lib/glossary'
 import type { OpenMarketRow, PublicOutcomeEvidenceRow } from '@/lib/markets/overview-shared'
-import { formatCompactMoney } from '@/lib/markets/overview-shared'
+import { formatCompactMoney, isMarketClosedToTrading } from '@/lib/markets/overview-shared'
 import { cn } from '@/lib/utils'
 import {
   APPROVE_TEXT_CLASS,
@@ -212,7 +212,7 @@ export function MarketDetailsPanel({
   const companyName = selectedMarket.event?.companyName?.trim() ?? ''
   const currentStatus = selectedMarket.event?.currentStatus?.trim() ?? ''
   const estEnrollment = selectedMarket.event?.estEnrollment ?? null
-  const isResolvedMarket = selectedMarket.status === 'RESOLVED'
+  const isResolvedMarket = isMarketClosedToTrading(selectedMarket)
   const primaryCompletionDate = selectedMarket.event?.decisionDate
   const studyCompletionDate = selectedMarket.event?.estStudyCompletionDate ?? null
   const resolvedDate = selectedMarket.resolution?.acceptedReview?.proposedOutcomeDate
