@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { getDaysUntil, MODEL_INFO, type ModelId } from '@/lib/constants'
+import { getDaysUntil, MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import { formatUtcDate } from '@/lib/date'
 import {
@@ -928,32 +928,24 @@ export function AdminTrialManager({
   const currentExecutionMarket = currentExecutionStep
     ? executionPlan.find((market) => market.marketId === currentExecutionStep.marketId) ?? null
     : null
-  const executionModelOrder = executionPlan[0]?.steps.map((step) => step.modelId) ?? runProgress?.modelOrder ?? []
+  const executionModelOrder = useMemo<ModelId[]>(() => {
+    const planModels = executionPlan[0]?.steps.map((step) => step.modelId) ?? []
+    const runModels = runProgress?.modelOrder ?? []
+    const seen = new Set<ModelId>()
+    const order: ModelId[] = []
+    for (const modelId of [...planModels, ...runModels, ...MODEL_IDS]) {
+      if (seen.has(modelId)) continue
+      seen.add(modelId)
+      order.push(modelId)
+    }
+    return order
+  }, [executionPlan, runProgress?.modelOrder])
   const executionEstimatedCostUsd = useMemo(() => (
     executionPlan.reduce((total, market) => (
       total + executionModelOrder.reduce((marketTotal, modelId) => (
         marketTotal + (market.estimatedModelRunCosts[modelId] ?? 0)
       ), 0)
     ), 0)
-  ), [executionModelOrder, executionPlan])
-  const averageModelRowCost = useMemo(() => (
-    executionModelOrder.reduce<Partial<Record<ModelId, number>>>((acc, modelId) => {
-      let total = 0
-      let count = 0
-
-      for (const market of executionPlan) {
-        const cost = market.estimatedModelRunCosts[modelId]
-        if (typeof cost !== 'number' || !Number.isFinite(cost) || cost <= 0) continue
-        total += cost
-        count += 1
-      }
-
-      if (count > 0) {
-        acc[modelId] = total / count
-      }
-
-      return acc
-    }, {})
   ), [executionModelOrder, executionPlan])
   const getExecutionStepFallbackDetail = (status: 'queued' | 'running' | 'waiting' | 'ok' | 'error' | 'skipped') => {
     switch (status) {
@@ -1325,131 +1317,101 @@ export function AdminTrialManager({
 
             <div className="mt-3">
               {executionPlan.length > 0 ? (
-                <div className="max-h-[72vh] overflow-auto rounded-none border border-[#e8ddd0] bg-white">
-                  <table className="min-w-[1700px] w-full border-separate border-spacing-0">
-                    <thead>
-                      <tr className="bg-[#f8f4ee]">
-                        <th className="sticky left-0 top-0 z-30 min-w-[260px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
-                          Trial
-                        </th>
-                        <th className="sticky top-0 z-20 min-w-[128px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
-                          Progress
-                        </th>
-                        {executionModelOrder.map((modelId, index) => (
-                          <th
-                            key={modelId}
-                            className="sticky top-0 z-20 min-w-[180px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left align-top"
-                          >
-                            <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">
-                              Model {index + 1}
+                <div className="max-h-[72vh] space-y-3 overflow-y-auto rounded-none border border-[#e8ddd0] bg-white p-3">
+                  {executionPlan.map((market) => {
+                    const marketDoneCount = market.steps.filter((step) => step.status === 'ok' || step.status === 'skipped' || step.status === 'error').length
+                    const stepByModel = new Map(market.steps.map((step) => [step.modelId, step] as const))
+                    const isCurrentMarket = currentExecutionMarket?.marketId === market.marketId
+                    const marketEstimatedCostUsd = executionModelOrder.reduce((total, modelId) => (
+                      total + (market.estimatedModelRunCosts[modelId] ?? 0)
+                    ), 0)
+
+                    return (
+                      <div
+                        key={market.marketId}
+                        className="rounded-none border border-[#e8ddd0] bg-white"
+                      >
+                        <div className="flex flex-col lg:flex-row">
+                          <div className="lg:w-[220px] lg:shrink-0 border-b border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3 lg:border-b-0 lg:border-r">
+                            <p className="text-sm font-medium text-[#1a1a1a]">
+                              {market.marketSequence}. {market.shortTitle}
                             </p>
-                            <p className="mt-1 text-xs font-medium text-[#1a1a1a]">
-                              {MODEL_INFO[modelId].fullName}
+                            <p className="mt-1 text-xs text-[#8a8075]">
+                              {formatUtcDate(market.decisionDate, { month: '2-digit', day: '2-digit', year: '2-digit' })}
+                              {market.nctNumber ? ` • ${market.nctNumber}` : ''}
                             </p>
-                            {averageModelRowCost[modelId] ? (
+                            <p className="mt-2 text-xs text-[#1a1a1a]">
+                              <span className="font-medium">{marketDoneCount}/{market.steps.length}</span>
+                              <span className="ml-1 text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">steps closed</span>
+                            </p>
+                            {marketEstimatedCostUsd > 0 ? (
                               <p className="mt-1 text-[11px] text-[#6f665b]">
-                                {formatUsdEstimate(averageModelRowCost[modelId] ?? 0)}/row
+                                {formatUsdEstimate(marketEstimatedCostUsd)} est.
                               </p>
                             ) : null}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {executionPlan.map((market) => {
-                        const marketDoneCount = market.steps.filter((step) => step.status === 'ok' || step.status === 'skipped' || step.status === 'error').length
-                        const stepByModel = new Map(market.steps.map((step) => [step.modelId, step] as const))
-                        const isCurrentMarket = currentExecutionMarket?.marketId === market.marketId
-                        const marketEstimatedCostUsd = executionModelOrder.reduce((total, modelId) => (
-                          total + (market.estimatedModelRunCosts[modelId] ?? 0)
-                        ), 0)
+                            {isCurrentMarket && currentExecutionStep && (
+                              <p className="mt-2 text-[11px] text-[#1f5cb9]">
+                                Live on {MODEL_INFO[currentExecutionStep.modelId].name}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex-1 px-3 py-3">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+                              {executionModelOrder.map((modelId) => {
+                                const step = stepByModel.get(modelId)
+                                const modelInfo = MODEL_INFO[modelId]
 
-                        return (
-                          <tr key={market.marketId} className="align-top">
-                            <td className="sticky left-0 z-10 min-w-[260px] border-t border-[#e8ddd0] bg-white px-3 py-3 shadow-[1px_0_0_0_#e8ddd0]">
-                              <p className="text-sm font-medium text-[#1a1a1a]">
-                                {market.marketSequence}. {market.shortTitle}
-                              </p>
-                              <p className="mt-1 text-xs text-[#8a8075]">
-                                {formatUtcDate(market.decisionDate, { month: '2-digit', day: '2-digit', year: '2-digit' })}
-                                {market.nctNumber ? ` • ${market.nctNumber}` : ''}
-                              </p>
-                            </td>
-                            <td className="border-l border-t border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3">
-                              <p className="text-sm font-medium text-[#1a1a1a]">
-                                {marketDoneCount}/{market.steps.length}
-                              </p>
-                              <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">
-                                steps closed
-                              </p>
-                              {marketEstimatedCostUsd > 0 ? (
-                                <p className="mt-2 text-xs text-[#6f665b]">
-                                  {formatUsdEstimate(marketEstimatedCostUsd)} est.
-                                </p>
-                              ) : null}
-                              {isCurrentMarket && currentExecutionStep && (
-                                <p className="mt-2 text-xs text-[#1f5cb9]">
-                                  Live on {MODEL_INFO[currentExecutionStep.modelId].name}
-                                </p>
-                              )}
-                            </td>
-                            {executionModelOrder.map((modelId) => {
-                              const step = stepByModel.get(modelId)
+                                if (!step) {
+                                  return (
+                                    <div
+                                      key={`${market.marketId}:${modelId}`}
+                                      className="rounded-none border border-[#e8ddd0] bg-white px-2 py-2"
+                                    >
+                                      <p className="text-[11px] font-medium text-[#1a1a1a]">{modelInfo.name}</p>
+                                      <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#a39789]">Not scheduled</p>
+                                    </div>
+                                  )
+                                }
 
-                              if (!step) {
+                                const tone = getExecutionStepTone(step.status)
+                                const detail = step.detail
+                                  ? truncateText(step.detail, 88)
+                                  : getExecutionStepFallbackDetail(step.status)
+                                const durationLabel = getExecutionStepDurationLabel(step, executionStepNowMs)
+                                const estimatedStepCostUsd = market.estimatedModelRunCosts[modelId] ?? 0
+
                                 return (
-                                  <td
-                                    key={`${market.marketId}:${modelId}`}
-                                    className="border-l border-t border-[#e8ddd0] bg-white px-3 py-3"
+                                  <div
+                                    key={step.key}
+                                    className={`rounded-none border px-2 py-2 ${tone.container}`}
                                   >
-                                    <p className="text-xs text-[#8a8075]">Not scheduled</p>
-                                  </td>
-                                )
-                              }
-
-                              const tone = getExecutionStepTone(step.status)
-                              const detail = step.detail
-                                ? truncateText(step.detail, 88)
-                                : getExecutionStepFallbackDetail(step.status)
-                              const durationLabel = getExecutionStepDurationLabel(step, executionStepNowMs)
-                              const estimatedStepCostUsd = market.estimatedModelRunCosts[modelId] ?? 0
-
-                              return (
-                                <td
-                                  key={step.key}
-                                  className={`border-l border-t px-3 py-3 align-top ${tone.container}`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}>
-                                      {getExecutionStatusLabel(step.status)}
-                                    </span>
-                                    <span className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">
-                                      {step.globalSequence}/{executionPlanStepCount}
-                                    </span>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-[11px] font-medium text-[#1a1a1a]">{modelInfo.name}</p>
+                                      <span className={`rounded-none border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] ${tone.badge}`}>
+                                        {getExecutionStatusLabel(step.status)}
+                                      </span>
+                                    </div>
+                                    {detail ? (
+                                      <p className={`mt-1.5 text-[11px] leading-4 ${tone.label}`}>
+                                        {detail}
+                                      </p>
+                                    ) : null}
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[#6f665b]">
+                                      <span>{step.globalSequence}/{executionPlanStepCount}</span>
+                                      {durationLabel ? <span>{durationLabel}</span> : null}
+                                      {estimatedStepCostUsd > 0 ? (
+                                        <span>{formatUsdEstimate(estimatedStepCostUsd)} est.</span>
+                                      ) : null}
+                                    </div>
                                   </div>
-                                  {detail ? (
-                                    <p className={`mt-2 text-xs leading-5 ${tone.label}`}>
-                                      {detail}
-                                    </p>
-                                  ) : null}
-                                  {durationLabel ? (
-                                    <p className="mt-2 text-[11px] text-[#6f665b]">
-                                      {durationLabel}
-                                    </p>
-                                  ) : null}
-                                  {estimatedStepCostUsd > 0 ? (
-                                    <p className="mt-2 text-[11px] text-[#8a8075]">
-                                      {formatUsdEstimate(estimatedStepCostUsd)} est.
-                                    </p>
-                                  ) : null}
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#8a8075]">
