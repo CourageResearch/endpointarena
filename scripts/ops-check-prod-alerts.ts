@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 
 type LogEntry = {
   level?: string
@@ -11,28 +11,7 @@ const HEALTH_URL = process.env.APP_HEALTH_URL?.trim() || 'https://endpointarena.
 const LOG_WINDOW = process.env.ALERT_LOG_WINDOW?.trim() || '1h'
 const LOG_LINES = Number(process.env.ALERT_LOG_LINES ?? 1500)
 
-function resolveRailwayBin(): string {
-  const override = process.env.RAILWAY_BIN?.trim()
-  if (override) return override
-
-  try {
-    const finder = process.platform === 'win32' ? 'where' : 'which'
-    const output = execFileSync(finder, ['railway'], {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
-    const matches = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    if (process.platform === 'win32') {
-      const preferred = matches.find((line) => /\.(cmd|exe|bat)$/i.test(line))
-      return preferred || matches[0] || 'railway'
-    }
-    return matches[0] || 'railway'
-  } catch {
-    return 'railway'
-  }
-}
-
-const RAILWAY_BIN = resolveRailwayBin()
+const RAILWAY_BIN = process.env.RAILWAY_BIN?.trim() || 'railway'
 
 const MAX_TOTAL_ERROR_LINES = Number(process.env.ALERT_MAX_TOTAL_ERROR_LINES ?? 50)
 const MAX_DB_CONNECTIVITY_ERRORS = Number(process.env.ALERT_MAX_DB_CONNECTIVITY_ERRORS ?? 0)

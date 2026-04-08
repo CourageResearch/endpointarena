@@ -2,17 +2,19 @@
 
 This repo expects the project local Postgres cluster to live at `~/.endpointarena-pg18` by default.
 
-If `cmd /c npm run dev` sees a different cluster on the same port, it now fails fast with a recovery command instead of letting the app boot into a broken state.
+If `npm run dev` sees a different cluster on the same port, it now fails fast with a recovery command instead of letting the app boot into a broken state.
 
 Useful commands:
 
-- `cmd /c npm run db:status-local-postgres`
-- `cmd /c npm run db:start-local-postgres`
-- `cmd /c npm run db:stop-local-postgres`
-- `cmd /c npm run db:switch-local-postgres`
+- `npm run dev:local`
+- `npm run db:status-local-postgres`
+- `npm run db:start-local-postgres`
+- `npm run db:stop-local-postgres`
+- `npm run db:switch-local-postgres`
 
 What each one does:
 
+- `dev:local` starts the project Postgres cluster if needed, then launches Next dev on `127.0.0.1:3000`.
 - `status` checks that the cluster listening on `DATABASE_URL` has the expected local database.
 - `start` starts the project cluster if nothing is listening on the expected port.
 - `switch` stops the other cluster on that port and restores the project cluster.

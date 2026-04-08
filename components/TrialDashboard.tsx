@@ -480,6 +480,25 @@ export function TrialDashboard({
     }
   }, [data?.recentActions, selectedEntry])
 
+  const activityFilterModelIds = useMemo(
+    () =>
+      Array.from(MODEL_IDS).sort((left, right) => {
+        const leftModel = MODEL_INFO[left]
+        const rightModel = MODEL_INFO[right]
+        return leftModel.fullName.localeCompare(rightModel.fullName)
+      }),
+    [],
+  )
+
+  const activityFilterOptions: ActivityFilterOption[] = useMemo(
+    () => activityFilterModelIds.map((modelId) => ({
+      id: modelId,
+      label: MODEL_INFO[modelId].fullName,
+      active: commentModelFilter !== 'all' && commentModelFilter.includes(modelId),
+    })),
+    [activityFilterModelIds, commentModelFilter],
+  )
+
   if (loading) {
     return <div className="rounded-2xl border border-[#e8ddd0] bg-white/75 p-6 text-sm text-[#7b7266]">Loading trial...</div>
   }
@@ -516,29 +535,12 @@ export function TrialDashboard({
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
   const isTradeVerified = Boolean(verificationStatus?.verified)
   const isResolvedMarket = selectedMarket.status === 'RESOLVED'
-  const showDetailSidebar = useStackedLayout && !isResolvedMarket
+  const showDetailSidebar = useStackedLayout
   const MarketTitleTag = showMarketList ? 'h3' : 'h1'
   const applicationTypeMeta = selectedMarket.event?.applicationType
     ? abbreviateType(selectedMarket.event.applicationType)
     : null
   const drugDescriptionText = selectedMarket.event?.eventDescription?.trim() || '-'
-  const activityFilterModelIds = useMemo(
-    () =>
-      Array.from(MODEL_IDS).sort((left, right) => {
-        const leftModel = MODEL_INFO[left]
-        const rightModel = MODEL_INFO[right]
-        return leftModel.fullName.localeCompare(rightModel.fullName)
-      }),
-    [],
-  )
-  const activityFilterOptions: ActivityFilterOption[] = useMemo(
-    () => activityFilterModelIds.map((modelId) => ({
-      id: modelId,
-      label: MODEL_INFO[modelId].fullName,
-      active: commentModelFilter !== 'all' && commentModelFilter.includes(modelId),
-    })),
-    [activityFilterModelIds, commentModelFilter],
-  )
   const selectedTradeSide = toHumanTradeSide(tradeDirection, tradeOutcome)
   const marketDetailHref = `/trials/${encodeURIComponent(selectedMarket.marketId)}`
   const decisionSnapshotsHref = `${marketDetailHref}/decision-snapshots`
@@ -990,6 +992,7 @@ export function TrialDashboard({
                               <MarketTradePanel
                                 className="lg:sticky lg:top-20"
                                 marketQuestion={selectedEntry.question}
+                                resolution={selectedMarket.resolution ?? null}
                                 sessionStatus={sessionStatus}
                                 verificationStatus={verificationStatus}
                                 safeCallbackUrl={safeCallbackUrl}

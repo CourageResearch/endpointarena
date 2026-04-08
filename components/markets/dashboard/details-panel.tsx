@@ -110,7 +110,7 @@ export function MarketResolutionPanel({
   const acceptedReview = resolution.acceptedReview
 
   return (
-    <section className={cn('space-y-4', className)}>
+    <section id="resolution-evidence" className={cn('space-y-4 scroll-mt-24', className)}>
       <div className="px-1">
         <div className="flex items-center gap-3">
           <div className={DASHBOARD_SECTION_LABEL_CLASS}>Resolution Evidence</div>
@@ -120,7 +120,7 @@ export function MarketResolutionPanel({
 
       <div className={cn(DETAILS_CARD_SHELL_CLASS)}>
         <div className="rounded-none border border-transparent px-4 py-4 sm:px-5 sm:py-5" style={DETAILS_CARD_BORDER_STYLE}>
-          <dl className="flex flex-wrap gap-3 lg:flex-nowrap lg:gap-2 xl:gap-3">
+          <dl className="flex flex-wrap gap-3">
               <DetailValue label="Outcome" className="sm:min-w-[8rem] sm:flex-[0_1_8rem] lg:min-w-[7.25rem] lg:flex-[0_1_7.25rem]">
                 <span className={cn('inline-flex items-center rounded-sm border px-2.5 py-1 text-[11px] font-medium tracking-[0.14em]', outcomeTone.badgeClass)}>
                   {outcomeTone.label}
@@ -128,18 +128,18 @@ export function MarketResolutionPanel({
               </DetailValue>
 
               <DetailValue label="Status" className="sm:min-w-[8.5rem] sm:flex-[0_1_8.5rem] lg:min-w-[8rem] lg:flex-[0_1_8rem]">
-                <span className="text-[0.98rem] font-medium text-[#50473f] sm:text-[1.02rem]">
+                <span className={cn('whitespace-nowrap font-sans', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS)}>
                   Resolved
                 </span>
               </DetailValue>
 
               <DetailValue label="Settlement Date" className="sm:min-w-[10rem] sm:flex-[0_1_10rem] lg:min-w-[9.75rem] lg:flex-[0_1_9.75rem]">
-                <span className={cn('text-[0.98rem] font-medium tracking-[0.01em] sm:text-[1.02rem]', outcomeTone.textClass)}>
+                <span className={cn('tabular-nums whitespace-nowrap', DETAILS_TOP_VALUE_CLASS, DETAIL_TOP_VALUE_CLASS)}>
                   {formatDateUtcCompact(resolution.resolvedAt)} UTC
                 </span>
               </DetailValue>
 
-              <DetailValue label="Executive Summary" className="min-w-0 sm:flex-[1_1_18rem] lg:flex-[1.9_1_0%]">
+              <DetailValue label="Executive Summary" className="basis-full min-w-0">
                 <p className={cn('leading-[1.7] text-[#4d453c]', DETAILS_BODY_TEXT_CLASS, DETAIL_BODY_VALUE_CLASS)}>
                   {acceptedReview
                     ? acceptedReview.summary

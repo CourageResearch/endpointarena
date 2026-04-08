@@ -47,6 +47,7 @@ export interface DailyRunProgressState {
   startedAtMs: number
   runDate: string | null
   modelOrder: ModelId[]
+  importedSourceLabel: string | null
   orderedMarkets: DailyRunPlannedMarket[]
   openMarkets: number
   totalActions: number
@@ -156,6 +157,11 @@ function extractLoggedModelOrder(message: string): ModelId[] {
   return orderedModelIds
 }
 
+function extractImportedSourceLabel(message: string): string | null {
+  const match = message.match(/\bImported via (.+?)(?:\s+\|\s+|$)/i)
+  return match?.[1]?.trim() || null
+}
+
 function inferExpectedModelCount(
   snapshot: AdminMarketRunSnapshot,
   logs: AdminMarketRunSnapshot['logs']
@@ -225,6 +231,18 @@ function extractSnapshotModelOrder(snapshot: AdminMarketRunSnapshot): ModelId[] 
   }
 
   return completeModelOrder(snapshot.runDate, orderedModelIds, expectedModelCount)
+}
+
+function extractSnapshotImportedSourceLabel(snapshot: AdminMarketRunSnapshot): string | null {
+  const latestRunLogs = extractLatestRunLogs(snapshot)
+
+  for (const log of latestRunLogs) {
+    if (log.logType !== 'system') continue
+    const importedSourceLabel = extractImportedSourceLabel(log.message)
+    if (importedSourceLabel) return importedSourceLabel
+  }
+
+  return null
 }
 
 function extractSnapshotOrderedMarkets(
@@ -320,9 +338,11 @@ export function buildExecutionPlan(input: {
   orderedMarkets?: DailyRunPlannedMarket[] | null
   fallbackStatuses?: Array<AdminMarketEvent['marketStatus']>
 }): ExecutionPlanMarket[] {
-  const modelOrder = input.modelOrder && input.modelOrder.length > 0
+  const initialModelOrder = input.modelOrder && input.modelOrder.length > 0
     ? input.modelOrder
-    : rotateModelOrderLocal(input.runDate)
+    : []
+  const normalizedRunDate = normalizeRunDateLocal(input.runDate).toISOString()
+  const modelOrder = completeModelOrder(normalizedRunDate, initialModelOrder, MODEL_IDS.length)
 
   const marketById = new Map(
     input.events
@@ -717,6 +737,7 @@ export function buildRunProgressFromSnapshot(snapshot: AdminMarketRunSnapshot | 
     startedAtMs: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : Date.now(),
     runDate: snapshot.runDate,
     modelOrder: extractSnapshotModelOrder(snapshot),
+    importedSourceLabel: extractSnapshotImportedSourceLabel(snapshot),
     orderedMarkets: [],
     openMarkets: snapshot.openMarkets,
     totalActions: counts.totalActions,

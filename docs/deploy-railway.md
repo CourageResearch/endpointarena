@@ -4,16 +4,16 @@ This repo deploys from GitHub to Railway. GitHub is the source of truth for code
 
 ## Windows command notes
 
-On this workstation, PowerShell blocks the wrapper scripts for `npm` and `railway`, so use `cmd /c`:
+On this workstation, run `npm` and `railway` directly in PowerShell:
 
-- `cmd /c npm run typecheck`
-- `cmd /c npm run build`
-- `cmd /c railway status`
+- `npm run typecheck`
+- `npm run build`
+- `railway status`
 
 If Railway CLI reports `Unauthorized`, re-authenticate before continuing:
 
-- `cmd /c railway login`
-- `cmd /c railway login --browserless`
+- `railway login`
+- `railway login --browserless`
 
 ## GitHub CI build env
 
@@ -39,9 +39,9 @@ This repo is already connected to Railway through GitHub deployments. The curren
 After logging in locally, link the repo:
 
 ```powershell
-cmd /c railway link --project f109ef0b-d201-42d1-b2cd-5b64b065d860 --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
-cmd /c railway status
-cmd /c railway variable list --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
+railway link --project f109ef0b-d201-42d1-b2cd-5b64b065d860 --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
+railway status
+railway variable list --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
 ```
 
 `railway.json` already points Railway health checks at `/api/health`.
@@ -63,14 +63,14 @@ For this release, `TRIAL_MONITOR_CRON_SECRET` and `TRIAL_SYNC_CRON_SECRET` are i
 2. Run the local preflight checks:
 
 ```powershell
-cmd /c npm run typecheck
-cmd /c npm run build
+npm run typecheck
+npm run build
 ```
 
 3. Apply the pending production schema migration directly against the Railway Postgres service:
 
 ```powershell
-Get-Content -Raw .\drizzle\0001_rapid_spitfire.sql | cmd /c railway connect postgres-green
+Get-Content -Raw .\drizzle\0001_rapid_spitfire.sql | railway connect postgres-green
 ```
 
 The required migration for this release is `drizzle/0001_rapid_spitfire.sql`. Do not use `railway run npm run db:migrate` from this workstation for production, because `railway run` executes locally and the production `DATABASE_URL` currently points at an internal Railway hostname.
@@ -78,7 +78,7 @@ The required migration for this release is `drizzle/0001_rapid_spitfire.sql`. Do
 4. Trigger one watched production deploy:
 
 ```powershell
-cmd /c railway up --ci
+railway up --ci
 ```
 
 If GitHub has already started the Railway deploy for the pushed commit, watch that deployment instead of creating a second one. If you do use `railway up --ci`, run it only from a clean checkout that matches the pushed commit.
@@ -87,7 +87,7 @@ If GitHub has already started the Railway deploy for the pushed commit, watch th
 
 ```powershell
 curl.exe -sS https://endpointarena.com/api/health
-cmd /c railway logs --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --latest --lines 200
+railway logs --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --latest --lines 200
 ```
 
 6. Smoke test:

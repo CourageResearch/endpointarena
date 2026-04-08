@@ -9,6 +9,7 @@ import {
   PageFrame,
   SquareDivider,
 } from '@/components/site/chrome'
+import { CopyablePromptBlock } from '@/components/site/CopyablePromptBlock'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { buildPageMetadata } from '@/lib/seo'
 
@@ -189,17 +190,6 @@ function FontCard({
   )
 }
 
-function PromptBlock({ value }: { value: string }) {
-  return (
-    <textarea
-      readOnly
-      value={value}
-      className="min-h-[560px] w-full resize-y border border-[#e8ddd0] bg-[#fcfaf7] p-4 font-mono text-xs leading-6 text-[#1a1a1a] focus:outline-none"
-      aria-label="Copyable infographic prompt"
-    />
-  )
-}
-
 function TokenRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[#e8ddd0] py-2 last:border-b-0">
@@ -289,27 +279,27 @@ export default function BrandPage() {
           </div>
         </section>
 
-        <section className="mb-10 grid gap-4 min-[520px]:grid-cols-2 lg:gap-6">
-          <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
+        <section className="mb-10 grid items-stretch gap-4 min-[520px]:grid-cols-2 lg:gap-6">
+          <GradientBorder className="h-full rounded-sm" innerClassName="flex h-full flex-col rounded-sm p-4 sm:p-6">
             <SectionHeader
               label="Material"
               title="UI Style Tokens"
               description="These are the exact surface, border, type, and layout rules that make the app feel native."
             />
-            <div className="rounded-lg border border-[#e8ddd0] bg-white px-3 py-1">
+            <div className="flex-1 rounded-lg border border-[#e8ddd0] bg-white px-3 py-1">
               {INFOGRAPHIC_STYLE_TOKENS.map((token) => (
                 <TokenRow key={token.label} label={token.label} value={token.value} />
               ))}
             </div>
           </GradientBorder>
 
-          <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
+          <GradientBorder className="h-full rounded-sm" innerClassName="flex h-full flex-col rounded-sm p-4 sm:p-6">
             <SectionHeader
               label="Prompt"
               title="Universal Style Prompt"
               description="Paste this into Midjourney, Grok, OpenAI image tools, or similar generators, then swap the final block with your subject."
             />
-            <PromptBlock value={INFOGRAPHIC_PROMPT} />
+            <CopyablePromptBlock value={INFOGRAPHIC_PROMPT} />
           </GradientBorder>
         </section>
 

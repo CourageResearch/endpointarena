@@ -108,14 +108,15 @@ Provider routing notes:
 - DeepSeek, GLM, Kimi, and MiniMax run through Fireworks.
 - Llama runs through Groq.
 
-On this Windows workstation, use `cmd /c` before `npm` and `railway` wrapper commands.
+On this Windows workstation, run `npm` and `railway` directly in PowerShell.
 
 Core local commands:
 
 ```bash
-cmd /c npm run dev
-cmd /c npm run typecheck
-cmd /c npm run check
-cmd /c npm run build
-cmd /c npm run db:import-phase2
+npm run dev
+npm run dev:local
+npm run typecheck
+npm run check
+npm run build
+npm run db:import-phase2
 ```

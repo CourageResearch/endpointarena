@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { getDaysUntil, MODEL_INFO, type ModelId } from '@/lib/constants'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
@@ -34,6 +34,7 @@ import {
   type AdminTrialRunSnapshot,
   type DailyRunProgressState,
   type ErrorConsoleEntry,
+  type ExecutionPlanStep,
   type ExecutionPlanTrial,
   type LastRunSummaryState,
 } from '@/components/admin/trial-manager-utils'
@@ -73,6 +74,21 @@ export type AdminTrialManagerSection =
   | 'openMarkets'
   | 'needsMarket'
   | 'resolvedMarkets'
+
+interface BrowserFilePickerHandle {
+  getFile: () => Promise<File>
+}
+
+interface BrowserFilePickerWindow extends Window {
+  showOpenFilePicker?: (options?: {
+    excludeAcceptAllOption?: boolean
+    multiple?: boolean
+    types?: Array<{
+      accept: Record<string, string[]>
+      description?: string
+    }>
+  }) => Promise<BrowserFilePickerHandle[]>
+}
 
 const DEFAULT_SECTIONS: AdminTrialManagerSection[] = [
   'dailyCycle',
@@ -160,24 +176,32 @@ export function AdminTrialManager({
   sections = DEFAULT_SECTIONS,
   labels,
 }: Props) {
+  const hasActiveInitialRun = initialRunSnapshot?.status === 'running'
+  const initialLastRunSummary = buildRunSummaryFromSnapshot(initialRunSnapshot)
   const router = useRouter()
   const [events, setEvents] = useState(initialEvents)
   const [search, setSearch] = useState('')
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null)
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
   const [updatingOutcome, setUpdatingOutcome] = useState<Record<string, boolean>>({})
-  const [runningDaily, setRunningDaily] = useState(initialRunSnapshot?.status === 'running')
-  const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(() => buildRunSummaryFromSnapshot(initialRunSnapshot))
-  const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(() => buildRunProgressFromSnapshot(initialRunSnapshot))
-  const [elapsedSeconds, setElapsedSeconds] = useState(() => buildRunSummaryFromSnapshot(initialRunSnapshot)?.durationSeconds ?? 0)
-  const [runLog, setRunLog] = useState<string[]>(() => buildRunLogFromSnapshot(initialRunSnapshot))
-  const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => buildErrorConsoleFromSnapshot(initialRunSnapshot))
+  const [runningDaily, setRunningDaily] = useState(hasActiveInitialRun)
+  const [lastRunSummary, setLastRunSummary] = useState<LastRunSummaryState | null>(initialLastRunSummary)
+  const [runProgress, setRunProgress] = useState<DailyRunProgressState | null>(() => (
+    hasActiveInitialRun ? buildRunProgressFromSnapshot(initialRunSnapshot) : null
+  ))
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => initialLastRunSummary?.durationSeconds ?? 0)
+  const [runLog, setRunLog] = useState<string[]>(() => (
+    hasActiveInitialRun ? buildRunLogFromSnapshot(initialRunSnapshot) : []
+  ))
+  const [errorConsole, setErrorConsole] = useState<ErrorConsoleEntry[]>(() => (
+    hasActiveInitialRun ? buildErrorConsoleFromSnapshot(initialRunSnapshot) : []
+  ))
   const [executionPlan, setExecutionPlan] = useState<ExecutionPlanTrial[]>(() => (
-    initialRunSnapshot
+    hasActiveInitialRun
       ? buildExecutionPlanFromSnapshot(initialEvents, initialRunSnapshot)
       : buildNextExecutionPlan(initialEvents)
   ))
-  const [preserveExecutionPlan, setPreserveExecutionPlan] = useState(Boolean(initialRunSnapshot))
+  const [preserveExecutionPlan, setPreserveExecutionPlan] = useState(hasActiveInitialRun)
   const [uiError, setUiError] = useState<string | null>(null)
   const [isStoppingDaily, setIsStoppingDaily] = useState(initialRunSnapshot?.status === 'running' && isAdminStoppedMessage(initialRunSnapshot?.failureReason))
   const [isStreamingRun, setIsStreamingRun] = useState(false)
@@ -188,11 +212,14 @@ export function AdminTrialManager({
   const [automationExportState, setAutomationExportState] = useState<AutomationExportState | null>(null)
   const [automationDecisionFile, setAutomationDecisionFile] = useState<File | null>(null)
   const [automationDecisionText, setAutomationDecisionText] = useState('')
+  const [automationDecisionFilenameHint, setAutomationDecisionFilenameHint] = useState<string | null>(null)
   const [automationPreview, setAutomationPreview] = useState<DailyRunAutomationPreview | null>(null)
   const [isPreviewingAutomation, setIsPreviewingAutomation] = useState(false)
   const [isApplyingAutomation, setIsApplyingAutomation] = useState(false)
   const [automationApplyState, setAutomationApplyState] = useState<AutomationApplyState | null>(null)
-
+  const [automationInputResetKey, setAutomationInputResetKey] = useState(0)
+  const [isLoadingLatestAutomationDecision, setIsLoadingLatestAutomationDecision] = useState(false)
+  const automationDecisionInputRef = useRef<HTMLInputElement | null>(null)
   const runStartedAtMs = runProgress?.startedAtMs ?? null
   const currentExecutionStep = useMemo(() => getCurrentExecutionStep(executionPlan), [executionPlan])
   const scopedClaudeNctNumber = useMemo(() => parseScopedNctNumber(scopedClaudeNctInput), [scopedClaudeNctInput])
@@ -487,7 +514,65 @@ export function AdminTrialManager({
 
     return {
       contents: pastedText,
-      filename: null,
+      filename: automationDecisionFilenameHint,
+    }
+  }
+
+  const setAutomationDecisionSelection = (file: File | null) => {
+    setAutomationDecisionFile(file)
+    setAutomationDecisionText('')
+    setAutomationDecisionFilenameHint(null)
+    setAutomationPreview(null)
+    setAutomationApplyState(null)
+    setAutomationInputResetKey((prev) => prev + 1)
+  }
+
+  const chooseAutomationDecisionFile = async () => {
+    setUiError(null)
+
+    try {
+      const input = automationDecisionInputRef.current as (HTMLInputElement & {
+        showPicker?: () => void
+      }) | null
+
+      if (input) {
+        if (typeof input.showPicker === 'function') {
+          input.showPicker()
+          return
+        }
+
+        input.click()
+        return
+      }
+
+      const pickerWindow = window as BrowserFilePickerWindow
+      if (typeof pickerWindow.showOpenFilePicker === 'function') {
+        const [handle] = await pickerWindow.showOpenFilePicker({
+          multiple: false,
+          types: [
+            {
+              description: 'JSON files',
+              accept: {
+                'application/json': ['.json'],
+              },
+            },
+          ],
+        })
+
+        if (handle) {
+          const file = await handle.getFile()
+          setAutomationDecisionSelection(file)
+        }
+        return
+      }
+
+      automationDecisionInputRef.current?.click()
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+
+      setUiError(error instanceof Error ? error.message : 'Failed to open the decision file picker')
     }
   }
 
@@ -499,6 +584,53 @@ export function AdminTrialManager({
     }
 
     applyRunSnapshot(payload?.snapshot ?? null)
+  }
+
+  const resetImportWorkspace = () => {
+    setUiError(null)
+    setIsStoppingDaily(false)
+    setIsStreamingRun(false)
+    setRunningDaily(false)
+    setElapsedSeconds(0)
+    setRunProgress(null)
+    setRunLog([])
+    setErrorConsole([])
+    setPreserveExecutionPlan(false)
+    setLastRunSummary(null)
+    setExecutionPlan(buildNextExecutionPlan(events))
+    setAutomationExportState(null)
+    setAutomationDecisionFile(null)
+    setAutomationDecisionText('')
+    setAutomationDecisionFilenameHint(null)
+    setAutomationPreview(null)
+    setAutomationApplyState(null)
+    setAutomationInputResetKey((prev) => prev + 1)
+  }
+
+  const loadLatestAutomationDecision = async () => {
+    setUiError(null)
+    setAutomationPreview(null)
+    setAutomationApplyState(null)
+    setIsLoadingLatestAutomationDecision(true)
+
+    try {
+      const response = await fetch(`/api/admin/trials/automation-decision-file?source=${automationSource}`, {
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Failed to load the latest decision file'))
+      }
+
+      setAutomationDecisionFile(null)
+      setAutomationDecisionText(typeof payload.contents === 'string' ? payload.contents : '')
+      setAutomationDecisionFilenameHint(typeof payload.filename === 'string' ? payload.filename : null)
+      setAutomationInputResetKey((prev) => prev + 1)
+    } catch (error) {
+      setUiError(error instanceof Error ? error.message : 'Failed to load the latest decision file')
+    } finally {
+      setIsLoadingLatestAutomationDecision(false)
+    }
   }
 
   const exportAutomationPacket = async () => {
@@ -636,6 +768,7 @@ export function AdminTrialManager({
       startedAtMs,
       runDate: null,
       modelOrder: initialModelOrder,
+      importedSourceLabel: null,
       orderedMarkets: [],
       openMarkets: 0,
       totalActions: 0,
@@ -929,6 +1062,11 @@ export function AdminTrialManager({
     ? executionPlan.find((market) => market.marketId === currentExecutionStep.marketId) ?? null
     : null
   const executionModelOrder = executionPlan[0]?.steps.map((step) => step.modelId) ?? runProgress?.modelOrder ?? []
+  const latestRunModelIdSet = useMemo(
+    () => new Set(runProgress?.modelOrder ?? []),
+    [runProgress?.modelOrder],
+  )
+  const latestImportedSourceLabel = runProgress?.importedSourceLabel ?? null
   const executionEstimatedCostUsd = useMemo(() => (
     executionPlan.reduce((total, market) => (
       total + executionModelOrder.reduce((marketTotal, modelId) => (
@@ -955,20 +1093,54 @@ export function AdminTrialManager({
       return acc
     }, {})
   ), [executionModelOrder, executionPlan])
-  const getExecutionStepFallbackDetail = (status: 'queued' | 'running' | 'waiting' | 'ok' | 'error' | 'skipped') => {
-    switch (status) {
+  const getExecutionStepBadgeLabel = (step: ExecutionPlanStep) => {
+    const isModelInLatestRun = latestRunModelIdSet.has(step.modelId)
+
+    if (step.status === 'ok' && latestImportedSourceLabel && isModelInLatestRun) {
+      return 'Uploaded'
+    }
+
+    if (step.status === 'queued' && latestRunModelIdSet.size > 0 && !isModelInLatestRun) {
+      return latestImportedSourceLabel ? 'Needs API' : 'Not Run'
+    }
+
+    return getExecutionStatusLabel(step.status)
+  }
+  const getExecutionStepFallbackDetail = (step: ExecutionPlanStep) => {
+    const isModelInLatestRun = latestRunModelIdSet.has(step.modelId)
+
+    switch (step.status) {
       case 'queued':
-        return null
+        if (runningDaily && isModelInLatestRun) {
+          return 'Queued for this run'
+        }
+        if (latestImportedSourceLabel && !isModelInLatestRun) {
+          return 'Needs API run'
+        }
+        if (latestRunModelIdSet.size > 0 && !isModelInLatestRun) {
+          return 'Not run in latest cycle'
+        }
+        return 'Queued for the next run'
       case 'running':
-        return 'In progress'
+        return latestImportedSourceLabel && isModelInLatestRun
+          ? 'Applying uploaded JSON'
+          : 'In progress'
       case 'waiting':
-        return 'Waiting on turn'
+        return latestImportedSourceLabel && isModelInLatestRun
+          ? 'Uploaded JSON ready to apply'
+          : 'Waiting on API response'
       case 'ok':
-        return 'Completed'
+        return latestImportedSourceLabel && isModelInLatestRun
+          ? 'Uploaded JSON applied'
+          : 'API run completed'
       case 'error':
-        return 'Needs review'
+        return latestImportedSourceLabel && isModelInLatestRun
+          ? 'Uploaded decision needs review'
+          : 'Needs review'
       case 'skipped':
-        return 'Skipped'
+        return latestImportedSourceLabel && isModelInLatestRun
+          ? 'Uploaded step skipped'
+          : 'Skipped'
       default:
         return null
     }
@@ -990,10 +1162,18 @@ export function AdminTrialManager({
               }}
               disabled={runningDaily}
               className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {runningDaily
+                  ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
+                  : 'Run Daily Cycle Now'}
+            </button>
+            <button
+              type="button"
+              onClick={resetImportWorkspace}
+              disabled={runningDaily}
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {runningDaily
-                ? (runProgress?.totalActions ? `Running... ${progressPercent}%` : 'Running...')
-                : 'Run Daily Cycle Now'}
+              Start Fresh
             </button>
             {runningDaily ? (
               <button
@@ -1092,23 +1272,51 @@ export function AdminTrialManager({
               </div>
             ) : null}
             <div className="grid gap-3 lg:grid-cols-2">
-              <label className="flex flex-col gap-1 text-xs text-[#8a8075]">
+              <div className="flex flex-col gap-1 text-xs text-[#8a8075]">
                 <span>Decision JSON File</span>
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null
-                    setAutomationDecisionFile(file)
-                    setAutomationPreview(null)
-                    setAutomationApplyState(null)
-                  }}
-                  className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-2 text-sm text-[#1a1a1a] outline-none file:mr-3 file:border-0 file:bg-transparent file:px-0 file:py-0 file:text-sm file:font-medium"
-                />
-                {automationDecisionFile ? (
-                  <span className="text-[11px] text-[#6f665b]">{automationDecisionFile.name}</span>
-                ) : null}
-              </label>
+                <div className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-3 text-sm text-[#1a1a1a]">
+                  <input
+                    ref={automationDecisionInputRef}
+                    key={automationInputResetKey}
+                    type="file"
+                    accept="application/json,.json"
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    onChange={(event) => {
+                      setAutomationDecisionSelection(event.target.files?.[0] ?? null)
+                    }}
+                    className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void chooseAutomationDecisionFile()
+                      }}
+                      className="inline-flex min-h-[42px] shrink-0 items-center justify-center border border-[#d9cdbf] bg-white px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                    >
+                      Choose File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void loadLatestAutomationDecision()
+                      }}
+                      disabled={isLoadingLatestAutomationDecision}
+                      className="inline-flex min-h-[42px] shrink-0 items-center justify-center border border-[#d9cdbf] bg-white px-4 py-2 text-sm font-medium text-[#6f665b] transition-colors hover:bg-[#f5eee5] hover:text-[#3b342c] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isLoadingLatestAutomationDecision ? 'Loading...' : 'Load Latest'}
+                    </button>
+                  </div>
+                  <p className={`mt-2 ${automationDecisionFile || automationDecisionFilenameHint ? 'text-[#1a1a1a]' : 'text-[#8a8075]'}`}>
+                    {automationDecisionFile
+                      ? automationDecisionFile.name
+                      : automationDecisionFilenameHint
+                        ? `Loaded ${automationDecisionFilenameHint}`
+                        : 'No file chosen'}
+                  </p>
+                </div>
+              </div>
               <label className="flex flex-col gap-1 text-xs text-[#8a8075]">
                 <span>Or Paste Decision JSON</span>
                 <textarea
@@ -1116,6 +1324,7 @@ export function AdminTrialManager({
                   onChange={(event) => {
                     setAutomationDecisionText(event.target.value)
                     setAutomationDecisionFile(null)
+                    setAutomationDecisionFilenameHint(null)
                     setAutomationPreview(null)
                     setAutomationApplyState(null)
                   }}
@@ -1329,7 +1538,7 @@ export function AdminTrialManager({
                   <table className="min-w-[1700px] w-full border-separate border-spacing-0">
                     <thead>
                       <tr className="bg-[#f8f4ee]">
-                        <th className="sticky left-0 top-0 z-30 min-w-[260px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
+                        <th className="sticky left-0 top-0 z-30 w-[340px] min-w-[340px] max-w-[340px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
                           Trial
                         </th>
                         <th className="sticky top-0 z-20 min-w-[128px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
@@ -1364,13 +1573,15 @@ export function AdminTrialManager({
                           total + (market.estimatedModelRunCosts[modelId] ?? 0)
                         ), 0)
 
+                        const displayTrialLabel = market.nctNumber?.trim() || 'No NCT'
+
                         return (
                           <tr key={market.marketId} className="align-top">
-                            <td className="sticky left-0 z-10 min-w-[260px] border-t border-[#e8ddd0] bg-white px-3 py-3 shadow-[1px_0_0_0_#e8ddd0]">
-                              <p className="text-sm font-medium text-[#1a1a1a]">
-                                {market.marketSequence}. {market.shortTitle}
+                            <td className="sticky left-0 z-10 w-[340px] min-w-[340px] max-w-[340px] border-t border-[#e8ddd0] bg-white px-3 py-3 shadow-[1px_0_0_0_#e8ddd0]">
+                              <p className="max-w-[300px] truncate text-sm font-medium text-[#1a1a1a]" title={displayTrialLabel}>
+                                {displayTrialLabel}
                               </p>
-                              <p className="mt-1 text-xs text-[#8a8075]">
+                              <p className="hidden">
                                 {formatUtcDate(market.decisionDate, { month: '2-digit', day: '2-digit', year: '2-digit' })}
                                 {market.nctNumber ? ` • ${market.nctNumber}` : ''}
                               </p>
@@ -1410,7 +1621,7 @@ export function AdminTrialManager({
                               const tone = getExecutionStepTone(step.status)
                               const detail = step.detail
                                 ? truncateText(step.detail, 88)
-                                : getExecutionStepFallbackDetail(step.status)
+                                : getExecutionStepFallbackDetail(step)
                               const durationLabel = getExecutionStepDurationLabel(step, executionStepNowMs)
                               const estimatedStepCostUsd = market.estimatedModelRunCosts[modelId] ?? 0
 
@@ -1421,7 +1632,7 @@ export function AdminTrialManager({
                                 >
                                   <div className="flex items-start justify-between gap-2">
                                     <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${tone.badge}`}>
-                                      {getExecutionStatusLabel(step.status)}
+                                      {getExecutionStepBadgeLabel(step)}
                                     </span>
                                     <span className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">
                                       {step.globalSequence}/{executionPlanStepCount}
