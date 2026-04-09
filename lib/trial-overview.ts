@@ -18,7 +18,7 @@ import { getMarketDecisionHistoryByMarketIds } from '@/lib/model-decision-snapsh
 import type { ModelDecisionSnapshot, PredictionHistoryEntry } from '@/lib/types'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
-  buildLatestCycleActionByMarketActor,
+  buildLatestModelActionByMarketActor,
   buildMarketActorKey,
   loadOpenMarketActorState,
   toModelId,
@@ -102,12 +102,11 @@ export async function getTrialsOverviewData(input: {
       : Promise.resolve([]),
     visibleMarketIds.length > 0
       ? db.query.marketActions.findMany({
-          where: and(
-            inArray(marketActions.marketId, visibleMarketIds),
-            eq(marketActions.actionSource, 'cycle'),
-            isNotNull(marketActions.trialQuestionId),
-          ),
-          orderBy: [desc(marketActions.createdAt)],
+        where: and(
+          inArray(marketActions.marketId, visibleMarketIds),
+          isNotNull(marketActions.trialQuestionId),
+        ),
+        orderBy: [desc(marketActions.createdAt)],
           with: {
             actor: true,
           },
@@ -132,7 +131,9 @@ export async function getTrialsOverviewData(input: {
         orderBy: [desc(trialOutcomeCandidates.reviewedAt), desc(trialOutcomeCandidates.createdAt)],
       })
     : []
-  const filteredActions = actions.filter((action) => !isMockMarketActionLike(action))
+  const filteredActions = actions.filter((action) => (
+    !isMockMarketActionLike(action) && toModelId(action.actor.modelKey) !== null
+  ))
   const questionsWithTrials = filterSupportedTrialQuestions(rawQuestionsWithTrials)
 
   const questionById = new Map(questionsWithTrials.map((question) => [question.id, question]))
@@ -147,7 +148,7 @@ export async function getTrialsOverviewData(input: {
     questionsByTrialId.set(question.trialId, current)
   }
 
-  const latestCycleActionByMarketActor = buildLatestCycleActionByMarketActor(filteredActions)
+  const latestModelActionByMarketActor = buildLatestModelActionByMarketActor(filteredActions)
   const costBasisByMarketActor = new Map<string, number>()
   const activityTotalsByMarket = new Map<string, { totalActionsCount: number; totalVolumeUsd: number }>()
   for (const action of filteredActions) {
@@ -255,7 +256,7 @@ export async function getTrialsOverviewData(input: {
     const modelStates = accountRows.map((account) => {
       const key = buildMarketActorKey(market.id, account.actorId)
       const position = positionsByMarketActor.get(key)
-      const latestAction = latestCycleActionByMarketActor.get(key)
+      const latestAction = latestModelActionByMarketActor.get(key)
       const decisionHistory = (decisionHistoryByMarketId.get(market.id) || [])
         .filter((entry) => entry.predictorId === account.modelId)
         .map((entry) => toDecisionSnapshot(entry, market.id, question.id))
