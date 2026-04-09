@@ -31,7 +31,7 @@ export interface ModelDecisionGeneration {
 }
 
 interface ModelDecisionGeneratorConfig {
-  generator: (input: ModelDecisionInput) => Promise<ModelDecisionGeneration>
+  generator: (input: ModelDecisionInput, options?: { signal?: AbortSignal }) => Promise<ModelDecisionGeneration>
   enabled: () => boolean
 }
 
@@ -211,7 +211,10 @@ function buildOutput(
   }
 }
 
-async function generateClaudeApiDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateClaudeApiDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const message = await client.messages.create({
@@ -219,6 +222,7 @@ async function generateClaudeApiDecision(input: ModelDecisionInput): Promise<Mod
     max_tokens: 6000,
     messages: [{ role: 'user', content: prompt }],
     tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 7 }],
+    signal: options?.signal,
   } as any)
 
   const content = extractClaudeResponseText(message)
@@ -235,11 +239,15 @@ async function generateClaudeApiDecision(input: ModelDecisionInput): Promise<Mod
 
 async function generateClaudeDecision(
   input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
-  return generateClaudeApiDecision(input)
+  return generateClaudeApiDecision(input, options)
 }
 
-async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateGptDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const response = await client.responses.create({
@@ -260,6 +268,7 @@ async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDeci
         ),
       },
     },
+    signal: options?.signal,
   } as any)
 
   const content = extractResponseText(response)
@@ -270,7 +279,10 @@ async function generateGptDecision(input: ModelDecisionInput): Promise<ModelDeci
   return buildOutput(content, input, parseUsageFromOpenAIResponse(response, 1))
 }
 
-async function generateGrokDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateGrokDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   const client = new OpenAI({
     apiKey: process.env.XAI_API_KEY,
     baseURL: 'https://api.x.ai/v1',
@@ -282,6 +294,7 @@ async function generateGrokDecision(input: ModelDecisionInput): Promise<ModelDec
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 4000,
     search_mode: 'auto',
+    signal: options?.signal,
   } as any)
 
   const content = extractChatCompletionText(completion)
@@ -292,7 +305,11 @@ async function generateGrokDecision(input: ModelDecisionInput): Promise<ModelDec
   return buildOutput(content, input)
 }
 
-async function generateGeminiDecision(input: ModelDecisionInput, model: string): Promise<ModelDecisionGeneration> {
+async function generateGeminiDecision(
+  input: ModelDecisionInput,
+  model: string,
+  _options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const response = await ai.models.generateContent({
@@ -327,6 +344,7 @@ async function generateFireworksDecision(args: {
   temperature?: number
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high'
   responseFormat?: OpenAICompatibleResponseFormat
+  signal?: AbortSignal
 }): Promise<ModelDecisionGeneration> {
   const apiKey = process.env.FIREWORKS_API_KEY
   if (!apiKey) {
@@ -355,6 +373,7 @@ async function generateFireworksDecision(args: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
+    signal: args.signal,
     body: JSON.stringify(requestBody),
   })
 
@@ -392,6 +411,7 @@ async function generateOpenAICompatibleDecision(args: {
   temperature?: number
   requestOverrides?: Record<string, unknown>
   responseFormat?: OpenAICompatibleResponseFormat
+  signal?: AbortSignal
 }): Promise<ModelDecisionGeneration> {
   const client = new OpenAI({
     apiKey: args.apiKey,
@@ -414,6 +434,10 @@ async function generateOpenAICompatibleDecision(args: {
     completionRequest.response_format = args.responseFormat
   }
 
+  if (args.signal) {
+    completionRequest.signal = args.signal
+  }
+
   const completion = await client.chat.completions.create(completionRequest)
   const content = extractChatCompletionText(completion)
   if (!content) {
@@ -423,7 +447,10 @@ async function generateOpenAICompatibleDecision(args: {
   return buildOutput(content, args.input, parseUsageFromChatCompletion(completion))
 }
 
-async function generateDeepSeekDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateDeepSeekDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
     model: DEEPSEEK_MODEL,
     input,
@@ -432,10 +459,14 @@ async function generateDeepSeekDecision(input: ModelDecisionInput): Promise<Mode
     temperature: 0.6,
     reasoningEffort: 'none',
     responseFormat: buildFireworksDecisionResponseFormat(input),
+    signal: options?.signal,
   })
 }
 
-async function generateLlama4Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateLlama4Decision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   return generateOpenAICompatibleDecision({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: 'https://api.groq.com/openai/v1',
@@ -445,10 +476,14 @@ async function generateLlama4Decision(input: ModelDecisionInput): Promise<ModelD
     maxTokens: 8192,
     temperature: 0.2,
     responseFormat: { type: 'json_object' },
+    signal: options?.signal,
   })
 }
 
-async function generateGlm5Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateGlm5Decision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
     model: GLM_MODEL,
     input,
@@ -457,10 +492,14 @@ async function generateGlm5Decision(input: ModelDecisionInput): Promise<ModelDec
     temperature: 0.6,
     reasoningEffort: 'none',
     responseFormat: buildFireworksDecisionResponseFormat(input),
+    signal: options?.signal,
   })
 }
 
-async function generateKimiDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateKimiDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
     model: KIMI_MODEL,
     input,
@@ -468,10 +507,14 @@ async function generateKimiDecision(input: ModelDecisionInput): Promise<ModelDec
     maxTokens: 4096,
     temperature: 0.6,
     responseFormat: buildFireworksDecisionResponseFormat(input),
+    signal: options?.signal,
   })
 }
 
-async function generateMiniMaxDecision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
+async function generateMiniMaxDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
     model: MINIMAX_MODEL,
     input,
@@ -480,6 +523,7 @@ async function generateMiniMaxDecision(input: ModelDecisionInput): Promise<Model
     temperature: 0.7,
     reasoningEffort: 'low',
     responseFormat: buildFireworksDecisionResponseFormat(input),
+    signal: options?.signal,
   })
 }
 

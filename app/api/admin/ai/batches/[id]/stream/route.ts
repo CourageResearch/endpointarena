@@ -1,6 +1,6 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse } from '@/lib/api-response'
-import { getAi2BatchState } from '@/lib/admin-ai2'
+import { getAiBatchState } from '@/lib/admin-ai'
 import { NotFoundError } from '@/lib/errors'
 
 type RouteContext = {
@@ -16,7 +16,7 @@ export async function GET(_: Request, context: RouteContext) {
     await ensureAdmin()
 
     const { id } = await context.params
-    const initial = await getAi2BatchState(id)
+    const initial = await getAiBatchState(id)
     if (!initial) {
       throw new NotFoundError('Batch not found')
     }
@@ -28,7 +28,7 @@ export async function GET(_: Request, context: RouteContext) {
         let closed = false
 
         const send = async () => {
-          const batch = await getAi2BatchState(id)
+          const batch = await getAiBatchState(id)
           if (!batch) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'missing' })}\n\n`))
             controller.close()

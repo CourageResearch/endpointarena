@@ -1,7 +1,7 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
-import { getAi2DeskState } from '@/lib/admin-ai2'
-import { isAi2Dataset } from '@/lib/admin-ai2-shared'
+import { getAiDeskState } from '@/lib/admin-ai'
+import { isAiDataset } from '@/lib/admin-ai-shared'
 import { getActiveDatabaseTarget } from '@/lib/database-target'
 import { ValidationError } from '@/lib/errors'
 
@@ -18,11 +18,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const datasetRaw = searchParams.get('dataset') ?? getDefaultAiDatasetForCurrentDatabase()
     const batchId = searchParams.get('batchId')
-    if (!isAi2Dataset(datasetRaw)) {
+    if (!isAiDataset(datasetRaw)) {
       throw new ValidationError('dataset must be toy or live')
     }
 
-    const state = await getAi2DeskState(datasetRaw, batchId)
+    const state = await getAiDeskState(datasetRaw, batchId)
     return successResponse(state, {
       headers: {
         'X-Request-Id': requestId,

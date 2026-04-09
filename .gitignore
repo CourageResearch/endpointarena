@@ -48,6 +48,7 @@ tmp-*.dump
 tmp-dev-server*.log
 tmp-start*.log
 tmp-*.json
+.codex-dev-server*.log
 
 # TypeScript
 *.tsbuildinfo

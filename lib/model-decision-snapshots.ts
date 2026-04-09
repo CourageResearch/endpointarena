@@ -499,7 +499,9 @@ async function insertStoredModelDecisionSnapshot(args: {
   }
 }
 
-export async function generateAndStoreModelDecisionSnapshot(args: ModelDecisionSnapshotArgs): StoredDecisionSnapshotResult {
+export async function generateAndStoreModelDecisionSnapshot(
+  args: ModelDecisionSnapshotArgs & { signal?: AbortSignal },
+): StoredDecisionSnapshotResult {
   const generator = MODEL_DECISION_GENERATORS[args.modelId]
   if (!generator?.enabled()) {
     throw new Error(getModelDecisionGeneratorDisabledReason(args.modelId))
@@ -509,7 +511,7 @@ export async function generateAndStoreModelDecisionSnapshot(args: ModelDecisionS
 
   const prompt = buildModelDecisionPrompt(input)
   const startedAt = Date.now()
-  const generated = await generator.generator(input)
+  const generated = await generator.generator(input, { signal: args.signal })
   const durationMs = Date.now() - startedAt
   const usage = resolveUsageForStorage({
     modelId: args.modelId,
