@@ -53,15 +53,15 @@ function buildPositionsByMarketActor(positions: PositionWithActor[]): Map<string
   return positionsByMarketActor
 }
 
-export function buildLatestCycleActionByMarketActor(actions: MarketActionWithActor[]): Map<string, MarketActionWithActor> {
-  const latestCycleActionByMarketActor = new Map<string, MarketActionWithActor>()
+export function buildLatestModelActionByMarketActor(actions: MarketActionWithActor[]): Map<string, MarketActionWithActor> {
+  const latestModelActionByMarketActor = new Map<string, MarketActionWithActor>()
   for (const action of actions) {
     const key = buildMarketActorKey(action.marketId, action.actorId)
-    if (!latestCycleActionByMarketActor.has(key)) {
-      latestCycleActionByMarketActor.set(key, action)
+    if (!latestModelActionByMarketActor.has(key)) {
+      latestModelActionByMarketActor.set(key, action)
     }
   }
-  return latestCycleActionByMarketActor
+  return latestModelActionByMarketActor
 }
 
 function buildPositionsValueByActorId(args: {
