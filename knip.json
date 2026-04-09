@@ -7,6 +7,7 @@
     "scripts/backfill-phase2-public-sponsor-tickers.ts",
     "scripts/check-local.ts",
     "scripts/cleanup-local-mock-market-data.ts",
+    "scripts/cleanup-admin-ai-timeout-snapshots.ts",
     "scripts/create-env-db.ts",
     "scripts/create-local-db.ts",
     "scripts/download-clinicaltrials-gov-snapshot.ts",
@@ -18,9 +19,24 @@
     "scripts/reset-local-trial-monitor.ts",
     "scripts/report-public-sponsor-coverage.ts",
     "scripts/sync-clinicaltrials-gov.ts",
+    "scripts/wipe-local-trial-monitor.ts",
+    "lib/admin-ai-row-costs.ts",
+    "lib/markets/automation-handoff.ts",
     "lib/manual-trial-outcome-import.ts"
   ],
   "ignoreIssues": {
+    "lib/markets/automation-handoff-shared.ts": [
+      "exports"
+    ],
+    "lib/markets/daily-run-planning.ts": [
+      "exports"
+    ],
+    "lib/markets/runtime-config.ts": [
+      "exports"
+    ],
+    "lib/trial-run-logs.ts": [
+      "exports"
+    ],
     "lib/trial-monitor.ts": [
       "exports"
     ],

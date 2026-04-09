@@ -3,13 +3,16 @@
 import { Fragment, startTransition, useEffect, useMemo, useState } from 'react'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import {
-  AI2_SUBSCRIPTION_MODEL_IDS,
-  type Ai2AvailableModel,
-  type Ai2BatchState,
-  type Ai2Dataset,
-  type Ai2DeskState,
-  type Ai2SubscriptionModelId,
-} from '@/lib/admin-ai2-shared'
+  AI_API_CONCURRENCY_DEFAULT,
+  AI_API_CONCURRENCY_MAX,
+  AI_API_CONCURRENCY_MIN,
+  AI_SUBSCRIPTION_MODEL_IDS,
+  type AiAvailableModel,
+  type AiBatchState,
+  type AiDataset,
+  type AiDeskState,
+  type AiSubscriptionModelId,
+} from '@/lib/admin-ai-shared'
 
 function formatUsd(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -36,7 +39,30 @@ function truncateText(value: string, maxLength: number): string {
   return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`
 }
 
-function isTerminal(status: Ai2BatchState['status'] | undefined): boolean {
+function formatDurationMs(value: number): string {
+  const totalSeconds = Math.max(0, Math.round(value / 1000))
+  if (totalSeconds < 60) return `${totalSeconds}s`
+
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`
+}
+
+function formatActionLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function isTerminal(status: AiBatchState['status'] | undefined): boolean {
   return status === 'cleared' || status === 'failed' || status === 'reset'
 }
 
@@ -51,7 +77,7 @@ function laneStatusLabel(status: string): string {
   return status
 }
 
-function getDeskStatusLabel(batch: Ai2BatchState | null): string {
+function getDeskStatusLabel(batch: AiBatchState | null): string {
   if (!batch) return 'Idle'
   if (!batch.runStartedAt) return 'Staged'
   if (batch.status === 'cleared') return 'Completed'
@@ -59,7 +85,7 @@ function getDeskStatusLabel(batch: Ai2BatchState | null): string {
   return laneStatusLabel(batch.status)
 }
 
-function getDeskStatusDetail(batch: Ai2BatchState | null): string {
+function getDeskStatusDetail(batch: AiBatchState | null): string {
   if (!batch) {
     return 'Stage a batch to start a new run.'
   }
@@ -105,7 +131,7 @@ function chipClass(status: string): string {
   return 'border-[#d8ccb9] bg-[#f8f4ee] text-[#6f665b]'
 }
 
-function getOrderBookTaskBadge(task: Ai2BatchState['tasks'][number]): string {
+function getOrderBookTaskBadge(task: AiBatchState['tasks'][number]): string {
   if (task.fill?.status === 'ok' || task.status === 'cleared') return 'DONE'
   if (task.fill?.status === 'error' || task.status === 'error') return 'FAILED'
   if (task.status === 'waiting-import') return 'WAITING'
@@ -114,7 +140,7 @@ function getOrderBookTaskBadge(task: Ai2BatchState['tasks'][number]): string {
   return 'QUEUED'
 }
 
-function getOrderBookTaskTone(task: Ai2BatchState['tasks'][number]): string {
+function getOrderBookTaskTone(task: AiBatchState['tasks'][number]): string {
   return chipClass(task.fill?.status === 'error' ? 'error' : task.fill?.status === 'ok' ? 'done' : task.status)
 }
 
@@ -127,11 +153,11 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> 
   return payload as T
 }
 
-function getDefaultEnabledModels(availableModels: Ai2AvailableModel[]): Ai2AvailableModel['modelId'][] {
+function getDefaultEnabledModels(availableModels: AiAvailableModel[]): AiAvailableModel['modelId'][] {
   return availableModels.filter((model) => model.defaultEnabled).map((model) => model.modelId)
 }
 
-function getLaneStatus(batch: Ai2BatchState | null, modelIds: string[]): string {
+function getLaneStatus(batch: AiBatchState | null, modelIds: string[]): string {
   if (!batch) return 'waiting'
 
   const tasks = batch.tasks.filter((task) => modelIds.includes(task.modelId))
@@ -146,21 +172,24 @@ function getLaneStatus(batch: Ai2BatchState | null, modelIds: string[]): string 
 }
 
 type Props = {
-  initialState: Ai2DeskState
+  initialState: AiDeskState
 }
 
-export function AdminAi2Desk({ initialState }: Props) {
+export function AdminAiDesk({ initialState }: Props) {
   const [deskState, setDeskState] = useState(initialState)
-  const [dataset, setDataset] = useState<Ai2Dataset>(initialState.batch?.dataset ?? initialState.dataset)
-  const [selectedModels, setSelectedModels] = useState<Ai2AvailableModel['modelId'][]>(
+  const [dataset, setDataset] = useState<AiDataset>(initialState.batch?.dataset ?? initialState.dataset)
+  const [selectedModels, setSelectedModels] = useState<AiAvailableModel['modelId'][]>(
     initialState.batch?.enabledModelIds ?? getDefaultEnabledModels(initialState.availableModels),
+  )
+  const [selectedApiConcurrency, setSelectedApiConcurrency] = useState<number>(
+    initialState.batch?.apiConcurrency ?? AI_API_CONCURRENCY_DEFAULT,
   )
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialState.batch?.trials[0]?.marketId ?? null)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [uiError, setUiError] = useState<string | null>(null)
   const [exportPackets, setExportPackets] = useState<Record<string, string>>({})
   const [importTexts, setImportTexts] = useState<Record<string, string>>({})
-  const [copiedPacketModelId, setCopiedPacketModelId] = useState<Ai2SubscriptionModelId | null>(null)
+  const [copiedPacketModelId, setCopiedPacketModelId] = useState<AiSubscriptionModelId | null>(null)
 
   const batch = deskState.batch
   const availableModelById = useMemo(() => (
@@ -178,12 +207,18 @@ export function AdminAi2Desk({ initialState }: Props) {
   }, [batch, selectedMarketId])
 
   useEffect(() => {
+    if (batch?.apiConcurrency != null) {
+      setSelectedApiConcurrency(batch.apiConcurrency)
+    }
+  }, [batch?.id, batch?.apiConcurrency])
+
+  useEffect(() => {
     if (!batch || isTerminal(batch.status)) return
 
     const source = new EventSource(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/stream`)
     source.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as { type?: string; batch?: Ai2BatchState; message?: string }
+        const payload = JSON.parse(event.data) as { type?: string; batch?: AiBatchState; message?: string }
         if (payload.type === 'state' && payload.batch) {
           startTransition(() => {
             setDeskState((current) => ({
@@ -213,7 +248,7 @@ export function AdminAi2Desk({ initialState }: Props) {
       return
     }
 
-    const modelIdsToExport = AI2_SUBSCRIPTION_MODEL_IDS.filter((modelId) => (
+    const modelIdsToExport = AI_SUBSCRIPTION_MODEL_IDS.filter((modelId) => (
       batch.enabledModelIds.includes(modelId) && !exportPackets[modelId]?.trim()
     ))
 
@@ -259,7 +294,7 @@ export function AdminAi2Desk({ initialState }: Props) {
     batch?.trials.find((trial) => trial.marketId === selectedMarketId) ?? batch?.trials[0] ?? null
   ), [batch, selectedMarketId])
 
-  const orderedModelIds = useMemo<Ai2AvailableModel['modelId'][]>(() => {
+  const orderedModelIds = useMemo<AiAvailableModel['modelId'][]>(() => {
     if (batch) {
       return batch.clearOrder.filter((modelId) => batch.enabledModelIds.includes(modelId))
     }
@@ -281,14 +316,35 @@ export function AdminAi2Desk({ initialState }: Props) {
   const successfulFillCount = useMemo(() => (
     batch?.fills.filter((fill) => fill.status === 'ok').length ?? 0
   ), [batch])
+  const canRetryFailedTaskInPlace = Boolean(successfulFillCount === 0 && batch?.status !== 'reset' && batch?.status !== 'cleared')
+  const displayedApiConcurrency = batch?.apiConcurrency ?? selectedApiConcurrency
+  const apiConcurrencyLocked = Boolean(batch?.runStartedAt)
 
   const apiModels = useMemo(() => deskState.availableModels.filter((model) => model.lane === 'api').map((model) => model.modelId), [deskState.availableModels])
+  const modelTimingByModelId = useMemo(() => {
+    const stats = new Map<AiAvailableModel['modelId'], { totalDurationMs: number; completedCount: number }>()
+    const modelIds = batch?.enabledModelIds ?? selectedModels
+
+    for (const modelId of modelIds) {
+      stats.set(modelId, { totalDurationMs: 0, completedCount: 0 })
+    }
+
+    for (const task of batch?.tasks ?? []) {
+      if (task.durationMs == null) continue
+      const current = stats.get(task.modelId) ?? { totalDurationMs: 0, completedCount: 0 }
+      current.totalDurationMs += task.durationMs
+      current.completedCount += 1
+      stats.set(task.modelId, current)
+    }
+
+    return stats
+  }, [batch, selectedModels])
   const laneCards = useMemo(() => {
     return [
       {
         id: 'api',
         label: 'API Lane',
-        description: 'API-backed models stay queued until you click Run Batch, then they execute in parallel.',
+        description: 'API-backed models stay queued until you click Run Batch, then they execute with your chosen parallelization.',
         status: getLaneStatus(batch, apiModels),
         modelIds: apiModels,
       },
@@ -309,8 +365,8 @@ export function AdminAi2Desk({ initialState }: Props) {
     ]
   }, [apiModels, batch])
 
-  async function refreshState(nextDataset: Ai2Dataset) {
-    const response = await fetchJson<Ai2DeskState>(`/api/admin/ai/state?dataset=${encodeURIComponent(nextDataset)}`)
+  async function refreshState(nextDataset: AiDataset) {
+    const response = await fetchJson<AiDeskState>(`/api/admin/ai/state?dataset=${encodeURIComponent(nextDataset)}`)
     startTransition(() => {
       setDeskState(response)
       setDataset(nextDataset)
@@ -324,7 +380,7 @@ export function AdminAi2Desk({ initialState }: Props) {
     setBusyKey('open')
     setUiError(null)
     try {
-      const payload = await fetchJson<{ batch: Ai2BatchState }>('/api/admin/ai/batches', {
+      const payload = await fetchJson<{ batch: AiBatchState }>('/api/admin/ai/batches', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -332,6 +388,7 @@ export function AdminAi2Desk({ initialState }: Props) {
         body: JSON.stringify({
           dataset,
           enabledModelIds: selectedModels,
+          apiConcurrency: selectedApiConcurrency,
         }),
       })
       startTransition(() => {
@@ -343,6 +400,36 @@ export function AdminAi2Desk({ initialState }: Props) {
       })
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to open batch')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  async function updateApiConcurrency(nextValue: number) {
+    setSelectedApiConcurrency(nextValue)
+
+    if (!batch || batch.runStartedAt || isTerminal(batch.status)) {
+      return
+    }
+
+    setBusyKey('api-concurrency')
+    setUiError(null)
+    try {
+      const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          apiConcurrency: nextValue,
+        }),
+      })
+      startTransition(() => {
+        setDeskState((current) => ({ ...current, batch: payload.batch }))
+      })
+    } catch (error) {
+      setSelectedApiConcurrency(batch.apiConcurrency)
+      setUiError(error instanceof Error ? error.message : 'Failed to update API parallelization')
     } finally {
       setBusyKey(null)
     }
@@ -370,7 +457,7 @@ export function AdminAi2Desk({ initialState }: Props) {
     }
   }
 
-  async function importPacket(modelId: Ai2SubscriptionModelId) {
+  async function importPacket(modelId: AiSubscriptionModelId) {
     if (!batch) return
     const text = importTexts[modelId]?.trim()
     if (!text) {
@@ -393,7 +480,7 @@ export function AdminAi2Desk({ initialState }: Props) {
         }
       }
 
-      const payload = await fetchJson<{ batch: Ai2BatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/subscription/import`, {
+      const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/subscription/import`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -410,7 +497,7 @@ export function AdminAi2Desk({ initialState }: Props) {
     }
   }
 
-  async function copyExportPacket(modelId: Ai2SubscriptionModelId) {
+  async function copyExportPacket(modelId: AiSubscriptionModelId) {
     const packet = exportPackets[modelId]?.trim()
     if (!packet) return
 
@@ -432,7 +519,7 @@ export function AdminAi2Desk({ initialState }: Props) {
     setBusyKey('run')
     setUiError(null)
     try {
-      const payload = await fetchJson<{ batch: Ai2BatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/run`, {
+      const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/run`, {
         method: 'POST',
       })
       startTransition(() => {
@@ -450,7 +537,7 @@ export function AdminAi2Desk({ initialState }: Props) {
     setBusyKey(`retry:${taskKey}`)
     setUiError(null)
     try {
-      const payload = await fetchJson<{ batch: Ai2BatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/tasks/retry`, {
+      const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/tasks/retry`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -530,6 +617,41 @@ export function AdminAi2Desk({ initialState }: Props) {
               })}
             </div>
           </div>
+          <div className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">API Parallelization</p>
+                <p className="mt-2 text-sm text-[#1a1a1a]">
+                  Choose how many API trial tasks can run at once in the API lane.
+                </p>
+              </div>
+              <label className="flex items-center gap-3 text-sm text-[#5f564c]">
+                <span>Concurrent tasks</span>
+                <select
+                  value={displayedApiConcurrency}
+                  disabled={busyKey != null || apiConcurrencyLocked || Boolean(batch && isTerminal(batch.status))}
+                  onChange={(event) => void updateApiConcurrency(Number(event.target.value))}
+                  className="border border-[#d8ccb9] bg-white px-3 py-2 text-sm text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {Array.from({ length: AI_API_CONCURRENCY_MAX - AI_API_CONCURRENCY_MIN + 1 }, (_, index) => {
+                    const value = AI_API_CONCURRENCY_MIN + index
+                    return (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    )
+                  })}
+                </select>
+              </label>
+            </div>
+            <p className="mt-3 text-[11px] text-[#8a8075]">
+              {batch
+                ? apiConcurrencyLocked
+                  ? `Locked for this run at ${batch.apiConcurrency} concurrent API task${batch.apiConcurrency === 1 ? '' : 's'}.`
+                  : `Saved to this staged batch at ${batch.apiConcurrency} concurrent API task${batch.apiConcurrency === 1 ? '' : 's'}.`
+                : `New batches default to ${AI_API_CONCURRENCY_DEFAULT} concurrent API tasks.`}
+            </p>
+          </div>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -567,12 +689,12 @@ export function AdminAi2Desk({ initialState }: Props) {
             <div className="border border-[#d8ccb9] bg-[#f8f4ee] px-3 py-2 text-sm text-[#6f665b]">
               {pendingSubscriptionImports > 0
                 ? `Batch is staged. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before running.`
-                : 'Batch is staged. The API lane is idle, and everything starts only after you click Run Batch.'}
+                : `Batch is staged. The API lane is idle and will run up to ${batch.apiConcurrency} task${batch.apiConcurrency === 1 ? '' : 's'} at once after you click Run Batch.`}
             </div>
           ) : null}
           {batch?.runStartedAt && !isTerminal(batch.status) ? (
             <div className="border border-[#5BA5ED]/30 bg-[#5BA5ED]/10 px-3 py-2 text-sm text-[#265f8f]">
-              Run is live. Decisions and shared-market clearing will keep updating here until the batch is done.
+              Run is live. Decisions are collecting with API parallelization locked at {batch.apiConcurrency}, and shared-market clearing will keep updating here until the batch is done.
             </div>
           ) : null}
           {batch?.status === 'failed' && successfulFillCount === 0 ? (
@@ -648,6 +770,7 @@ export function AdminAi2Desk({ initialState }: Props) {
                 ? lane.modelIds.some((modelId) => batch.enabledModelIds.includes(modelId as (typeof batch.enabledModelIds)[number]))
                 : false
               const laneTasks = batch?.tasks.filter((task) => lane.modelIds.includes(task.modelId)) ?? []
+              const laneEnabledModelIds = (batch?.enabledModelIds ?? selectedModels).filter((modelId) => lane.modelIds.includes(modelId))
               const failedLaneTasks = laneTasks.filter((task) => task.status === 'error')
               const firstFailedLaneTask = failedLaneTasks[0] ?? null
 
@@ -656,6 +779,7 @@ export function AdminAi2Desk({ initialState }: Props) {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-[#1a1a1a]">{lane.label}</p>
+                    <p className="mt-2 text-xs leading-5 text-[#6f665b]">{lane.description}</p>
                     {batch && !laneActive ? (
                       <p className="mt-2 text-[11px] uppercase tracking-[0.08em] text-[#b26a25]">Not enabled in this batch</p>
                     ) : null}
@@ -664,13 +788,28 @@ export function AdminAi2Desk({ initialState }: Props) {
                     {laneStatusLabel(lane.status)}
                   </span>
                 </div>
+                {lane.id === 'api' ? (
+                  <div className="mt-4 border border-[#e8ddd0] bg-white px-3 py-3 text-xs text-[#6f665b]">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Parallelization</p>
+                    <p className="mt-2 text-sm font-medium text-[#1a1a1a]">
+                      {displayedApiConcurrency} concurrent API task{displayedApiConcurrency === 1 ? '' : 's'}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#8a8075]">
+                      {apiConcurrencyLocked
+                        ? 'Locked for the active run.'
+                        : batch
+                          ? 'Editable until Run Batch starts.'
+                          : 'Set this before staging the next batch.'}
+                    </p>
+                  </div>
+                ) : null}
                 {lane.id === 'claude-opus' || lane.id === 'gpt-5.2' ? (
                   <div className="mt-4 space-y-3">
                     <div className="flex gap-2">
                       <button
                         type="button"
                         disabled={!batch || !laneActive || busyKey != null || !importTexts[lane.id]?.trim()}
-                        onClick={() => void importPacket(lane.id as Ai2SubscriptionModelId)}
+                        onClick={() => void importPacket(lane.id as AiSubscriptionModelId)}
                         className="border border-[#c1ab8e] bg-[#eadfce] px-3 py-2 text-xs font-medium text-[#5b4d3f] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {busyKey === `import:${lane.id}` ? 'Importing...' : 'Import JSON'}
@@ -680,7 +819,7 @@ export function AdminAi2Desk({ initialState }: Props) {
                       <button
                         type="button"
                         disabled={!exportPackets[lane.id]?.trim()}
-                        onClick={() => void copyExportPacket(lane.id as Ai2SubscriptionModelId)}
+                        onClick={() => void copyExportPacket(lane.id as AiSubscriptionModelId)}
                         title={copiedPacketModelId === lane.id ? 'Copied' : 'Copy export packet'}
                         aria-label={copiedPacketModelId === lane.id ? 'Copied' : 'Copy export packet'}
                         className={`absolute top-3 right-8 z-10 inline-flex h-7 w-7 items-center justify-center rounded-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -734,6 +873,30 @@ export function AdminAi2Desk({ initialState }: Props) {
                     <p className="mt-2 leading-5">
                       {firstFailedLaneTask.errorMessage ?? batch?.failureMessage ?? 'The lane hit an error before returning a decision.'}
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMarketId(firstFailedLaneTask.marketId)
+                          void retryTask(firstFailedLaneTask.taskKey)
+                        }}
+                        disabled={!canRetryFailedTaskInPlace || busyKey != null}
+                        className="border border-[#1a1a1a] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {busyKey === `retry:${firstFailedLaneTask.taskKey}`
+                          ? 'Retrying...'
+                          : firstFailedLaneTask.decision
+                            ? 'Retry From Frozen Decision'
+                            : firstFailedLaneTask.lane === 'api'
+                              ? 'Retry API Task'
+                              : 'Reopen Import'}
+                      </button>
+                      <p className="text-[11px] text-[#8d2c22]/80">
+                        {canRetryFailedTaskInPlace
+                          ? 'Retry keeps the original frozen snapshot and clear order.'
+                          : 'Retry is disabled because the live AMM has already moved in this batch.'}
+                      </p>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -748,32 +911,27 @@ export function AdminAi2Desk({ initialState }: Props) {
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">3. Order Book</p>
             <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Batch-wide decision matrix</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6f665b]">
-              Trial rows, progress in the middle, and one model column per clearing slot. Click any row to inspect the full reasoning below.
-            </p>
           </div>
         </div>
         {batch?.trials.length ? (
           <div className="mt-4">
             <div className="max-h-[72vh] overflow-auto rounded-none border border-[#e8ddd0] bg-white">
-              <table className="min-w-[1140px] w-full border-separate border-spacing-0">
+              <table className="min-w-[760px] w-full table-fixed border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-[#f8f4ee]">
-                    <th className="sticky left-0 top-0 z-30 w-[190px] min-w-[190px] max-w-[190px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
+                    <th className="sticky left-0 top-0 z-30 w-[108px] min-w-[108px] max-w-[108px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-2 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
                       Trial
-                    </th>
-                    <th className="sticky top-0 z-20 min-w-[132px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075]">
-                      Progress
                     </th>
                     {orderedModelIds.map((modelId, index) => {
                       const model = availableModelById.get(modelId)
+                      const timing = modelTimingByModelId.get(modelId)
                       return (
                         <th
                           key={modelId}
-                          className="sticky top-0 z-20 min-w-[160px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-3 py-2 text-left align-top"
+                          className="sticky top-0 z-20 w-[96px] min-w-[96px] max-w-[96px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-2 py-2 text-left align-top"
                         >
                           <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Model {index + 1}</p>
-                          <p className="mt-1 text-xs font-medium text-[#1a1a1a]">{availableModelById.get(modelId)?.label ?? modelId}</p>
+                          <p className="mt-1 text-xs leading-4 font-medium text-[#1a1a1a]">{availableModelById.get(modelId)?.label ?? modelId}</p>
                           <p className="mt-1 text-[11px] text-[#6f665b]">
                             {model?.lane === 'subscription' ? 'Subscription lane' : 'API lane'}
                           </p>
@@ -791,7 +949,6 @@ export function AdminAi2Desk({ initialState }: Props) {
                     const filledCount = trialTasks.filter((task) => task.fill?.status === 'ok').length
                     const active = selectedTrial?.marketId === trial.marketId
                     const stickyCellClass = active ? 'bg-[#fcf7f0]' : 'bg-white'
-                    const progressCellClass = active ? 'bg-[#f8f1e6]' : 'bg-[#fcfaf7]'
                     const rowCellClass = active ? 'bg-[#fffdf9]' : 'bg-white'
 
                     return (
@@ -800,23 +957,17 @@ export function AdminAi2Desk({ initialState }: Props) {
                         className="align-top cursor-pointer"
                         onClick={() => setSelectedMarketId(trial.marketId)}
                       >
-                        <td className={`sticky left-0 z-10 w-[190px] min-w-[190px] max-w-[190px] border-t border-[#e8ddd0] px-3 py-3 shadow-[1px_0_0_0_#e8ddd0] ${stickyCellClass}`}>
-                          <p className="truncate text-sm font-medium text-[#1a1a1a]" title={trial.nctNumber ?? trial.shortTitle}>
-                            {trialIndex + 1}. {trial.nctNumber?.trim() || trial.shortTitle}
-                          </p>
-                        </td>
-                        <td className={`border-l border-t border-[#e8ddd0] px-3 py-3 ${progressCellClass}`}>
-                          <p className="text-sm font-medium text-[#1a1a1a]">
-                            {closedCount}/{orderedModelIds.length || trialTasks.length}
-                          </p>
-                          <p className="mt-2 text-xs text-[#6f665b]">
-                            {filledCount > 0
-                              ? `${filledCount} filled`
-                              : readyCount > 0
-                                ? `${readyCount} ready`
-                                : 'Waiting'}
-                          </p>
-                          <p className="mt-2 text-[11px] text-[#8a8075]">{formatPercent(trial.marketSnapshot.priceYes)} start yes</p>
+                        <td className={`sticky left-0 z-10 w-[108px] min-w-[108px] max-w-[108px] border-t border-[#e8ddd0] px-2 py-2 shadow-[1px_0_0_0_#e8ddd0] ${stickyCellClass}`}>
+                          <div title={trial.nctNumber ?? trial.shortTitle}>
+                            <p className="text-sm font-medium text-[#1a1a1a]">{trialIndex + 1}.</p>
+                            <p className="truncate text-sm font-medium text-[#1a1a1a]">{trial.nctNumber?.trim() || trial.shortTitle}</p>
+                          </div>
+                          <div className="mt-1 pt-0.5">
+                            <p className="text-[11px] text-[#8a8075]">
+                              {closedCount}/{orderedModelIds.length || trialTasks.length}
+                            </p>
+                            <p className="mt-1.5 text-[11px] text-[#8a8075]">{formatPercent(trial.marketSnapshot.priceYes)} start yes</p>
+                          </div>
                         </td>
                         {orderedModelIds.map((modelId, index) => {
                           const task = taskByModel.get(modelId)
@@ -826,7 +977,7 @@ export function AdminAi2Desk({ initialState }: Props) {
                             return (
                               <td
                                 key={`${trial.marketId}:${modelId}`}
-                                className={`border-l border-t border-[#e8ddd0] px-3 py-2 align-top ${rowCellClass}`}
+                                className={`w-[96px] min-w-[96px] max-w-[96px] border-l border-t border-[#e8ddd0] px-2 py-2 align-top ${rowCellClass}`}
                               >
                                 <p className="text-xs text-[#8a8075]">{model?.available === false ? 'Unavailable' : 'Not scheduled'}</p>
                               </td>
@@ -863,15 +1014,35 @@ export function AdminAi2Desk({ initialState }: Props) {
                           return (
                             <td
                               key={task.taskKey}
-                              className={`border-l border-t border-[#e8ddd0] px-3 py-2 align-top ${rowCellClass}`}
+                              className={`w-[96px] min-w-[96px] max-w-[96px] border-l border-t border-[#e8ddd0] px-2 py-2 align-top ${rowCellClass}`}
                             >
                               <div className="flex items-start gap-1.5">
                                 <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${getOrderBookTaskTone(task)}`}>
                                   {getOrderBookTaskBadge(task)}
                                 </span>
                               </div>
-                              <p className="mt-1 text-xs leading-4 text-[#5f564c]">{primaryDetail}</p>
-                              <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                              {task.fill ? (
+                                <>
+                                  <p className="mt-1 text-xs leading-4 text-[#5f564c]">Filled</p>
+                                  <p className="mt-0.5 text-xs leading-4 font-medium text-[#5f564c]">
+                                    {formatActionLabel(task.fill.executedAction)}
+                                  </p>
+                                  {task.fill.executedAmountUsd > 0 ? (
+                                    <p className="mt-0.5 text-[11px] leading-4 text-[#6f665b]">
+                                      {formatUsd(task.fill.executedAmountUsd)}
+                                    </p>
+                                  ) : null}
+                                  <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="mt-1 text-xs leading-4 text-[#5f564c]">{primaryDetail}</p>
+                                  <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                </>
+                              )}
+                              {task.durationMs != null ? (
+                                <p className="mt-1 text-[11px] text-[#8a8075]">{formatDurationMs(task.durationMs)} run time</p>
+                              ) : null}
                               {task.estimatedCostUsd ? (
                                 <p className="mt-1 text-[11px] text-[#8a8075]">{formatUsd(task.estimatedCostUsd)} est.</p>
                               ) : null}
@@ -926,6 +1097,12 @@ export function AdminAi2Desk({ initialState }: Props) {
                   <div>
                     <p className="text-sm font-medium text-[#1a1a1a]">{availableModelById.get(task.modelId)?.label ?? task.modelId}</p>
                     <p className="mt-1 text-xs text-[#8a8075]">{task.lane === 'api' ? 'API lane' : 'Subscription lane'}</p>
+                    {task.durationMs != null ? (
+                      <p className="mt-1 text-xs text-[#8a8075]">Run time: {formatDurationMs(task.durationMs)}</p>
+                    ) : null}
+                    {task.estimatedCostUsd ? (
+                      <p className="mt-1 text-xs text-[#8a8075]">{formatUsd(task.estimatedCostUsd)} estimated cost</p>
+                    ) : null}
                   </div>
                   <span className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${getOrderBookTaskTone(task)}`}>
                     {getOrderBookTaskBadge(task)}

@@ -1,7 +1,7 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
-import { exportAi2SubscriptionPacket } from '@/lib/admin-ai2'
-import { AI2_SUBSCRIPTION_MODEL_IDS, type Ai2SubscriptionModelId } from '@/lib/admin-ai2-shared'
+import { exportAiSubscriptionPacket } from '@/lib/admin-ai'
+import { AI_SUBSCRIPTION_MODEL_IDS, type AiSubscriptionModelId } from '@/lib/admin-ai-shared'
 import { ValidationError } from '@/lib/errors'
 
 type RouteContext = {
@@ -19,11 +19,11 @@ export async function POST(request: Request, context: RouteContext) {
     const { id } = await context.params
     const { searchParams } = new URL(request.url)
     const modelId = searchParams.get('modelId')
-    if (!modelId || !AI2_SUBSCRIPTION_MODEL_IDS.includes(modelId as Ai2SubscriptionModelId)) {
+    if (!modelId || !AI_SUBSCRIPTION_MODEL_IDS.includes(modelId as AiSubscriptionModelId)) {
       throw new ValidationError('modelId must be claude-opus or gpt-5.2')
     }
 
-    const packet = await exportAi2SubscriptionPacket(id, modelId as Ai2SubscriptionModelId)
+    const packet = await exportAiSubscriptionPacket(id, modelId as AiSubscriptionModelId)
     return successResponse({ packet }, {
       headers: {
         'X-Request-Id': requestId,

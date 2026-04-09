@@ -1,8 +1,8 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { AdminAi2Desk } from '@/components/admin-ai/AdminAi2Desk'
-import { getAi2DeskState } from '@/lib/admin-ai2'
+import { AdminAiDesk } from '@/components/admin-ai/AdminAiDesk'
+import { getAiDeskState } from '@/lib/admin-ai'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { getActiveDatabaseTarget } from '@/lib/database-target'
@@ -22,11 +22,11 @@ export default async function AdminAiPage() {
     redirect('/login')
   }
 
-  const initialState = await getAi2DeskState(getDefaultAiDatasetForCurrentDatabase())
+  const initialState = await getAiDeskState(getDefaultAiDatasetForCurrentDatabase())
 
   return (
     <AdminConsoleLayout title="AI" activeTab="ai">
-      <AdminAi2Desk initialState={initialState} />
+      <AdminAiDesk initialState={initialState} />
     </AdminConsoleLayout>
   )
 }

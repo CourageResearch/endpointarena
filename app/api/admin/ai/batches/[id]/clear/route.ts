@@ -1,6 +1,6 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
-import { clearAi2BatchNow } from '@/lib/admin-ai2'
+import { clearAiBatchNow } from '@/lib/admin-ai'
 
 type RouteContext = {
   params: Promise<{
@@ -15,7 +15,7 @@ export async function POST(_: Request, context: RouteContext) {
     await ensureAdmin()
 
     const { id } = await context.params
-    const batch = await clearAi2BatchNow(id)
+    const batch = await clearAiBatchNow(id)
 
     return successResponse({ batch }, {
       headers: {

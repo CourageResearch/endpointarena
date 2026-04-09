@@ -1,13 +1,19 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
-import { createAi2Batch } from '@/lib/admin-ai2'
-import { isAi2Dataset } from '@/lib/admin-ai2-shared'
+import { createAiBatch } from '@/lib/admin-ai'
+import {
+  AI_API_CONCURRENCY_MAX,
+  AI_API_CONCURRENCY_MIN,
+  isAiApiConcurrency,
+  isAiDataset,
+} from '@/lib/admin-ai-shared'
 import { isModelId } from '@/lib/constants'
 import { ValidationError } from '@/lib/errors'
 
 type CreateBatchBody = {
   dataset?: string
   enabledModelIds?: string[]
+  apiConcurrency?: number
 }
 
 export async function POST(request: Request) {
@@ -18,7 +24,7 @@ export async function POST(request: Request) {
 
     const body = await parseJsonBody<CreateBatchBody>(request)
     const dataset = typeof body.dataset === 'string' ? body.dataset : ''
-    if (!isAi2Dataset(dataset)) {
+    if (!isAiDataset(dataset)) {
       throw new ValidationError('dataset must be toy or live')
     }
 
@@ -30,10 +36,14 @@ export async function POST(request: Request) {
       throw new ValidationError(`Unknown model id: ${invalidModel}`)
     }
     const enabledModelIds = rawEnabledModelIds.filter(isModelId)
+    if (body.apiConcurrency != null && !isAiApiConcurrency(body.apiConcurrency)) {
+      throw new ValidationError(`apiConcurrency must be an integer between ${AI_API_CONCURRENCY_MIN} and ${AI_API_CONCURRENCY_MAX}`)
+    }
 
-    const batch = await createAi2Batch({
+    const batch = await createAiBatch({
       dataset,
       enabledModelIds,
+      apiConcurrency: body.apiConcurrency,
     })
 
     return successResponse({ batch }, {

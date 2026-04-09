@@ -1,14 +1,14 @@
 import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
 import type { ModelDecisionInput, ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
 
-export const AI2_DATASETS = ['toy', 'live'] as const
-export type Ai2Dataset = (typeof AI2_DATASETS)[number]
-export const AI2_SUBSCRIPTION_EXPORT_WORKFLOW = 'admin-ai-batch-export'
-export const AI2_SUBSCRIPTION_IMPORT_WORKFLOW = 'admin-ai-batch-import'
-export const LEGACY_AI2_SUBSCRIPTION_EXPORT_WORKFLOW = 'admin-ai2-batch-export'
-export const LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW = 'admin-ai2-batch-import'
+export const AI_DATASETS = ['toy', 'live'] as const
+export type AiDataset = (typeof AI_DATASETS)[number]
+export const AI_SUBSCRIPTION_EXPORT_WORKFLOW = 'admin-ai-batch-export'
+export const AI_SUBSCRIPTION_IMPORT_WORKFLOW = 'admin-ai-batch-import'
+const LEGACY_AI_SUBSCRIPTION_EXPORT_WORKFLOW = 'admin-ai2-batch-export'
+export const LEGACY_AI_SUBSCRIPTION_IMPORT_WORKFLOW = 'admin-ai2-batch-import'
 
-export const AI2_BATCH_STATUSES = [
+export const AI_BATCH_STATUSES = [
   'collecting',
   'waiting',
   'ready',
@@ -17,9 +17,9 @@ export const AI2_BATCH_STATUSES = [
   'failed',
   'reset',
 ] as const
-export type Ai2BatchStatus = (typeof AI2_BATCH_STATUSES)[number]
+export type AiBatchStatus = (typeof AI_BATCH_STATUSES)[number]
 
-export const AI2_TASK_STATUSES = [
+export const AI_TASK_STATUSES = [
   'queued',
   'running',
   'waiting-import',
@@ -27,9 +27,9 @@ export const AI2_TASK_STATUSES = [
   'error',
   'cleared',
 ] as const
-export type Ai2TaskStatus = (typeof AI2_TASK_STATUSES)[number]
+export type AiTaskStatus = (typeof AI_TASK_STATUSES)[number]
 
-export const AI2_LANE_STATUSES = [
+const AI_LANE_STATUSES = [
   'collecting',
   'waiting',
   'ready',
@@ -37,31 +37,34 @@ export const AI2_LANE_STATUSES = [
   'done',
   'failed',
 ] as const
-export type Ai2LaneStatus = (typeof AI2_LANE_STATUSES)[number]
+export type AiLaneStatus = (typeof AI_LANE_STATUSES)[number]
 
-export const AI2_SUBSCRIPTION_MODEL_IDS = ['claude-opus', 'gpt-5.2'] as const satisfies readonly ModelId[]
-export type Ai2SubscriptionModelId = (typeof AI2_SUBSCRIPTION_MODEL_IDS)[number]
+export const AI_SUBSCRIPTION_MODEL_IDS = ['claude-opus', 'gpt-5.2'] as const satisfies readonly ModelId[]
+export type AiSubscriptionModelId = (typeof AI_SUBSCRIPTION_MODEL_IDS)[number]
 
-export type Ai2ModelLane = 'api' | 'subscription'
+export type AiModelLane = 'api' | 'subscription'
+export const AI_API_CONCURRENCY_MIN = 1
+export const AI_API_CONCURRENCY_MAX = 8
+export const AI_API_CONCURRENCY_DEFAULT = 4
 
-export type Ai2DatasetSummary = {
-  key: Ai2Dataset
+export type AiDatasetSummary = {
+  key: AiDataset
   label: string
   description: string
   candidateCount: number
 }
 
-export type Ai2AvailableModel = {
+export type AiAvailableModel = {
   modelId: ModelId
   label: string
   provider: string
-  lane: Ai2ModelLane
+  lane: AiModelLane
   available: boolean
   defaultEnabled: boolean
   disabledReason: string | null
 }
 
-export type Ai2FrozenPortfolio = {
+export type AiFrozenPortfolio = {
   actorId: string
   cashAvailable: number
   yesSharesHeld: number
@@ -71,7 +74,7 @@ export type Ai2FrozenPortfolio = {
   maxSellNoUsd: number
 }
 
-export type Ai2FrozenMarketSnapshot = {
+export type AiFrozenMarketSnapshot = {
   priceYes: number
   priceNo: number
   qYes: number
@@ -81,7 +84,7 @@ export type Ai2FrozenMarketSnapshot = {
   snapshotAt: string
 }
 
-export type Ai2BatchTrial = {
+export type AiBatchTrial = {
   marketId: string
   trialQuestionId: string
   trialId: string
@@ -97,15 +100,15 @@ export type Ai2BatchTrial = {
   primaryEndpoint: string
   currentStatus: string
   briefSummary: string
-  marketSnapshot: Ai2FrozenMarketSnapshot
+  marketSnapshot: AiFrozenMarketSnapshot
 }
 
-export type Ai2DecisionIntent = {
+export type AiDecisionIntent = {
   forecast: ModelDecisionResult['forecast']
   action: ModelDecisionResult['action']
 }
 
-export type Ai2FillEvent = {
+export type AiFillEvent = {
   id: string
   marketId: string
   trialQuestionId: string
@@ -126,7 +129,7 @@ export type Ai2FillEvent = {
   errorMessage: string | null
 }
 
-export type Ai2TaskFillSummary = {
+export type AiTaskFillSummary = {
   fillEventId: string | null
   marketActionId: string | null
   executedAction: ModelDecisionResult['action']['type']
@@ -139,18 +142,18 @@ export type Ai2TaskFillSummary = {
   errorMessage: string | null
 }
 
-export type Ai2DecisionTask = {
+export type AiDecisionTask = {
   taskKey: string
   marketId: string
   trialQuestionId: string
   trialId: string
   modelId: ModelId
   actorId: string
-  lane: Ai2ModelLane
-  status: Ai2TaskStatus
-  frozenPortfolio: Ai2FrozenPortfolio
-  frozenMarket: Ai2FrozenMarketSnapshot
-  decision: Ai2DecisionIntent | null
+  lane: AiModelLane
+  status: AiTaskStatus
+  frozenPortfolio: AiFrozenPortfolio
+  frozenMarket: AiFrozenMarketSnapshot
+  decision: AiDecisionIntent | null
   reasoningPreview: string | null
   snapshotId: string | null
   durationMs: number | null
@@ -159,10 +162,10 @@ export type Ai2DecisionTask = {
   exportedAt: string | null
   importedAt: string | null
   errorMessage: string | null
-  fill: Ai2TaskFillSummary | null
+  fill: AiTaskFillSummary | null
 }
 
-export type Ai2TrialClearPlan = {
+export type AiTrialClearPlan = {
   marketId: string
   trialQuestionId: string
   queue: Array<{
@@ -172,7 +175,7 @@ export type Ai2TrialClearPlan = {
   }>
 }
 
-export type Ai2PortfolioMarketPosition = {
+export type AiPortfolioMarketPosition = {
   marketId: string
   trialQuestionId: string
   shortTitle: string
@@ -180,48 +183,49 @@ export type Ai2PortfolioMarketPosition = {
   noShares: number
 }
 
-export type Ai2PortfolioState = {
+export type AiPortfolioState = {
   modelId: ModelId
   actorId: string
   cashBalance: number
   totalYesShares: number
   totalNoShares: number
-  markets: Ai2PortfolioMarketPosition[]
+  markets: AiPortfolioMarketPosition[]
   latestActionSummary: string | null
 }
 
-export type Ai2BatchLog = {
+export type AiBatchLog = {
   id: string
   at: string
   message: string
   tone: 'info' | 'success' | 'warning' | 'error'
 }
 
-export type Ai2BatchState = {
+export type AiBatchState = {
   id: string
-  dataset: Ai2Dataset
-  status: Ai2BatchStatus
+  dataset: AiDataset
+  status: AiBatchStatus
   createdAt: string
   updatedAt: string
   runStartedAt: string | null
+  apiConcurrency: number
   clearOrder: ModelId[]
   enabledModelIds: ModelId[]
-  trials: Ai2BatchTrial[]
-  tasks: Ai2DecisionTask[]
-  fills: Ai2FillEvent[]
-  portfolioStates: Ai2PortfolioState[]
-  logs: Ai2BatchLog[]
+  trials: AiBatchTrial[]
+  tasks: AiDecisionTask[]
+  fills: AiFillEvent[]
+  portfolioStates: AiPortfolioState[]
+  logs: AiBatchLog[]
   failureMessage: string | null
 }
 
-export type Ai2DeskState = {
-  dataset: Ai2Dataset
-  datasets: Ai2DatasetSummary[]
-  availableModels: Ai2AvailableModel[]
-  batch: Ai2BatchState | null
+export type AiDeskState = {
+  dataset: AiDataset
+  datasets: AiDatasetSummary[]
+  availableModels: AiAvailableModel[]
+  batch: AiBatchState | null
 }
 
-export type Ai2SubscriptionExportTask = {
+export type AiSubscriptionExportTask = {
   taskKey: string
   marketId: string
   trialQuestionId: string
@@ -234,71 +238,82 @@ export type Ai2SubscriptionExportTask = {
   prompt: string
 }
 
-export type Ai2SubscriptionExportPacket = {
+export type AiSubscriptionExportPacket = {
   version: 1
-  workflow: typeof AI2_SUBSCRIPTION_EXPORT_WORKFLOW
+  workflow: typeof AI_SUBSCRIPTION_EXPORT_WORKFLOW
   batchId: string
-  dataset: Ai2Dataset
+  dataset: AiDataset
   modelId: ModelId
   exportedAt: string
   taskCount: number
   operatorInstructions: string[]
-  responseTemplate: Ai2SubscriptionImportPacket
-  tasks: Ai2SubscriptionExportTask[]
+  responseTemplate: AiSubscriptionImportPacket
+  tasks: AiSubscriptionExportTask[]
 }
 
-export type Ai2SubscriptionImportItem = {
+export type AiSubscriptionImportItem = {
   taskKey: string
   decision: ModelDecisionResult
 }
 
-export type Ai2SubscriptionImportPacket = {
+export type AiSubscriptionImportPacket = {
   version: 1
-  workflow: typeof AI2_SUBSCRIPTION_IMPORT_WORKFLOW
+  workflow: typeof AI_SUBSCRIPTION_IMPORT_WORKFLOW
   batchId: string
   modelId: ModelId
-  decisions: Ai2SubscriptionImportItem[]
+  decisions: AiSubscriptionImportItem[]
 }
 
-export function isAi2Dataset(value: string | null | undefined): value is Ai2Dataset {
-  return AI2_DATASETS.includes(value as Ai2Dataset)
+export function isAiDataset(value: string | null | undefined): value is AiDataset {
+  return AI_DATASETS.includes(value as AiDataset)
 }
 
-export function isAi2SubscriptionModelId(modelId: ModelId): modelId is Ai2SubscriptionModelId {
-  return AI2_SUBSCRIPTION_MODEL_IDS.includes(modelId as Ai2SubscriptionModelId)
+function isAiSubscriptionModelId(modelId: ModelId): modelId is AiSubscriptionModelId {
+  return AI_SUBSCRIPTION_MODEL_IDS.includes(modelId as AiSubscriptionModelId)
 }
 
-export function isAi2SubscriptionImportWorkflow(value: string): value is typeof AI2_SUBSCRIPTION_IMPORT_WORKFLOW | typeof LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW {
-  return value === AI2_SUBSCRIPTION_IMPORT_WORKFLOW || value === LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW
+export function isAiSubscriptionImportWorkflow(value: string): value is typeof AI_SUBSCRIPTION_IMPORT_WORKFLOW | typeof LEGACY_AI_SUBSCRIPTION_IMPORT_WORKFLOW {
+  return value === AI_SUBSCRIPTION_IMPORT_WORKFLOW || value === LEGACY_AI_SUBSCRIPTION_IMPORT_WORKFLOW
 }
 
-export function getAi2ModelLane(modelId: ModelId): Ai2ModelLane {
-  return isAi2SubscriptionModelId(modelId) ? 'subscription' : 'api'
+export function getAiModelLane(modelId: ModelId): AiModelLane {
+  return isAiSubscriptionModelId(modelId) ? 'subscription' : 'api'
 }
 
-export function buildAi2TaskKey(batchId: string, marketId: string, modelId: ModelId): string {
+export function isAiApiConcurrency(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= AI_API_CONCURRENCY_MIN
+    && value <= AI_API_CONCURRENCY_MAX
+}
+
+export function normalizeAiApiConcurrency(value: unknown): number {
+  return isAiApiConcurrency(value) ? value : AI_API_CONCURRENCY_DEFAULT
+}
+
+export function buildAiTaskKey(batchId: string, marketId: string, modelId: ModelId): string {
   return `${batchId}:${marketId}:${modelId}`
 }
 
-export function getAi2DatasetLabel(dataset: Ai2Dataset): string {
+export function getAiDatasetLabel(dataset: AiDataset): string {
   return dataset === 'toy' ? 'Toy' : 'Live'
 }
 
-export function getAi2DatasetDescription(dataset: Ai2Dataset): string {
+export function getAiDatasetDescription(dataset: AiDataset): string {
   return dataset === 'toy'
     ? 'A small-slate batch for fast testing.'
     : 'All open trial markets currently eligible for the desk.'
 }
 
-export function getAi2ModelLabel(modelId: ModelId): string {
+export function getAiModelLabel(modelId: ModelId): string {
   return MODEL_INFO[modelId].fullName
 }
 
-export function listAi2SupportedModelIds(): readonly ModelId[] {
+export function listAiSupportedModelIds(): readonly ModelId[] {
   return MODEL_IDS
 }
 
-export function buildAi2TrialClearPlans(batch: Ai2BatchState): Ai2TrialClearPlan[] {
+function buildAiTrialClearPlans(batch: AiBatchState): AiTrialClearPlan[] {
   return batch.trials.map((trial) => ({
     marketId: trial.marketId,
     trialQuestionId: trial.trialQuestionId,
@@ -312,11 +327,11 @@ export function buildAi2TrialClearPlans(batch: Ai2BatchState): Ai2TrialClearPlan
           position: index + 1,
         }
       })
-      .filter((value): value is Ai2TrialClearPlan['queue'][number] => value !== null),
+      .filter((value): value is AiTrialClearPlan['queue'][number] => value !== null),
   }))
 }
 
-export function summarizeAi2Lane(batch: Ai2BatchState | null, modelIds: readonly ModelId[]): Ai2LaneStatus {
+function summarizeAiLane(batch: AiBatchState | null, modelIds: readonly ModelId[]): AiLaneStatus {
   if (!batch) return 'waiting'
 
   const tasks = batch.tasks.filter((task) => modelIds.includes(task.modelId))

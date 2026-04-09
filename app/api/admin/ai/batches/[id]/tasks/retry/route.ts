@@ -1,6 +1,6 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
-import { retryAi2Task } from '@/lib/admin-ai2'
+import { retryAiTask } from '@/lib/admin-ai'
 import { ValidationError } from '@/lib/errors'
 
 type RetryBody = {
@@ -26,7 +26,7 @@ export async function POST(request: Request, context: RouteContext) {
       throw new ValidationError('taskKey is required')
     }
 
-    const batch = await retryAi2Task(id, taskKey)
+    const batch = await retryAiTask(id, taskKey)
 
     return successResponse({ batch }, {
       headers: {

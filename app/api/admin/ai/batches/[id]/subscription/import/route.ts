@@ -1,6 +1,6 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
-import { importAi2SubscriptionPacket } from '@/lib/admin-ai2'
+import { importAiSubscriptionPacket } from '@/lib/admin-ai'
 
 type ImportBody = {
   workflow?: string
@@ -27,7 +27,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     const { id } = await context.params
     const body = await parseJsonBody<ImportBody>(request)
-    const batch = await importAi2SubscriptionPacket(id, {
+    const batch = await importAiSubscriptionPacket(id, {
       workflow: typeof body.workflow === 'string' ? body.workflow : '',
       batchId: typeof body.batchId === 'string' ? body.batchId : '',
       modelId: typeof body.modelId === 'string' ? body.modelId : '',

@@ -7,35 +7,36 @@ import {
   predictionMarkets,
   trialQuestions,
   phase2Trials,
-  type Ai2Batch as Ai2BatchRow,
+  type AiBatch as AiBatchRow,
 } from '@/lib/db'
 import {
-  AI2_SUBSCRIPTION_EXPORT_WORKFLOW,
-  AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
-  AI2_SUBSCRIPTION_MODEL_IDS,
-  buildAi2TaskKey,
-  getAi2DatasetDescription,
-  getAi2DatasetLabel,
-  getAi2ModelLabel,
-  getAi2ModelLane,
-  isAi2SubscriptionImportWorkflow,
-  LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
-  listAi2SupportedModelIds,
-  type Ai2AvailableModel,
-  type Ai2BatchState,
-  type Ai2BatchStatus,
-  type Ai2Dataset,
-  type Ai2DatasetSummary,
-  type Ai2DecisionTask,
-  type Ai2DeskState,
-  type Ai2FrozenMarketSnapshot,
-  type Ai2FrozenPortfolio,
-  type Ai2PortfolioMarketPosition,
-  type Ai2PortfolioState,
-  type Ai2SubscriptionImportPacket,
-  type Ai2SubscriptionModelId,
-  type Ai2TaskStatus,
-} from '@/lib/admin-ai2-shared'
+  AI_SUBSCRIPTION_EXPORT_WORKFLOW,
+  AI_SUBSCRIPTION_IMPORT_WORKFLOW,
+  AI_SUBSCRIPTION_MODEL_IDS,
+  buildAiTaskKey,
+  getAiDatasetDescription,
+  getAiDatasetLabel,
+  getAiModelLabel,
+  getAiModelLane,
+  normalizeAiApiConcurrency,
+  isAiSubscriptionImportWorkflow,
+  LEGACY_AI_SUBSCRIPTION_IMPORT_WORKFLOW,
+  listAiSupportedModelIds,
+  type AiAvailableModel,
+  type AiBatchState,
+  type AiBatchStatus,
+  type AiDataset,
+  type AiDatasetSummary,
+  type AiDecisionTask,
+  type AiDeskState,
+  type AiFrozenMarketSnapshot,
+  type AiFrozenPortfolio,
+  type AiPortfolioMarketPosition,
+  type AiPortfolioState,
+  type AiSubscriptionImportPacket,
+  type AiSubscriptionModelId,
+  type AiTaskStatus,
+} from '@/lib/admin-ai-shared'
 import { MODEL_INFO, type ModelId } from '@/lib/constants'
 import {
   normalizeRunDate,
@@ -64,29 +65,30 @@ type OpenTrialCandidate = {
   }
 }
 
-type CreateAi2BatchInput = {
-  dataset: Ai2Dataset
+type CreateAiBatchInput = {
+  dataset: AiDataset
   enabledModelIds: ModelId[]
+  apiConcurrency?: number
 }
 
 declare global {
   // eslint-disable-next-line no-var
-  var __endpointArenaAi2Workers: Map<string, Promise<void>> | undefined
+  var __endpointArenaAiWorkers: Map<string, Promise<void>> | undefined
   // eslint-disable-next-line no-var
-  var __endpointArenaAi2Locks: Map<string, Promise<void>> | undefined
+  var __endpointArenaAiLocks: Map<string, Promise<void>> | undefined
 }
 
-const ACTIVE_BATCH_STATUSES: Ai2BatchStatus[] = ['collecting', 'waiting', 'ready', 'clearing']
+const ACTIVE_BATCH_STATUSES: AiBatchStatus[] = ['collecting', 'waiting', 'ready', 'clearing']
 
-const ai2Workers = globalThis.__endpointArenaAi2Workers ?? new Map<string, Promise<void>>()
-const ai2Locks = globalThis.__endpointArenaAi2Locks ?? new Map<string, Promise<void>>()
+const ai2Workers = globalThis.__endpointArenaAiWorkers ?? new Map<string, Promise<void>>()
+const ai2Locks = globalThis.__endpointArenaAiLocks ?? new Map<string, Promise<void>>()
 
 if (process.env.NODE_ENV !== 'production') {
-  globalThis.__endpointArenaAi2Workers = ai2Workers
-  globalThis.__endpointArenaAi2Locks = ai2Locks
+  globalThis.__endpointArenaAiWorkers = ai2Workers
+  globalThis.__endpointArenaAiLocks = ai2Locks
 }
 
-function isTerminalBatchStatus(status: Ai2BatchStatus): boolean {
+function isTerminalBatchStatus(status: AiBatchStatus): boolean {
   return status === 'cleared' || status === 'failed' || status === 'reset'
 }
 
@@ -100,18 +102,19 @@ function toIsoString(value: Date | string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
-function parseBatchState(row: Ai2BatchRow): Ai2BatchState {
-  const state = row.state as unknown as Partial<Ai2BatchState>
+function parseBatchState(row: AiBatchRow): AiBatchState {
+  const state = row.state as unknown as Partial<AiBatchState>
   const inferredRunStartedAt = state.runStartedAt
     ?? (row.status === 'waiting' ? null : row.updatedAt.toISOString())
 
   return {
     id: row.id,
-    dataset: row.dataset as Ai2Dataset,
-    status: row.status as Ai2BatchStatus,
+    dataset: row.dataset as AiDataset,
+    status: row.status as AiBatchStatus,
     createdAt: state.createdAt ?? row.createdAt.toISOString(),
     updatedAt: state.updatedAt ?? row.updatedAt.toISOString(),
     runStartedAt: inferredRunStartedAt,
+    apiConcurrency: normalizeAiApiConcurrency(state.apiConcurrency),
     clearOrder: state.clearOrder ?? [],
     enabledModelIds: state.enabledModelIds ?? [],
     trials: state.trials ?? [],
@@ -143,7 +146,7 @@ async function withBatchLock<T>(batchId: string, fn: () => Promise<T>): Promise<
   }
 }
 
-function buildLog(message: string, tone: Ai2BatchState['logs'][number]['tone'] = 'info') {
+function buildLog(message: string, tone: AiBatchState['logs'][number]['tone'] = 'info') {
   return {
     id: crypto.randomUUID(),
     at: new Date().toISOString(),
@@ -195,14 +198,14 @@ async function listOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
     })
 }
 
-export function getAi2AvailableModels(): Ai2AvailableModel[] {
-  return listAi2SupportedModelIds().map((modelId) => {
-    const lane = getAi2ModelLane(modelId)
+function getAiAvailableModels(): AiAvailableModel[] {
+  return listAiSupportedModelIds().map((modelId) => {
+    const lane = getAiModelLane(modelId)
     const available = lane === 'subscription' ? true : MODEL_DECISION_GENERATORS[modelId]?.enabled() ?? false
 
     return {
       modelId,
-      label: getAi2ModelLabel(modelId),
+      label: getAiModelLabel(modelId),
       provider: MODEL_INFO[modelId].provider,
       lane,
       available,
@@ -212,7 +215,7 @@ export function getAi2AvailableModels(): Ai2AvailableModel[] {
   })
 }
 
-async function buildDatasetSummaries(): Promise<Ai2DatasetSummary[]> {
+async function buildDatasetSummaries(): Promise<AiDatasetSummary[]> {
   const [candidates, runtimeConfig] = await Promise.all([
     listOpenTrialCandidates(),
     getMarketRuntimeConfig(),
@@ -221,21 +224,21 @@ async function buildDatasetSummaries(): Promise<Ai2DatasetSummary[]> {
   return [
     {
       key: 'toy',
-      label: getAi2DatasetLabel('toy'),
-      description: getAi2DatasetDescription('toy'),
+      label: getAiDatasetLabel('toy'),
+      description: getAiDatasetDescription('toy'),
       candidateCount: Math.min(runtimeConfig.toyTrialCount, candidateCount),
     },
     {
       key: 'live',
-      label: getAi2DatasetLabel('live'),
-      description: getAi2DatasetDescription('live'),
+      label: getAiDatasetLabel('live'),
+      description: getAiDatasetDescription('live'),
       candidateCount,
     },
   ]
 }
 
 function pickDatasetTrials(
-  dataset: Ai2Dataset,
+  dataset: AiDataset,
   candidates: OpenTrialCandidate[],
   toyTrialCount: number,
 ): OpenTrialCandidate[] {
@@ -254,7 +257,7 @@ function pickDatasetTrials(
   return candidates
 }
 
-function buildFrozenMarketSnapshot(candidate: OpenTrialCandidate): Ai2FrozenMarketSnapshot {
+function buildFrozenMarketSnapshot(candidate: OpenTrialCandidate): AiFrozenMarketSnapshot {
   return {
     priceYes: candidate.market.priceYes,
     priceNo: 1 - candidate.market.priceYes,
@@ -272,7 +275,7 @@ function buildFrozenPortfolio(input: {
   position: typeof marketPositions.$inferSelect
   runDate: Date
   runtimeConfig: Awaited<ReturnType<typeof getMarketRuntimeConfig>>
-}): Ai2FrozenPortfolio {
+}): AiFrozenPortfolio {
   const tradeCaps = calculateExecutableTradeCaps({
     state: {
       qYes: input.market.qYes,
@@ -298,7 +301,7 @@ function buildFrozenPortfolio(input: {
   }
 }
 
-function buildBatchTrial(candidate: OpenTrialCandidate): Ai2BatchState['trials'][number] {
+function buildBatchTrial(candidate: OpenTrialCandidate): AiBatchState['trials'][number] {
   return {
     marketId: candidate.market.id,
     trialQuestionId: candidate.question.id,
@@ -319,11 +322,11 @@ function buildBatchTrial(candidate: OpenTrialCandidate): Ai2BatchState['trials']
   }
 }
 
-function buildTaskStatus(lane: 'api' | 'subscription'): Ai2TaskStatus {
+function buildTaskStatus(lane: 'api' | 'subscription'): AiTaskStatus {
   return lane === 'api' ? 'queued' : 'waiting-import'
 }
 
-async function buildInitialPortfolioStates(state: Pick<Ai2BatchState, 'trials' | 'enabledModelIds' | 'tasks' | 'fills'>): Promise<Ai2PortfolioState[]> {
+async function buildInitialPortfolioStates(state: Pick<AiBatchState, 'trials' | 'enabledModelIds' | 'tasks' | 'fills'>): Promise<AiPortfolioState[]> {
   const actorIdByModelId = new Map(state.tasks.map((task) => [task.modelId, task.actorId]))
   const uniqueActorIds = Array.from(new Set(state.tasks.map((task) => task.actorId)))
   const marketIds = state.trials.map((trial) => trial.marketId)
@@ -345,7 +348,7 @@ async function buildInitialPortfolioStates(state: Pick<Ai2BatchState, 'trials' |
   ])
 
   const accountByActorId = new Map(accounts.map((account) => [account.actorId, account]))
-  const positionsByActorId = new Map<string, Ai2PortfolioMarketPosition[]>()
+  const positionsByActorId = new Map<string, AiPortfolioMarketPosition[]>()
 
   for (const position of positions) {
     const trial = state.trials.find((entry) => entry.marketId === position.marketId)
@@ -374,7 +377,7 @@ async function buildInitialPortfolioStates(state: Pick<Ai2BatchState, 'trials' |
       totalNoShares: markets.reduce((sum, item) => sum + item.noShares, 0),
       markets,
       latestActionSummary: latestFill
-        ? `${getAi2ModelLabel(modelId)} ${latestFill.executedAction} ${latestFill.executedAmountUsd > 0 ? `$${latestFill.executedAmountUsd.toFixed(2)}` : ''}`.trim()
+        ? `${getAiModelLabel(modelId)} ${latestFill.executedAction} ${latestFill.executedAmountUsd > 0 ? `$${latestFill.executedAmountUsd.toFixed(2)}` : ''}`.trim()
         : null,
     }
   })
@@ -382,7 +385,7 @@ async function buildInitialPortfolioStates(state: Pick<Ai2BatchState, 'trials' |
 
 function buildInitialBatchState(input: {
   batchId: string
-  dataset: Ai2Dataset
+  dataset: AiDataset
   enabledModelIds: ModelId[]
   clearOrder: ModelId[]
   trials: OpenTrialCandidate[]
@@ -391,11 +394,12 @@ function buildInitialBatchState(input: {
   positionByMarketActorKey: Map<string, typeof marketPositions.$inferSelect>
   runtimeConfig: Awaited<ReturnType<typeof getMarketRuntimeConfig>>
   createdAt: Date
-}): Ai2BatchState {
+  apiConcurrency: number
+}): AiBatchState {
   const createdAtIso = input.createdAt.toISOString()
   const normalizedRunDate = normalizeRunDate(input.createdAt)
   const trials = input.trials.map((candidate) => buildBatchTrial(candidate))
-  const tasks: Ai2DecisionTask[] = []
+  const tasks: AiDecisionTask[] = []
 
   for (const trial of trials) {
     const candidate = input.trials.find((entry) => entry.market.id === trial.marketId)
@@ -410,14 +414,14 @@ function buildInitialBatchState(input: {
       if (!account || !position) continue
 
       tasks.push({
-        taskKey: buildAi2TaskKey(input.batchId, trial.marketId, modelId),
+        taskKey: buildAiTaskKey(input.batchId, trial.marketId, modelId),
         marketId: trial.marketId,
         trialQuestionId: trial.trialQuestionId,
         trialId: trial.trialId,
         modelId,
         actorId,
-        lane: getAi2ModelLane(modelId),
-        status: buildTaskStatus(getAi2ModelLane(modelId)),
+        lane: getAiModelLane(modelId),
+        status: buildTaskStatus(getAiModelLane(modelId)),
         frozenPortfolio: buildFrozenPortfolio({
           market: candidate.market,
           account,
@@ -447,6 +451,7 @@ function buildInitialBatchState(input: {
     createdAt: createdAtIso,
     updatedAt: createdAtIso,
     runStartedAt: null,
+    apiConcurrency: input.apiConcurrency,
     clearOrder: input.clearOrder,
     enabledModelIds: input.enabledModelIds,
     trials,
@@ -455,24 +460,24 @@ function buildInitialBatchState(input: {
     portfolioStates: [],
     logs: [
       buildLog(
-        `${getAi2DatasetLabel(input.dataset)} batch staged with ${trials.length} trial${trials.length === 1 ? '' : 's'} and ${input.enabledModelIds.length} model${input.enabledModelIds.length === 1 ? '' : 's'}.`,
+        `${getAiDatasetLabel(input.dataset)} batch staged with ${trials.length} trial${trials.length === 1 ? '' : 's'} and ${input.enabledModelIds.length} model${input.enabledModelIds.length === 1 ? '' : 's'}.`,
       ),
     ],
     failureMessage: null,
   }
 }
 
-function serializeBatchState(state: Ai2BatchState): Record<string, unknown> {
+function serializeBatchState(state: AiBatchState): Record<string, unknown> {
   return state as unknown as Record<string, unknown>
 }
 
-async function getBatchRowById(batchId: string): Promise<Ai2BatchRow | null> {
+async function getBatchRowById(batchId: string): Promise<AiBatchRow | null> {
   return (await db.query.ai2Batches.findFirst({
     where: eq(ai2Batches.id, batchId),
   })) ?? null
 }
 
-async function getLatestVisibleBatch(dataset: Ai2Dataset): Promise<Ai2BatchState | null> {
+async function getLatestVisibleBatch(dataset: AiDataset): Promise<AiBatchState | null> {
   const row = await db.query.ai2Batches.findFirst({
     where: and(
       eq(ai2Batches.dataset, dataset),
@@ -484,7 +489,7 @@ async function getLatestVisibleBatch(dataset: Ai2Dataset): Promise<Ai2BatchState
   return row ? parseBatchState(row) : null
 }
 
-function updateAggregateStatus(state: Ai2BatchState, overrideStatus?: Ai2BatchStatus): Ai2BatchState {
+function updateAggregateStatus(state: AiBatchState, overrideStatus?: AiBatchStatus): AiBatchState {
   const next = { ...state }
   const tasks = next.tasks
 
@@ -512,7 +517,7 @@ function updateAggregateStatus(state: Ai2BatchState, overrideStatus?: Ai2BatchSt
   return next
 }
 
-async function persistBatchState(batchId: string, state: Ai2BatchState): Promise<Ai2BatchState | null> {
+async function persistBatchState(batchId: string, state: AiBatchState): Promise<AiBatchState | null> {
   const normalized = updateAggregateStatus(state)
   const [row] = await db.update(ai2Batches)
     .set({
@@ -529,8 +534,8 @@ async function persistBatchState(batchId: string, state: Ai2BatchState): Promise
 
 async function mutateBatchState(
   batchId: string,
-  mutator: (state: Ai2BatchState) => Promise<Ai2BatchState> | Ai2BatchState,
-): Promise<Ai2BatchState | null> {
+  mutator: (state: AiBatchState) => Promise<AiBatchState> | AiBatchState,
+): Promise<AiBatchState | null> {
   return withBatchLock(batchId, async () => {
     const row = await getBatchRowById(batchId)
     if (!row) return null
@@ -540,7 +545,7 @@ async function mutateBatchState(
   })
 }
 
-function reconstructSnapshotArgs(batch: Ai2BatchState, task: Ai2DecisionTask) {
+function reconstructSnapshotArgs(batch: AiBatchState, task: AiDecisionTask) {
   const trial = batch.trials.find((entry) => entry.marketId === task.marketId)
   if (!trial) {
     throw new NotFoundError(`Missing trial snapshot for ${task.marketId}`)
@@ -600,15 +605,15 @@ function reconstructSnapshotArgs(batch: Ai2BatchState, task: Ai2DecisionTask) {
   }
 }
 
-async function buildExportPacket(batch: Ai2BatchState, modelId: Ai2SubscriptionModelId) {
+async function buildExportPacket(batch: AiBatchState, modelId: AiSubscriptionModelId) {
   if (!batch.enabledModelIds.includes(modelId)) {
-    throw new ValidationError(`${getAi2ModelLabel(modelId)} is not enabled in this batch.`)
+    throw new ValidationError(`${getAiModelLabel(modelId)} is not enabled in this batch.`)
   }
 
   const runtimeConfig = await getMarketRuntimeConfig()
   const tasks = batch.tasks.filter((task) => task.modelId === modelId)
   if (tasks.length === 0) {
-    throw new ValidationError(`No ${getAi2ModelLabel(modelId)} tasks are queued in this batch.`)
+    throw new ValidationError(`No ${getAiModelLabel(modelId)} tasks are queued in this batch.`)
   }
 
   const exportTasks = tasks.map((task) => {
@@ -632,9 +637,9 @@ async function buildExportPacket(batch: Ai2BatchState, modelId: Ai2SubscriptionM
     }
   })
 
-  const responseTemplate: Ai2SubscriptionImportPacket = {
+  const responseTemplate: AiSubscriptionImportPacket = {
     version: 1,
-    workflow: AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
+    workflow: AI_SUBSCRIPTION_IMPORT_WORKFLOW,
     batchId: batch.id,
     modelId,
     decisions: exportTasks.map((task) => ({
@@ -658,7 +663,7 @@ async function buildExportPacket(batch: Ai2BatchState, modelId: Ai2SubscriptionM
 
   return {
     version: 1 as const,
-    workflow: AI2_SUBSCRIPTION_EXPORT_WORKFLOW,
+    workflow: AI_SUBSCRIPTION_EXPORT_WORKFLOW,
     batchId: batch.id,
     dataset: batch.dataset,
     modelId,
@@ -733,13 +738,13 @@ function extractJsonObjects(raw: string): string[] {
 }
 
 function normalizeRawSubscriptionImport(args: {
-  batch: Ai2BatchState
-  modelId: Ai2SubscriptionModelId
+  batch: AiBatchState
+  modelId: AiSubscriptionModelId
   rawText: string
 }): {
-  workflow: typeof AI2_SUBSCRIPTION_IMPORT_WORKFLOW
+  workflow: typeof AI_SUBSCRIPTION_IMPORT_WORKFLOW
   batchId: string
-  modelId: Ai2SubscriptionModelId
+  modelId: AiSubscriptionModelId
   decisions: Array<{
     taskKey: string
     decision: ModelDecisionResult
@@ -771,7 +776,7 @@ function normalizeRawSubscriptionImport(args: {
   }
 
   return {
-    workflow: AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
+    workflow: AI_SUBSCRIPTION_IMPORT_WORKFLOW,
     batchId: args.batch.id,
     modelId: args.modelId,
     decisions: pendingTasks.map((task, index) => ({
@@ -781,7 +786,7 @@ function normalizeRawSubscriptionImport(args: {
   }
 }
 
-async function getLiveFillState(task: Ai2DecisionTask) {
+async function getLiveFillState(task: AiDecisionTask) {
   const [market, account, position] = await Promise.all([
     db.query.predictionMarkets.findFirst({
       where: eq(predictionMarkets.id, task.marketId),
@@ -812,7 +817,7 @@ async function getLiveFillState(task: Ai2DecisionTask) {
 }
 
 function applyRiskCap(args: {
-  action: NonNullable<Ai2DecisionTask['decision']>['action']['type']
+  action: NonNullable<AiDecisionTask['decision']>['action']['type']
   requestedUsd: number
   market: typeof predictionMarkets.$inferSelect
   account: typeof marketAccounts.$inferSelect
@@ -867,24 +872,30 @@ function applyRiskCap(args: {
   }
 }
 
-async function hydratePortfolioStates(state: Ai2BatchState): Promise<Ai2BatchState> {
+async function hydratePortfolioStates(state: AiBatchState): Promise<AiBatchState> {
   return {
     ...state,
     portfolioStates: await buildInitialPortfolioStates(state),
   }
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, context: string): Promise<T> {
+async function withTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  context: string,
+): Promise<T> {
   let timeoutId: NodeJS.Timeout | null = null
+  const controller = new AbortController()
 
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => {
+        controller.abort()
         reject(new Error(`${context} timed out after ${Math.round(timeoutMs / 1000)}s`))
       }, timeoutMs)
     })
 
-    return await Promise.race([promise, timeoutPromise])
+    return await Promise.race([operation(controller.signal), timeoutPromise])
   } finally {
     if (timeoutId) clearTimeout(timeoutId)
   }
@@ -912,9 +923,10 @@ async function runApiTask(batchId: string, taskKey: string): Promise<void> {
     const runtimeConfig = await getMarketRuntimeConfig()
     const { snapshotArgs } = reconstructSnapshotArgs(runningState, task)
     const result = await withTimeout(
-      generateAndStoreModelDecisionSnapshot({
+      (signal) => generateAndStoreModelDecisionSnapshot({
         ...snapshotArgs,
         runtimeConfig,
+        signal,
       }),
       getMarketModelResponseTimeoutMs(task.modelId),
       `${task.modelId} decision`,
@@ -922,7 +934,7 @@ async function runApiTask(batchId: string, taskKey: string): Promise<void> {
 
     const next = await mutateBatchState(batchId, (state) => ({
       ...state,
-      logs: [...state.logs, buildLog(`${getAi2ModelLabel(task.modelId)} is ready on ${task.marketId}.`, 'success')],
+      logs: [...state.logs, buildLog(`${getAiModelLabel(task.modelId)} is ready on ${task.marketId}.`, 'success')],
       tasks: state.tasks.map((entry) => (
         entry.taskKey === taskKey
           ? {
@@ -994,7 +1006,7 @@ async function clearBatch(batchId: string): Promise<void> {
     trial,
     queue: state.clearOrder
       .map((modelId) => state.tasks.find((task) => task.marketId === trial.marketId && task.modelId === modelId))
-      .filter((task): task is Ai2DecisionTask => task != null),
+      .filter((task): task is AiDecisionTask => task != null),
   }))
 
   for (const plan of clearPlans) {
@@ -1024,8 +1036,8 @@ async function clearBatch(batchId: string): Promise<void> {
           .join(' ')
           .trim()
 
-        let fillEvent: Ai2BatchState['fills'][number]
-        let fillSummary: Ai2DecisionTask['fill']
+        let fillEvent: AiBatchState['fills'][number]
+        let fillSummary: AiDecisionTask['fill']
 
         if (decision.action.type === 'HOLD' || cap.amountUsd <= 0) {
           const actionRecord = await runHoldAction({
@@ -1131,7 +1143,7 @@ async function clearBatch(batchId: string): Promise<void> {
         await mutateBatchState(batchId, async (currentState) => hydratePortfolioStates({
           ...currentState,
           fills: [...currentState.fills, fillEvent],
-          logs: [...currentState.logs, buildLog(`${getAi2ModelLabel(currentTask.modelId)} cleared ${fillSummary.executedAction} on ${currentTask.marketId}.`, 'success')],
+          logs: [...currentState.logs, buildLog(`${getAiModelLabel(currentTask.modelId)} cleared ${fillSummary.executedAction} on ${currentTask.marketId}.`, 'success')],
           tasks: currentState.tasks.map((entry) => (
             entry.taskKey === currentTask.taskKey
               ? {
@@ -1218,7 +1230,7 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
 
     const apiTasks = state.tasks.filter((task) => task.lane === 'api' && task.status === 'queued')
     if (apiTasks.length > 0) {
-      await runWithConcurrency(apiTasks, 4, async (task) => {
+      await runWithConcurrency(apiTasks, state.apiConcurrency, async (task) => {
         await runApiTask(batchId, task.taskKey)
       })
     }
@@ -1250,10 +1262,10 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
   await worker
 }
 
-export async function getAi2DeskState(dataset: Ai2Dataset, batchId?: string | null): Promise<Ai2DeskState> {
+export async function getAiDeskState(dataset: AiDataset, batchId?: string | null): Promise<AiDeskState> {
   const [datasets, availableModels] = await Promise.all([
     buildDatasetSummaries(),
-    Promise.resolve(getAi2AvailableModels()),
+    Promise.resolve(getAiAvailableModels()),
   ])
 
   const batch = batchId
@@ -1272,7 +1284,7 @@ export async function getAi2DeskState(dataset: Ai2Dataset, batchId?: string | nu
   }
 }
 
-export async function getAi2BatchState(batchId: string): Promise<Ai2BatchState | null> {
+export async function getAiBatchState(batchId: string): Promise<AiBatchState | null> {
   const row = await getBatchRowById(batchId)
   if (!row) return null
   const batch = parseBatchState(row)
@@ -1282,13 +1294,14 @@ export async function getAi2BatchState(batchId: string): Promise<Ai2BatchState |
   return batch
 }
 
-export async function createAi2Batch(input: CreateAi2BatchInput): Promise<Ai2BatchState> {
+export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchState> {
   const enabledModelIds = toModelIds(input.enabledModelIds)
+  const apiConcurrency = normalizeAiApiConcurrency(input.apiConcurrency)
   if (enabledModelIds.length === 0) {
     throw new ValidationError('Select at least one model before opening a batch.')
   }
 
-  const availableModels = new Map(getAi2AvailableModels().map((model) => [model.modelId, model]))
+  const availableModels = new Map(getAiAvailableModels().map((model) => [model.modelId, model]))
   for (const modelId of enabledModelIds) {
     const model = availableModels.get(modelId)
     if (!model) {
@@ -1348,6 +1361,7 @@ export async function createAi2Batch(input: CreateAi2BatchInput): Promise<Ai2Bat
     positionByMarketActorKey,
     runtimeConfig,
     createdAt,
+    apiConcurrency,
   })
   state = await hydratePortfolioStates(state)
 
@@ -1366,7 +1380,40 @@ export async function createAi2Batch(input: CreateAi2BatchInput): Promise<Ai2Bat
   return parseBatchState(row)
 }
 
-export async function exportAi2SubscriptionPacket(batchId: string, modelId: Ai2SubscriptionModelId) {
+export async function updateAiBatchSettings(batchId: string, input: {
+  apiConcurrency: number
+}): Promise<AiBatchState> {
+  const nextApiConcurrency = normalizeAiApiConcurrency(input.apiConcurrency)
+  const row = await getBatchRowById(batchId)
+  if (!row) {
+    throw new NotFoundError('Batch not found')
+  }
+
+  const batch = parseBatchState(row)
+  if (batch.runStartedAt) {
+    throw new ConflictError('API concurrency is locked after Run Batch starts.')
+  }
+  if (isTerminalBatchStatus(batch.status)) {
+    throw new ConflictError('This batch can no longer be edited.')
+  }
+
+  const next = await mutateBatchState(batchId, (state) => ({
+    ...state,
+    apiConcurrency: nextApiConcurrency,
+    logs: [
+      ...state.logs,
+      buildLog(`API lane parallelization set to ${nextApiConcurrency} concurrent task${nextApiConcurrency === 1 ? '' : 's'}.`),
+    ],
+  }))
+
+  if (!next) {
+    throw new NotFoundError('Batch not found after updating settings')
+  }
+
+  return next
+}
+
+export async function exportAiSubscriptionPacket(batchId: string, modelId: AiSubscriptionModelId) {
   const row = await getBatchRowById(batchId)
   if (!row) {
     throw new NotFoundError('Batch not found')
@@ -1377,7 +1424,7 @@ export async function exportAi2SubscriptionPacket(batchId: string, modelId: Ai2S
 
   await mutateBatchState(batchId, (state) => ({
     ...state,
-    logs: [...state.logs, buildLog(`${getAi2ModelLabel(modelId)} export packet generated.`)],
+    logs: [...state.logs, buildLog(`${getAiModelLabel(modelId)} export packet generated.`)],
     tasks: state.tasks.map((task) => (
       task.modelId === modelId
         ? { ...task, exportedAt: packet.exportedAt }
@@ -1388,7 +1435,7 @@ export async function exportAi2SubscriptionPacket(batchId: string, modelId: Ai2S
   return packet
 }
 
-export async function importAi2SubscriptionPacket(batchId: string, payload: {
+export async function importAiSubscriptionPacket(batchId: string, payload: {
   workflow: string
   batchId: string
   modelId: string
@@ -1397,22 +1444,22 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
     decision: unknown
   }>
   rawText?: string | null
-}): Promise<Ai2BatchState> {
-  if (!AI2_SUBSCRIPTION_MODEL_IDS.includes(payload.modelId as Ai2SubscriptionModelId)) {
+}): Promise<AiBatchState> {
+  if (!AI_SUBSCRIPTION_MODEL_IDS.includes(payload.modelId as AiSubscriptionModelId)) {
     throw new ValidationError('Only Claude and GPT subscription lanes accept imported decision JSON.')
   }
 
-  const modelId = payload.modelId as Ai2SubscriptionModelId
+  const modelId = payload.modelId as AiSubscriptionModelId
   const row = await getBatchRowById(batchId)
   if (!row) {
     throw new NotFoundError('Batch not found')
   }
   const batch = parseBatchState(row)
   const runtimeConfig = await getMarketRuntimeConfig()
-  const normalizedPayload = isAi2SubscriptionImportWorkflow(payload.workflow)
+  const normalizedPayload = isAiSubscriptionImportWorkflow(payload.workflow)
     ? {
         ...payload,
-        workflow: AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
+        workflow: AI_SUBSCRIPTION_IMPORT_WORKFLOW,
       }
     : payload.rawText?.trim()
       ? normalizeRawSubscriptionImport({
@@ -1424,7 +1471,7 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
 
   if (!normalizedPayload) {
     throw new ValidationError(
-      `Decision JSON does not match the import workflow. Use ${AI2_SUBSCRIPTION_IMPORT_WORKFLOW} for new packets. ${LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW} is still accepted for older exports.`,
+      `Decision JSON does not match the import workflow. Use ${AI_SUBSCRIPTION_IMPORT_WORKFLOW} for new packets. ${LEGACY_AI_SUBSCRIPTION_IMPORT_WORKFLOW} is still accepted for older exports.`,
     )
   }
   if (normalizedPayload.batchId !== batchId) {
@@ -1434,7 +1481,7 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
   if (normalizedPayload !== payload) {
     await mutateBatchState(batchId, (state) => ({
       ...state,
-      logs: [...state.logs, buildLog(`${getAi2ModelLabel(modelId)} raw response normalized into import format.`, 'warning')],
+      logs: [...state.logs, buildLog(`${getAiModelLabel(modelId)} raw response normalized into import format.`, 'warning')],
     }))
   }
 
@@ -1462,7 +1509,7 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
 
     await mutateBatchState(batchId, (state) => ({
       ...state,
-      logs: [...state.logs, buildLog(`${getAi2ModelLabel(task.modelId)} import attached to ${task.marketId}.`, 'success')],
+      logs: [...state.logs, buildLog(`${getAiModelLabel(task.modelId)} import attached to ${task.marketId}.`, 'success')],
       tasks: state.tasks.map((entry) => (
         entry.taskKey === item.taskKey
           ? {
@@ -1493,7 +1540,7 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
   return parseBatchState(final)
 }
 
-export async function runAi2BatchNow(batchId: string): Promise<Ai2BatchState> {
+export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
   const row = await getBatchRowById(batchId)
   if (!row) {
     throw new NotFoundError('Batch not found')
@@ -1535,7 +1582,7 @@ export async function runAi2BatchNow(batchId: string): Promise<Ai2BatchState> {
   return next
 }
 
-export async function retryAi2Task(batchId: string, taskKey: string): Promise<Ai2BatchState> {
+export async function retryAiTask(batchId: string, taskKey: string): Promise<AiBatchState> {
   const row = await getBatchRowById(batchId)
   if (!row) {
     throw new NotFoundError('Batch not found')
@@ -1559,7 +1606,7 @@ export async function retryAi2Task(batchId: string, taskKey: string): Promise<Ai
     throw new ConflictError('This batch already started clearing against the live AMM. Reset and stage a new batch to preserve fairness.')
   }
 
-  const nextTaskStatus: Ai2TaskStatus = task.decision
+  const nextTaskStatus: AiTaskStatus = task.decision
     ? 'ready'
     : task.lane === 'api'
       ? 'queued'
@@ -1574,8 +1621,8 @@ export async function retryAi2Task(batchId: string, taskKey: string): Promise<Ai
       ...state.logs,
       buildLog(
         task.decision
-          ? `${getAi2ModelLabel(task.modelId)} retry armed from the frozen snapshot without changing clear order.`
-          : `${getAi2ModelLabel(task.modelId)} retry queued against the frozen snapshot without changing clear order.`,
+          ? `${getAiModelLabel(task.modelId)} retry armed from the frozen snapshot without changing clear order.`
+          : `${getAiModelLabel(task.modelId)} retry queued against the frozen snapshot without changing clear order.`,
         'warning',
       ),
     ],
@@ -1601,7 +1648,7 @@ export async function retryAi2Task(batchId: string, taskKey: string): Promise<Ai
   return next
 }
 
-export async function clearAi2BatchNow(batchId: string): Promise<Ai2BatchState> {
+export async function clearAiBatchNow(batchId: string): Promise<AiBatchState> {
   const row = await getBatchRowById(batchId)
   if (!row) {
     throw new NotFoundError('Batch not found')
@@ -1624,7 +1671,7 @@ export async function clearAi2BatchNow(batchId: string): Promise<Ai2BatchState> 
   return parseBatchState(refreshed)
 }
 
-export async function resetAi2Batch(batchId: string): Promise<void> {
+export async function resetAiBatch(batchId: string): Promise<void> {
   await mutateBatchState(batchId, (state) => ({
     ...state,
     status: 'reset',
