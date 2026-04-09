@@ -1,0 +1,2 @@
+ALTER TABLE "market_runtime_configs" ADD COLUMN "toy_trial_count" integer DEFAULT 2 NOT NULL;--> statement-breakpoint
+ALTER TABLE "market_runtime_configs" ADD CONSTRAINT "market_runtime_configs_toy_trial_count_check" CHECK ("market_runtime_configs"."toy_trial_count" >= 1 AND "market_runtime_configs"."toy_trial_count" <= 5);

@@ -4,7 +4,10 @@ import { ConfigurationError, ValidationError } from '@/lib/errors'
 
 const MARKET_RUNTIME_CONFIG_ID = 'default'
 const MAX_CONFIG_NUMBER = 10_000_000
-export const DEFAULT_SIGNUP_USER_LIMIT = 56
+export const DEFAULT_TOY_TRIAL_COUNT = 2
+export const MIN_TOY_TRIAL_COUNT = 1
+export const MAX_TOY_TRIAL_COUNT = 5
+type MarketRuntimeConfigDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export type MarketRuntimeConfig = {
   warmupRunCount: number
@@ -14,7 +17,7 @@ export type MarketRuntimeConfig = {
   steadyBuyCashFraction: number
   maxPositionPerSideShares: number
   openingLmsrB: number
-  signupUserLimit: number
+  toyTrialCount: number
   createdAt: Date
   updatedAt: Date
 }
@@ -27,7 +30,7 @@ export type MarketRuntimeConfigPatchInput = Partial<{
   steadyBuyCashFraction: unknown
   maxPositionPerSideShares: unknown
   openingLmsrB: unknown
-  signupUserLimit: unknown
+  toyTrialCount: unknown
 }>
 
 type MarketRuntimeConfigPatch = Partial<{
@@ -38,7 +41,7 @@ type MarketRuntimeConfigPatch = Partial<{
   steadyBuyCashFraction: number
   maxPositionPerSideShares: number
   openingLmsrB: number
-  signupUserLimit: number
+  toyTrialCount: number
 }>
 
 function coerceNumber(value: unknown, fieldName: string): number {
@@ -108,12 +111,12 @@ function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPa
     patch.openingLmsrB = parsed
   }
 
-  if (input.signupUserLimit !== undefined) {
-    const parsed = Math.round(coerceNumber(input.signupUserLimit, 'signupUserLimit'))
-    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
-      throw new ValidationError(`signupUserLimit must be between 0 and ${MAX_CONFIG_NUMBER}`)
+  if (input.toyTrialCount !== undefined) {
+    const parsed = Math.round(coerceNumber(input.toyTrialCount, 'toyTrialCount'))
+    if (parsed < MIN_TOY_TRIAL_COUNT || parsed > MAX_TOY_TRIAL_COUNT) {
+      throw new ValidationError(`toyTrialCount must be between ${MIN_TOY_TRIAL_COUNT} and ${MAX_TOY_TRIAL_COUNT}`)
     }
-    patch.signupUserLimit = parsed
+    patch.toyTrialCount = parsed
   }
 
   return patch
@@ -132,14 +135,16 @@ function mapRow(row: typeof marketRuntimeConfigs.$inferSelect): MarketRuntimeCon
     steadyBuyCashFraction: row.steadyBuyCashFraction,
     maxPositionPerSideShares: row.maxPositionPerSideShares,
     openingLmsrB: row.openingLmsrB,
-    signupUserLimit: row.signupUserLimit ?? DEFAULT_SIGNUP_USER_LIMIT,
+    toyTrialCount: row.toyTrialCount ?? DEFAULT_TOY_TRIAL_COUNT,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
 }
 
-export async function getMarketRuntimeConfig(): Promise<MarketRuntimeConfig> {
-  const row = await db.query.marketRuntimeConfigs.findFirst({
+export async function getMarketRuntimeConfig(
+  dbClient: MarketRuntimeConfigDbClient = db,
+): Promise<MarketRuntimeConfig> {
+  const row = await dbClient.query.marketRuntimeConfigs.findFirst({
     where: eq(marketRuntimeConfigs.id, MARKET_RUNTIME_CONFIG_ID),
   })
 
@@ -153,14 +158,15 @@ export async function getMarketRuntimeConfig(): Promise<MarketRuntimeConfig> {
 }
 
 export async function updateMarketRuntimeConfig(
-  input: MarketRuntimeConfigPatchInput
+  input: MarketRuntimeConfigPatchInput,
+  dbClient: MarketRuntimeConfigDbClient = db,
 ): Promise<MarketRuntimeConfig> {
   const patch = parsePatch(input)
   if (Object.keys(patch).length === 0) {
     throw new ValidationError('Provide at least one market config field to update')
   }
 
-  const [updated] = await db.update(marketRuntimeConfigs)
+  const [updated] = await dbClient.update(marketRuntimeConfigs)
     .set({
       ...patch,
       updatedAt: new Date(),

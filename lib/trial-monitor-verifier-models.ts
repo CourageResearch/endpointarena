@@ -75,6 +75,8 @@ const TRIAL_MONITOR_VERIFIER_KEYS = Object.keys(TRIAL_MONITOR_VERIFIER_SPECS) as
 const LEGACY_TRIAL_MONITOR_VERIFIER_ALIASES: Record<string, TrialMonitorVerifierModelKey> = {
   'gpt-5.2': 'gpt-5.4',
 }
+const MANUAL_CHAT_REVIEW_VERIFIER_KEY = 'manual-chat-review'
+const MANUAL_CHAT_REVIEW_VERIFIER_LABEL = 'Manual Chat Review'
 
 export function normalizeTrialMonitorVerifierModelKey(value: unknown): TrialMonitorVerifierModelKey | null {
   if (typeof value !== 'string') {
@@ -112,6 +114,10 @@ export function getTrialMonitorVerifierLabel(value: unknown): string {
   const normalized = normalizeTrialMonitorVerifierModelKey(value)
   if (normalized) {
     return TRIAL_MONITOR_VERIFIER_SPECS[normalized].label
+  }
+
+  if (typeof value === 'string' && value.trim() === MANUAL_CHAT_REVIEW_VERIFIER_KEY) {
+    return MANUAL_CHAT_REVIEW_VERIFIER_LABEL
   }
 
   return typeof value === 'string' && value.trim().length > 0

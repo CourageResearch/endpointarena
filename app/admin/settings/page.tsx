@@ -4,10 +4,13 @@ import { sql } from 'drizzle-orm'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { AdminDatabaseTargetManager, type AdminDatabaseTargetOptionDto } from '@/components/AdminDatabaseTargetManager'
 import { AdminTrialConstantsManager, type TrialRuntimeConfigDto } from '@/components/AdminTrialConstantsManager'
 import { AdminModelStartingBankroll } from '@/components/AdminModelStartingBankroll'
+import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
+import { ensureToyAdminUser } from '@/lib/toy-database'
 import { getTrialRuntimeConfig } from '@/lib/trial-runtime-config'
-import { db, users } from '@/lib/db'
+import { db, getDbForTarget, phase2Trials, users } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,10 +23,49 @@ function toDto(config: Awaited<ReturnType<typeof getTrialRuntimeConfig>>): Trial
     steadyBuyCashFraction: config.steadyBuyCashFraction,
     maxPositionPerSideShares: config.maxPositionPerSideShares,
     openingLmsrB: config.openingLmsrB,
-    signupUserLimit: config.signupUserLimit,
+    toyTrialCount: config.toyTrialCount,
     createdAt: config.createdAt.toISOString(),
     updatedAt: config.updatedAt.toISOString(),
   }
+}
+
+async function buildDatabaseTargetOptions(): Promise<AdminDatabaseTargetOptionDto[]> {
+  return Promise.all(listDatabaseTargets().map(async (target) => {
+    if (!target.configured) {
+      return {
+        ...target,
+        usersCount: null,
+        trialsCount: null,
+        errorMessage: null,
+      }
+    }
+
+    try {
+      if (target.target === 'toy') {
+        await ensureToyAdminUser()
+      }
+
+      const targetDb = getDbForTarget(target.target)
+      const [userRows, trialRows] = await Promise.all([
+        targetDb.select({ count: sql<number>`count(*)::int` }).from(users),
+        targetDb.select({ count: sql<number>`count(*)::int` }).from(phase2Trials),
+      ])
+
+      return {
+        ...target,
+        usersCount: userRows[0]?.count ?? 0,
+        trialsCount: trialRows[0]?.count ?? 0,
+        errorMessage: null,
+      }
+    } catch (error) {
+      return {
+        ...target,
+        usersCount: null,
+        trialsCount: null,
+        errorMessage: error instanceof Error ? error.message : 'Unable to query this database target.',
+      }
+    }
+  }))
 }
 
 export default async function AdminSettingsPage() {
@@ -32,11 +74,11 @@ export default async function AdminSettingsPage() {
     redirect('/login')
   }
 
-  const [config, userRows] = await Promise.all([
+  const [config, databaseTargetOptions] = await Promise.all([
     getTrialRuntimeConfig(),
-    db.select({ count: sql<number>`count(*)::int` }).from(users),
+    buildDatabaseTargetOptions(),
   ])
-  const currentUsersCount = userRows[0]?.count ?? 0
+  const activeDatabaseTarget = getActiveDatabaseTarget()
 
   return (
     <AdminConsoleLayout
@@ -45,13 +87,15 @@ export default async function AdminSettingsPage() {
     >
       <section className="mb-4">
         <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Runtime Controls</h2>
-        <p className="text-sm text-[#8a8075] mt-1">
-          Changes apply immediately after saving. Trial settings affect new openings and future runs; signup limits affect new account creation.
-        </p>
       </section>
 
       <div className="space-y-4">
-        <AdminTrialConstantsManager initialConfig={toDto(config)} currentUsersCount={currentUsersCount} />
+        <AdminDatabaseTargetManager
+          activeTarget={activeDatabaseTarget}
+          options={databaseTargetOptions}
+          toyTrialCount={config.toyTrialCount}
+        />
+        <AdminTrialConstantsManager initialConfig={toDto(config)} />
         <AdminModelStartingBankroll />
       </div>
     </AdminConsoleLayout>

@@ -29,6 +29,34 @@
       "when": 1775232779532,
       "tag": "0003_small_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775668139916,
+      "tag": "0004_futuristic_blacklash",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775749135330,
+      "tag": "0005_demonic_jamie_braddock",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775758395972,
+      "tag": "0006_lyrical_bruce_banner",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775759903277,
+      "tag": "0007_remove_signup_user_limit",
+      "breakpoints": true
     }
   ]
 }

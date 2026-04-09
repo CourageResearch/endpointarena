@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { gte, sql } from 'drizzle-orm'
 import { db, contactMessages, crashEvents, users, waitlistEntries } from '@/lib/db'
+import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
@@ -30,8 +31,8 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string; dayFilters?
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
   { id: 'searches', href: '/admin/searches', label: 'Searches', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
   { id: 'crashes', href: '/admin/crashes', label: 'Crashes', dayFilters: ADMIN_CRASH_DAY_FILTERS },
-  { id: 'settings', href: '/admin/settings', label: 'Settings' },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
+  { id: 'settings', href: '/admin/settings', label: 'Settings' },
 ]
 
 async function getWaitlistBadgeData() {
@@ -106,6 +107,8 @@ export async function AdminConsoleLayout({
     getContactCount(),
     getCrashes24hCount(),
   ])
+  const activeDatabaseTarget = getActiveDatabaseTarget()
+  const activeDatabase = listDatabaseTargets().find((entry) => entry.target === activeDatabaseTarget) ?? null
   const tabsById = new Map(ADMIN_TABS.map((tab) => [tab.id, tab]))
 
   const renderTabLink = (tabId: AdminTab) => {
@@ -188,6 +191,14 @@ export async function AdminConsoleLayout({
               <div className="flex items-center gap-2">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#b5aa9e]">Admin Console</p>
                 <HeaderDots />
+                {activeDatabase ? (
+                  <span
+                    title={activeDatabase.databaseName ? `Current database: ${activeDatabase.databaseName}` : undefined}
+                    className="rounded-none border border-[#d8ccb9] bg-[#fcfaf7] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-[#6f665b]"
+                  >
+                    {activeDatabase.label}
+                  </span>
+                ) : null}
               </div>
               <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
             </div>

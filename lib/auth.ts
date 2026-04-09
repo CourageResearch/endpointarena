@@ -5,21 +5,17 @@ import { getServerSession } from 'next-auth'
 import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import TwitterProvider from 'next-auth/providers/twitter'
-import { accounts, db, marketRuntimeConfigs, sessions, users, verificationTokens } from '@/lib/db'
-import { and, eq, sql } from 'drizzle-orm'
+import { accounts, db, getActiveDb, sessions, users, verificationTokens } from '@/lib/db'
+import { and, eq } from 'drizzle-orm'
 import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
 import { getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
-import { DEFAULT_SIGNUP_USER_LIMIT } from '@/lib/markets/runtime-config'
 import { isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
-const MARKET_RUNTIME_CONFIG_ID = 'default'
-const SIGNUPS_CLOSED_ERROR = 'SIGNUPS_CLOSED'
-const SIGNUP_LIMIT_LOCK_ID = 20501
 
 type CredentialUserRecord = {
   id: string
@@ -108,38 +104,6 @@ async function findUserForCredentials(email: string): Promise<{
   return rows[0] ?? null
 }
 
-function isSignupsClosedError(error: unknown): boolean {
-  return error instanceof Error && error.message === SIGNUPS_CLOSED_ERROR
-}
-
-async function getSignupUserLimit(tx: any): Promise<number> {
-  const rows = await tx
-    .select({
-      signupUserLimit: marketRuntimeConfigs.signupUserLimit,
-    })
-    .from(marketRuntimeConfigs)
-    .where(eq(marketRuntimeConfigs.id, MARKET_RUNTIME_CONFIG_ID))
-    .limit(1)
-
-  return rows[0]?.signupUserLimit ?? DEFAULT_SIGNUP_USER_LIMIT
-}
-
-async function assertSignupCapacity(tx: any): Promise<void> {
-  const [rows, signupUserLimit] = await Promise.all([
-    tx
-      .select({
-        count: sql<number>`count(*)::int`,
-      })
-      .from(users),
-    getSignupUserLimit(tx),
-  ])
-
-  const totalUsers = rows[0]?.count ?? 0
-  if (totalUsers >= signupUserLimit) {
-    throw new Error(SIGNUPS_CLOSED_ERROR)
-  }
-}
-
 async function createCredentialUser(
   email: string,
   passwordHash: string,
@@ -148,9 +112,6 @@ async function createCredentialUser(
   const generatedName = getGeneratedDisplayName(email)
 
   return await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${SIGNUP_LIMIT_LOCK_ID})`)
-    await assertSignupCapacity(tx)
-
     const [newUser] = await tx.insert(users).values({
       name: generatedName,
       email,
@@ -187,11 +148,8 @@ async function createCredentialUser(
   })
 }
 
-async function createAdapterUserWithSignupLimit(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser> {
+async function createAdapterUser(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser> {
   return await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${SIGNUP_LIMIT_LOCK_ID})`)
-    await assertSignupCapacity(tx)
-
     const [createdUser] = await tx.insert(users).values({
       name: resolveDisplayName(user.name, user.email ?? user.image ?? 'endpoint-arena'),
       email: user.email,
@@ -313,9 +271,6 @@ function getProviders() {
           if (!user) return null
           return { id: user.id, email: user.email, name: user.name }
         } catch (error) {
-          if (isSignupsClosedError(error)) {
-            throw error
-          }
           console.error('Credentials authorize failed', error)
           throw new Error('AUTH_UNAVAILABLE')
         }
@@ -386,19 +341,28 @@ function getProviders() {
   return providers
 }
 
-const baseAdapter = DrizzleAdapter(db, {
-  usersTable: users,
-  accountsTable: accounts as any,
-  sessionsTable: sessions as any,
-  verificationTokensTable: verificationTokens as any,
-}) as Adapter
-
-const authAdapter: Adapter = {
-  ...baseAdapter,
-  async createUser(user: Omit<AdapterUser, 'id'>) {
-    return await createAdapterUserWithSignupLimit(user)
-  },
+function getBaseAuthAdapter(): Adapter {
+  return DrizzleAdapter(getActiveDb(), {
+    usersTable: users,
+    accountsTable: accounts as any,
+    sessionsTable: sessions as any,
+    verificationTokensTable: verificationTokens as any,
+  }) as Adapter
 }
+
+const authAdapter = new Proxy({} as Adapter, {
+  get(_target, prop, receiver) {
+    if (prop === 'createUser') {
+      return async (user: Omit<AdapterUser, 'id'>) => await createAdapterUser(user)
+    }
+
+    const adapter = getBaseAuthAdapter()
+    const value = Reflect.get(adapter as object, prop, receiver)
+    return typeof value === 'function'
+      ? value.bind(adapter)
+      : value
+  },
+}) as Adapter
 
 export const authOptions: NextAuthOptions = {
   adapter: authAdapter as NextAuthOptions['adapter'],

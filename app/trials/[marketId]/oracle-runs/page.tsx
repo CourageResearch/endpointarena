@@ -148,6 +148,17 @@ function extractVerifierModelLabelFromRunDebugLog(debugLog: string | null | unde
   return 'Unknown model'
 }
 
+function getRunVerifierModelLabel(input: {
+  verifierModelKey: string | null
+  debugLog: string | null | undefined
+}): string {
+  if (input.verifierModelKey) {
+    return getTrialMonitorVerifierLabel(input.verifierModelKey)
+  }
+
+  return extractVerifierModelLabelFromRunDebugLog(input.debugLog)
+}
+
 function findCandidateCreatedDuringRun<
   T extends {
     id: string
@@ -465,7 +476,10 @@ export default async function TrialOracleRunsPage({
   const attributedRunHistory = allRuns.map((run) => ({
     id: run.id,
     status: run.status as 'running' | 'completed' | 'failed' | 'paused',
-    verifierModelLabel: extractVerifierModelLabelFromRunDebugLog(run.debugLog),
+    verifierModelLabel: getRunVerifierModelLabel({
+      verifierModelKey: run.verifierModelKey,
+      debugLog: run.debugLog,
+    }),
     questionsScanned: run.questionsScanned,
     candidatesCreated: run.candidatesCreated,
     errorSummary: run.errorSummary,

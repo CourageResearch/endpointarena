@@ -31,6 +31,7 @@
     "db:create-local": "node scripts/run-with-env.js .env.local -- npx tsx scripts/create-env-db.ts",
     "db:check-local": "node scripts/run-with-env.js .env.local -- npx tsx scripts/check-local.ts",
     "db:reset-local-trial-monitor": "node scripts/run-with-env.js .env.local -- npx tsx scripts/reset-local-trial-monitor.ts",
+    "db:wipe-local-trial-monitor": "node scripts/run-with-env.js .env.local -- npx tsx scripts/wipe-local-trial-monitor.ts",
     "db:cleanup-local-mock-market-data": "node scripts/run-with-env.js .env.local -- npx tsx scripts/cleanup-local-mock-market-data.ts",
     "db:status-local-postgres": "npx tsx scripts/local-postgres.ts status",
     "db:start-local-postgres": "npx tsx scripts/local-postgres.ts start",

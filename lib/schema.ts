@@ -4,6 +4,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgTable,
   real,
   text,
@@ -294,6 +295,8 @@ export const trialMonitorRuns = pgTable('trial_monitor_runs', {
   candidatesCreated: integer('candidates_created').notNull().default(0),
   errorSummary: text('error_summary'),
   debugLog: text('debug_log'),
+  verifierModelKey: text('verifier_model_key'),
+  scopedNctNumber: text('scoped_nct_number'),
   startedAt: utcTimestamp('started_at').notNull().$defaultFn(() => new Date()),
   completedAt: utcTimestamp('completed_at'),
   stopRequestedAt: utcTimestamp('stop_requested_at'),
@@ -816,6 +819,29 @@ export const marketRuns = pgTable('market_runs', {
   ),
 }))
 
+export const ai2Batches = pgTable('ai2_batches', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  dataset: text('dataset').notNull(),
+  status: text('status').notNull(),
+  state: jsonb('state').$type<Record<string, unknown>>().notNull(),
+  error: text('error'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  datasetIdx: index('ai2_batches_dataset_idx').on(table.dataset),
+  statusIdx: index('ai2_batches_status_idx').on(table.status),
+  datasetStatusIdx: index('ai2_batches_dataset_status_idx').on(table.dataset, table.status),
+  createdAtIdx: index('ai2_batches_created_at_idx').on(table.createdAt),
+  datasetCheck: check(
+    'ai2_batches_dataset_check',
+    sql`${table.dataset} IN ('toy', 'live')`,
+  ),
+  statusCheck: check(
+    'ai2_batches_status_check',
+    sql`${table.status} IN ('collecting', 'waiting', 'ready', 'clearing', 'cleared', 'failed', 'reset')`,
+  ),
+}))
+
 export const marketRunLogs = pgTable('market_run_logs', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   runId: text('run_id').notNull().references(() => marketRuns.id, { onDelete: 'cascade' }),
@@ -1152,7 +1178,7 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   steadyBuyCashFraction: real('steady_buy_cash_fraction').notNull().default(0.02),
   maxPositionPerSideShares: real('max_position_per_side_shares').notNull().default(10000),
   openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
-  signupUserLimit: integer('signup_user_limit').notNull().default(56),
+  toyTrialCount: integer('toy_trial_count').notNull().default(2),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
@@ -1184,9 +1210,9 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
     'market_runtime_configs_opening_lmsr_b_check',
     sql`${table.openingLmsrB} > 0 AND ${table.openingLmsrB} <= 10000000`
   ),
-  signupUserLimitCheck: check(
-    'market_runtime_configs_signup_user_limit_check',
-    sql`${table.signupUserLimit} >= 0 AND ${table.signupUserLimit} <= 10000000`
+  toyTrialCountCheck: check(
+    'market_runtime_configs_toy_trial_count_check',
+    sql`${table.toyTrialCount} >= 1 AND ${table.toyTrialCount} <= 5`
   ),
 }))
 
@@ -1456,6 +1482,8 @@ export const marketRunLogsRelations = relations(marketRunLogs, ({ one }) => ({
   }),
 }))
 
+export const ai2BatchesRelations = relations(ai2Batches, () => ({}))
+
 export const marketActionsRelations = relations(marketActions, ({ one }) => ({
   run: one(marketRuns, {
     fields: [marketActions.runId],
@@ -1573,6 +1601,8 @@ export type ModelDecisionSnapshot = typeof modelDecisionSnapshots.$inferSelect
 export type NewModelDecisionSnapshot = typeof modelDecisionSnapshots.$inferInsert
 export type MarketRun = typeof marketRuns.$inferSelect
 export type NewMarketRun = typeof marketRuns.$inferInsert
+export type Ai2Batch = typeof ai2Batches.$inferSelect
+export type NewAi2Batch = typeof ai2Batches.$inferInsert
 export type MarketRunLog = typeof marketRunLogs.$inferSelect
 export type NewMarketRunLog = typeof marketRunLogs.$inferInsert
 export type MarketPriceSnapshot = typeof marketPriceSnapshots.$inferSelect

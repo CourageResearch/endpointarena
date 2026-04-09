@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
 
 interface Props {
   initialConfig: TrialRuntimeConfigDto
-  currentUsersCount: number
 }
 
 type FormState = {
@@ -16,7 +16,7 @@ type FormState = {
   steadyBuyCashFraction: string
   maxPositionPerSideShares: string
   openingLmsrB: string
-  signupUserLimit: string
+  toyTrialCount: string
 }
 
 function formatMoney(value: number): string {
@@ -43,7 +43,7 @@ export interface TrialRuntimeConfigDto {
   steadyBuyCashFraction: number
   maxPositionPerSideShares: number
   openingLmsrB: number
-  signupUserLimit: number
+  toyTrialCount: number
   createdAt: string
   updatedAt: string
 }
@@ -57,11 +57,12 @@ function toFormState(config: TrialRuntimeConfigDto): FormState {
     steadyBuyCashFraction: String(config.steadyBuyCashFraction),
     maxPositionPerSideShares: String(config.maxPositionPerSideShares),
     openingLmsrB: String(config.openingLmsrB),
-    signupUserLimit: String(config.signupUserLimit),
+    toyTrialCount: String(config.toyTrialCount),
   }
 }
 
-export function AdminTrialConstantsManager({ initialConfig, currentUsersCount }: Props) {
+export function AdminTrialConstantsManager({ initialConfig }: Props) {
+  const router = useRouter()
   const [config, setConfig] = useState(initialConfig)
   const [form, setForm] = useState<FormState>(() => toFormState(initialConfig))
   const [isSaving, setIsSaving] = useState(false)
@@ -121,7 +122,7 @@ export function AdminTrialConstantsManager({ initialConfig, currentUsersCount }:
         steadyBuyCashFraction: parseField(form.steadyBuyCashFraction, 'Steady-state buy cash fraction'),
         maxPositionPerSideShares: parseField(form.maxPositionPerSideShares, 'Max position per side shares'),
         openingLmsrB: parseField(form.openingLmsrB, 'Opening LMSR b'),
-        signupUserLimit: parseField(form.signupUserLimit, 'Signup user limit'),
+        toyTrialCount: parseField(form.toyTrialCount, 'Toy trial count'),
       }
 
       const response = await fetch('/api/admin/trial-config', {
@@ -140,7 +141,13 @@ export function AdminTrialConstantsManager({ initialConfig, currentUsersCount }:
       const nextConfig = data.config as TrialRuntimeConfigDto
       setConfig(nextConfig)
       setForm(toFormState(nextConfig))
+      window.dispatchEvent(new CustomEvent('endpointarena:trial-runtime-config-updated', {
+        detail: {
+          toyTrialCount: nextConfig.toyTrialCount,
+        },
+      }))
       setSuccessMessage('Settings saved.')
+      router.refresh()
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save settings')
     } finally {
@@ -261,18 +268,17 @@ export function AdminTrialConstantsManager({ initialConfig, currentUsersCount }:
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Signup User Limit</span>
+            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Toy Trial Count</span>
             <input
               type="number"
-              min={0}
+              min={1}
+              max={5}
               step={1}
-              value={form.signupUserLimit}
-              onChange={(e) => updateField('signupUserLimit', e.target.value)}
+              value={form.toyTrialCount}
+              onChange={(e) => updateField('toyTrialCount', e.target.value)}
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
-            <p className="text-xs text-[#8a8075]">
-              Blocks new account creation once total users reach this count. Current total: {currentUsersCount}. Set to 0 to close signups.
-            </p>
+            <p className="text-xs text-[#8a8075]">Used for Toy DB resets and toy-mode AI batches. Choose between 1 and 5 trials.</p>
           </label>
         </div>
 

@@ -507,6 +507,8 @@ export async function importManualTrialOutcomeDecisions(input: {
           items,
           importedAt: now.toISOString(),
         }),
+        verifierModelKey,
+        scopedNctNumber: null,
         startedAt: now,
         completedAt: now,
         updatedAt: now,

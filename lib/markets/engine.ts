@@ -385,12 +385,12 @@ async function calculateHistoricalApprovalRate(): Promise<number> {
   return clampProbability(DEFAULT_BINARY_MARKET_BASELINE)
 }
 
-export async function ensureMarketAccounts(): Promise<void> {
-  const actorIdByModelId = await getModelActorIds()
+export async function ensureMarketAccounts(dbClient: MarketDbClient = db): Promise<void> {
+  const actorIdByModelId = await getModelActorIds(MODEL_IDS, dbClient)
   for (const modelId of MODEL_IDS) {
     const actorId = actorIdByModelId.get(modelId)
     if (!actorId) continue
-    await db.insert(marketAccounts)
+    await dbClient.insert(marketAccounts)
       .values({
         actorId,
         startingCash: MARKET_STARTING_CASH,
@@ -400,12 +400,12 @@ export async function ensureMarketAccounts(): Promise<void> {
   }
 }
 
-export async function ensureMarketPositions(marketId: string): Promise<void> {
-  const actorIdByModelId = await getModelActorIds()
+export async function ensureMarketPositions(marketId: string, dbClient: MarketDbClient = db): Promise<void> {
+  const actorIdByModelId = await getModelActorIds(MODEL_IDS, dbClient)
   for (const modelId of MODEL_IDS) {
     const actorId = actorIdByModelId.get(modelId)
     if (!actorId) continue
-    await db.insert(marketPositions)
+    await dbClient.insert(marketPositions)
       .values({
         marketId,
         actorId,
@@ -414,10 +414,13 @@ export async function ensureMarketPositions(marketId: string): Promise<void> {
   }
 }
 
-export async function openMarketForTrialQuestion(trialQuestionId: string) {
-  await ensureMarketAccounts()
+export async function openMarketForTrialQuestion(
+  trialQuestionId: string,
+  dbClient: MarketDbClient = db,
+) {
+  await ensureMarketAccounts(dbClient)
 
-  const question = await db.query.trialQuestions.findFirst({
+  const question = await dbClient.query.trialQuestions.findFirst({
     where: eq(trialQuestions.id, trialQuestionId),
     with: {
       trial: true,
@@ -436,13 +439,13 @@ export async function openMarketForTrialQuestion(trialQuestionId: string) {
     throw new ConflictError('Cannot open a market for a question that already has a final outcome')
   }
 
-  const existing = await db.query.predictionMarkets.findFirst({
+  const existing = await dbClient.query.predictionMarkets.findFirst({
     where: eq(predictionMarkets.trialQuestionId, trialQuestionId),
   })
 
   if (existing) {
     if (existing.status === 'OPEN') {
-      await ensureMarketPositions(existing.id)
+      await ensureMarketPositions(existing.id, dbClient)
       return existing
     }
     throw new ConflictError('Market already exists and is resolved')
@@ -450,13 +453,13 @@ export async function openMarketForTrialQuestion(trialQuestionId: string) {
 
   const [openingProbability, runtimeConfig] = await Promise.all([
     calculateHistoricalApprovalRate(),
-    getMarketRuntimeConfig(),
+    getMarketRuntimeConfig(dbClient),
   ])
 
   const initialLiquidityB = Math.max(1, runtimeConfig.openingLmsrB)
   const initialState = createInitialMarketState(openingProbability, initialLiquidityB)
 
-  const [market] = await db.insert(predictionMarkets)
+  const [market] = await dbClient.insert(predictionMarkets)
     .values({
       trialQuestionId,
       status: 'OPEN',
@@ -470,10 +473,10 @@ export async function openMarketForTrialQuestion(trialQuestionId: string) {
     })
     .returning()
 
-  await ensureMarketPositions(market.id)
+  await ensureMarketPositions(market.id, dbClient)
   const runDate = normalizeRunDate(new Date())
 
-  await db.insert(marketPriceSnapshots)
+  await dbClient.insert(marketPriceSnapshots)
     .values({
       marketId: market.id,
       snapshotDate: runDate,

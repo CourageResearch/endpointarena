@@ -1,58 +1,32 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
+import { AdminAi2Desk } from '@/components/admin-ai/AdminAi2Desk'
+import { getAi2DeskState } from '@/lib/admin-ai2'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { AdminTrialManager } from '@/components/AdminTrialManager'
-import { getTrialAdminData, getTrialAdminStats } from '@/lib/admin-trial-data'
-import { getLatestTrialRunSnapshot } from '@/lib/trial-run-logs'
+import { getActiveDatabaseTarget } from '@/lib/database-target'
+import { isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
 
 export const dynamic = 'force-dynamic'
 
+function getDefaultAiDatasetForCurrentDatabase(): 'toy' | 'live' {
+  return getActiveDatabaseTarget() === 'toy' ? 'toy' : 'live'
+}
+
 export default async function AdminAiPage() {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
+  const email = session?.user?.email ?? null
+
+  if (!email || (email !== ADMIN_EMAIL && !isLocalDevBypassEmail(email))) {
     redirect('/login')
   }
 
-  const [events, initialRunSnapshot] = await Promise.all([
-    getTrialAdminData(),
-    getLatestTrialRunSnapshot(),
-  ])
-  const {
-    openMarkets,
-    pendingWithoutMarket,
-    liveQuestions,
-    liveQuestionsWithMarket,
-  } = getTrialAdminStats(events)
+  const initialState = await getAi2DeskState(getDefaultAiDatasetForCurrentDatabase())
 
   return (
-    <AdminConsoleLayout
-      title="AI"
-      activeTab="ai"
-    >
-      <section className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-none border border-[#3a8a2e]/30 bg-[#3a8a2e]/5 p-3">
-          <p className="text-xl font-semibold text-[#3a8a2e]">{openMarkets}</p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Queued For AI Run</p>
-        </div>
-        <div className="rounded-none border border-[#EF6F67]/30 bg-[#EF6F67]/5 p-3">
-          <p className="text-xl font-semibold text-[#EF6F67]">{pendingWithoutMarket}</p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Coverage Gaps</p>
-        </div>
-        <div className="rounded-none border border-[#5BA5ED]/30 bg-[#5BA5ED]/5 p-3">
-          <p className="text-xl font-semibold text-[#5BA5ED]">
-            {liveQuestionsWithMarket}/{liveQuestions}
-          </p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Live Questions Covered</p>
-        </div>
-      </section>
-
-      <AdminTrialManager
-        events={events}
-        initialRunSnapshot={initialRunSnapshot}
-        sections={['dailyCycle']}
-      />
+    <AdminConsoleLayout title="AI" activeTab="ai">
+      <AdminAi2Desk initialState={initialState} />
     </AdminConsoleLayout>
   )
 }

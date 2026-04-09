@@ -786,7 +786,11 @@ async function failStaleRunIfNeeded(run: { id: string }): Promise<boolean> {
   return updated.length > 0
 }
 
-async function startMonitorRun(triggerSource: MonitorTriggerSource) {
+async function startMonitorRun(input: {
+  triggerSource: MonitorTriggerSource
+  verifierModelKey: string
+  scopedNctNumber: string | null
+}) {
   const activeRun = await db.query.trialMonitorRuns.findFirst({
     where: eq(trialMonitorRuns.status, 'running'),
     orderBy: [desc(trialMonitorRuns.updatedAt), desc(trialMonitorRuns.startedAt)],
@@ -801,10 +805,12 @@ async function startMonitorRun(triggerSource: MonitorTriggerSource) {
 
   const [run] = await db.insert(trialMonitorRuns)
     .values({
-      triggerSource,
+      triggerSource: input.triggerSource,
       status: 'running',
       questionsScanned: 0,
       candidatesCreated: 0,
+      verifierModelKey: input.verifierModelKey,
+      scopedNctNumber: input.scopedNctNumber,
       startedAt: new Date(),
       updatedAt: new Date(),
     })
@@ -1628,7 +1634,11 @@ export async function runTrialMonitor(input: {
     throw new NotFoundError(`No live pending outcome question was found for ${scopedNctNumber}`)
   }
 
-  const run = await startMonitorRun(input.triggerSource)
+  const run = await startMonitorRun({
+    triggerSource: input.triggerSource,
+    verifierModelKey,
+    scopedNctNumber,
+  })
   const errors: string[] = []
   let questionsScanned = 0
   let candidatesCreated = 0

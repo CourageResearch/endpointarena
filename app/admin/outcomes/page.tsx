@@ -58,6 +58,24 @@ function parseBooleanSearchParam(value: string | string[] | undefined): boolean 
   return rawValue === '1' || rawValue === 'true'
 }
 
+function getRunVerifierModelLabel(input: {
+  verifierModelKey: string | null
+  debugLog: string | null | undefined
+}): string {
+  if (input.verifierModelKey) {
+    return getTrialMonitorVerifierLabel(input.verifierModelKey)
+  }
+
+  return extractVerifierModelLabelFromRunDebugLog(input.debugLog)
+}
+
+function getRunScopedNctNumber(input: {
+  scopedNctNumber: string | null
+  debugLog: string | null | undefined
+}): string | null {
+  return input.scopedNctNumber ?? extractScopedNctNumberFromRunDebugLog(input.debugLog)
+}
+
 export default async function AdminOutcomesPage({
   searchParams,
 }: {
@@ -144,8 +162,14 @@ export default async function AdminOutcomesPage({
           id: run.id,
           triggerSource: run.triggerSource as 'cron' | 'manual',
           status: run.status as 'running' | 'completed' | 'failed' | 'paused',
-          verifierModelLabel: extractVerifierModelLabelFromRunDebugLog(run.debugLog),
-          scopedNctNumber: extractScopedNctNumberFromRunDebugLog(run.debugLog),
+          verifierModelLabel: getRunVerifierModelLabel({
+            verifierModelKey: run.verifierModelKey,
+            debugLog: run.debugLog,
+          }),
+          scopedNctNumber: getRunScopedNctNumber({
+            scopedNctNumber: run.scopedNctNumber,
+            debugLog: run.debugLog,
+          }),
           questionsScanned: run.questionsScanned,
           candidatesCreated: run.candidatesCreated,
           errorSummary: run.errorSummary,

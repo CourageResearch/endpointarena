@@ -15,20 +15,13 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const [errorCode, setErrorCode] = useState('')
   const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [geo, setGeo] = useState({ country: '', state: '' })
-  const signupsClosed = errorCode === 'SIGNUPS_CLOSED'
 
   useEffect(() => {
     let cancelled = false
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
-    const authError = params.get('error')
-    if (authError === 'SIGNUPS_CLOSED') {
-      setError('Signups are full. Endpoint Arena is currently full.')
-      setErrorCode('SIGNUPS_CLOSED')
-    }
 
     ensureAuthGeo({ country: '', state: '' }).then((detectedGeo) => {
       if (!cancelled && (detectedGeo.country || detectedGeo.state)) {
@@ -43,22 +36,18 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (signupsClosed) return
     if (!email || !password || !confirmPassword) return
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
-      setErrorCode('')
       return
     }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
-      setErrorCode('')
       return
     }
 
     setIsLoading(true)
     setError('')
-    setErrorCode('')
 
     try {
       const detectedGeo = await ensureAuthGeo(geo)
@@ -89,22 +78,15 @@ export default function SignupPage() {
         params.set('signupAward', String(STARTER_POINTS))
         router.push(`${pathname}?${params.toString()}`)
         router.refresh()
-      } else if (result?.error === 'SIGNUPS_CLOSED') {
-        setError('Signups are full. Endpoint Arena is currently full.')
-        setErrorCode('SIGNUPS_CLOSED')
       } else if (result?.error === 'CredentialsSignin') {
         setError('An account with that email already exists. Please sign in instead.')
-        setErrorCode('')
       } else if (result?.error === 'AUTH_UNAVAILABLE') {
         setError('Account creation is temporarily unavailable. Please try again shortly.')
-        setErrorCode('')
       } else {
         setError('Failed to create account. Please try again.')
-        setErrorCode('')
       }
     } catch {
       setError('Failed to create account')
-      setErrorCode('')
     } finally {
       setIsLoading(false)
     }
@@ -140,12 +122,10 @@ export default function SignupPage() {
                       placeholder="you@example.com"
                       value={email}
                       onChange={(e) => {
-                        if (!signupsClosed && error) setError('')
-                        if (!signupsClosed && errorCode) setErrorCode('')
+                        if (error) setError('')
                         setEmail(e.target.value)
                       }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
-                      disabled={signupsClosed}
                       required
                     />
                   </div>
@@ -163,12 +143,10 @@ export default function SignupPage() {
                       placeholder="At least 8 characters"
                       value={password}
                       onChange={(e) => {
-                        if (!signupsClosed && error) setError('')
-                        if (!signupsClosed && errorCode) setErrorCode('')
+                        if (error) setError('')
                         setPassword(e.target.value)
                       }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
-                      disabled={signupsClosed}
                       minLength={8}
                       required
                     />
@@ -187,12 +165,10 @@ export default function SignupPage() {
                       placeholder="Repeat password"
                       value={confirmPassword}
                       onChange={(e) => {
-                        if (!signupsClosed && error) setError('')
-                        if (!signupsClosed && errorCode) setErrorCode('')
+                        if (error) setError('')
                         setConfirmPassword(e.target.value)
                       }}
                       className="w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
-                      disabled={signupsClosed}
                       minLength={8}
                       required
                     />
@@ -200,10 +176,10 @@ export default function SignupPage() {
 
                   <button
                     type="submit"
-                    disabled={isLoading || signupsClosed}
+                    disabled={isLoading}
                     className="w-full rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {signupsClosed ? 'Signups full' : isLoading ? 'Creating account...' : 'Create account'}
+                    {isLoading ? 'Creating account...' : 'Create account'}
                   </button>
                 </form>
 
@@ -217,20 +193,6 @@ export default function SignupPage() {
                 {error ? (
                   <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
                     <p>{error}</p>
-                    {errorCode === 'SIGNUPS_CLOSED' ? (
-                      <p className="mt-2">
-                        Join the waitlist at{' '}
-                        <a
-                          href="https://endpointarena.com/waitlist"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium underline"
-                        >
-                          endpointarena.com/waitlist
-                        </a>
-                        {' '}or check back later.
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
               </div>

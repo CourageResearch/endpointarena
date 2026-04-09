@@ -3,6 +3,7 @@ import { db, marketActors } from '@/lib/db'
 import { MODEL_IDS, type ModelId } from '@/lib/constants'
 
 type MarketActorRow = typeof marketActors.$inferSelect
+type MarketActorsDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 function normalizeNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
@@ -10,13 +11,16 @@ function normalizeNonEmpty(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-export async function getModelActorIds(modelIds: readonly ModelId[] = MODEL_IDS): Promise<Map<ModelId, string>> {
+export async function getModelActorIds(
+  modelIds: readonly ModelId[] = MODEL_IDS,
+  dbClient: MarketActorsDbClient = db,
+): Promise<Map<ModelId, string>> {
   const ids = Array.from(new Set(modelIds))
   if (ids.length === 0) {
     return new Map()
   }
 
-  const existing = await db.query.marketActors.findMany({
+  const existing = await dbClient.query.marketActors.findMany({
     where: inArray(marketActors.modelKey, ids),
   })
 
@@ -28,7 +32,7 @@ export async function getModelActorIds(modelIds: readonly ModelId[] = MODEL_IDS)
 
   const missing = ids.filter((modelId) => !existingByModelId.has(modelId))
   if (missing.length > 0) {
-    await db.insert(marketActors)
+    await dbClient.insert(marketActors)
       .values(missing.map((modelId) => ({
         actorType: 'model',
         modelKey: modelId,
@@ -37,7 +41,7 @@ export async function getModelActorIds(modelIds: readonly ModelId[] = MODEL_IDS)
       .onConflictDoNothing({ target: marketActors.modelKey })
   }
 
-  const allActors = await db.query.marketActors.findMany({
+  const allActors = await dbClient.query.marketActors.findMany({
     where: inArray(marketActors.modelKey, ids),
   })
 
@@ -52,8 +56,8 @@ export async function getModelActorIds(modelIds: readonly ModelId[] = MODEL_IDS)
   return actorIdByModelId
 }
 
-export async function getModelActorId(modelId: ModelId): Promise<string> {
-  const actorId = (await getModelActorIds([modelId])).get(modelId)
+export async function getModelActorId(modelId: ModelId, dbClient: MarketActorsDbClient = db): Promise<string> {
+  const actorId = (await getModelActorIds([modelId], dbClient)).get(modelId)
   if (!actorId) {
     throw new Error(`Missing market actor for model ${modelId}`)
   }
