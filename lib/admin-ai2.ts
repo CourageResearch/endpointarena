@@ -10,12 +10,16 @@ import {
   type Ai2Batch as Ai2BatchRow,
 } from '@/lib/db'
 import {
+  AI2_SUBSCRIPTION_EXPORT_WORKFLOW,
+  AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
   AI2_SUBSCRIPTION_MODEL_IDS,
   buildAi2TaskKey,
   getAi2DatasetDescription,
   getAi2DatasetLabel,
   getAi2ModelLabel,
   getAi2ModelLane,
+  isAi2SubscriptionImportWorkflow,
+  LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
   listAi2SupportedModelIds,
   type Ai2AvailableModel,
   type Ai2BatchState,
@@ -630,7 +634,7 @@ async function buildExportPacket(batch: Ai2BatchState, modelId: Ai2SubscriptionM
 
   const responseTemplate: Ai2SubscriptionImportPacket = {
     version: 1,
-    workflow: 'admin-ai2-batch-import',
+    workflow: AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
     batchId: batch.id,
     modelId,
     decisions: exportTasks.map((task) => ({
@@ -654,7 +658,7 @@ async function buildExportPacket(batch: Ai2BatchState, modelId: Ai2SubscriptionM
 
   return {
     version: 1 as const,
-    workflow: 'admin-ai2-batch-export' as const,
+    workflow: AI2_SUBSCRIPTION_EXPORT_WORKFLOW,
     batchId: batch.id,
     dataset: batch.dataset,
     modelId,
@@ -733,7 +737,7 @@ function normalizeRawSubscriptionImport(args: {
   modelId: Ai2SubscriptionModelId
   rawText: string
 }): {
-  workflow: 'admin-ai2-batch-import'
+  workflow: typeof AI2_SUBSCRIPTION_IMPORT_WORKFLOW
   batchId: string
   modelId: Ai2SubscriptionModelId
   decisions: Array<{
@@ -767,7 +771,7 @@ function normalizeRawSubscriptionImport(args: {
   }
 
   return {
-    workflow: 'admin-ai2-batch-import',
+    workflow: AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
     batchId: args.batch.id,
     modelId: args.modelId,
     decisions: pendingTasks.map((task, index) => ({
@@ -1405,8 +1409,11 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
   }
   const batch = parseBatchState(row)
   const runtimeConfig = await getMarketRuntimeConfig()
-  const normalizedPayload = payload.workflow === 'admin-ai2-batch-import'
-    ? payload
+  const normalizedPayload = isAi2SubscriptionImportWorkflow(payload.workflow)
+    ? {
+        ...payload,
+        workflow: AI2_SUBSCRIPTION_IMPORT_WORKFLOW,
+      }
     : payload.rawText?.trim()
       ? normalizeRawSubscriptionImport({
           batch,
@@ -1416,7 +1423,9 @@ export async function importAi2SubscriptionPacket(batchId: string, payload: {
       : null
 
   if (!normalizedPayload) {
-    throw new ValidationError('Decision JSON does not match the import workflow.')
+    throw new ValidationError(
+      `Decision JSON does not match the import workflow. Use ${AI2_SUBSCRIPTION_IMPORT_WORKFLOW} for new packets. ${LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW} is still accepted for older exports.`,
+    )
   }
   if (normalizedPayload.batchId !== batchId) {
     throw new ValidationError('Decision JSON batchId does not match the selected batch.')

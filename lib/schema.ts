@@ -1212,7 +1212,7 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   ),
   toyTrialCountCheck: check(
     'market_runtime_configs_toy_trial_count_check',
-    sql`${table.toyTrialCount} >= 1 AND ${table.toyTrialCount} <= 5`
+    sql`${table.toyTrialCount} >= 1`
   ),
 }))
 

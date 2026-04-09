@@ -25,6 +25,7 @@ async function migrate() {
       steady_buy_cash_fraction REAL NOT NULL DEFAULT 0.02,
       max_position_per_side_shares REAL NOT NULL DEFAULT 10000,
       opening_lmsr_b REAL NOT NULL DEFAULT 100000,
+      toy_trial_count INTEGER NOT NULL DEFAULT 2,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW(),
       CONSTRAINT market_runtime_configs_warmup_run_count_check
@@ -40,15 +41,19 @@ async function migrate() {
       CONSTRAINT market_runtime_configs_max_position_per_side_shares_check
         CHECK (max_position_per_side_shares >= 0 AND max_position_per_side_shares <= 10000000),
       CONSTRAINT market_runtime_configs_opening_lmsr_b_check
-        CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000)
+        CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000),
+      CONSTRAINT market_runtime_configs_toy_trial_count_check
+        CHECK (toy_trial_count >= 1)
     )
   `
 
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_max_trade_usd REAL NOT NULL DEFAULT 1000`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS steady_buy_cash_fraction REAL NOT NULL DEFAULT 0.02`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS max_position_per_side_shares REAL NOT NULL DEFAULT 10000`
+  await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS toy_trial_count INTEGER NOT NULL DEFAULT 2`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS signup_user_limit`
+  await sql`ALTER TABLE market_runtime_configs DROP CONSTRAINT IF EXISTS market_runtime_configs_toy_trial_count_check`
 
   await sql`
     INSERT INTO market_runtime_configs (
@@ -60,6 +65,7 @@ async function migrate() {
       steady_buy_cash_fraction,
       max_position_per_side_shares,
       opening_lmsr_b,
+      toy_trial_count,
       created_at,
       updated_at
     )
@@ -72,6 +78,7 @@ async function migrate() {
       0.02,
       10000,
       100000,
+      2,
       NOW(),
       NOW()
     )
@@ -89,6 +96,21 @@ async function migrate() {
         ALTER TABLE market_runtime_configs
         ADD CONSTRAINT market_runtime_configs_steady_max_trade_usd_check
         CHECK (steady_max_trade_usd >= 0 AND steady_max_trade_usd <= 10000000);
+      END IF;
+    END $$;
+  `
+
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'market_runtime_configs_toy_trial_count_check'
+      ) THEN
+        ALTER TABLE market_runtime_configs
+        ADD CONSTRAINT market_runtime_configs_toy_trial_count_check
+        CHECK (toy_trial_count >= 1);
       END IF;
     END $$;
   `

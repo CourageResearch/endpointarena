@@ -30,7 +30,7 @@ function HeroGradientStem() {
 export function HomePageContent({
   initialTrialOverview,
 }: {
-  initialTrialOverview: OverviewResponse | null
+  initialTrialOverview: OverviewResponse
 }) {
   return (
     <PageFrame>

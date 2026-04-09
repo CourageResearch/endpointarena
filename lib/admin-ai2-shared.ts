@@ -3,6 +3,10 @@ import type { ModelDecisionInput, ModelDecisionResult } from '@/lib/predictions/
 
 export const AI2_DATASETS = ['toy', 'live'] as const
 export type Ai2Dataset = (typeof AI2_DATASETS)[number]
+export const AI2_SUBSCRIPTION_EXPORT_WORKFLOW = 'admin-ai-batch-export'
+export const AI2_SUBSCRIPTION_IMPORT_WORKFLOW = 'admin-ai-batch-import'
+export const LEGACY_AI2_SUBSCRIPTION_EXPORT_WORKFLOW = 'admin-ai2-batch-export'
+export const LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW = 'admin-ai2-batch-import'
 
 export const AI2_BATCH_STATUSES = [
   'collecting',
@@ -232,7 +236,7 @@ export type Ai2SubscriptionExportTask = {
 
 export type Ai2SubscriptionExportPacket = {
   version: 1
-  workflow: 'admin-ai2-batch-export'
+  workflow: typeof AI2_SUBSCRIPTION_EXPORT_WORKFLOW
   batchId: string
   dataset: Ai2Dataset
   modelId: ModelId
@@ -250,7 +254,7 @@ export type Ai2SubscriptionImportItem = {
 
 export type Ai2SubscriptionImportPacket = {
   version: 1
-  workflow: 'admin-ai2-batch-import'
+  workflow: typeof AI2_SUBSCRIPTION_IMPORT_WORKFLOW
   batchId: string
   modelId: ModelId
   decisions: Ai2SubscriptionImportItem[]
@@ -262,6 +266,10 @@ export function isAi2Dataset(value: string | null | undefined): value is Ai2Data
 
 export function isAi2SubscriptionModelId(modelId: ModelId): modelId is Ai2SubscriptionModelId {
   return AI2_SUBSCRIPTION_MODEL_IDS.includes(modelId as Ai2SubscriptionModelId)
+}
+
+export function isAi2SubscriptionImportWorkflow(value: string): value is typeof AI2_SUBSCRIPTION_IMPORT_WORKFLOW | typeof LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW {
+  return value === AI2_SUBSCRIPTION_IMPORT_WORKFLOW || value === LEGACY_AI2_SUBSCRIPTION_IMPORT_WORKFLOW
 }
 
 export function getAi2ModelLane(modelId: ModelId): Ai2ModelLane {

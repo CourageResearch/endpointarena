@@ -4,7 +4,7 @@ import { createBrowseTrialsOverviewPayload } from '@/lib/trial-overview-payload'
 import { HomePageContent } from '@/components/HomePageContent'
 import { buildPageMetadata } from '@/lib/seo'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Prediction Market for Phase 2 Clinical Trials',
@@ -14,8 +14,11 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default async function Page() {
   const initialTrialOverview = createBrowseTrialsOverviewPayload(
-    await getTrialsOverviewData().catch(() => null),
+    await getTrialsOverviewData(),
   )
+  if (!initialTrialOverview) {
+    throw new Error('Homepage trials overview payload was unexpectedly empty.')
+  }
 
   return <HomePageContent initialTrialOverview={initialTrialOverview} />
 }

@@ -272,13 +272,12 @@ export function AdminTrialConstantsManager({ initialConfig }: Props) {
             <input
               type="number"
               min={1}
-              max={5}
               step={1}
               value={form.toyTrialCount}
               onChange={(e) => updateField('toyTrialCount', e.target.value)}
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
-            <p className="text-xs text-[#8a8075]">Used for Toy DB resets and toy-mode AI batches. Choose between 1 and 5 trials.</p>
+            <p className="text-xs text-[#8a8075]">Used for Toy DB resets and toy-mode AI batches. Enter any whole number of 1 or more.</p>
           </label>
         </div>
 

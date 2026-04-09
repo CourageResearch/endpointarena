@@ -6,7 +6,6 @@ const MARKET_RUNTIME_CONFIG_ID = 'default'
 const MAX_CONFIG_NUMBER = 10_000_000
 export const DEFAULT_TOY_TRIAL_COUNT = 2
 export const MIN_TOY_TRIAL_COUNT = 1
-export const MAX_TOY_TRIAL_COUNT = 5
 type MarketRuntimeConfigDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export type MarketRuntimeConfig = {
@@ -113,8 +112,8 @@ function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPa
 
   if (input.toyTrialCount !== undefined) {
     const parsed = Math.round(coerceNumber(input.toyTrialCount, 'toyTrialCount'))
-    if (parsed < MIN_TOY_TRIAL_COUNT || parsed > MAX_TOY_TRIAL_COUNT) {
-      throw new ValidationError(`toyTrialCount must be between ${MIN_TOY_TRIAL_COUNT} and ${MAX_TOY_TRIAL_COUNT}`)
+    if (parsed < MIN_TOY_TRIAL_COUNT) {
+      throw new ValidationError(`toyTrialCount must be at least ${MIN_TOY_TRIAL_COUNT}`)
     }
     patch.toyTrialCount = parsed
   }

@@ -57,6 +57,13 @@
       "when": 1775759903277,
       "tag": "0007_remove_signup_user_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775762954500,
+      "tag": "0008_arbitrary_toy_trial_count",
+      "breakpoints": true
     }
   ]
 }

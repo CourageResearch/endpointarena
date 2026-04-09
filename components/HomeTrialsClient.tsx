@@ -15,7 +15,7 @@ export function HomeTrialsClient({
   detailBasePath?: string
   headerLinkHref?: string
   headerLinkLabel?: string
-  initialOverview?: OverviewResponse | null
+  initialOverview: OverviewResponse
   initialTypeFilter?: string | null
   variant?: 'full' | 'table'
 }) {

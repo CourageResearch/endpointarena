@@ -370,25 +370,6 @@ export function AdminAi2Desk({ initialState }: Props) {
     }
   }
 
-  async function exportPacket(modelId: Ai2SubscriptionModelId) {
-    if (!batch) return
-    setBusyKey(`export:${modelId}`)
-    setUiError(null)
-    try {
-      const payload = await fetchJson<{ packet: unknown }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/subscription/export?modelId=${encodeURIComponent(modelId)}`, {
-        method: 'POST',
-      })
-      setExportPackets((current) => ({
-        ...current,
-        [modelId]: JSON.stringify(payload.packet, null, 2),
-      }))
-    } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed to export packet')
-    } finally {
-      setBusyKey(null)
-    }
-  }
-
   async function importPacket(modelId: Ai2SubscriptionModelId) {
     if (!batch) return
     const text = importTexts[modelId]?.trim()
@@ -686,14 +667,6 @@ export function AdminAi2Desk({ initialState }: Props) {
                 {lane.id === 'claude-opus' || lane.id === 'gpt-5.2' ? (
                   <div className="mt-4 space-y-3">
                     <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={!batch || !laneActive || busyKey != null}
-                        onClick={() => void exportPacket(lane.id as Ai2SubscriptionModelId)}
-                        className="border border-[#d8ccb9] bg-white px-3 py-2 text-xs font-medium text-[#5f564c] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busyKey === `export:${lane.id}` ? 'Exporting...' : 'Export Packet'}
-                      </button>
                       <button
                         type="button"
                         disabled={!batch || !laneActive || busyKey != null || !importTexts[lane.id]?.trim()}
