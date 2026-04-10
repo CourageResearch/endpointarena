@@ -915,145 +915,150 @@ export function AdminAiDesk({ initialState }: Props) {
         </div>
         {batch?.trials.length ? (
           <div className="mt-4">
-            <div className="max-h-[72vh] overflow-auto rounded-none border border-[#e8ddd0] bg-white">
-              <table className="min-w-[760px] w-full table-fixed border-separate border-spacing-0">
-                <thead>
-                  <tr className="bg-[#f8f4ee]">
-                    <th className="sticky left-0 top-0 z-30 w-[108px] min-w-[108px] max-w-[108px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-2 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
-                      Trial
-                    </th>
-                    {orderedModelIds.map((modelId, index) => {
-                      const model = availableModelById.get(modelId)
-                      const timing = modelTimingByModelId.get(modelId)
-                      return (
-                        <th
-                          key={modelId}
-                          className="sticky top-0 z-20 w-[96px] min-w-[96px] max-w-[96px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-2 py-2 text-left align-top"
-                        >
-                          <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Model {index + 1}</p>
-                          <p className="mt-1 text-xs leading-4 font-medium text-[#1a1a1a]">{availableModelById.get(modelId)?.label ?? modelId}</p>
-                          <p className="mt-1 text-[11px] text-[#6f665b]">
-                            {model?.lane === 'subscription' ? 'Subscription lane' : 'API lane'}
-                          </p>
-                        </th>
-                      )
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {batch.trials.map((trial, trialIndex) => {
-                    const trialTasks = batch.tasks.filter((task) => task.marketId === trial.marketId)
-                    const taskByModel = new Map(trialTasks.map((task) => [task.modelId, task] as const))
-                    const closedCount = trialTasks.filter((task) => task.status === 'ready' || task.status === 'error' || task.status === 'cleared').length
-                    const readyCount = trialTasks.filter((task) => task.status === 'ready' || task.status === 'cleared').length
-                    const filledCount = trialTasks.filter((task) => task.fill?.status === 'ok').length
-                    const active = selectedTrial?.marketId === trial.marketId
-                    const stickyCellClass = active ? 'bg-[#fcf7f0]' : 'bg-white'
-                    const rowCellClass = active ? 'bg-[#fffdf9]' : 'bg-white'
-
-                    return (
-                      <tr
-                        key={trial.marketId}
-                        className="align-top cursor-pointer"
-                        onClick={() => setSelectedMarketId(trial.marketId)}
-                      >
-                        <td className={`sticky left-0 z-10 w-[108px] min-w-[108px] max-w-[108px] border-t border-[#e8ddd0] px-2 py-2 shadow-[1px_0_0_0_#e8ddd0] ${stickyCellClass}`}>
-                          <div title={trial.nctNumber ?? trial.shortTitle}>
-                            <p className="text-sm font-medium text-[#1a1a1a]">{trialIndex + 1}.</p>
-                            <p className="truncate text-sm font-medium text-[#1a1a1a]">{trial.nctNumber?.trim() || trial.shortTitle}</p>
-                          </div>
-                          <div className="mt-1 pt-0.5">
-                            <p className="text-[11px] text-[#8a8075]">
-                              {closedCount}/{orderedModelIds.length || trialTasks.length}
+            <div className="overflow-x-auto rounded-none border border-[#e8ddd0] bg-white">
+              <div className="min-w-[760px]">
+                <table className="w-full table-fixed border-separate border-spacing-0">
+                  <thead>
+                    <tr className="bg-[#f8f4ee]">
+                      <th className="sticky left-0 z-30 w-[108px] min-w-[108px] max-w-[108px] border-b border-[#e8ddd0] bg-[#f8f4ee] px-2 py-2 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8075] shadow-[1px_0_0_0_#e8ddd0]">
+                        Trial
+                      </th>
+                      {orderedModelIds.map((modelId, index) => {
+                        const model = availableModelById.get(modelId)
+                        return (
+                          <th
+                            key={modelId}
+                            className="z-20 w-[88px] min-w-[88px] max-w-[88px] border-b border-l border-[#e8ddd0] bg-[#f8f4ee] px-2 py-2 text-left align-top"
+                          >
+                            <p className="text-[10px] uppercase tracking-[0.08em] text-[#8a8075]">Model {index + 1}</p>
+                            <p className="mt-1 text-xs leading-4 font-medium text-[#1a1a1a]">{availableModelById.get(modelId)?.label ?? modelId}</p>
+                            <p className="mt-1 text-[11px] text-[#6f665b]">
+                              {model?.lane === 'subscription' ? 'Subscription lane' : 'API lane'}
                             </p>
-                            <p className="mt-1.5 text-[11px] text-[#8a8075]">{formatPercent(trial.marketSnapshot.priceYes)} start yes</p>
-                          </div>
-                        </td>
-                        {orderedModelIds.map((modelId, index) => {
-                          const task = taskByModel.get(modelId)
-                          const model = availableModelById.get(modelId)
+                          </th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                </table>
+                <div className="max-h-[72vh] overflow-y-auto">
+                  <table className="w-full table-fixed border-separate border-spacing-0">
+                    <tbody>
+                      {batch.trials.map((trial, trialIndex) => {
+                        const trialTasks = batch.tasks.filter((task) => task.marketId === trial.marketId)
+                        const taskByModel = new Map(trialTasks.map((task) => [task.modelId, task] as const))
+                        const closedCount = trialTasks.filter((task) => task.status === 'ready' || task.status === 'error' || task.status === 'cleared').length
+                        const readyCount = trialTasks.filter((task) => task.status === 'ready' || task.status === 'cleared').length
+                        const filledCount = trialTasks.filter((task) => task.fill?.status === 'ok').length
+                        const active = selectedTrial?.marketId === trial.marketId
+                        const stickyCellClass = active ? 'bg-[#fcf7f0]' : 'bg-white'
+                        const rowCellClass = active ? 'bg-[#fffdf9]' : 'bg-white'
 
-                          if (!task) {
-                            return (
-                              <td
-                                key={`${trial.marketId}:${modelId}`}
-                                className={`w-[96px] min-w-[96px] max-w-[96px] border-l border-t border-[#e8ddd0] px-2 py-2 align-top ${rowCellClass}`}
-                              >
-                                <p className="text-xs text-[#8a8075]">{model?.available === false ? 'Unavailable' : 'Not scheduled'}</p>
-                              </td>
-                            )
-                          }
-
-                          const primaryDetail = task.fill
-                            ? `Filled ${task.fill.executedAction}${task.fill.executedAmountUsd > 0 ? ` ${formatUsd(task.fill.executedAmountUsd)}` : ''}`
-                            : task.decision
-                              ? `${task.decision.forecast.binaryCall.toUpperCase()} / ${task.decision.forecast.confidence} / ${task.decision.action.type}${task.decision.action.amountUsd > 0 ? ` ${formatUsd(task.decision.action.amountUsd)}` : ''}`
-                              : task.status === 'error'
-                                ? 'Decision failed'
-                                : !batch.runStartedAt && task.lane === 'api'
-                                  ? 'Queued for Run Batch'
-                                  : task.status === 'waiting-import'
-                                    ? 'Waiting for import'
-                                    : task.status === 'running'
-                                      ? 'Computing decision'
-                                      : 'Waiting for decision'
-                          const secondaryDetail = task.fill
-                            ? `Price ${formatPercent(task.fill.priceBefore)} to ${formatPercent(task.fill.priceAfter)}`
-                            : task.decision
-                              ? truncateText(task.decision.action.explanation || task.reasoningPreview || task.decision.forecast.reasoning, 92)
-                              : task.status === 'error'
-                                ? truncateText(task.errorMessage ?? batch.failureMessage ?? 'Task failed before returning a decision.', 92)
-                                : !batch.runStartedAt && task.lane === 'api'
-                                  ? 'Queued until you click Run Batch.'
-                                  : task.status === 'waiting-import'
-                                    ? 'Waiting for subscription JSON.'
-                                    : task.status === 'running'
-                                      ? 'The API lane is evaluating this trial now.'
-                                      : 'Still waiting for this lane to return.'
-
-                          return (
-                            <td
-                              key={task.taskKey}
-                              className={`w-[96px] min-w-[96px] max-w-[96px] border-l border-t border-[#e8ddd0] px-2 py-2 align-top ${rowCellClass}`}
-                            >
-                              <div className="flex items-start gap-1.5">
-                                <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${getOrderBookTaskTone(task)}`}>
-                                  {getOrderBookTaskBadge(task)}
-                                </span>
+                        return (
+                          <tr
+                            key={trial.marketId}
+                            className="align-top cursor-pointer"
+                            onClick={() => setSelectedMarketId(trial.marketId)}
+                          >
+                            <td className={`sticky left-0 z-10 w-[108px] min-w-[108px] max-w-[108px] border-t border-[#e8ddd0] px-2 py-2 shadow-[1px_0_0_0_#e8ddd0] ${stickyCellClass}`}>
+                              <div title={trial.nctNumber ?? trial.shortTitle}>
+                                <p className="text-sm font-medium text-[#1a1a1a]">{trialIndex + 1}.</p>
+                                <p className="truncate text-[11px] leading-tight text-[#8a8075]">{trial.nctNumber?.trim() || trial.shortTitle}</p>
                               </div>
-                              {task.fill ? (
-                                <>
-                                  <p className="mt-1 text-xs leading-4 text-[#5f564c]">Filled</p>
-                                  <p className="mt-0.5 text-xs leading-4 font-medium text-[#5f564c]">
-                                    {formatActionLabel(task.fill.executedAction)}
-                                  </p>
-                                  {task.fill.executedAmountUsd > 0 ? (
-                                    <p className="mt-0.5 text-[11px] leading-4 text-[#6f665b]">
-                                      {formatUsd(task.fill.executedAmountUsd)}
-                                    </p>
-                                  ) : null}
-                                  <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
-                                </>
-                              ) : (
-                                <>
-                                  <p className="mt-1 text-xs leading-4 text-[#5f564c]">{primaryDetail}</p>
-                                  <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
-                                </>
-                              )}
-                              {task.durationMs != null ? (
-                                <p className="mt-1 text-[11px] text-[#8a8075]">{formatDurationMs(task.durationMs)} run time</p>
-                              ) : null}
-                              {task.estimatedCostUsd ? (
-                                <p className="mt-1 text-[11px] text-[#8a8075]">{formatUsd(task.estimatedCostUsd)} est.</p>
-                              ) : null}
+                              <div className="mt-1 pt-0.5">
+                                <p className="text-[11px] text-[#8a8075]">
+                                  {closedCount}/{orderedModelIds.length || trialTasks.length}
+                                </p>
+                                <p className="mt-1.5 text-[11px] text-[#8a8075]">{formatPercent(trial.marketSnapshot.priceYes)} start yes</p>
+                              </div>
                             </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                            {orderedModelIds.map((modelId, index) => {
+                              const task = taskByModel.get(modelId)
+                              const model = availableModelById.get(modelId)
+
+                              if (!task) {
+                                return (
+                                  <td
+                                    key={`${trial.marketId}:${modelId}`}
+                                    className={`w-[88px] min-w-[88px] max-w-[88px] border-l border-t border-[#e8ddd0] px-2 py-2 align-top ${rowCellClass}`}
+                                  >
+                                    <p className="text-xs text-[#8a8075]">{model?.available === false ? 'Unavailable' : 'Not scheduled'}</p>
+                                  </td>
+                                )
+                              }
+
+                              const primaryDetail = task.fill
+                                ? `Filled ${task.fill.executedAction}${task.fill.executedAmountUsd > 0 ? ` ${formatUsd(task.fill.executedAmountUsd)}` : ''}`
+                                : task.decision
+                                  ? `${task.decision.forecast.binaryCall.toUpperCase()} / ${task.decision.forecast.confidence} / ${task.decision.action.type}${task.decision.action.amountUsd > 0 ? ` ${formatUsd(task.decision.action.amountUsd)}` : ''}`
+                                  : task.status === 'error'
+                                    ? 'Decision failed'
+                                    : !batch.runStartedAt && task.lane === 'api'
+                                      ? 'Queued for Run Batch'
+                                      : task.status === 'waiting-import'
+                                        ? 'Waiting for import'
+                                        : task.status === 'running'
+                                          ? 'Computing decision'
+                                          : 'Waiting for decision'
+                              const secondaryDetail = task.fill
+                                ? `Price ${formatPercent(task.fill.priceBefore)} to ${formatPercent(task.fill.priceAfter)}`
+                                : task.decision
+                                  ? truncateText(task.decision.action.explanation || task.reasoningPreview || task.decision.forecast.reasoning, 92)
+                                  : task.status === 'error'
+                                    ? truncateText(task.errorMessage ?? batch.failureMessage ?? 'Task failed before returning a decision.', 92)
+                                    : !batch.runStartedAt && task.lane === 'api'
+                                      ? 'Queued until you click Run Batch.'
+                                      : task.status === 'waiting-import'
+                                        ? 'Waiting for subscription JSON.'
+                                        : task.status === 'running'
+                                          ? 'The API lane is evaluating this trial now.'
+                                          : 'Still waiting for this lane to return.'
+
+                              return (
+                                <td
+                                  key={task.taskKey}
+                                  className={`w-[88px] min-w-[88px] max-w-[88px] border-l border-t border-[#e8ddd0] px-2 py-2 align-top ${rowCellClass}`}
+                                >
+                                  <div className="flex items-start gap-1.5">
+                                    <span className={`rounded-none border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${getOrderBookTaskTone(task)}`}>
+                                      {getOrderBookTaskBadge(task)}
+                                    </span>
+                                  </div>
+                                  {task.fill ? (
+                                    <>
+                                      <p className="mt-1 text-xs leading-4 text-[#5f564c]">Filled</p>
+                                      <p className="mt-0.5 text-xs leading-4 font-medium text-[#5f564c]">
+                                        {formatActionLabel(task.fill.executedAction)}
+                                      </p>
+                                      {task.fill.executedAmountUsd > 0 ? (
+                                        <p className="mt-0.5 text-[11px] leading-4 text-[#6f665b]">
+                                          {formatUsd(task.fill.executedAmountUsd)}
+                                        </p>
+                                      ) : null}
+                                      <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="mt-1 text-xs leading-4 text-[#5f564c]">{primaryDetail}</p>
+                                      <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                    </>
+                                  )}
+                                  {task.durationMs != null ? (
+                                    <p className="mt-1 text-[11px] text-[#8a8075]">{formatDurationMs(task.durationMs)} run time</p>
+                                  ) : null}
+                                  {task.estimatedCostUsd ? (
+                                    <p className="mt-1 text-[11px] text-[#8a8075]">{formatUsd(task.estimatedCostUsd)} est.</p>
+                                  ) : null}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
