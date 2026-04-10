@@ -52,6 +52,7 @@
     "db:backfill-public-sponsor-tickers": "node scripts/run-with-env.js .env.local -- npx tsx scripts/backfill-phase2-public-sponsor-tickers.ts",
     "db:export-manual-trial-outcome-queue": "node scripts/run-with-env.js .env.local -- npx tsx scripts/export-manual-trial-outcome-queue.ts",
     "db:import-manual-trial-outcomes": "node scripts/run-with-env.js .env.local -- npx tsx scripts/import-manual-trial-outcomes.ts",
+    "db:sync-ai-batches-to-prod": "node scripts/run-with-env.js .env.local -- npx tsx scripts/sync-ai-batches-to-prod.ts",
     "db:extract-clinicaltrials-sponsors": "npx tsx scripts/extract-clinicaltrials-gov-sponsors.ts",
     "db:curate-clinicaltrials-sponsors": "npx tsx scripts/curate-clinicaltrials-sponsor-map.ts",
     "db:report-public-sponsors": "node scripts/run-with-env.js .env.local -- npx tsx scripts/report-public-sponsor-coverage.ts",

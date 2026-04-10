@@ -64,6 +64,13 @@
       "when": 1775762954500,
       "tag": "0008_arbitrary_toy_trial_count",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775831000000,
+      "tag": "0009_nimble_ai_batches",
+      "breakpoints": true
     }
   ]
 }

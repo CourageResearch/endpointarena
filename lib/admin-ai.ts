@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import {
   db,
-  ai2Batches,
+  aiBatches,
   marketAccounts,
   marketPositions,
   predictionMarkets,
@@ -472,18 +472,18 @@ function serializeBatchState(state: AiBatchState): Record<string, unknown> {
 }
 
 async function getBatchRowById(batchId: string): Promise<AiBatchRow | null> {
-  return (await db.query.ai2Batches.findFirst({
-    where: eq(ai2Batches.id, batchId),
+  return (await db.query.aiBatches.findFirst({
+    where: eq(aiBatches.id, batchId),
   })) ?? null
 }
 
 async function getLatestVisibleBatch(dataset: AiDataset): Promise<AiBatchState | null> {
-  const row = await db.query.ai2Batches.findFirst({
+  const row = await db.query.aiBatches.findFirst({
     where: and(
-      eq(ai2Batches.dataset, dataset),
-      inArray(ai2Batches.status, ['collecting', 'waiting', 'ready', 'clearing', 'cleared', 'failed']),
+      eq(aiBatches.dataset, dataset),
+      inArray(aiBatches.status, ['collecting', 'waiting', 'ready', 'clearing', 'cleared', 'failed']),
     ),
-    orderBy: [desc(ai2Batches.updatedAt), desc(ai2Batches.createdAt)],
+    orderBy: [desc(aiBatches.updatedAt), desc(aiBatches.createdAt)],
   })
 
   return row ? parseBatchState(row) : null
@@ -519,14 +519,14 @@ function updateAggregateStatus(state: AiBatchState, overrideStatus?: AiBatchStat
 
 async function persistBatchState(batchId: string, state: AiBatchState): Promise<AiBatchState | null> {
   const normalized = updateAggregateStatus(state)
-  const [row] = await db.update(ai2Batches)
+  const [row] = await db.update(aiBatches)
     .set({
       status: normalized.status,
       state: serializeBatchState(normalized),
       error: normalized.failureMessage,
       updatedAt: new Date(),
     })
-    .where(eq(ai2Batches.id, batchId))
+    .where(eq(aiBatches.id, batchId))
     .returning()
 
   return row ? parseBatchState(row) : null
@@ -1312,9 +1312,9 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
     }
   }
 
-  const existing = await db.query.ai2Batches.findFirst({
-    where: inArray(ai2Batches.status, ACTIVE_BATCH_STATUSES),
-    orderBy: [desc(ai2Batches.updatedAt)],
+  const existing = await db.query.aiBatches.findFirst({
+    where: inArray(aiBatches.status, ACTIVE_BATCH_STATUSES),
+    orderBy: [desc(aiBatches.updatedAt)],
   })
   if (existing) {
     throw new ConflictError('An /admin/ai batch is already active. Reset it before opening a new one.')
@@ -1365,7 +1365,7 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
   })
   state = await hydratePortfolioStates(state)
 
-  const [row] = await db.insert(ai2Batches)
+  const [row] = await db.insert(aiBatches)
     .values({
       id: batchId,
       dataset: input.dataset,

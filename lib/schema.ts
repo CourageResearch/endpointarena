@@ -819,7 +819,7 @@ export const marketRuns = pgTable('market_runs', {
   ),
 }))
 
-export const ai2Batches = pgTable('ai2_batches', {
+export const aiBatches = pgTable('ai_batches', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   dataset: text('dataset').notNull(),
   status: text('status').notNull(),
@@ -828,16 +828,16 @@ export const ai2Batches = pgTable('ai2_batches', {
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  datasetIdx: index('ai2_batches_dataset_idx').on(table.dataset),
-  statusIdx: index('ai2_batches_status_idx').on(table.status),
-  datasetStatusIdx: index('ai2_batches_dataset_status_idx').on(table.dataset, table.status),
-  createdAtIdx: index('ai2_batches_created_at_idx').on(table.createdAt),
+  datasetIdx: index('ai_batches_dataset_idx').on(table.dataset),
+  statusIdx: index('ai_batches_status_idx').on(table.status),
+  datasetStatusIdx: index('ai_batches_dataset_status_idx').on(table.dataset, table.status),
+  createdAtIdx: index('ai_batches_created_at_idx').on(table.createdAt),
   datasetCheck: check(
-    'ai2_batches_dataset_check',
+    'ai_batches_dataset_check',
     sql`${table.dataset} IN ('toy', 'live')`,
   ),
   statusCheck: check(
-    'ai2_batches_status_check',
+    'ai_batches_status_check',
     sql`${table.status} IN ('collecting', 'waiting', 'ready', 'clearing', 'cleared', 'failed', 'reset')`,
   ),
 }))
@@ -1482,7 +1482,7 @@ export const marketRunLogsRelations = relations(marketRunLogs, ({ one }) => ({
   }),
 }))
 
-export const ai2BatchesRelations = relations(ai2Batches, () => ({}))
+export const aiBatchesRelations = relations(aiBatches, () => ({}))
 
 export const marketActionsRelations = relations(marketActions, ({ one }) => ({
   run: one(marketRuns, {
@@ -1601,8 +1601,8 @@ export type ModelDecisionSnapshot = typeof modelDecisionSnapshots.$inferSelect
 export type NewModelDecisionSnapshot = typeof modelDecisionSnapshots.$inferInsert
 export type MarketRun = typeof marketRuns.$inferSelect
 export type NewMarketRun = typeof marketRuns.$inferInsert
-export type AiBatch = typeof ai2Batches.$inferSelect
-export type NewAiBatch = typeof ai2Batches.$inferInsert
+export type AiBatch = typeof aiBatches.$inferSelect
+export type NewAiBatch = typeof aiBatches.$inferInsert
 export type MarketRunLog = typeof marketRunLogs.$inferSelect
 export type NewMarketRunLog = typeof marketRunLogs.$inferInsert
 export type MarketPriceSnapshot = typeof marketPriceSnapshots.$inferSelect

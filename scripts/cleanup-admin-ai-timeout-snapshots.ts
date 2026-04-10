@@ -63,7 +63,7 @@ async function main() {
   try {
     const batchRows = await sql<{ state: BatchState }[]>`
       select state
-      from ai2_batches
+      from ai_batches
       where id = ${batchId}
       limit 1
     `

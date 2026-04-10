@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, ne } from 'drizzle-orm'
 import {
   accounts,
-  ai2Batches,
+  aiBatches,
   db,
   getDbForTarget,
   marketAccounts,
@@ -195,7 +195,7 @@ async function syncToyAdminIdentity(
 
 async function resetToyRuntimeState(dbClient: DatabaseClient): Promise<void> {
   await dbClient.transaction(async (tx) => {
-    await tx.delete(ai2Batches)
+    await tx.delete(aiBatches)
     await tx.delete(trialOutcomeCandidateEvidence)
     await tx.delete(trialOutcomeCandidates)
     await tx.delete(trialMonitorRuns)
