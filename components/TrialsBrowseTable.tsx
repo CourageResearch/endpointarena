@@ -37,8 +37,11 @@ const TAB_FILTER_PARAM = 'tab'
 const FROM_FILTER_PARAM = 'from'
 const TO_FILTER_PARAM = 'to'
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
-const PANEL_BORDER_STYLE = {
-  background: PANEL_GRADIENT,
+const PANEL_FRAME_STYLE = {
+  border: '1px solid transparent',
+  backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)), ${PANEL_GRADIENT}`,
+  backgroundOrigin: 'border-box',
+  backgroundClip: 'padding-box, border-box',
 } as const
 const SEARCH_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3.5 py-2.5 text-[14px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const DATE_INPUT_CLASS_NAME = 'w-full rounded-none border border-[#e7ddd0] bg-white/92 px-3 py-2 text-[13px] leading-tight text-[#2f2a24] focus:border-[#8a8075] focus:bg-white focus:outline-none'
@@ -563,14 +566,13 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
         </div>
       </div>
 
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95">
-          {rows.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-[#8a8075]">{emptyMessage}</div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="min-w-[900px] w-full table-fixed border-collapse">
+      <div className="overflow-hidden rounded-sm" style={PANEL_FRAME_STYLE}>
+        {rows.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-[#8a8075]">{emptyMessage}</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-[900px] w-full table-fixed border-collapse">
                   {selectedTab === 'resolved' ? (
                     <colgroup>
                       <col className="w-[48%]" />
@@ -745,12 +747,11 @@ const TrialsBrowseTableSection = memo(function TrialsBrowseTableSection({
                       )
                     })}
                   </tbody>
-                </table>
-              </div>
+              </table>
+            </div>
 
-            </>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {rows.length > 0 ? (
@@ -1034,16 +1035,14 @@ export function TrialsBrowseTable({
 
   if (loading) {
     return (
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading trials...</div>
-      </div>
+      <div className="overflow-hidden rounded-sm p-6 text-sm text-[#8a8075]" style={PANEL_FRAME_STYLE}>Loading trials...</div>
     )
   }
 
   if (error && !data) {
     return (
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+      <div className="overflow-hidden rounded-sm p-6" style={PANEL_FRAME_STYLE}>
+        <div className="border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           Failed to load trials: {error}
         </div>
       </div>
@@ -1052,9 +1051,7 @@ export function TrialsBrowseTable({
 
   if (!data) {
     return (
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No trial data.</div>
-      </div>
+      <div className="overflow-hidden rounded-sm p-6 text-sm text-[#8a8075]" style={PANEL_FRAME_STYLE}>No trial data.</div>
     )
   }
 

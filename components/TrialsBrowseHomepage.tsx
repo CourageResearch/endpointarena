@@ -53,8 +53,11 @@ type MarketTableRow = {
 }
 
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
-const PANEL_BORDER_STYLE = {
-  background: PANEL_GRADIENT,
+const PANEL_FRAME_STYLE = {
+  border: '1px solid transparent',
+  backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)), ${PANEL_GRADIENT}`,
+  backgroundOrigin: 'border-box',
+  backgroundClip: 'padding-box, border-box',
 } as const
 const MARKET_CONTROL_INPUT_CLASS_NAME = 'min-w-0 h-16 rounded-none border border-[#e7ddd0] bg-white/92 px-4 text-[17px] leading-tight text-[#2f2a24] placeholder:text-[#b7aa98] focus:border-[#8a8075] focus:bg-white focus:outline-none'
 const MARKET_CONTROL_SELECT_CLASS_NAME = `${MARKET_CONTROL_INPUT_CLASS_NAME} appearance-none pr-14`
@@ -704,15 +707,14 @@ function MarketTable({
         ) : null}
       </div>
 
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95">
-          {visibleRows.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-[#8a8075]">
-              {emptyMessage || `No ${tab === 'resolved' ? 'resolved' : 'upcoming'} trials match the current filters.`}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-[900px] w-full table-fixed border-collapse">
+      <div className="overflow-hidden rounded-sm" style={PANEL_FRAME_STYLE}>
+        {visibleRows.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-[#8a8075]">
+            {emptyMessage || `No ${tab === 'resolved' ? 'resolved' : 'upcoming'} trials match the current filters.`}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-[900px] w-full table-fixed border-collapse">
                 {tab === 'resolved' ? (
                   <colgroup>
                     <col className="w-[48%]" />
@@ -887,11 +889,9 @@ function MarketTable({
                     )
                   })}
                 </tbody>
-              </table>
-            </div>
-          )}
-
-        </div>
+            </table>
+          </div>
+        )}
       </div>
 
       {showFooterLink && resolvedHeaderLinkHref ? (
@@ -1109,16 +1109,14 @@ export function TrialsBrowseHomepage({
 
   if (loading) {
     return (
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">Loading trials...</div>
-      </div>
+      <div className="overflow-hidden rounded-sm p-6 text-sm text-[#8a8075]" style={PANEL_FRAME_STYLE}>Loading trials...</div>
     )
   }
 
   if (error && !data) {
     return (
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+      <div className="overflow-hidden rounded-sm p-6" style={PANEL_FRAME_STYLE}>
+        <div className="border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           Failed to load trials: {error}
         </div>
       </div>
@@ -1127,9 +1125,7 @@ export function TrialsBrowseHomepage({
 
   if (!data) {
     return (
-      <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-        <div className="rounded-sm bg-white/95 p-6 text-sm text-[#8a8075]">No trial data.</div>
-      </div>
+      <div className="overflow-hidden rounded-sm p-6 text-sm text-[#8a8075]" style={PANEL_FRAME_STYLE}>No trial data.</div>
     )
   }
 
@@ -1295,10 +1291,8 @@ export function TrialsBrowseHomepage({
         ) : null}
 
         {visibleEntries.length === 0 ? (
-            <div className="rounded-sm p-[1px]" style={PANEL_BORDER_STYLE}>
-              <div className="rounded-sm bg-white/95 px-4 py-12 text-center text-sm text-[#8a8075]">
+            <div className="overflow-hidden rounded-sm px-4 py-12 text-center text-sm text-[#8a8075]" style={PANEL_FRAME_STYLE}>
               {entries.length === 0 ? 'No upcoming trials right now.' : 'No upcoming trials match those filters.'}
-              </div>
             </div>
         ) : (
           <>
