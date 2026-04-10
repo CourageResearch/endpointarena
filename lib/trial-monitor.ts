@@ -2168,3 +2168,45 @@ export async function reviewTrialOutcomeCandidate(input: {
     })
     .where(eq(trialOutcomeCandidates.id, candidate.id))
 }
+
+export async function dismissTrialOutcomeCandidates(input: {
+  candidateIds: string[]
+  reviewerId?: string | null
+  reviewNotes?: string | null
+}) {
+  const normalizedCandidateIds = Array.from(new Set(
+    input.candidateIds
+      .map((candidateId) => candidateId.trim())
+      .filter((candidateId) => candidateId.length > 0),
+  ))
+
+  if (normalizedCandidateIds.length === 0) {
+    throw new ValidationError('candidateIds must contain at least one id')
+  }
+
+  const now = new Date()
+  const dismissedRows = await db.update(trialOutcomeCandidates)
+    .set({
+      status: 'dismissed',
+      reviewedByUserId: input.reviewerId ?? null,
+      reviewNotes: input.reviewNotes ?? null,
+      reviewedAt: now,
+      updatedAt: now,
+    })
+    .where(and(
+      inArray(trialOutcomeCandidates.id, normalizedCandidateIds),
+      eq(trialOutcomeCandidates.status, 'pending_review'),
+      eq(trialOutcomeCandidates.proposedOutcome, 'NO_DECISION'),
+    ))
+    .returning({
+      id: trialOutcomeCandidates.id,
+    })
+
+  const dismissedIds = dismissedRows.map((row) => row.id)
+
+  return {
+    dismissedIds,
+    dismissedCount: dismissedIds.length,
+    skippedCount: normalizedCandidateIds.length - dismissedIds.length,
+  }
+}

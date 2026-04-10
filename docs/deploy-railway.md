@@ -53,7 +53,8 @@ Verify these production variables exist before cutting a release:
 - `NEXTAUTH_URL`
 - `NEXT_PUBLIC_SITE_URL`
 - `SITE_URL`
-- At least one provider key such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`, or `FIREWORKS_API_KEY`
+- At least one provider key such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, or `FIREWORKS_API_KEY`
+- `FIREWORKS_LLAMA_4_DEPLOYMENT` if the `llama-4-scout` slot should be enabled, set to the full Fireworks dedicated deployment resource accepted by the chat completions API
 
 For this release, `TRIAL_MONITOR_CRON_SECRET` and `TRIAL_SYNC_CRON_SECRET` are intentionally deferred because scheduled jobs remain manual.
 
@@ -75,7 +76,19 @@ Get-Content -Raw .\drizzle\0001_rapid_spitfire.sql | railway connect postgres-gr
 
 The required migration for this release is `drizzle/0001_rapid_spitfire.sql`. Do not use `railway run npm run db:migrate` from this workstation for production, because `railway run` executes locally and the production `DATABASE_URL` currently points at an internal Railway hostname.
 
-4. Trigger one watched production deploy:
+4. For the canonical model ID cutover release, pause admin AI activity and preview the one-off rename migration:
+
+```powershell
+npm run db:rename-model-ids -- --dry-run
+```
+
+This dry run reports legacy `market_actors.model_key` rows, verifier-key rows, pending AI batch rewrites, and any queued admin AI handoff files that will be archived. Run the apply step only during the short maintenance window after the app deploy is live:
+
+```powershell
+npm run db:rename-model-ids -- --apply
+```
+
+5. Trigger one watched production deploy:
 
 ```powershell
 railway up --ci
@@ -83,21 +96,21 @@ railway up --ci
 
 If GitHub has already started the Railway deploy for the pushed commit, watch that deployment instead of creating a second one. If you do use `railway up --ci`, run it only from a clean checkout that matches the pushed commit.
 
-5. Watch health and logs:
+6. Watch health and logs:
 
 ```powershell
 curl.exe -sS https://endpointarena.com/api/health
 railway logs --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --latest --lines 200
 ```
 
-6. Smoke test:
+7. Smoke test:
 
 - `https://endpointarena.com/api/health`
 - `https://endpointarena.com/trials`
 - Login/auth flow
 - One DB-backed admin route such as trial run state
 
-7. Confirm the active Railway deployment SHA matches the intended GitHub commit. Railway GitHub deployment records on April 1, 2026 showed a newer deployment entry that did not record a `success` state even though production remained healthy, so verify the deployed SHA explicitly in Railway or via the GitHub deployment history.
+8. Confirm the active Railway deployment SHA matches the intended GitHub commit. Railway GitHub deployment records on April 1, 2026 showed a newer deployment entry that did not record a `success` state even though production remained healthy, so verify the deployed SHA explicitly in Railway or via the GitHub deployment history.
 
 ## After the watched release
 

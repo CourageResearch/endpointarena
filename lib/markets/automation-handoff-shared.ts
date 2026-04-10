@@ -77,7 +77,7 @@ export type DailyRunAutomationPreview = {
 }
 
 export function getDailyRunAutomationModelId(source: DailyRunAutomationSource): ModelId {
-  return source === 'claude-code-subscription' ? 'claude-opus' : 'gpt-5.2'
+  return source === 'claude-code-subscription' ? 'claude-opus' : 'gpt-5.4'
 }
 
 export function getDailyRunAutomationSourceLabel(source: DailyRunAutomationSource): string {

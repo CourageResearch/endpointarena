@@ -46,6 +46,8 @@
     "db:download-clinicaltrials-snapshot": "node scripts/run-with-env.js .env.local -- npx tsx scripts/download-clinicaltrials-gov-snapshot.ts",
     "db:export-trial-public-state": "node scripts/run-with-env.js .env.local -- npx tsx scripts/export-trial-public-state.ts",
     "db:import-trial-public-state": "npx tsx scripts/import-trial-public-state.ts --input-file",
+    "db:rename-model-ids": "npx tsx scripts/rename-model-ids.ts",
+    "db:purge-legacy-open-markets": "npx tsx scripts/purge-legacy-open-markets.ts",
     "db:export-admin-ai-automation-packet": "node scripts/run-with-env.js .env.local -- npx tsx scripts/export-admin-ai-automation-packet.ts",
     "db:import-admin-ai-automation-decisions": "node scripts/run-with-env.js .env.local -- npx tsx scripts/import-admin-ai-automation-decisions.ts",
     "db:download-public-company-reference": "npx tsx scripts/download-public-company-reference.ts",
@@ -58,6 +60,7 @@
     "db:report-public-sponsors": "node scripts/run-with-env.js .env.local -- npx tsx scripts/report-public-sponsor-coverage.ts",
     "db:sync-clinicaltrials": "node scripts/run-with-env.js .env.local -- npx tsx scripts/sync-clinicaltrials-gov.ts",
     "db:sync-clinicaltrials:from-file": "node scripts/run-with-env.js .env.local -- npx tsx scripts/sync-clinicaltrials-gov.ts --input-file",
+    "test:model-ids": "node --import tsx --test tests/model-id-rename.test.ts",
     "ops:check-prod-alerts": "npx tsx scripts/ops-check-prod-alerts.ts"
   },
   "dependencies": {

@@ -3,6 +3,10 @@ import OpenAI from 'openai'
 import { GoogleGenAI } from '@google/genai'
 import type { ModelId } from '@/lib/constants'
 import {
+  FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR,
+  MODEL_PROVIDER_MODEL_IDS,
+} from '@/lib/model-runtime-metadata'
+import {
   buildFireworksModelDecisionJsonSchema,
   buildModelDecisionJsonSchema,
   buildModelDecisionPrompt,
@@ -44,12 +48,6 @@ interface OpenAICompatibleResponseFormat {
 }
 
 const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1'
-const OPENAI_GPT_MODEL = 'gpt-5.4'
-const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v3p2'
-const GLM_MODEL = 'accounts/fireworks/models/glm-5'
-const LLAMA_4_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
-const KIMI_MODEL = 'accounts/fireworks/models/kimi-k2p5'
-const MINIMAX_MODEL = 'accounts/fireworks/models/minimax-m2p5'
 const FIREWORKS_DECISION_SCHEMA_NAME = 'trial_market_decision'
 const DEFAULT_USAGE: ProviderUsageSnapshot = {
   inputTokens: null,
@@ -218,7 +216,7 @@ async function generateClaudeApiDecision(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: MODEL_PROVIDER_MODEL_IDS['claude-opus'],
     max_tokens: 6000,
     messages: [{ role: 'user', content: prompt }],
     tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 7 }],
@@ -251,7 +249,7 @@ async function generateGptDecision(
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const response = await client.responses.create({
-    model: OPENAI_GPT_MODEL,
+    model: MODEL_PROVIDER_MODEL_IDS['gpt-5.4'],
     input: prompt,
     max_output_tokens: 8000,
     tools: [{ type: 'web_search' }],
@@ -290,7 +288,7 @@ async function generateGrokDecision(
 
   const prompt = buildModelDecisionPrompt(input)
   const completion = await client.chat.completions.create({
-    model: 'grok-4-1-fast-reasoning',
+    model: MODEL_PROVIDER_MODEL_IDS['grok-4.1'],
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 4000,
     search_mode: 'auto',
@@ -333,7 +331,7 @@ async function generateGeminiDecision(
 }
 
 async function generateGemini3Decision(input: ModelDecisionInput): Promise<ModelDecisionGeneration> {
-  return generateGeminiDecision(input, 'gemini-3-pro-preview')
+  return generateGeminiDecision(input, MODEL_PROVIDER_MODEL_IDS['gemini-3-pro'])
 }
 
 async function generateFireworksDecision(args: {
@@ -434,11 +432,10 @@ async function generateOpenAICompatibleDecision(args: {
     completionRequest.response_format = args.responseFormat
   }
 
-  if (args.signal) {
-    completionRequest.signal = args.signal
-  }
-
-  const completion = await client.chat.completions.create(completionRequest)
+  const completion = await client.chat.completions.create(
+    completionRequest,
+    args.signal ? { signal: args.signal } : undefined,
+  )
   const content = extractChatCompletionText(completion)
   if (!content) {
     throw new Error(`No content in ${args.errorLabel} response`)
@@ -452,7 +449,7 @@ async function generateDeepSeekDecision(
   options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
-    model: DEEPSEEK_MODEL,
+    model: MODEL_PROVIDER_MODEL_IDS['deepseek-v3.2'],
     input,
     errorLabel: 'DeepSeek V3.2',
     maxTokens: 4096,
@@ -467,10 +464,13 @@ async function generateLlama4Decision(
   input: ModelDecisionInput,
   options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
-  return generateOpenAICompatibleDecision({
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: 'https://api.groq.com/openai/v1',
-    model: LLAMA_4_MODEL,
+  const deployment = process.env[FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR]?.trim()
+  if (!deployment) {
+    throw new Error(getModelDecisionGeneratorDisabledReason('llama-4-scout'))
+  }
+
+  return generateFireworksDecision({
+    model: deployment,
     input,
     errorLabel: 'Llama 4 Scout',
     maxTokens: 8192,
@@ -485,7 +485,7 @@ async function generateGlm5Decision(
   options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
-    model: GLM_MODEL,
+    model: MODEL_PROVIDER_MODEL_IDS['glm-5'],
     input,
     errorLabel: 'GLM 5',
     maxTokens: 4096,
@@ -501,7 +501,7 @@ async function generateKimiDecision(
   options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
-    model: KIMI_MODEL,
+    model: MODEL_PROVIDER_MODEL_IDS['kimi-k2.5'],
     input,
     errorLabel: 'Kimi K2.5',
     maxTokens: 4096,
@@ -516,7 +516,7 @@ async function generateMiniMaxDecision(
   options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
   return generateFireworksDecision({
-    model: MINIMAX_MODEL,
+    model: MODEL_PROVIDER_MODEL_IDS['minimax-m2.5'],
     input,
     errorLabel: 'MiniMax M2.5',
     maxTokens: 4096,
@@ -530,6 +530,10 @@ async function generateMiniMaxDecision(
 export function getModelDecisionGeneratorDisabledReason(
   modelId: ModelId,
 ): string {
+  if (modelId === 'llama-4-scout') {
+    return `llama-4-scout generator is disabled because ${FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR} and FIREWORKS_API_KEY must both be configured`
+  }
+
   return `${modelId} generator is disabled because its API key is not configured`
 }
 
@@ -538,11 +542,11 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
     generator: generateClaudeDecision,
     enabled: () => !!process.env.ANTHROPIC_API_KEY,
   },
-  'gpt-5.2': {
+  'gpt-5.4': {
     generator: generateGptDecision,
     enabled: () => !!process.env.OPENAI_API_KEY,
   },
-  'grok-4': {
+  'grok-4.1': {
     generator: generateGrokDecision,
     enabled: () => !!process.env.XAI_API_KEY,
   },
@@ -558,9 +562,9 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
     generator: generateGlm5Decision,
     enabled: () => !!process.env.FIREWORKS_API_KEY,
   },
-  'llama-4': {
+  'llama-4-scout': {
     generator: generateLlama4Decision,
-    enabled: () => !!process.env.GROQ_API_KEY,
+    enabled: () => !!process.env.FIREWORKS_API_KEY && !!process.env[FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR]?.trim(),
   },
   'kimi-k2.5': {
     generator: generateKimiDecision,

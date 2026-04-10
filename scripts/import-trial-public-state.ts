@@ -29,6 +29,10 @@ import {
   type TrialSyncRunBundleRow,
   type TrialSyncRunItemBundleRow,
 } from './trial-public-state-utils'
+import {
+  renameLegacyModelId,
+  renameLegacyVerifierModelKey,
+} from './model-id-rename-shared'
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
@@ -141,6 +145,30 @@ function toIsoTimestamp(value: string | Date | null | undefined): string | null 
 
 function roundCash(value: number): number {
   return Math.round(value * 1_000_000) / 1_000_000
+}
+
+function normalizeLegacyBundleModelIds(bundle: TrialPublicStateBundle): TrialPublicStateBundle {
+  return {
+    ...bundle,
+    metadata: {
+      ...bundle.metadata,
+      source_supported_model_ids: bundle.metadata.source_supported_model_ids.map(renameLegacyModelId),
+      source_active_model_ids: bundle.metadata.source_active_model_ids.map(renameLegacyModelId),
+      source_disabled_model_ids: bundle.metadata.source_disabled_model_ids.map(renameLegacyModelId),
+    },
+    trialMonitorConfig: {
+      ...bundle.trialMonitorConfig,
+      verifier_model_key: renameLegacyVerifierModelKey(bundle.trialMonitorConfig.verifier_model_key),
+    },
+    trialOutcomeCandidates: bundle.trialOutcomeCandidates.map((row) => ({
+      ...row,
+      verifier_model_key: renameLegacyVerifierModelKey(row.verifier_model_key),
+    })),
+    modelActors: bundle.modelActors.map((row) => ({
+      ...row,
+      model_key: renameLegacyModelId(row.model_key),
+    })),
+  }
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
@@ -1999,7 +2027,7 @@ async function main(): Promise<void> {
     )
   }
 
-  const bundle = await loadTrialPublicStateBundle(args.inputFile)
+  const bundle = normalizeLegacyBundleModelIds(await loadTrialPublicStateBundle(args.inputFile))
   if (bundle.metadata.schema_version !== TRIAL_PUBLIC_STATE_SCHEMA_VERSION) {
     throw new Error(`Unsupported bundle schema version ${bundle.metadata.schema_version}`)
   }

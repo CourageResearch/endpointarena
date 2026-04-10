@@ -2,7 +2,7 @@ import { ConfigurationError, ValidationError } from '@/lib/errors'
 
 export type TrialMonitorVerifierModelKey =
   | 'gpt-5.4'
-  | 'grok-4'
+  | 'grok-4.1'
   | 'grok-4.20'
   | 'gemini-3-pro'
   | 'claude-opus'
@@ -35,8 +35,8 @@ const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMo
     envKey: 'OPENAI_API_KEY',
     model: 'gpt-5.4',
   },
-  'grok-4': {
-    key: 'grok-4',
+  'grok-4.1': {
+    key: 'grok-4.1',
     label: 'Grok 4.1 (xAI)',
     provider: 'xai',
     providerLabel: 'xAI',
@@ -72,9 +72,6 @@ const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMo
 }
 
 const TRIAL_MONITOR_VERIFIER_KEYS = Object.keys(TRIAL_MONITOR_VERIFIER_SPECS) as TrialMonitorVerifierModelKey[]
-const LEGACY_TRIAL_MONITOR_VERIFIER_ALIASES: Record<string, TrialMonitorVerifierModelKey> = {
-  'gpt-5.2': 'gpt-5.4',
-}
 const MANUAL_CHAT_REVIEW_VERIFIER_KEY = 'manual-chat-review'
 const MANUAL_CHAT_REVIEW_VERIFIER_LABEL = 'Manual Chat Review'
 
@@ -86,10 +83,6 @@ export function normalizeTrialMonitorVerifierModelKey(value: unknown): TrialMoni
   const trimmed = value.trim()
   if (!trimmed) {
     return null
-  }
-
-  if (Object.prototype.hasOwnProperty.call(LEGACY_TRIAL_MONITOR_VERIFIER_ALIASES, trimmed)) {
-    return LEGACY_TRIAL_MONITOR_VERIFIER_ALIASES[trimmed]
   }
 
   return Object.prototype.hasOwnProperty.call(TRIAL_MONITOR_VERIFIER_SPECS, trimmed)

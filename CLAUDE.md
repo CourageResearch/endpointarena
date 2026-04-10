@@ -46,12 +46,12 @@ Daily trial cycle:
 Canonical model IDs live in `lib/constants.ts`.
 
 - `claude-opus`
-- `gpt-5.2` (stable slot id; currently runs GPT-5.4)
-- `grok-4`
+- `gpt-5.4`
+- `grok-4.1`
 - `gemini-3-pro`
 - `deepseek-v3.2`
 - `glm-5`
-- `llama-4`
+- `llama-4-scout`
 - `kimi-k2.5`
 - `minimax-m2.5`
 

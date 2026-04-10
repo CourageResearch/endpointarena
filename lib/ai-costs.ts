@@ -63,7 +63,7 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     longContextOutputUsdPer1MTokens: 37.5,
     webSearchUsdPerRequest: CLAUDE_WEB_SEARCH_USD_PER_REQUEST,
   },
-  'gpt-5.2': {
+  'gpt-5.4': {
     inputUsdPer1MTokens: 2.5,
     outputUsdPer1MTokens: 15,
     longContextInputTokenThreshold: GPT_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
@@ -72,7 +72,7 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     cachedInputUsdPer1MTokens: 0.25,
     webSearchUsdPerRequest: GPT_WEB_SEARCH_MEDIUM_CONTEXT_USD_PER_REQUEST,
   },
-  'grok-4': {
+  'grok-4.1': {
     inputUsdPer1MTokens: 0.2,
     outputUsdPer1MTokens: 0.5,
     longContextInputTokenThreshold: GROK_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
@@ -97,7 +97,7 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     inputUsdPer1MTokens: 1,
     outputUsdPer1MTokens: 4,
   },
-  'llama-4': {
+  'llama-4-scout': {
     inputUsdPer1MTokens: 0.15,
     outputUsdPer1MTokens: 0.6,
   },
@@ -145,10 +145,10 @@ export function getCostEstimationProfileForModel(modelId: ModelId): AICostEstima
   if (modelId === 'claude-opus') {
     return 'claude-deep-research'
   }
-  if (modelId === 'gpt-5.2') {
+  if (modelId === 'gpt-5.4') {
     return 'gpt-deep-research'
   }
-  if (modelId === 'grok-4') {
+  if (modelId === 'grok-4.1') {
     return 'grok-deep-research'
   }
   if (modelId === 'gemini-3-pro') {
@@ -160,7 +160,7 @@ export function getCostEstimationProfileForModel(modelId: ModelId): AICostEstima
   if (modelId === 'glm-5') {
     return 'glm-reasoning'
   }
-  if (modelId === 'llama-4') {
+  if (modelId === 'llama-4-scout') {
     return 'llama4-reasoning'
   }
   if (modelId === 'kimi-k2.5') {
@@ -267,9 +267,9 @@ export function estimateTextGenerationCost(args: {
     inputTokens += CLAUDE_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS * CLAUDE_DEEP_RESEARCH_ESTIMATED_INPUT_TOKENS_PER_SEARCH
     outputTokens += CLAUDE_DEEP_RESEARCH_ESTIMATED_HIDDEN_OUTPUT_TOKENS
     webSearchRequests = CLAUDE_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
-  } else if (args.profile === 'gpt-deep-research' && args.modelId === 'gpt-5.2') {
+  } else if (args.profile === 'gpt-deep-research' && args.modelId === 'gpt-5.4') {
     webSearchRequests = GPT_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
-  } else if (args.profile === 'grok-deep-research' && args.modelId === 'grok-4') {
+  } else if (args.profile === 'grok-deep-research' && args.modelId === 'grok-4.1') {
     webSearchRequests = GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'gemini3-deep-research' && args.modelId === 'gemini-3-pro') {
     webSearchRequests = GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS
@@ -277,7 +277,7 @@ export function estimateTextGenerationCost(args: {
     webSearchRequests = DEEPSEEK_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'glm-reasoning' && args.modelId === 'glm-5') {
     webSearchRequests = GLM_ESTIMATED_SEARCH_REQUESTS
-  } else if (args.profile === 'llama4-reasoning' && args.modelId === 'llama-4') {
+  } else if (args.profile === 'llama4-reasoning' && args.modelId === 'llama-4-scout') {
     webSearchRequests = LLAMA4_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'kimi-thinking' && args.modelId === 'kimi-k2.5') {
     webSearchRequests = KIMI_ESTIMATED_SEARCH_REQUESTS

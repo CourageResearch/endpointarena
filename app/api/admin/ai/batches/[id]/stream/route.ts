@@ -1,5 +1,6 @@
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse } from '@/lib/api-response'
+import { deriveAiBatchProgress } from '@/lib/admin-ai-shared'
 import { getAiBatchState } from '@/lib/admin-ai'
 import { NotFoundError } from '@/lib/errors'
 
@@ -36,7 +37,7 @@ export async function GET(_: Request, context: RouteContext) {
             return
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'state', batch })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'progress', progress: deriveAiBatchProgress(batch) })}\n\n`))
           if (batch.status === 'cleared' || batch.status === 'failed' || batch.status === 'reset') {
             controller.close()
             closed = true
