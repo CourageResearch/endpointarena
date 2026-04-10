@@ -1596,6 +1596,11 @@ export async function listEligibleTrialOutcomeQuestions(): Promise<EligibleTrial
   }))
 }
 
+export async function countAllOpenTrialOutcomeQuestions(): Promise<number> {
+  const questions = await listAllOpenTrialOutcomeQuestionsInternal()
+  return questions.length
+}
+
 export async function listEligibleTrialOutcomeQuestionsForManualResearch(): Promise<ManualTrialOutcomeQueueItem[]> {
   const config = await getTrialMonitorConfig()
   const questions = await getEligibleTrialOutcomeQuestionsInternal(config)

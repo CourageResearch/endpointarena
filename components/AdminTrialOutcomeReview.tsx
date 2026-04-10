@@ -88,6 +88,7 @@ interface Props {
   initialCandidates: Candidate[]
   recentRuns: RunRow[]
   initialEligibleQuestions: EligibleQuestion[]
+  allOpenTrialCount: number
   historyEntries: AdminTrialOutcomeHistoryEntry[]
   initialScopedNctNumber?: string | null
   autoRunScopedNctNumber?: string | null
@@ -459,6 +460,7 @@ export function AdminTrialOutcomeReview({
   initialCandidates,
   recentRuns,
   initialEligibleQuestions,
+  allOpenTrialCount,
   historyEntries,
   initialScopedNctNumber = null,
   autoRunScopedNctNumber = null,
@@ -1123,6 +1125,10 @@ export function AdminTrialOutcomeReview({
                     Bypass the queue filters and scan every open trial with a live pending outcome question.
                   </p>
                 </div>
+                <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Open Right Now</div>
+                  <div className="mt-1 text-lg font-semibold text-[#1a1a1a]">{allOpenTrialCount}</div>
+                </div>
                 <button
                   type="button"
                   onClick={() => void runMonitor({ questionSelection: 'all_open_trials' })}
@@ -1173,14 +1179,20 @@ export function AdminTrialOutcomeReview({
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4 md:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
-            <h3 className="text-sm font-semibold text-[#1a1a1a]">Next Scan Queue</h3>
+            <h3 className="text-sm font-semibold text-[#1a1a1a]">Eligible Queue</h3>
             <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-              These are the trial questions the monitor would scan right now using the current settings.
+              These are the trials the monitor would scan right now if you run the eligible queue with the current settings.
             </p>
           </div>
-          <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-right">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queued Now</div>
-            <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{visibleEligibleQuestions.length}</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-right">
+              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Eligible Now</div>
+              <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{visibleEligibleQuestions.length}</div>
+            </div>
+            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-right">
+              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">All Open Trials</div>
+              <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{allOpenTrialCount}</div>
+            </div>
           </div>
         </div>
 

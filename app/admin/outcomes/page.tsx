@@ -5,7 +5,12 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminTrialOutcomeReview } from '@/components/AdminTrialOutcomeReview'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
-import { listEligibleTrialOutcomeQuestions, listPendingTrialOutcomeCandidates, listRecentTrialMonitorRuns } from '@/lib/trial-monitor'
+import {
+  countAllOpenTrialOutcomeQuestions,
+  listEligibleTrialOutcomeQuestions,
+  listPendingTrialOutcomeCandidates,
+  listRecentTrialMonitorRuns,
+} from '@/lib/trial-monitor'
 import { listRecentTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
@@ -125,11 +130,12 @@ export default async function AdminOutcomesPage({
     ? initialScopedNctNumber
     : null
 
-  const [config, candidates, recentRuns, eligibleQuestions, historyEntries] = await Promise.all([
+  const [config, candidates, recentRuns, eligibleQuestions, allOpenTrialCount, historyEntries] = await Promise.all([
     getTrialMonitorConfig(),
     listPendingTrialOutcomeCandidates(),
     listRecentTrialMonitorRuns(),
     listEligibleTrialOutcomeQuestions(),
+    countAllOpenTrialOutcomeQuestions(),
     listRecentTrialQuestionOutcomeHistory(),
   ])
   const normalizedVerifierModelKey = normalizeTrialMonitorVerifierModelKey(config.verifierModelKey) ?? 'gpt-5.4'
@@ -224,6 +230,7 @@ export default async function AdminOutcomesPage({
             lastMonitoredAt: question.trial.lastMonitoredAt ? question.trial.lastMonitoredAt.toISOString() : null,
           },
         }))}
+        allOpenTrialCount={allOpenTrialCount}
         historyEntries={historyEntries.map((entry) => ({
           id: entry.id,
           trialQuestionId: entry.trialQuestionId,
