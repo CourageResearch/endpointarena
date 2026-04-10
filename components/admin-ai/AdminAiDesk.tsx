@@ -1,18 +1,32 @@
 'use client'
 
-import { Fragment, startTransition, useEffect, useMemo, useState } from 'react'
+import { Fragment, startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { getApiErrorMessage, parseErrorMessage } from '@/lib/client-api'
 import {
   AI_API_CONCURRENCY_DEFAULT,
   AI_API_CONCURRENCY_MAX,
   AI_API_CONCURRENCY_MIN,
   AI_SUBSCRIPTION_MODEL_IDS,
+  deriveAiBatchProgress,
   type AiAvailableModel,
+  type AiBatchProgress,
   type AiBatchState,
+  type AiBatchTaskCounts,
   type AiDataset,
   type AiDeskState,
   type AiSubscriptionModelId,
 } from '@/lib/admin-ai-shared'
+
+const ACTIVE_BATCH_FULL_REFRESH_INTERVAL_MS = 15_000
+const EMPTY_TASK_COUNTS: AiBatchTaskCounts = {
+  total: 0,
+  queued: 0,
+  running: 0,
+  waitingImport: 0,
+  ready: 0,
+  cleared: 0,
+  error: 0,
+}
 
 function formatUsd(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -31,6 +45,14 @@ function formatDate(value: string): string {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+  })
+}
+
+function formatClockTime(value: string): string {
+  return new Date(value).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
   })
 }
 
@@ -77,47 +99,82 @@ function laneStatusLabel(status: string): string {
   return status
 }
 
-function getDeskStatusLabel(batch: AiBatchState | null): string {
+function getDeskStatusLabel(batch: AiBatchState | null, progress: AiBatchProgress | null): string {
   if (!batch) return 'Idle'
   if (!batch.runStartedAt) return 'Staged'
-  if (batch.status === 'cleared') return 'Completed'
-  if (batch.status === 'reset') return 'Reset'
-  return laneStatusLabel(batch.status)
+  const status = progress?.status ?? batch.status
+  if (status === 'cleared') return 'Completed'
+  if (status === 'reset') return 'Reset'
+  return laneStatusLabel(status)
 }
 
-function getDeskStatusDetail(batch: AiBatchState | null): string {
+function getDeskStatusDetail(batch: AiBatchState | null, progress: AiBatchProgress | null): string {
   if (!batch) {
     return 'Stage a batch to start a new run.'
   }
 
+  const status = progress?.status ?? batch.status
+  const pendingSubscriptionImports = progress?.laneCounts.subscription.waitingImport
+    ?? batch.tasks.filter((task) => task.lane === 'subscription' && task.status === 'waiting-import').length
+  const apiTaskCounts = progress?.laneCounts.api ?? batch.tasks
+    .filter((task) => task.lane === 'api')
+    .reduce<AiBatchTaskCounts>((counts, task) => {
+      counts.total += 1
+      if (task.status === 'queued') counts.queued += 1
+      if (task.status === 'running') counts.running += 1
+      if (task.status === 'waiting-import') counts.waitingImport += 1
+      if (task.status === 'ready') counts.ready += 1
+      if (task.status === 'cleared') counts.cleared += 1
+      if (task.status === 'error') counts.error += 1
+      return counts
+    }, { ...EMPTY_TASK_COUNTS })
+  const hasEnabledApiLane = apiTaskCounts.total > 0
+  const apiLaneReady = hasEnabledApiLane && apiTaskCounts.ready + apiTaskCounts.cleared >= apiTaskCounts.total
+
   if (!batch.runStartedAt) {
-    return 'Batch is staged. Import any subscription outputs, then click Run Batch.'
+    if (pendingSubscriptionImports > 0 && hasEnabledApiLane) {
+      return `Batch is staged. Start the API lane now, then import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} while it runs.`
+    }
+
+    if (pendingSubscriptionImports > 0) {
+      return `Batch is staged. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'}, then run the batch.`
+    }
+
+    return 'Batch is staged. All subscription outputs are in and the batch is ready to run.'
   }
 
-  if (batch.status === 'collecting' || batch.status === 'waiting') {
+  if (status === 'collecting' || status === 'waiting') {
+    if (pendingSubscriptionImports > 0 && apiLaneReady) {
+      return `The API lane is done. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before the batch can clear.`
+    }
+
+    if (pendingSubscriptionImports > 0) {
+      return `The API lane has started. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect. The AMM has not executed yet.`
+    }
+
     return 'Model decisions are still coming in. The AMM has not executed yet.'
   }
 
-  if (batch.status === 'ready') {
+  if (status === 'ready') {
     return 'All model decisions are in. The batch is ready to clear.'
   }
 
-  if (batch.status === 'clearing') {
+  if (status === 'clearing') {
     return 'The batch is executing against the shared AMM now.'
   }
 
-  if (batch.status === 'cleared') {
+  if (status === 'cleared') {
     return 'All model decisions are in, the AMM trades were executed, and this batch is final.'
   }
 
-  if (batch.status === 'failed') {
+  if (status === 'failed') {
     const hasSuccessfulFill = batch.fills.some((fill) => fill.status === 'ok')
     return hasSuccessfulFill
       ? 'A task failed after live AMM movement. Reset and stage a fresh batch to preserve fairness.'
       : 'A task failed before clearing completed. You can retry the failed task in place.'
   }
 
-  if (batch.status === 'reset') {
+  if (status === 'reset') {
     return 'This batch was reset.'
   }
 
@@ -142,6 +199,21 @@ function getOrderBookTaskBadge(task: AiBatchState['tasks'][number]): string {
 
 function getOrderBookTaskTone(task: AiBatchState['tasks'][number]): string {
   return chipClass(task.fill?.status === 'error' ? 'error' : task.fill?.status === 'ok' ? 'done' : task.status)
+}
+
+function logToneClass(tone: AiBatchProgress['recentLogs'][number]['tone']): string {
+  if (tone === 'success') return 'border-[#3a8a2e]/30 bg-[#3a8a2e]/10 text-[#2f6f24]'
+  if (tone === 'warning') return 'border-[#c9982b]/30 bg-[#fff7e5] text-[#8a6418]'
+  if (tone === 'error') return 'border-[#c43a2b]/30 bg-[#fff3f1] text-[#8d2c22]'
+  return 'border-[#d8ccb9] bg-[#f8f4ee] text-[#6f665b]'
+}
+
+function formatEta(progress: AiBatchProgress | null): string {
+  if (!progress) return '--'
+  if (progress.status === 'cleared') return 'Complete'
+  if (progress.etaBasis === 'blocked') return 'Waiting for import'
+  if (progress.etaMs == null || progress.etaMs <= 0) return '--'
+  return formatDurationMs(progress.etaMs)
 }
 
 async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -173,9 +245,10 @@ function getLaneStatus(batch: AiBatchState | null, modelIds: string[]): string {
 
 type Props = {
   initialState: AiDeskState
+  initialProgress: AiBatchProgress | null
 }
 
-export function AdminAiDesk({ initialState }: Props) {
+export function AdminAiDesk({ initialState, initialProgress }: Props) {
   const [deskState, setDeskState] = useState(initialState)
   const [dataset, setDataset] = useState<AiDataset>(initialState.batch?.dataset ?? initialState.dataset)
   const [selectedModels, setSelectedModels] = useState<AiAvailableModel['modelId'][]>(
@@ -190,11 +263,60 @@ export function AdminAiDesk({ initialState }: Props) {
   const [exportPackets, setExportPackets] = useState<Record<string, string>>({})
   const [importTexts, setImportTexts] = useState<Record<string, string>>({})
   const [copiedPacketModelId, setCopiedPacketModelId] = useState<AiSubscriptionModelId | null>(null)
+  const [progress, setProgress] = useState<AiBatchProgress | null>(initialProgress)
+  const snapshotRefreshInFlightRef = useRef(false)
 
   const batch = deskState.batch
   const availableModelById = useMemo(() => (
     new Map(deskState.availableModels.map((model) => [model.modelId, model] as const))
   ), [deskState.availableModels])
+  const liveProgress = progress
+
+  const replaceBatch = useEffectEvent((nextBatch: AiBatchState | null) => {
+    startTransition(() => {
+      setDeskState((current) => ({
+        ...current,
+        batch: nextBatch,
+      }))
+      setProgress(deriveAiBatchProgress(nextBatch))
+    })
+  })
+
+  const applyBatchSnapshot = useEffectEvent((batchId: string, nextBatch: AiBatchState | null) => {
+    startTransition(() => {
+      setDeskState((current) => (
+        current.batch?.id === batchId
+          ? {
+              ...current,
+              batch: nextBatch,
+            }
+          : current
+      ))
+      setProgress((current) => (
+        current == null || current.batchId === batchId
+          ? deriveAiBatchProgress(nextBatch)
+          : current
+      ))
+    })
+  })
+
+  const refreshBatchSnapshot = useEffectEvent(async (batchId: string, options?: { force?: boolean; silent?: boolean }) => {
+    if (!options?.force && snapshotRefreshInFlightRef.current) {
+      return
+    }
+
+    snapshotRefreshInFlightRef.current = true
+    try {
+      const response = await fetchJson<AiDeskState>(`/api/admin/ai/state?dataset=${encodeURIComponent(dataset)}&batchId=${encodeURIComponent(batchId)}`)
+      applyBatchSnapshot(batchId, response.batch)
+    } catch (error) {
+      if (!options?.silent) {
+        setUiError(error instanceof Error ? error.message : 'Failed to refresh live AI batch state')
+      }
+    } finally {
+      snapshotRefreshInFlightRef.current = false
+    }
+  })
 
   useEffect(() => {
     if (!batch?.trials.length) {
@@ -215,17 +337,22 @@ export function AdminAiDesk({ initialState }: Props) {
   useEffect(() => {
     if (!batch || isTerminal(batch.status)) return
 
+    let previousStatus = batch.status
     const source = new EventSource(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/stream`)
     source.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as { type?: string; batch?: AiBatchState; message?: string }
-        if (payload.type === 'state' && payload.batch) {
+        const payload = JSON.parse(event.data) as { type?: string; progress?: AiBatchProgress | null; message?: string }
+        if (payload.type === 'progress' && payload.progress) {
+          const nextProgress = payload.progress
           startTransition(() => {
-            setDeskState((current) => ({
-              ...current,
-              batch: payload.batch ?? current.batch,
-            }))
+            setProgress(nextProgress)
           })
+
+          const statusChanged = nextProgress.status !== previousStatus
+          previousStatus = nextProgress.status
+          if (statusChanged || isTerminal(nextProgress.status)) {
+            void refreshBatchSnapshot(batch.id, { force: true, silent: true })
+          }
         }
         if (payload.type === 'error' && payload.message) {
           setUiError(payload.message)
@@ -241,10 +368,24 @@ export function AdminAiDesk({ initialState }: Props) {
     return () => {
       source.close()
     }
-  }, [batch?.id, batch?.status])
+  }, [batch?.id, batch?.status, refreshBatchSnapshot])
 
   useEffect(() => {
-    if (!batch || batch.runStartedAt || isTerminal(batch.status) || busyKey != null) {
+    if (!batch?.runStartedAt || isTerminal(batch.status)) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshBatchSnapshot(batch.id, { silent: true })
+    }, ACTIVE_BATCH_FULL_REFRESH_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [batch?.id, batch?.runStartedAt, batch?.status, refreshBatchSnapshot])
+
+  useEffect(() => {
+    if (!batch || isTerminal(batch.status) || busyKey != null) {
       return
     }
 
@@ -309,42 +450,43 @@ export function AdminAiDesk({ initialState }: Props) {
       .sort((a, b) => (order.get(a.modelId) ?? 0) - (order.get(b.modelId) ?? 0))
   }, [batch, orderedModelIds, selectedTrial])
 
+  const apiModels = useMemo(() => deskState.availableModels.filter((model) => model.lane === 'api').map((model) => model.modelId), [deskState.availableModels])
   const pendingSubscriptionImports = useMemo(() => (
     batch?.tasks.filter((task) => task.lane === 'subscription' && task.status === 'waiting-import').length ?? 0
   ), [batch])
+  const apiLaneTasks = useMemo(() => (
+    batch?.tasks.filter((task) => apiModels.includes(task.modelId)) ?? []
+  ), [batch, apiModels])
+  const hasEnabledApiLane = apiLaneTasks.length > 0
   const canRunBatch = Boolean(batch && !batch.runStartedAt && pendingSubscriptionImports === 0 && !isTerminal(batch.status))
+  const canStartApiLaneEarly = Boolean(batch && hasEnabledApiLane && !batch.runStartedAt && pendingSubscriptionImports > 0 && !isTerminal(batch.status))
   const successfulFillCount = useMemo(() => (
     batch?.fills.filter((fill) => fill.status === 'ok').length ?? 0
   ), [batch])
   const canRetryFailedTaskInPlace = Boolean(successfulFillCount === 0 && batch?.status !== 'reset' && batch?.status !== 'cleared')
+  const apiLaneReadyForClear = useMemo(() => (
+    hasEnabledApiLane && apiLaneTasks.every((task) => task.status === 'ready' || task.status === 'cleared')
+  ), [apiLaneTasks, hasEnabledApiLane])
   const displayedApiConcurrency = batch?.apiConcurrency ?? selectedApiConcurrency
   const apiConcurrencyLocked = Boolean(batch?.runStartedAt)
-
-  const apiModels = useMemo(() => deskState.availableModels.filter((model) => model.lane === 'api').map((model) => model.modelId), [deskState.availableModels])
-  const modelTimingByModelId = useMemo(() => {
-    const stats = new Map<AiAvailableModel['modelId'], { totalDurationMs: number; completedCount: number }>()
-    const modelIds = batch?.enabledModelIds ?? selectedModels
-
-    for (const modelId of modelIds) {
-      stats.set(modelId, { totalDurationMs: 0, completedCount: 0 })
-    }
-
-    for (const task of batch?.tasks ?? []) {
-      if (task.durationMs == null) continue
-      const current = stats.get(task.modelId) ?? { totalDurationMs: 0, completedCount: 0 }
-      current.totalDurationMs += task.durationMs
-      current.completedCount += 1
-      stats.set(task.modelId, current)
-    }
-
-    return stats
-  }, [batch, selectedModels])
+  const liveTaskCounts = liveProgress?.taskCounts ?? EMPTY_TASK_COUNTS
+  const liveApiTaskCounts = liveProgress?.laneCounts.api ?? EMPTY_TASK_COUNTS
+  const liveSubscriptionTaskCounts = liveProgress?.laneCounts.subscription ?? EMPTY_TASK_COUNTS
+  const livePendingSubscriptionImports = liveProgress?.laneCounts.subscription.waitingImport ?? pendingSubscriptionImports
+  const liveHasEnabledApiLane = liveApiTaskCounts.total > 0 || hasEnabledApiLane
+  const liveApiLaneReadyForClear = liveApiTaskCounts.total > 0
+    ? liveApiTaskCounts.ready + liveApiTaskCounts.cleared >= liveApiTaskCounts.total
+    : apiLaneReadyForClear
+  const liveBatchSizeLabel = liveProgress
+    ? `${liveProgress.trialCount} trials / ${liveProgress.modelCount} models / ${liveTaskCounts.total} tasks`
+    : 'No active batch'
+  const fullRefreshIntervalSeconds = Math.round(ACTIVE_BATCH_FULL_REFRESH_INTERVAL_MS / 1000)
   const laneCards = useMemo(() => {
     return [
       {
         id: 'api',
         label: 'API Lane',
-        description: 'API-backed models stay queued until you click Run Batch, then they execute with your chosen parallelization.',
+        description: 'API-backed models stay queued until you start the API lane or run the fully ready batch, then they execute with your chosen parallelization.',
         status: getLaneStatus(batch, apiModels),
         modelIds: apiModels,
       },
@@ -356,11 +498,11 @@ export function AdminAiDesk({ initialState }: Props) {
         modelIds: ['claude-opus'],
       },
       {
-        id: 'gpt-5.2',
+        id: 'gpt-5.4',
         label: 'OpenAI Subscription',
         description: 'Export GPT tasks, run them in your subscription workflow, then import JSON.',
-        status: getLaneStatus(batch, ['gpt-5.2']),
-        modelIds: ['gpt-5.2'],
+        status: getLaneStatus(batch, ['gpt-5.4']),
+        modelIds: ['gpt-5.4'],
       },
     ]
   }, [apiModels, batch])
@@ -373,6 +515,7 @@ export function AdminAiDesk({ initialState }: Props) {
       setSelectedModels(response.batch?.enabledModelIds ?? getDefaultEnabledModels(response.availableModels))
       setExportPackets({})
       setImportTexts({})
+      setProgress(deriveAiBatchProgress(response.batch))
     })
   }
 
@@ -391,9 +534,7 @@ export function AdminAiDesk({ initialState }: Props) {
           apiConcurrency: selectedApiConcurrency,
         }),
       })
-      startTransition(() => {
-        setDeskState((current) => ({ ...current, batch: payload.batch }))
-      })
+      replaceBatch(payload.batch)
       startTransition(() => {
         setExportPackets({})
         setImportTexts({})
@@ -424,9 +565,7 @@ export function AdminAiDesk({ initialState }: Props) {
           apiConcurrency: nextValue,
         }),
       })
-      startTransition(() => {
-        setDeskState((current) => ({ ...current, batch: payload.batch }))
-      })
+      replaceBatch(payload.batch)
     } catch (error) {
       setSelectedApiConcurrency(batch.apiConcurrency)
       setUiError(error instanceof Error ? error.message : 'Failed to update API parallelization')
@@ -449,6 +588,7 @@ export function AdminAiDesk({ initialState }: Props) {
         setDeskState((current) => ({ ...current, batch: null }))
         setExportPackets({})
         setImportTexts({})
+        setProgress(null)
       })
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to reset batch')
@@ -487,9 +627,7 @@ export function AdminAiDesk({ initialState }: Props) {
         },
         body: JSON.stringify(requestBody),
       })
-      startTransition(() => {
-        setDeskState((current) => ({ ...current, batch: payload.batch }))
-      })
+      replaceBatch(payload.batch)
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to import packet')
     } finally {
@@ -522,9 +660,7 @@ export function AdminAiDesk({ initialState }: Props) {
       const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/run`, {
         method: 'POST',
       })
-      startTransition(() => {
-        setDeskState((current) => ({ ...current, batch: payload.batch }))
-      })
+      replaceBatch(payload.batch)
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to run batch')
     } finally {
@@ -544,9 +680,7 @@ export function AdminAiDesk({ initialState }: Props) {
         },
         body: JSON.stringify({ taskKey }),
       })
-      startTransition(() => {
-        setDeskState((current) => ({ ...current, batch: payload.batch }))
-      })
+      replaceBatch(payload.batch)
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to retry task')
     } finally {
@@ -682,19 +816,27 @@ export function AdminAiDesk({ initialState }: Props) {
           </div>
           <div className="border border-[#d8ccb9] bg-white/80 p-3">
             <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Desk Status</p>
-            <p className="mt-2 text-sm font-medium text-[#1a1a1a]">{getDeskStatusLabel(batch)}</p>
-            <p className="mt-2 text-xs leading-5 text-[#6f665b]">{getDeskStatusDetail(batch)}</p>
+            <p className="mt-2 text-sm font-medium text-[#1a1a1a]">{getDeskStatusLabel(batch, liveProgress)}</p>
+            <p className="mt-2 text-xs leading-5 text-[#6f665b]">{getDeskStatusDetail(batch, liveProgress)}</p>
           </div>
           {batch && !batch.runStartedAt ? (
             <div className="border border-[#d8ccb9] bg-[#f8f4ee] px-3 py-2 text-sm text-[#6f665b]">
-              {pendingSubscriptionImports > 0
-                ? `Batch is staged. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before running.`
-                : `Batch is staged. The API lane is idle and will run up to ${batch.apiConcurrency} task${batch.apiConcurrency === 1 ? '' : 's'} at once after you click Run Batch.`}
+              {livePendingSubscriptionImports > 0
+                ? liveHasEnabledApiLane
+                  ? `Batch is staged. Start the API lane now, then import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} while it runs.`
+                  : `Batch is staged. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before running the batch.`
+                : liveHasEnabledApiLane
+                  ? `Batch is staged. The API lane is ready to start with up to ${batch.apiConcurrency} task${batch.apiConcurrency === 1 ? '' : 's'} at once when you click Run Batch.`
+                  : 'Batch is staged. All subscription outputs are in and the batch is ready to run.'}
             </div>
           ) : null}
           {batch?.runStartedAt && !isTerminal(batch.status) ? (
             <div className="border border-[#5BA5ED]/30 bg-[#5BA5ED]/10 px-3 py-2 text-sm text-[#265f8f]">
-              Run is live. Decisions are collecting with API parallelization locked at {batch.apiConcurrency}, and shared-market clearing will keep updating here until the batch is done.
+              {livePendingSubscriptionImports > 0
+                ? liveApiLaneReadyForClear
+                  ? `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the shared AMM can clear.`
+                  : `The API lane is live. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect.`
+                : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix refreshes every ${fullRefreshIntervalSeconds}s while live run health updates continue every second.`}
             </div>
           ) : null}
           {batch?.status === 'failed' && successfulFillCount === 0 ? (
@@ -715,6 +857,95 @@ export function AdminAiDesk({ initialState }: Props) {
           {uiError ? (
             <div className="border border-[#c43a2b]/30 bg-[#fff3f1] px-3 py-2 text-sm text-[#8d2c22]">{uiError}</div>
           ) : null}
+        </div>
+      </section>
+
+      <section className="border border-[#e8ddd0] bg-white/85 p-5">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">1. Run Health</p>
+              <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Live batch pace</h3>
+            </div>
+            <p className="text-xs text-[#8a8075]">
+              {batch?.runStartedAt && !isTerminal(batch.status)
+                ? `Live counts update every second. The order book refreshes every ${fullRefreshIntervalSeconds}s.`
+                : liveBatchSizeLabel}
+            </p>
+          </div>
+
+          {liveProgress ? (
+            <>
+              <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-4 py-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Current Phase</p>
+                    <p className="mt-1 text-sm font-medium text-[#1a1a1a]">{laneStatusLabel(liveProgress.status)}</p>
+                    <p className="mt-1 text-xs text-[#6f665b]">{liveBatchSizeLabel}</p>
+                  </div>
+                  <div className="min-w-0 flex-1 lg:max-w-[440px]">
+                    <div className="flex items-center justify-between gap-3 text-xs text-[#6f665b]">
+                      <span>{liveTaskCounts.cleared} / {liveTaskCounts.total} cleared</span>
+                      <span>{formatPercent(liveProgress.completionRatio)} complete</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#eadfce]">
+                      <div
+                        className="h-full bg-[#5BA5ED] transition-[width] duration-300"
+                        style={{ width: `${Math.min(100, Math.max(0, Math.round(liveProgress.completionRatio * 100)))}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Tasks</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#1a1a1a]">{liveTaskCounts.total}</p>
+                  <p className="mt-1 text-xs text-[#6f665b]">{liveProgress.trialCount} trials / {liveProgress.modelCount} models</p>
+                </div>
+                <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Queue</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#1a1a1a]">{liveTaskCounts.running}</p>
+                  <p className="mt-1 text-xs text-[#6f665b]">Running / {liveTaskCounts.ready} ready / {liveTaskCounts.queued} queued</p>
+                </div>
+                <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Timing</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#1a1a1a]">{liveProgress.elapsedMs != null ? formatDurationMs(liveProgress.elapsedMs) : '--'}</p>
+                  <p className="mt-1 text-xs text-[#6f665b]">Elapsed / ETA {formatEta(liveProgress)}</p>
+                </div>
+                <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">API Lane</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#1a1a1a]">{liveApiTaskCounts.running}</p>
+                  <p className="mt-1 text-xs text-[#6f665b]">{liveApiTaskCounts.ready} ready / {displayedApiConcurrency} concurrency / {liveSubscriptionTaskCounts.waitingImport} waiting import</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="border border-[#e8ddd0] bg-white px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Cleared</p>
+                  <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{liveTaskCounts.cleared}</p>
+                </div>
+                <div className="border border-[#e8ddd0] bg-white px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Failed</p>
+                  <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{liveTaskCounts.error}</p>
+                </div>
+                <div className="border border-[#e8ddd0] bg-white px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Recent Activity</p>
+                  <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{formatClockTime(liveProgress.latestActivityAt)}</p>
+                </div>
+                <div className="border border-[#e8ddd0] bg-white px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Debug Feed</p>
+                  <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{liveProgress.logCount} logs</p>
+                  <p className="mt-1 text-xs text-[#6f665b]">{liveProgress.fillCount} fills recorded</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
+              Stage a batch to start live run-health tracking and debug output.
+            </div>
+          )}
         </div>
       </section>
 
@@ -779,7 +1010,6 @@ export function AdminAiDesk({ initialState }: Props) {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-[#1a1a1a]">{lane.label}</p>
-                    <p className="mt-2 text-xs leading-5 text-[#6f665b]">{lane.description}</p>
                     {batch && !laneActive ? (
                       <p className="mt-2 text-[11px] uppercase tracking-[0.08em] text-[#b26a25]">Not enabled in this batch</p>
                     ) : null}
@@ -798,12 +1028,22 @@ export function AdminAiDesk({ initialState }: Props) {
                       {apiConcurrencyLocked
                         ? 'Locked for the active run.'
                         : batch
-                          ? 'Editable until Run Batch starts.'
+                          ? 'Editable until the API lane starts.'
                           : 'Set this before staging the next batch.'}
                     </p>
                   </div>
                 ) : null}
-                {lane.id === 'claude-opus' || lane.id === 'gpt-5.2' ? (
+                {lane.id === 'api' && canStartApiLaneEarly ? (
+                  <button
+                    type="button"
+                    disabled={busyKey != null}
+                    onClick={() => void runBatchNow()}
+                    className="mt-4 w-full border border-[#3a8a2e] bg-[#3a8a2e] px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busyKey === 'run' ? 'Starting...' : 'Start API Lane'}
+                  </button>
+                ) : null}
+                {lane.id === 'claude-opus' || lane.id === 'gpt-5.4' ? (
                   <div className="mt-4 space-y-3">
                     <div className="flex gap-2">
                       <button
@@ -859,7 +1099,17 @@ export function AdminAiDesk({ initialState }: Props) {
                   </div>
                 ) : (
                   <div className="mt-4 rounded border border-[#e8ddd0] bg-white px-3 py-3 text-xs text-[#6f665b]">
-                    {batch ? `${batch.tasks.filter((task) => apiModels.includes(task.modelId)).length} API task${batch.tasks.filter((task) => apiModels.includes(task.modelId)).length === 1 ? '' : 's'} in this batch.` : 'API tasks stay idle until you stage a batch and click Run Batch.'}
+                    {batch
+                      ? !batch.runStartedAt
+                        ? pendingSubscriptionImports > 0
+                          ? `Start the API lane to begin ${laneTasks.length} queued API task${laneTasks.length === 1 ? '' : 's'} while subscription imports continue.`
+                          : `${laneTasks.length} API task${laneTasks.length === 1 ? '' : 's'} are staged in this batch and ready to start.`
+                        : pendingSubscriptionImports > 0
+                          ? apiLaneReadyForClear
+                            ? `${laneTasks.length} API task${laneTasks.length === 1 ? '' : 's'} are done. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before clearing can begin.`
+                            : `${laneTasks.length} API task${laneTasks.length === 1 ? '' : 's'} are running in this batch while subscription imports continue.`
+                          : `${laneTasks.length} API task${laneTasks.length === 1 ? '' : 's'} in this batch.`
+                      : 'API tasks stay idle until you stage a batch.'}
                   </div>
                 )}
                 {firstFailedLaneTask ? (
@@ -911,6 +1161,11 @@ export function AdminAiDesk({ initialState }: Props) {
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">3. Order Book</p>
             <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Batch-wide decision matrix</h3>
+            {batch?.runStartedAt && !isTerminal(batch.status) ? (
+              <p className="mt-2 text-xs text-[#8a8075]">
+                This matrix refreshes every {fullRefreshIntervalSeconds}s while the run is active. Use Run Health and Live Debug for second-by-second updates.
+              </p>
+            ) : null}
           </div>
         </div>
         {batch?.trials.length ? (
@@ -994,7 +1249,7 @@ export function AdminAiDesk({ initialState }: Props) {
                                   : task.status === 'error'
                                     ? 'Decision failed'
                                     : !batch.runStartedAt && task.lane === 'api'
-                                      ? 'Queued for Run Batch'
+                                      ? 'Queued for API lane start'
                                       : task.status === 'waiting-import'
                                         ? 'Waiting for import'
                                         : task.status === 'running'
@@ -1007,7 +1262,7 @@ export function AdminAiDesk({ initialState }: Props) {
                                   : task.status === 'error'
                                     ? truncateText(task.errorMessage ?? batch.failureMessage ?? 'Task failed before returning a decision.', 92)
                                     : !batch.runStartedAt && task.lane === 'api'
-                                      ? 'Queued until you click Run Batch.'
+                                      ? 'Queued until you start the API lane.'
                                       : task.status === 'waiting-import'
                                         ? 'Waiting for subscription JSON.'
                                         : task.status === 'running'
@@ -1127,7 +1382,7 @@ export function AdminAiDesk({ initialState }: Props) {
                       {task.decision
                         ? `${task.decision.forecast.binaryCall.toUpperCase()} / ${task.decision.forecast.confidence}`
                         : !batch?.runStartedAt && task.lane === 'api'
-                          ? 'Queued for Run Batch'
+                          ? 'Queued for API lane start'
                           : task.status === 'waiting-import'
                             ? 'Waiting for import'
                             : 'Waiting for decision'}
@@ -1136,7 +1391,7 @@ export function AdminAiDesk({ initialState }: Props) {
                       {task.decision
                         ? `${task.decision.action.type} ${task.decision.action.amountUsd > 0 ? formatUsd(task.decision.action.amountUsd) : ''}`.trim()
                         : !batch?.runStartedAt && task.lane === 'api'
-                          ? 'No trade intent yet. This lane has not started.'
+                          ? 'No trade intent yet. Start the API lane to begin this model.'
                           : task.status === 'waiting-import'
                             ? 'No trade intent yet. Import the JSON for this model.'
                             : 'No trade intent yet'}
@@ -1149,7 +1404,7 @@ export function AdminAiDesk({ initialState }: Props) {
                     {task.decision?.forecast.reasoning
                       ?? task.errorMessage
                       ?? (!batch?.runStartedAt && task.lane === 'api'
-                        ? 'Queued. This API model will not run until you click Run Batch.'
+                        ? 'Queued. This API model will not run until you start the API lane.'
                         : task.status === 'waiting-import'
                           ? 'Waiting for imported subscription JSON.'
                           : 'Waiting for the lane to return.')}
@@ -1195,29 +1450,6 @@ export function AdminAiDesk({ initialState }: Props) {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.5fr,1fr]">
-        <div className="hidden">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">4. Clearing Tape</p>
-          <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Shared-market fills</h3>
-          <div className="mt-4 space-y-3">
-            {batch?.fills.length ? batch.fills.map((fill) => (
-              <div key={fill.id} className="border border-[#d8ccb9] bg-[#fcfaf7] px-4 py-3">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-[#1a1a1a]">{fill.modelId} on {batch.trials.find((trial) => trial.marketId === fill.marketId)?.shortTitle ?? fill.marketId}</p>
-                    <p className="mt-1 text-xs text-[#8a8075]">{fill.executedAction} / requested {formatUsd(fill.requestedAmountUsd)} / executed {formatUsd(fill.executedAmountUsd)}</p>
-                  </div>
-                  <span className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${chipClass(fill.status)}`}>{fill.status}</span>
-                </div>
-                <p className="mt-2 text-sm text-[#5f564c]">{fill.explanation}</p>
-                <p className="mt-2 text-xs text-[#6f665b]">Price path: {formatPercent(fill.priceBefore)} to {formatPercent(fill.priceAfter)} / shares delta {fill.sharesDelta.toFixed(0)}</p>
-              </div>
-            )) : (
-              <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
-                The tape stays empty until the batch reaches clearing.
-              </div>
-            )}
-          </div>
-        </div>
 
         <div className="hidden">
           <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">4. Portfolio State</p>
@@ -1247,6 +1479,105 @@ export function AdminAiDesk({ initialState }: Props) {
             )) : (
               <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
                 Portfolio balances appear here once the batch is open.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.5fr,1fr]">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">4. Live Debug</p>
+          <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Recent logs and fills</h3>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-[#1a1a1a]">Recent logs</p>
+                  <p className="mt-1 text-xs text-[#8a8075]">{liveProgress ? `${liveProgress.logCount} total` : 'No active batch'}</p>
+                </div>
+                {liveProgress ? (
+                  <span className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Newest first</span>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-2">
+                {liveProgress?.recentLogs.length ? liveProgress.recentLogs.map((entry) => (
+                  <div key={entry.id} className={`border px-3 py-3 text-sm ${logToneClass(entry.tone)}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] uppercase tracking-[0.08em]">{entry.tone}</span>
+                      <span className="text-[11px]">{formatClockTime(entry.at)}</span>
+                    </div>
+                    <p className="mt-2 leading-5">{entry.message}</p>
+                  </div>
+                )) : (
+                  <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
+                    Live logs appear here once a batch starts moving.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-[#1a1a1a]">Recent fills</p>
+                  <p className="mt-1 text-xs text-[#8a8075]">{liveProgress ? `${liveProgress.fillCount} total` : 'No active batch'}</p>
+                </div>
+                {liveProgress ? (
+                  <span className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Newest first</span>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-2">
+                {liveProgress?.recentFills.length ? liveProgress.recentFills.map((fill) => (
+                  <div key={fill.id} className={`border px-3 py-3 text-sm ${chipClass(fill.status)}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-[#1a1a1a]">{fill.modelLabel}</p>
+                        <p className="mt-1 text-xs text-[#6f665b]">{fill.trialLabel}</p>
+                      </div>
+                      <span className="text-[11px] text-[#8a8075]">{formatClockTime(fill.at)}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-[#5f564c]">
+                      {formatActionLabel(fill.executedAction)}
+                      {fill.executedAmountUsd > 0 ? ` ${formatUsd(fill.executedAmountUsd)}` : ''}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#6f665b]">Price {formatPercent(fill.priceBefore)} to {formatPercent(fill.priceAfter)}</p>
+                  </div>
+                )) : (
+                  <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
+                    Fills will appear here as the shared AMM clears each task.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[#b5aa9e]">5. Timing</p>
+          <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Per-model pace</h3>
+          <div className="mt-4 space-y-3">
+            {liveProgress?.modelDurations.length ? liveProgress.modelDurations.map((entry) => (
+              <div key={entry.modelId} className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-[#1a1a1a]">{entry.label}</p>
+                    <p className="mt-1 text-xs text-[#8a8075]">{entry.lane === 'api' ? 'API lane' : 'Subscription lane'}</p>
+                  </div>
+                  <span className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${chipClass(entry.runningCount > 0 ? 'running' : entry.clearedCount > 0 ? 'done' : entry.readyCount > 0 ? 'ready' : 'waiting')}`}>
+                    {entry.averageDurationMs != null ? formatDurationMs(entry.averageDurationMs) : 'No runtime yet'}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#6f665b]">
+                  <div className="border border-[#e8ddd0] bg-white px-3 py-2">Completed: {entry.completedCount}</div>
+                  <div className="border border-[#e8ddd0] bg-white px-3 py-2">Cleared: {entry.clearedCount}</div>
+                  <div className="border border-[#e8ddd0] bg-white px-3 py-2">Running: {entry.runningCount}</div>
+                  <div className="border border-[#e8ddd0] bg-white px-3 py-2">Queued: {entry.queuedCount}</div>
+                </div>
+              </div>
+            )) : (
+              <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
+                Per-model timing appears here once the active batch records decisions.
               </div>
             )}
           </div>

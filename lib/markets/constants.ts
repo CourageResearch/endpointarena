@@ -14,12 +14,12 @@ export type MarketOutcome = (typeof MARKET_OUTCOMES)[number]
 
 const MARKET_MODELS = [
   'claude-opus',
-  'gpt-5.2',
-  'grok-4',
+  'gpt-5.4',
+  'grok-4.1',
   'gemini-3-pro',
   'deepseek-v3.2',
   'glm-5',
-  'llama-4',
+  'llama-4-scout',
   'kimi-k2.5',
   'minimax-m2.5',
 ] as const

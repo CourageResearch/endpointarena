@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { db, modelDecisionSnapshots, trialQuestions } from '@/lib/db'
 import { sql } from 'drizzle-orm'
-import { MODEL_IDS, MODEL_INFO, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
+import { MODEL_METHOD_BINDINGS } from '@/lib/model-runtime-metadata'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
@@ -59,90 +60,8 @@ async function getData() {
 export default async function MethodPage() {
   const { trialQuestionCount, predictionCount, snapshotCount } = await getData()
 
-  const MODEL_BINDINGS: Record<ModelId, {
-    version: string
-    internet: boolean
-    internetDetail: string
-    reasoning: string
-    reasoningDetail: string
-    maxTokens: string
-  }> = {
-    'claude-opus': {
-      version: 'claude-opus-4-6',
-      internet: true,
-      internetDetail: 'Anthropic web_search_20250305 (max_uses: 7)',
-      reasoning: 'Extended Thinking',
-      reasoningDetail: 'Native thinking blocks + tool-assisted synthesis',
-      maxTokens: '4,096 output',
-    },
-    'gpt-5.2': {
-      version: 'gpt-5.2',
-      internet: true,
-      internetDetail: 'OpenAI web_search tool',
-      reasoning: 'High Effort',
-      reasoningDetail: 'reasoning.effort = high',
-      maxTokens: '16,000 output',
-    },
-    'grok-4': {
-      version: 'grok-4-1-fast-reasoning',
-      internet: true,
-      internetDetail: 'search_mode: auto',
-      reasoning: 'Fast Reasoning',
-      reasoningDetail: 'Native fast reasoning mode',
-      maxTokens: '16,000 output',
-    },
-    'gemini-3-pro': {
-      version: 'gemini-3-pro-preview',
-      internet: true,
-      internetDetail: 'Google Search grounding',
-      reasoning: 'Thinking',
-      reasoningDetail: 'thinkingConfig.thinkingBudget = -1',
-      maxTokens: '65,536 output',
-    },
-    'deepseek-v3.2': {
-      version: 'deepseek-ai/DeepSeek-V3.1',
-      internet: false,
-      internetDetail: 'No web-search tool configured in the combined decision generator',
-      reasoning: 'Reasoning mode',
-      reasoningDetail: 'extra_body.reasoning_effort = high',
-      maxTokens: '16,000 output',
-    },
-    'glm-5': {
-      version: 'zai-org/GLM-5',
-      internet: false,
-      internetDetail: 'No web-search tool configured in the combined decision generator',
-      reasoning: 'Provider default',
-      reasoningDetail: 'No explicit reasoning parameter configured',
-      maxTokens: '16,000 output',
-    },
-    'llama-4': {
-      version: 'meta-llama/llama-4-scout-17b-16e-instruct',
-      internet: false,
-      internetDetail: 'No web-search tool configured in the combined decision generator',
-      reasoning: 'Provider default',
-      reasoningDetail: 'No explicit reasoning parameter configured',
-      maxTokens: '8,192 output',
-    },
-    'kimi-k2.5': {
-      version: 'moonshotai/Kimi-K2.5',
-      internet: false,
-      internetDetail: 'No web-search tool configured in the combined decision generator',
-      reasoning: 'Thinking',
-      reasoningDetail: 'extra_body.chat_template_args.enable_thinking = true',
-      maxTokens: '16,000 output',
-    },
-    'minimax-m2.5': {
-      version: 'MiniMax-M2.5',
-      internet: false,
-      internetDetail: 'No web-search tool configured in the combined decision generator',
-      reasoning: 'Provider default',
-      reasoningDetail: 'No explicit reasoning parameter configured',
-      maxTokens: '16,000 output',
-    },
-  }
-
   const models = MODEL_IDS.map((modelId) => {
-    const binding = MODEL_BINDINGS[modelId]
+    const binding = MODEL_METHOD_BINDINGS[modelId]
     const info = MODEL_INFO[modelId]
 
     return {

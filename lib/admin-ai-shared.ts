@@ -39,12 +39,12 @@ const AI_LANE_STATUSES = [
 ] as const
 export type AiLaneStatus = (typeof AI_LANE_STATUSES)[number]
 
-export const AI_SUBSCRIPTION_MODEL_IDS = ['claude-opus', 'gpt-5.2'] as const satisfies readonly ModelId[]
+export const AI_SUBSCRIPTION_MODEL_IDS = ['claude-opus', 'gpt-5.4'] as const satisfies readonly ModelId[]
 export type AiSubscriptionModelId = (typeof AI_SUBSCRIPTION_MODEL_IDS)[number]
 
 export type AiModelLane = 'api' | 'subscription'
 export const AI_API_CONCURRENCY_MIN = 1
-export const AI_API_CONCURRENCY_MAX = 8
+export const AI_API_CONCURRENCY_MAX = 10
 export const AI_API_CONCURRENCY_DEFAULT = 4
 
 export type AiDatasetSummary = {
@@ -225,6 +225,65 @@ export type AiDeskState = {
   batch: AiBatchState | null
 }
 
+export type AiBatchTaskCounts = {
+  total: number
+  queued: number
+  running: number
+  waitingImport: number
+  ready: number
+  cleared: number
+  error: number
+}
+
+export type AiBatchModelDurationSummary = {
+  modelId: ModelId
+  label: string
+  lane: AiModelLane
+  completedCount: number
+  queuedCount: number
+  runningCount: number
+  readyCount: number
+  clearedCount: number
+  averageDurationMs: number | null
+}
+
+export type AiBatchRecentFill = {
+  id: string
+  at: string
+  modelId: ModelId
+  modelLabel: string
+  trialLabel: string
+  executedAction: ModelDecisionResult['action']['type']
+  executedAmountUsd: number
+  priceBefore: number
+  priceAfter: number
+  status: 'ok' | 'error'
+}
+
+export type AiBatchProgress = {
+  batchId: string
+  status: AiBatchStatus
+  runStartedAt: string | null
+  latestActivityAt: string
+  elapsedMs: number | null
+  apiConcurrency: number
+  trialCount: number
+  modelCount: number
+  enabledModelIds: ModelId[]
+  clearOrder: ModelId[]
+  completionRatio: number
+  taskCounts: AiBatchTaskCounts
+  laneCounts: Record<AiModelLane, AiBatchTaskCounts>
+  etaMs: number | null
+  etaBasis: 'api' | 'clearing' | 'blocked' | 'none'
+  recentLogs: AiBatchLog[]
+  recentFills: AiBatchRecentFill[]
+  modelDurations: AiBatchModelDurationSummary[]
+  fillCount: number
+  logCount: number
+  failureMessage: string | null
+}
+
 export type AiSubscriptionExportTask = {
   taskKey: string
   marketId: string
@@ -306,7 +365,7 @@ export function getAiDatasetDescription(dataset: AiDataset): string {
 }
 
 export function getAiModelLabel(modelId: ModelId): string {
-  return MODEL_INFO[modelId].fullName
+  return MODEL_INFO[modelId]?.fullName ?? modelId
 }
 
 export function listAiSupportedModelIds(): readonly ModelId[] {
@@ -344,4 +403,188 @@ function summarizeAiLane(batch: AiBatchState | null, modelIds: readonly ModelId[
   if (tasks.some((task) => task.status === 'running')) return 'collecting'
   if (tasks.some((task) => task.status === 'waiting-import')) return 'waiting'
   return 'collecting'
+}
+
+const AI_PROGRESS_RECENT_LOG_LIMIT = 12
+const AI_PROGRESS_RECENT_FILL_LIMIT = 12
+const AI_PROGRESS_CLEAR_RATE_WINDOW = 20
+
+function buildEmptyTaskCounts(): AiBatchTaskCounts {
+  return {
+    total: 0,
+    queued: 0,
+    running: 0,
+    waitingImport: 0,
+    ready: 0,
+    cleared: 0,
+    error: 0,
+  }
+}
+
+function incrementTaskCounts(counts: AiBatchTaskCounts, task: AiDecisionTask): void {
+  counts.total += 1
+
+  if (task.status === 'queued') counts.queued += 1
+  if (task.status === 'running') counts.running += 1
+  if (task.status === 'waiting-import') counts.waitingImport += 1
+  if (task.status === 'ready') counts.ready += 1
+  if (task.status === 'cleared') counts.cleared += 1
+  if (task.status === 'error') counts.error += 1
+}
+
+function getLatestActivityAt(batch: AiBatchState): string {
+  const candidates = [
+    batch.updatedAt,
+    batch.runStartedAt,
+    batch.logs[batch.logs.length - 1]?.at ?? null,
+    batch.fills[batch.fills.length - 1]?.createdAt ?? null,
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value))
+
+  if (candidates.length === 0) {
+    return new Date().toISOString()
+  }
+
+  return new Date(Math.max(...candidates)).toISOString()
+}
+
+function estimateAiBatchEtaMs(batch: AiBatchState, taskCounts: AiBatchTaskCounts, laneCounts: Record<AiModelLane, AiBatchTaskCounts>): {
+  etaMs: number | null
+  etaBasis: AiBatchProgress['etaBasis']
+} {
+  if (batch.status === 'cleared') {
+    return {
+      etaMs: 0,
+      etaBasis: 'none',
+    }
+  }
+
+  if (batch.status === 'failed' || batch.status === 'reset') {
+    return {
+      etaMs: null,
+      etaBasis: 'none',
+    }
+  }
+
+  if (laneCounts.subscription.waitingImport > 0) {
+    return {
+      etaMs: null,
+      etaBasis: 'blocked',
+    }
+  }
+
+  if (batch.status === 'clearing') {
+    const recentFills = batch.fills.slice(-AI_PROGRESS_CLEAR_RATE_WINDOW)
+    if (recentFills.length >= 2) {
+      const firstAt = new Date(recentFills[0].createdAt).getTime()
+      const lastAt = new Date(recentFills[recentFills.length - 1].createdAt).getTime()
+      const spanMs = lastAt - firstAt
+      const averageFillIntervalMs = spanMs > 0 ? spanMs / (recentFills.length - 1) : 0
+      const remainingTaskCount = Math.max(0, taskCounts.total - taskCounts.cleared)
+      if (averageFillIntervalMs > 0 && remainingTaskCount > 0) {
+        return {
+          etaMs: Math.round(averageFillIntervalMs * remainingTaskCount),
+          etaBasis: 'clearing',
+        }
+      }
+    }
+  }
+
+  const completedApiTasks = batch.tasks.filter((task) => task.lane === 'api' && task.durationMs != null)
+  const averageApiDurationMs = completedApiTasks.length > 0
+    ? completedApiTasks.reduce((sum, task) => sum + (task.durationMs ?? 0), 0) / completedApiTasks.length
+    : null
+  const remainingApiTasks = laneCounts.api.queued + laneCounts.api.running
+
+  if (averageApiDurationMs != null && averageApiDurationMs > 0 && remainingApiTasks > 0) {
+    const waves = Math.ceil(remainingApiTasks / Math.max(1, batch.apiConcurrency))
+    return {
+      etaMs: Math.round(waves * averageApiDurationMs),
+      etaBasis: 'api',
+    }
+  }
+
+  return {
+    etaMs: null,
+    etaBasis: 'none',
+  }
+}
+
+export function deriveAiBatchProgress(batch: AiBatchState | null): AiBatchProgress | null {
+  if (!batch) return null
+
+  const taskCounts = buildEmptyTaskCounts()
+  const laneCounts: Record<AiModelLane, AiBatchTaskCounts> = {
+    api: buildEmptyTaskCounts(),
+    subscription: buildEmptyTaskCounts(),
+  }
+
+  for (const task of batch.tasks) {
+    incrementTaskCounts(taskCounts, task)
+    incrementTaskCounts(laneCounts[task.lane], task)
+  }
+
+  const recentLogs = batch.logs.slice(-AI_PROGRESS_RECENT_LOG_LIMIT).reverse()
+  const trialLabelByMarketId = new Map(batch.trials.map((trial) => [trial.marketId, trial.nctNumber?.trim() || trial.shortTitle] as const))
+  const recentFills = batch.fills
+    .slice(-AI_PROGRESS_RECENT_FILL_LIMIT)
+    .reverse()
+    .map((fill) => ({
+      id: fill.id,
+      at: fill.createdAt,
+      modelId: fill.modelId,
+      modelLabel: getAiModelLabel(fill.modelId),
+      trialLabel: trialLabelByMarketId.get(fill.marketId) ?? fill.marketId,
+      executedAction: fill.executedAction,
+      executedAmountUsd: fill.executedAmountUsd,
+      priceBefore: fill.priceBefore,
+      priceAfter: fill.priceAfter,
+      status: fill.status,
+    }))
+  const modelDurations = batch.enabledModelIds.map((modelId) => {
+    const tasks = batch.tasks.filter((task) => task.modelId === modelId)
+    const completedTasks = tasks.filter((task) => task.durationMs != null)
+    const totalDurationMs = completedTasks.reduce((sum, task) => sum + (task.durationMs ?? 0), 0)
+
+    return {
+      modelId,
+      label: getAiModelLabel(modelId),
+      lane: getAiModelLane(modelId),
+      completedCount: completedTasks.length,
+      queuedCount: tasks.filter((task) => task.status === 'queued').length,
+      runningCount: tasks.filter((task) => task.status === 'running').length,
+      readyCount: tasks.filter((task) => task.status === 'ready').length,
+      clearedCount: tasks.filter((task) => task.status === 'cleared').length,
+      averageDurationMs: completedTasks.length > 0 ? totalDurationMs / completedTasks.length : null,
+    }
+  })
+  const { etaMs, etaBasis } = estimateAiBatchEtaMs(batch, taskCounts, laneCounts)
+  const nowMs = Date.now()
+  const startedAtMs = batch.runStartedAt ? new Date(batch.runStartedAt).getTime() : Number.NaN
+
+  return {
+    batchId: batch.id,
+    status: batch.status,
+    runStartedAt: batch.runStartedAt,
+    latestActivityAt: getLatestActivityAt(batch),
+    elapsedMs: Number.isFinite(startedAtMs) ? Math.max(0, nowMs - startedAtMs) : null,
+    apiConcurrency: batch.apiConcurrency,
+    trialCount: batch.trials.length,
+    modelCount: batch.enabledModelIds.length,
+    enabledModelIds: batch.enabledModelIds,
+    clearOrder: batch.clearOrder,
+    completionRatio: taskCounts.total > 0 ? taskCounts.cleared / taskCounts.total : 0,
+    taskCounts,
+    laneCounts,
+    etaMs,
+    etaBasis,
+    recentLogs,
+    recentFills,
+    modelDurations,
+    fillCount: batch.fills.length,
+    logCount: batch.logs.length,
+    failureMessage: batch.failureMessage,
+  }
 }

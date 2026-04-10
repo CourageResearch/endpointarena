@@ -20,7 +20,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { searchParams } = new URL(request.url)
     const modelId = searchParams.get('modelId')
     if (!modelId || !AI_SUBSCRIPTION_MODEL_IDS.includes(modelId as AiSubscriptionModelId)) {
-      throw new ValidationError('modelId must be claude-opus or gpt-5.2')
+      throw new ValidationError('modelId must be claude-opus or gpt-5.4')
     }
 
     const packet = await exportAiSubscriptionPacket(id, modelId as AiSubscriptionModelId)

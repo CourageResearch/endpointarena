@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminAiDesk } from '@/components/admin-ai/AdminAiDesk'
+import { deriveAiBatchProgress } from '@/lib/admin-ai-shared'
 import { getAiDeskState } from '@/lib/admin-ai'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
@@ -23,10 +24,11 @@ export default async function AdminAiPage() {
   }
 
   const initialState = await getAiDeskState(getDefaultAiDatasetForCurrentDatabase())
+  const initialProgress = deriveAiBatchProgress(initialState.batch)
 
   return (
     <AdminConsoleLayout title="AI" activeTab="ai">
-      <AdminAiDesk initialState={initialState} />
+      <AdminAiDesk initialState={initialState} initialProgress={initialProgress} />
     </AdminConsoleLayout>
   )
 }

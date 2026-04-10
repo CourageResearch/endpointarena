@@ -471,6 +471,7 @@ export function AdminTrialOutcomeReview({
   const [runs, setRuns] = useState(recentRuns)
   const [eligibleQuestions, setEligibleQuestions] = useState(initialEligibleQuestions)
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [isBulkDismissing, setIsBulkDismissing] = useState(false)
   const [deletingRunId, setDeletingRunId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -490,6 +491,7 @@ export function AdminTrialOutcomeReview({
     ? candidates.filter((candidate) => matchesScopedNctNumber(candidate.trial.nctNumber, scopedViewNctNumber))
     : candidates)]
     .sort(compareCandidatesForReview)
+  const visibleEvidenceOnlyCandidates = visibleCandidates.filter((candidate) => !isSettlementCandidate(candidate))
   const visibleRuns = scopedViewNctNumber
     ? runs.filter((run) => matchesScopedNctNumber(run.scopedNctNumber, scopedViewNctNumber))
     : runs
@@ -770,6 +772,70 @@ export function AdminTrialOutcomeReview({
       setError(reviewError instanceof Error ? reviewError.message : 'Failed to review oracle item')
     } finally {
       setLoadingId(null)
+    }
+  }
+
+  const dismissVisibleEvidenceOnlyCandidates = async () => {
+    const evidenceOnlyCandidateIds = visibleEvidenceOnlyCandidates.map((candidate) => candidate.id)
+    if (evidenceOnlyCandidateIds.length === 0) {
+      return
+    }
+
+    const itemLabel = evidenceOnlyCandidateIds.length === 1 ? 'item' : 'items'
+    const confirmed = window.confirm(
+      `Dismiss ${evidenceOnlyCandidateIds.length} visible evidence-only queue ${itemLabel}? Settlement items will remain pending and untouched.`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setError(null)
+    setSuccessMessage(null)
+    setRunMessage(null)
+    setIsBulkDismissing(true)
+
+    try {
+      const response = await fetch('/api/admin/trial-outcome-candidates/dismiss-evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateIds: evidenceOnlyCandidateIds,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Failed to dismiss evidence-only oracle items'))
+      }
+
+      const dismissedIds = Array.isArray(payload.dismissedIds)
+        ? payload.dismissedIds.filter((candidateId: unknown): candidateId is string => typeof candidateId === 'string')
+        : []
+      const dismissedIdSet = new Set(dismissedIds)
+      const dismissedCount = typeof payload.dismissedCount === 'number' ? payload.dismissedCount : dismissedIds.length
+      const skippedCount = typeof payload.skippedCount === 'number'
+        ? payload.skippedCount
+        : Math.max(evidenceOnlyCandidateIds.length - dismissedCount, 0)
+
+      setCandidates((prev) => prev.filter((candidate) => !dismissedIdSet.has(candidate.id)))
+
+      if (dismissedCount > 0 && skippedCount > 0) {
+        setSuccessMessage(
+          `Dismissed ${dismissedCount} evidence-only queue item${dismissedCount === 1 ? '' : 's'}. ${skippedCount} item${skippedCount === 1 ? '' : 's'} were skipped because they were already reviewed or no longer matched.`,
+        )
+      } else if (dismissedCount > 0) {
+        setSuccessMessage(`Dismissed ${dismissedCount} evidence-only queue item${dismissedCount === 1 ? '' : 's'}.`)
+      } else {
+        setSuccessMessage(
+          `No evidence-only queue items were dismissed. ${skippedCount} item${skippedCount === 1 ? '' : 's'} were already reviewed or no longer matched.`,
+        )
+      }
+
+      router.refresh()
+    } catch (dismissError) {
+      setError(dismissError instanceof Error ? dismissError.message : 'Failed to dismiss evidence-only oracle items')
+    } finally {
+      setIsBulkDismissing(false)
     }
   }
 
@@ -1254,7 +1320,21 @@ export function AdminTrialOutcomeReview({
               Settlement items only resolve a market after admin acceptance. Evidence-only items can be dismissed without settling.
             </p>
           </div>
-          <div className="text-sm text-[#8a8075]">{visibleCandidates.length} pending</div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-[#8a8075]">{visibleCandidates.length} pending</div>
+            {visibleEvidenceOnlyCandidates.length > 0 ? (
+              <button
+                type="button"
+                disabled={isBulkDismissing}
+                onClick={() => {
+                  void dismissVisibleEvidenceOnlyCandidates()
+                }}
+                className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isBulkDismissing ? 'Dismissing...' : 'Dismiss All Evidence-Only'}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-4 space-y-4">
@@ -1320,7 +1400,7 @@ export function AdminTrialOutcomeReview({
                     <>
                       <button
                         type="button"
-                        disabled={loadingId === candidate.id}
+                        disabled={isBulkDismissing || loadingId === candidate.id}
                         onClick={() => reviewCandidate(candidate.id, 'clear_for_rerun')}
                         className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1328,7 +1408,7 @@ export function AdminTrialOutcomeReview({
                       </button>
                       <button
                         type="button"
-                        disabled={loadingId === candidate.id}
+                        disabled={isBulkDismissing || loadingId === candidate.id}
                         onClick={() => reviewCandidate(candidate.id, 'accept')}
                         className="rounded-none bg-[#3a8a2e] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2f6f24] disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1336,7 +1416,7 @@ export function AdminTrialOutcomeReview({
                       </button>
                       <button
                         type="button"
-                        disabled={loadingId === candidate.id}
+                        disabled={isBulkDismissing || loadingId === candidate.id}
                         onClick={() => reviewCandidate(candidate.id, 'reject')}
                         className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1347,7 +1427,7 @@ export function AdminTrialOutcomeReview({
                     <>
                       <button
                         type="button"
-                        disabled={loadingId === candidate.id}
+                        disabled={isBulkDismissing || loadingId === candidate.id}
                         onClick={() => reviewCandidate(candidate.id, 'clear_for_rerun')}
                         className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1355,7 +1435,7 @@ export function AdminTrialOutcomeReview({
                       </button>
                       <button
                         type="button"
-                        disabled={loadingId === candidate.id}
+                        disabled={isBulkDismissing || loadingId === candidate.id}
                         onClick={() => reviewCandidate(candidate.id, 'dismiss')}
                         className="rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                       >

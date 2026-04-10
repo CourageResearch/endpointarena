@@ -71,6 +71,8 @@ type CreateAiBatchInput = {
   apiConcurrency?: number
 }
 
+type JsonRecord = Record<string, unknown>
+
 declare global {
   // eslint-disable-next-line no-var
   var __endpointArenaAiWorkers: Map<string, Promise<void>> | undefined
@@ -79,6 +81,11 @@ declare global {
 }
 
 const ACTIVE_BATCH_STATUSES: AiBatchStatus[] = ['collecting', 'waiting', 'ready', 'clearing']
+const LEGACY_AI_MODEL_ID_RENAMES: Record<string, ModelId> = {
+  'gpt-5.2': 'gpt-5.4',
+  'grok-4': 'grok-4.1',
+  'llama-4': 'llama-4-scout',
+}
 
 const ai2Workers = globalThis.__endpointArenaAiWorkers ?? new Map<string, Promise<void>>()
 const ai2Locks = globalThis.__endpointArenaAiLocks ?? new Map<string, Promise<void>>()
@@ -102,8 +109,84 @@ function toIsoString(value: Date | string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
+function renameLegacyAiModelId(value: string): string {
+  return LEGACY_AI_MODEL_ID_RENAMES[value] ?? value
+}
+
+function renameLegacyAiTaskKey(taskKey: string): string {
+  const parts = taskKey.split(':')
+  if (parts.length < 3) return taskKey
+
+  const tail = parts[parts.length - 1]
+  if (!tail) return taskKey
+
+  const renamedTail = renameLegacyAiModelId(tail)
+  if (renamedTail === tail) return taskKey
+
+  parts[parts.length - 1] = renamedTail
+  return parts.join(':')
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function renameLegacyAiModelIdArray(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+
+  return value.map((entry) => (
+    typeof entry === 'string'
+      ? renameLegacyAiModelId(entry)
+      : entry
+  ))
+}
+
+function renameLegacyAiTaskLikeEntry(entry: unknown): unknown {
+  if (!isJsonRecord(entry)) return entry
+
+  const nextEntry: JsonRecord = { ...entry }
+
+  if (typeof nextEntry.modelId === 'string') {
+    nextEntry.modelId = renameLegacyAiModelId(nextEntry.modelId)
+  }
+
+  if (typeof nextEntry.taskKey === 'string') {
+    nextEntry.taskKey = renameLegacyAiTaskKey(nextEntry.taskKey)
+  }
+
+  return nextEntry
+}
+
+function renameLegacyAiPortfolioEntry(entry: unknown): unknown {
+  if (!isJsonRecord(entry) || typeof entry.modelId !== 'string') {
+    return entry
+  }
+
+  return {
+    ...entry,
+    modelId: renameLegacyAiModelId(entry.modelId),
+  }
+}
+
+function normalizeLegacyAiBatchState(state: Partial<AiBatchState>): Partial<AiBatchState> {
+  return {
+    ...state,
+    enabledModelIds: renameLegacyAiModelIdArray(state.enabledModelIds) as Partial<AiBatchState>['enabledModelIds'],
+    clearOrder: renameLegacyAiModelIdArray(state.clearOrder) as Partial<AiBatchState>['clearOrder'],
+    tasks: Array.isArray(state.tasks)
+      ? state.tasks.map(renameLegacyAiTaskLikeEntry) as Partial<AiBatchState>['tasks']
+      : state.tasks,
+    fills: Array.isArray(state.fills)
+      ? state.fills.map(renameLegacyAiTaskLikeEntry) as Partial<AiBatchState>['fills']
+      : state.fills,
+    portfolioStates: Array.isArray(state.portfolioStates)
+      ? state.portfolioStates.map(renameLegacyAiPortfolioEntry) as Partial<AiBatchState>['portfolioStates']
+      : state.portfolioStates,
+  }
+}
+
 function parseBatchState(row: AiBatchRow): AiBatchState {
-  const state = row.state as unknown as Partial<AiBatchState>
+  const state = normalizeLegacyAiBatchState(row.state as unknown as Partial<AiBatchState>)
   const inferredRunStartedAt = state.runStartedAt
     ?? (row.status === 'waiting' ? null : row.updatedAt.toISOString())
 
@@ -908,8 +991,15 @@ async function withTimeout<T>(
 }
 
 async function runApiTask(batchId: string, taskKey: string): Promise<void> {
+  let claimedTask = false
   const runningState = await mutateBatchState(batchId, (state) => {
     if (state.status === 'reset') return state
+    const queuedTask = state.tasks.find((task) => task.taskKey === taskKey)
+    if (!queuedTask || queuedTask.lane !== 'api' || queuedTask.status !== 'queued') {
+      return state
+    }
+
+    claimedTask = true
     return {
       ...state,
       logs: [...state.logs, buildLog(`Starting ${taskKey}.`)],
@@ -921,9 +1011,9 @@ async function runApiTask(batchId: string, taskKey: string): Promise<void> {
     }
   })
 
-  if (!runningState || runningState.status === 'reset') return
+  if (!claimedTask || !runningState || runningState.status === 'reset') return
   const task = runningState.tasks.find((entry) => entry.taskKey === taskKey)
-  if (!task || task.lane !== 'api') return
+  if (!task || task.lane !== 'api' || task.status !== 'running') return
 
   try {
     const runtimeConfig = await getMarketRuntimeConfig()
@@ -938,50 +1028,68 @@ async function runApiTask(batchId: string, taskKey: string): Promise<void> {
       `${task.modelId} decision`,
     )
 
-    const next = await mutateBatchState(batchId, (state) => ({
-      ...state,
-      logs: [...state.logs, buildLog(`${getAiModelLabel(task.modelId)} is ready on ${task.marketId}.`, 'success')],
-      tasks: state.tasks.map((entry) => (
-        entry.taskKey === taskKey
-          ? {
-              ...entry,
-              status: 'ready',
-              decision: {
-                forecast: result.decision.forecast,
-                action: result.decision.action,
-              },
-              reasoningPreview: result.decision.forecast.reasoning.slice(0, 240),
-              snapshotId: result.snapshot.id,
-              durationMs: result.snapshot.durationMs ?? null,
-              costSource: result.snapshot.costSource ?? null,
-              estimatedCostUsd: result.snapshot.estimatedCostUsd ?? null,
-              errorMessage: null,
-            }
-          : entry
-      )),
-    }))
+    let markedReady = false
+    const next = await mutateBatchState(batchId, (state) => {
+      if (state.status === 'reset') return state
+      const currentTask = state.tasks.find((entry) => entry.taskKey === taskKey)
+      if (!currentTask || currentTask.status !== 'running') {
+        return state
+      }
 
-    if (next) {
+      markedReady = true
+      return {
+        ...state,
+        logs: [...state.logs, buildLog(`${getAiModelLabel(task.modelId)} is ready on ${task.marketId}.`, 'success')],
+        tasks: state.tasks.map((entry) => (
+          entry.taskKey === taskKey
+            ? {
+                ...entry,
+                status: 'ready',
+                decision: {
+                  forecast: result.decision.forecast,
+                  action: result.decision.action,
+                },
+                reasoningPreview: result.decision.forecast.reasoning.slice(0, 240),
+                snapshotId: result.snapshot.id,
+                durationMs: result.snapshot.durationMs ?? null,
+                costSource: result.snapshot.costSource ?? null,
+                estimatedCostUsd: result.snapshot.estimatedCostUsd ?? null,
+                errorMessage: null,
+              }
+            : entry
+        )),
+      }
+    })
+
+    if (markedReady && next) {
       void continueBatchProcessing(batchId)
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown API task error'
 
-    await mutateBatchState(batchId, (state) => ({
-      ...state,
-      status: 'failed',
-      failureMessage: message,
-      logs: [...state.logs, buildLog(`${task.modelId} failed: ${message}`, 'error')],
-      tasks: state.tasks.map((entry) => (
-        entry.taskKey === taskKey
-          ? {
-              ...entry,
-              status: 'error',
-              errorMessage: message,
-            }
-          : entry
-      )),
-    }))
+    await mutateBatchState(batchId, (state) => {
+      if (state.status === 'reset') return state
+      const currentTask = state.tasks.find((entry) => entry.taskKey === taskKey)
+      if (!currentTask || currentTask.status !== 'running') {
+        return state
+      }
+
+      return {
+        ...state,
+        status: 'failed',
+        failureMessage: message,
+        logs: [...state.logs, buildLog(`${task.modelId} failed: ${message}`, 'error')],
+        tasks: state.tasks.map((entry) => (
+          entry.taskKey === taskKey
+            ? {
+                ...entry,
+                status: 'error',
+                errorMessage: message,
+              }
+            : entry
+        )),
+      }
+    })
   }
 }
 
@@ -1399,7 +1507,7 @@ export async function updateAiBatchSettings(batchId: string, input: {
 
   const batch = parseBatchState(row)
   if (batch.runStartedAt) {
-    throw new ConflictError('API concurrency is locked after Run Batch starts.')
+    throw new ConflictError('API concurrency is locked after the batch starts.')
   }
   if (isTerminalBatchStatus(batch.status)) {
     throw new ConflictError('This batch can no longer be edited.')
@@ -1545,7 +1653,12 @@ export async function importAiSubscriptionPacket(batchId: string, payload: {
     throw new NotFoundError('Batch not found after import')
   }
 
-  return parseBatchState(final)
+  const next = parseBatchState(final)
+  if (next.runStartedAt && !isTerminalBatchStatus(next.status)) {
+    void continueBatchProcessing(batchId)
+  }
+
+  return next
 }
 
 export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
@@ -1557,11 +1670,6 @@ export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
   const batch = parseBatchState(row)
   if (isTerminalBatchStatus(batch.status)) {
     throw new ConflictError('Batch is already closed.')
-  }
-
-  const missingImport = batch.tasks.find((task) => task.lane === 'subscription' && task.status === 'waiting-import')
-  if (missingImport) {
-    throw new ConflictError('Import all subscription JSON before running the batch.')
   }
 
   if (batch.tasks.length === 0) {
@@ -1578,7 +1686,13 @@ export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
       ...state,
       runStartedAt: startedAt,
       status: 'collecting',
-      logs: [...state.logs, buildLog('Batch run started by admin. API models can now execute, then the shared AMM will clear.', 'warning')],
+      logs: [
+        ...state.logs,
+        buildLog(
+          'Batch collection started by admin. API models can now execute while subscription imports continue, and the shared AMM will clear once every lane is ready.',
+          'warning',
+        ),
+      ],
     }
   })
 

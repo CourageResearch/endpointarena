@@ -56,14 +56,14 @@ const CURRENT_MODEL_PRICING: Record<ModelId, ModelPricing> = {
     assumedSearchContentInputTokens: 1200,
     outputReasoningMultiplier: 1.2,
   },
-  'gpt-5.2': {
+  'gpt-5.4': {
     inputUsdPer1MTokens: 2.5,
     outputUsdPer1MTokens: 15,
     searchUsdPerRequest: 0.01,
     assumedSearchContentInputTokens: 1200,
     outputReasoningMultiplier: 2.4,
   },
-  'grok-4': {
+  'grok-4.1': {
     inputUsdPer1MTokens: 0.2,
     outputUsdPer1MTokens: 0.5,
     searchUsdPerRequest: 0.005,
@@ -88,9 +88,9 @@ const CURRENT_MODEL_PRICING: Record<ModelId, ModelPricing> = {
     outputUsdPer1MTokens: 3.2,
     outputReasoningMultiplier: 1,
   },
-  'llama-4': {
-    inputUsdPer1MTokens: 0.11,
-    outputUsdPer1MTokens: 0.34,
+  'llama-4-scout': {
+    inputUsdPer1MTokens: 0.15,
+    outputUsdPer1MTokens: 0.6,
     outputReasoningMultiplier: 1,
   },
   'kimi-k2.5': {

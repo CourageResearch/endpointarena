@@ -73,6 +73,25 @@ function assertObject(value: unknown, message: string): asserts value is Record<
   }
 }
 
+function normalizeImportedAutomationModelId(value: string): string {
+  return value === 'gpt-5.2' ? 'gpt-5.4' : value
+}
+
+function normalizeImportedAutomationTaskKey(taskKey: string): string {
+  const parts = taskKey.split(':')
+  if (parts.length < 2) {
+    return taskKey
+  }
+
+  const tail = normalizeImportedAutomationModelId(parts[parts.length - 1] ?? '')
+  if (tail === parts[parts.length - 1]) {
+    return taskKey
+  }
+
+  parts[parts.length - 1] = tail
+  return parts.join(':')
+}
+
 function normalizeImportDecision(raw: unknown, modelId: ReturnType<typeof getDailyRunAutomationModelId>): DailyRunAutomationDecisionItem {
   assertObject(raw, 'Each imported decision must be an object')
 
@@ -82,7 +101,8 @@ function normalizeImportDecision(raw: unknown, modelId: ReturnType<typeof getDai
   if (!marketId || !trialQuestionId || !rawModelId) {
     throw new ValidationError('Each imported decision must include marketId, trialQuestionId, and modelId')
   }
-  if (rawModelId !== modelId) {
+  const normalizedRawModelId = normalizeImportedAutomationModelId(rawModelId)
+  if (normalizedRawModelId !== modelId) {
     throw new ValidationError(`Imported modelId ${rawModelId} does not match the selected automation source`)
   }
 
@@ -94,7 +114,7 @@ function normalizeImportDecision(raw: unknown, modelId: ReturnType<typeof getDai
 
   return {
     taskKey: typeof raw.taskKey === 'string' && raw.taskKey.trim().length > 0
-      ? raw.taskKey.trim()
+      ? normalizeImportedAutomationTaskKey(raw.taskKey.trim())
       : buildDailyRunAutomationTaskKey(marketId, modelId),
     marketId,
     trialQuestionId,

@@ -14,13 +14,12 @@ export const STARTER_POINTS = 5
 // All known model IDs supported by the application.
 export const ALL_MODEL_IDS = [
   'claude-opus',
-  // Keep the legacy `gpt-5.2` slot id stable so existing model state keeps mapping cleanly.
-  'gpt-5.2',
-  'grok-4',
+  'gpt-5.4',
+  'grok-4.1',
   'gemini-3-pro',
   'deepseek-v3.2',
   'glm-5',
-  'llama-4',
+  'llama-4-scout',
   'kimi-k2.5',
   'minimax-m2.5',
 ] as const
@@ -75,14 +74,14 @@ export const MODEL_INFO: Record<ModelId, {
     provider: 'Anthropic',
     features: ['Web Search', 'Extended Thinking'],
   },
-  'gpt-5.2': {
+  'gpt-5.4': {
     name: 'GPT-5.4',
     fullName: 'GPT-5.4',
     color: '#C9A227',
     provider: 'OpenAI',
     features: ['Web Search', 'Reasoning'],
   },
-  'grok-4': {
+  'grok-4.1': {
     name: 'Grok',
     fullName: 'Grok 4.1',
     color: '#2D7CF6',
@@ -110,12 +109,11 @@ export const MODEL_INFO: Record<ModelId, {
     provider: 'Fireworks',
     features: ['Reasoning', 'Long Context'],
   },
-  // Keep the legacy `llama-4` slot id stable so existing model state keeps mapping cleanly.
-  'llama-4': {
+  'llama-4-scout': {
     name: 'Llama',
     fullName: 'Llama 4 Scout',
     color: '#2E7D32',
-    provider: 'Groq (Meta)',
+    provider: 'Fireworks',
     features: ['Fast Inference', 'Reasoning'],
   },
   'kimi-k2.5': {
@@ -174,12 +172,12 @@ export function getDaysUntil(date: Date | string): number {
 // Model names by full ID
 export const MODEL_NAMES: Record<ModelId, string> = {
   'claude-opus': 'Claude Opus 4.6',
-  'gpt-5.2': 'GPT-5.4',
-  'grok-4': 'Grok 4.1',
+  'gpt-5.4': 'GPT-5.4',
+  'grok-4.1': 'Grok 4.1',
   'gemini-3-pro': 'Gemini 3 Pro',
   'deepseek-v3.2': 'DeepSeek V3.2',
   'glm-5': 'GLM 5',
-  'llama-4': 'Llama 4 Scout',
+  'llama-4-scout': 'Llama 4 Scout',
   'kimi-k2.5': 'Kimi K2.5',
   'minimax-m2.5': 'MiniMax M2.5',
 }

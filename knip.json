@@ -18,6 +18,7 @@
     "scripts/import-manual-trial-outcomes.ts",
     "scripts/reset-local-trial-monitor.ts",
     "scripts/report-public-sponsor-coverage.ts",
+    "scripts/sync-ai-batches-to-prod.ts",
     "scripts/sync-clinicaltrials-gov.ts",
     "scripts/wipe-local-trial-monitor.ts",
     "lib/admin-ai-row-costs.ts",
