@@ -472,19 +472,25 @@ function serializeBatchState(state: AiBatchState): Record<string, unknown> {
 }
 
 async function getBatchRowById(batchId: string): Promise<AiBatchRow | null> {
-  return (await db.query.aiBatches.findFirst({
-    where: eq(aiBatches.id, batchId),
-  })) ?? null
+  const rows = await db.select()
+    .from(aiBatches)
+    .where(eq(aiBatches.id, batchId))
+    .limit(1)
+
+  return rows[0] ?? null
 }
 
 async function getLatestVisibleBatch(dataset: AiDataset): Promise<AiBatchState | null> {
-  const row = await db.query.aiBatches.findFirst({
-    where: and(
+  const rows = await db.select()
+    .from(aiBatches)
+    .where(and(
       eq(aiBatches.dataset, dataset),
       inArray(aiBatches.status, ['collecting', 'waiting', 'ready', 'clearing', 'cleared', 'failed']),
-    ),
-    orderBy: [desc(aiBatches.updatedAt), desc(aiBatches.createdAt)],
-  })
+    ))
+    .orderBy(desc(aiBatches.updatedAt), desc(aiBatches.createdAt))
+    .limit(1)
+
+  const row = rows[0]
 
   return row ? parseBatchState(row) : null
 }
@@ -1312,10 +1318,12 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
     }
   }
 
-  const existing = await db.query.aiBatches.findFirst({
-    where: inArray(aiBatches.status, ACTIVE_BATCH_STATUSES),
-    orderBy: [desc(aiBatches.updatedAt)],
-  })
+  const existingRows = await db.select()
+    .from(aiBatches)
+    .where(inArray(aiBatches.status, ACTIVE_BATCH_STATUSES))
+    .orderBy(desc(aiBatches.updatedAt))
+    .limit(1)
+  const existing = existingRows[0]
   if (existing) {
     throw new ConflictError('An /admin/ai batch is already active. Reset it before opening a new one.')
   }
