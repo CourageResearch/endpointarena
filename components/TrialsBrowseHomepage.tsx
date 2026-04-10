@@ -35,7 +35,7 @@ type MarketCardEntry = {
 }
 
 type MarketBrowseTab = 'upcoming' | 'resolved'
-type UpcomingSortMode = 'earliest' | 'latest' | 'controversial' | 'volume' | 'move'
+type UpcomingSortMode = 'earliest' | 'latest' | 'controversial' | 'volume'
 type HeaderLinkPlacement = 'header' | 'footer' | 'both'
 type MarketTableSortKey = 'market' | 'primaryCompletion' | 'resolvedAt' | 'outcome' | 'yes' | 'no' | 'volume' | 'aiYes' | 'aiNo'
 type MarketTableSortDirection = 'asc' | 'desc'
@@ -84,7 +84,6 @@ const UPCOMING_SORT_OPTIONS: ReadonlyArray<{ value: UpcomingSortMode; label: str
   { value: 'latest', label: 'Latest date' },
   { value: 'controversial', label: 'Most controversial' },
   { value: 'volume', label: 'Highest volume' },
-  { value: 'move', label: 'Biggest move' },
 ]
 
 function isLocalhostHostname(hostname: string) {
@@ -192,10 +191,6 @@ function compareUpcomingEntries(a: MarketCardEntry, b: MarketCardEntry, sortMode
     case 'volume':
       if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
       if (b.commentsCount !== a.commentsCount) return b.commentsCount - a.commentsCount
-      return compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
-    case 'move':
-      if (b.absMove !== a.absMove) return b.absMove - a.absMove
-      if (b.volumeUsd !== a.volumeUsd) return b.volumeUsd - a.volumeUsd
       return compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
     default: {
       const dateComparison = compareUpcomingDays(a.daysUntil, b.daysUntil, 'asc')
@@ -590,6 +585,7 @@ function MarketTable({
   headerLinkLabel,
   headerLinkPlacement = 'header',
   maxRows,
+  pageSize,
   searchControl,
   emptyMessage,
   heading,
@@ -604,6 +600,7 @@ function MarketTable({
   headerLinkLabel?: string
   headerLinkPlacement?: HeaderLinkPlacement
   maxRows?: number
+  pageSize?: number
   searchControl?: ReactNode
   emptyMessage?: string
   heading?: string
@@ -613,6 +610,7 @@ function MarketTable({
 }) {
   const router = useRouter()
   const [sortState, setSortState] = useState<MarketTableSortState>(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const tableRows = useMemo(() => {
     return entries.map((entry) => {
@@ -634,9 +632,17 @@ function MarketTable({
     return sortState ? sortMarketTableRows(tableRows, sortState, tab) : tableRows
   }, [sortState, tab, tableRows])
 
+  const effectivePageSize = typeof pageSize === 'number' && pageSize > 0 ? pageSize : null
+  const pageCount = effectivePageSize ? Math.max(1, Math.ceil(sortedRows.length / effectivePageSize)) : 1
+
   const visibleRows = useMemo(() => {
+    if (effectivePageSize) {
+      const startIndex = (currentPage - 1) * effectivePageSize
+      return sortedRows.slice(startIndex, startIndex + effectivePageSize)
+    }
+
     return typeof maxRows === 'number' ? sortedRows.slice(0, maxRows) : sortedRows
-  }, [maxRows, sortedRows])
+  }, [currentPage, effectivePageSize, maxRows, sortedRows])
 
   function handleSort(nextKey: MarketTableSortKey) {
     setSortState((current) => {
@@ -658,6 +664,15 @@ function MarketTable({
     setSortState(null)
   }, [sortResetKey, tab])
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [entries, effectivePageSize, tab])
+
+  useEffect(() => {
+    if (currentPage <= pageCount) return
+    setCurrentPage(pageCount)
+  }, [currentPage, pageCount])
+
   function navigateToMarket(href: string) {
     router.push(href)
   }
@@ -672,6 +687,9 @@ function MarketTable({
   const resolvedHeaderLinkHref = headerLinkHref ?? null
   const showHeaderLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'header' || headerLinkPlacement === 'both')
   const showFooterLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'footer' || headerLinkPlacement === 'both')
+  const visibleRowCount = effectivePageSize ? sortedRows.length : visibleRows.length
+  const paginationStartRow = effectivePageSize ? (currentPage - 1) * effectivePageSize + 1 : 0
+  const paginationEndRow = effectivePageSize ? Math.min(currentPage * effectivePageSize, sortedRows.length) : 0
 
   return (
     <section className="mt-10">
@@ -685,7 +703,7 @@ function MarketTable({
           </div>
 
           <div className="flex items-center gap-4 text-xs text-[#b5aa9e] sm:ml-auto sm:shrink-0">
-            {showRowCount ? <span>{visibleRows.length} rows</span> : null}
+            {showRowCount ? <span>{visibleRowCount} rows</span> : null}
             {showHeaderLink && resolvedHeaderLinkHref ? (
               <Link href={resolvedHeaderLinkHref} className="hover:text-[#1a1a1a] transition-colors">
                 {headerLinkLabel}
@@ -893,6 +911,36 @@ function MarketTable({
           </div>
         )}
       </div>
+
+      {effectivePageSize && sortedRows.length > 0 ? (
+        <div className="mt-5 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-[12px] text-[#8a8075]">
+            Showing {paginationStartRow}-{paginationEndRow} of {sortedRows.length.toLocaleString('en-US')}
+          </div>
+
+          <div className="flex items-center gap-4 sm:gap-6">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage <= 1}
+              className="inline-flex min-w-[8.5rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-4 py-3 text-[13px] text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:bg-[#fbf7f1] disabled:text-[#c4b7a8]"
+            >
+              Previous
+            </button>
+            <div className="min-w-[7.5rem] text-center text-[13px] text-[#8a8075]">
+              Page {currentPage} of {pageCount}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+              disabled={currentPage >= pageCount}
+              className="inline-flex min-w-[8.5rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-4 py-3 text-[13px] text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:bg-[#fbf7f1] disabled:text-[#c4b7a8]"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {showFooterLink && resolvedHeaderLinkHref ? (
         <div className="pt-3 text-right text-xs text-[#b5aa9e]">
@@ -1169,7 +1217,12 @@ export function TrialsBrowseHomepage({
             ))}
           </select>
         </div>
-      ) : null}
+      ) : (
+        <div
+          aria-hidden="true"
+          className="hidden min-w-0 flex-1 sm:block"
+        />
+      )}
     </div>
   ) : undefined
 
@@ -1184,11 +1237,11 @@ export function TrialsBrowseHomepage({
             ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:[background:linear-gradient(90deg,_#EF6F67,_#5DBB63,_#D39D2E,_#5BA5ED)]'
             : 'text-[#9d9184] hover:text-[#3a342d]',
         )}
-      >
-        <span className={cn('tracking-[0.1em]', selectedTab === 'upcoming' ? 'text-[11px]' : 'text-[10px]')}>
-          Upcoming
-        </span>
-      </button>
+        >
+          <span className={cn('tracking-[0.1em]', selectedTab === 'upcoming' ? 'text-[11px]' : 'text-[10px]')}>
+            Open
+          </span>
+        </button>
       <button
         type="button"
         onClick={() => handleTabChange('resolved')}
@@ -1207,8 +1260,6 @@ export function TrialsBrowseHomepage({
   ) : undefined
 
   if (variant === 'table') {
-    const tableMaxRows = normalizedSearchQuery.length > 0 ? undefined : initialTableMaxRows
-
     return (
       <div className="space-y-4">
         <MarketTable
@@ -1218,7 +1269,7 @@ export function TrialsBrowseHomepage({
           headerLinkHref={headerLinkHref}
           headerLinkLabel={headerLinkLabel}
           headerLinkPlacement={headerLinkPlacement}
-          maxRows={tableMaxRows}
+          pageSize={initialTableMaxRows}
           searchControl={tableSearchControl}
           heading={PHASE_2_TRIALS_HEADING}
           headerTabs={tableStatusTabs}

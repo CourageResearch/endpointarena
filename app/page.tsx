@@ -12,13 +12,33 @@ export const metadata: Metadata = buildPageMetadata({
   path: '/',
 })
 
-export default async function Page() {
+type PageSearchParams = {
+  tab?: string | string[]
+}
+
+function firstSearchParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<PageSearchParams>
+}) {
+  const resolvedSearchParams = (await searchParams) ?? {}
+  const initialStatusTab = firstSearchParam(resolvedSearchParams.tab)
   const initialTrialOverview = createBrowseTrialsOverviewPayload(
-    await getTrialsOverviewData(),
+    await getTrialsOverviewData({ includeResolved: true }),
   )
   if (!initialTrialOverview) {
     throw new Error('Homepage trials overview payload was unexpectedly empty.')
   }
 
-  return <HomePageContent initialTrialOverview={initialTrialOverview} />
+  return (
+    <HomePageContent
+      initialStatusTab={initialStatusTab}
+      initialTrialOverview={initialTrialOverview}
+    />
+  )
 }

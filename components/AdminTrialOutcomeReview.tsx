@@ -48,10 +48,13 @@ type Candidate = {
   }>
 }
 
+type TrialMonitorQuestionSelection = 'eligible_queue' | 'all_open_trials' | 'specific_nct'
+
 type RunRow = {
   id: string
   triggerSource: 'cron' | 'manual'
   status: 'running' | 'completed' | 'failed' | 'paused'
+  questionSelection: TrialMonitorQuestionSelection
   verifierModelLabel: string
   scopedNctNumber: string | null
   questionsScanned: number
@@ -114,6 +117,7 @@ type TrialMonitorRunResult = {
   executed: boolean
   reason?: 'disabled' | 'not_due'
   status?: 'completed' | 'paused'
+  questionSelection?: TrialMonitorQuestionSelection
   questionsScanned: number
   candidatesCreated: number
   errors: string[]
@@ -273,6 +277,23 @@ function isSettlementCandidate(candidate: Candidate): boolean {
   return candidate.proposedOutcome === 'YES' || candidate.proposedOutcome === 'NO'
 }
 
+function compareCandidatesForReview(left: Candidate, right: Candidate): number {
+  const leftSettlement = isSettlementCandidate(left)
+  const rightSettlement = isSettlementCandidate(right)
+
+  if (leftSettlement !== rightSettlement) {
+    return leftSettlement ? -1 : 1
+  }
+
+  const leftCreatedAt = new Date(left.createdAt).getTime()
+  const rightCreatedAt = new Date(right.createdAt).getTime()
+  if (Number.isFinite(leftCreatedAt) && Number.isFinite(rightCreatedAt) && leftCreatedAt !== rightCreatedAt) {
+    return rightCreatedAt - leftCreatedAt
+  }
+
+  return left.trial.shortTitle.localeCompare(right.trial.shortTitle)
+}
+
 function getCandidateBadge(candidate: Candidate): { label: string; className: string } {
   if (candidate.proposedOutcome === 'YES') {
     return {
@@ -291,6 +312,35 @@ function getCandidateBadge(candidate: Candidate): { label: string; className: st
   return {
     label: 'NO DECISION / EVIDENCE ONLY',
     className: 'bg-[#D39D2E]/10 text-[#8b6b21]',
+  }
+}
+
+function getRunSelectionLabel(input: {
+  questionSelection?: TrialMonitorQuestionSelection
+  scopedNctNumber?: string | null
+}): string {
+  if (input.scopedNctNumber) {
+    return `One-off run for ${input.scopedNctNumber}`
+  }
+
+  switch (input.questionSelection) {
+    case 'all_open_trials':
+      return 'All-open-trials run'
+    case 'specific_nct':
+      return 'One-off run'
+    default:
+      return 'Eligible-queue run'
+  }
+}
+
+function getRunSelectionBadgeLabel(questionSelection: TrialMonitorQuestionSelection): string {
+  switch (questionSelection) {
+    case 'all_open_trials':
+      return 'All Open Trials'
+    case 'specific_nct':
+      return 'Specific NCT'
+    default:
+      return 'Eligible Queue'
   }
 }
 
@@ -434,9 +484,10 @@ export function AdminTrialOutcomeReview({
   const activeConfigSaveRef = useRef<Promise<void> | null>(null)
   const autoRunHandledRef = useRef(false)
   const scopedViewNctNumber = parseScopedNctNumber(initialScopedNctNumber ?? '')
-  const visibleCandidates = scopedViewNctNumber
+  const visibleCandidates = [...(scopedViewNctNumber
     ? candidates.filter((candidate) => matchesScopedNctNumber(candidate.trial.nctNumber, scopedViewNctNumber))
-    : candidates
+    : candidates)]
+    .sort(compareCandidatesForReview)
   const visibleRuns = scopedViewNctNumber
     ? runs.filter((run) => matchesScopedNctNumber(run.scopedNctNumber, scopedViewNctNumber))
     : runs
@@ -490,9 +541,10 @@ export function AdminTrialOutcomeReview({
   }, [isRunActive])
 
   const formatRunResult = (result: TrialMonitorRunResult): string => {
-    const runLabel = result.scopedNctNumber
-      ? `One-off run for ${result.scopedNctNumber}`
-      : 'Run'
+    const runLabel = getRunSelectionLabel({
+      questionSelection: result.questionSelection,
+      scopedNctNumber: result.scopedNctNumber ?? null,
+    })
 
     if (!result.executed) {
       if (result.reason === 'disabled') {
@@ -609,15 +661,26 @@ export function AdminTrialOutcomeReview({
     }
   }, [configStatusTone, form, isSavingConfig, lastSavedConfigSignature, router])
 
-  const runMonitor = async (options: { nctNumber?: string | null } = {}) => {
+  const runMonitor = async (options: {
+    questionSelection?: TrialMonitorQuestionSelection
+    nctNumber?: string | null
+  } = {}) => {
     setError(null)
     setSuccessMessage(null)
     setRunMessage(null)
 
     try {
       const normalizedScopedNctNumber = parseScopedNctNumber(options.nctNumber ?? '')
+      const questionSelection = options.questionSelection ?? (normalizedScopedNctNumber ? 'specific_nct' : 'eligible_queue')
+
       if (options.nctNumber && !normalizedScopedNctNumber) {
         throw new Error('Use an NCT number like NCT01234567 for a one-off run.')
+      }
+      if (questionSelection === 'specific_nct' && !normalizedScopedNctNumber) {
+        throw new Error('Use an NCT number like NCT01234567 for a one-off run.')
+      }
+      if (questionSelection !== 'specific_nct' && normalizedScopedNctNumber) {
+        throw new Error('NCT numbers are only used for one-off runs.')
       }
 
       const validationMessage = getConfigValidationMessage(form)
@@ -646,7 +709,8 @@ export function AdminTrialOutcomeReview({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           force: true,
-          nctNumber: normalizedScopedNctNumber ?? undefined,
+          scope: questionSelection,
+          nctNumber: questionSelection === 'specific_nct' ? normalizedScopedNctNumber ?? undefined : undefined,
         }),
       })
       const payload = await response.json().catch(() => ({}))
@@ -666,7 +730,7 @@ export function AdminTrialOutcomeReview({
   const triggerScopedAutoRun = useEffectEvent(async (nctNumber: string) => {
     setScopedNctNumber(nctNumber)
     router.replace(`/admin/outcomes?nct=${encodeURIComponent(nctNumber)}`)
-    await runMonitor({ nctNumber })
+    await runMonitor({ questionSelection: 'specific_nct', nctNumber })
   })
 
   useEffect(() => {
@@ -819,7 +883,11 @@ export function AdminTrialOutcomeReview({
                 {isPauseRequested
                   ? 'Pause requested. The monitor is finishing any in-flight trial checks before it halts.'
                   : activeRun
-                    ? `${activeRun.scopedNctNumber ? `Scoped to ${activeRun.scopedNctNumber}. ` : ''}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
+                    ? `${activeRun.scopedNctNumber
+                      ? `Scoped to ${activeRun.scopedNctNumber}. `
+                      : activeRun.questionSelection === 'all_open_trials'
+                        ? 'Running across all open trials. '
+                        : 'Running across the current eligible queue. '}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
                   : 'Starting the monitor run and waiting for the first heartbeat from the server.'}
               </p>
               <p className="mt-2 text-xs text-[#5b7ea6]">
@@ -1015,23 +1083,23 @@ export function AdminTrialOutcomeReview({
             )}
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-3">
             <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
               <div className="flex h-full flex-col gap-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Full Run</div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Eligible Queue</div>
                   <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-                    Run the full Phase 2 oracle monitor across the current eligible queue.
+                    Scan only the trials that are currently due under the lookahead and overdue recheck rules.
                   </p>
                 </div>
                 <div className="mt-auto space-y-2">
                   <button
                     type="button"
-                    onClick={() => void runMonitor()}
+                    onClick={() => void runMonitor({ questionSelection: 'eligible_queue' })}
                     disabled={isRunActive || isSavingConfig}
                     className="w-full rounded-none bg-[#1a1a1a] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run Full Monitor'}
+                    {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run Eligible Queue'}
                   </button>
                   {isRunActive ? (
                     <button
@@ -1044,6 +1112,25 @@ export function AdminTrialOutcomeReview({
                     </button>
                   ) : null}
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
+              <div className="flex h-full flex-col gap-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">All Open Trials</div>
+                  <p className="mt-1 text-xs leading-5 text-[#8a8075]">
+                    Bypass the queue filters and scan every open trial with a live pending outcome question.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runMonitor({ questionSelection: 'all_open_trials' })}
+                  disabled={isRunActive || isSavingConfig}
+                  className="mt-auto w-full rounded-none border border-[#1a1a1a] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Run All Open Trials
+                </button>
               </div>
             </div>
 
@@ -1070,7 +1157,7 @@ export function AdminTrialOutcomeReview({
                   />
                   <button
                     type="button"
-                    onClick={() => void runMonitor({ nctNumber: scopedNctNumber })}
+                    onClick={() => void runMonitor({ questionSelection: 'specific_nct', nctNumber: scopedNctNumber })}
                     disabled={isRunActive || isSavingConfig || !parseScopedNctNumber(scopedNctNumber)}
                     className="rounded-none border border-[#d9cdbf] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -1131,7 +1218,7 @@ export function AdminTrialOutcomeReview({
                       type="button"
                       onClick={() => {
                         setScopedNctNumber(normalizedQuestionNctNumber)
-                        void runMonitor({ nctNumber: normalizedQuestionNctNumber })
+                        void runMonitor({ questionSelection: 'specific_nct', nctNumber: normalizedQuestionNctNumber })
                       }}
                       disabled={isRunActive || isSavingConfig}
                       className="rounded-none border border-[#d9cdbf] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
@@ -1306,6 +1393,9 @@ export function AdminTrialOutcomeReview({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-none border border-[#e8ddd0] bg-[#F5F2ED] px-2 py-1 text-xs font-medium text-[#5f564c]">
                       {run.triggerSource === 'manual' ? 'Manual' : 'Scheduled'}
+                    </span>
+                    <span className="rounded-none border border-[#d8ccb9] bg-[#fffdf9] px-2 py-1 text-xs font-medium text-[#7a7065]">
+                      {getRunSelectionBadgeLabel(run.questionSelection)}
                     </span>
                     {run.scopedNctNumber ? (
                       <span className="rounded-none border border-[#d8ccb9] bg-[#fffdf9] px-2 py-1 text-xs font-medium text-[#7a7065]">

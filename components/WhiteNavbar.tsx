@@ -11,7 +11,6 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home' },
-  { href: '/trials', label: 'Trials' },
   { href: '/leaderboard', label: 'Leaderboard' },
   { href: '/method', label: 'Methodology' },
 ]
@@ -22,7 +21,7 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminUser = Boolean(session?.user?.email && session.user.email === ADMIN_EMAIL)
-  const safeCallback = encodeURIComponent(pathname || '/trials')
+  const safeCallback = encodeURIComponent(pathname || '/')
   const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
   const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Sign up'
   const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null

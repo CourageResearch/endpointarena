@@ -5,8 +5,11 @@ import { createRequestId, errorResponse, parseOptionalJsonBody, successResponse 
 import { ValidationError } from '@/lib/errors'
 import { runTrialMonitor } from '@/lib/trial-monitor'
 
+const VALID_RUN_SCOPES = new Set(['eligible_queue', 'all_open_trials', 'specific_nct'] as const)
+
 type RequestBody = {
   force?: boolean
+  scope?: 'eligible_queue' | 'all_open_trials' | 'specific_nct'
   nctNumber?: string
 }
 
@@ -20,6 +23,9 @@ export async function POST(request: NextRequest) {
     if (body.force !== undefined && typeof body.force !== 'boolean') {
       throw new ValidationError('force must be a boolean when provided')
     }
+    if (body.scope !== undefined && !VALID_RUN_SCOPES.has(body.scope)) {
+      throw new ValidationError('scope must be one of eligible_queue, all_open_trials, or specific_nct')
+    }
     if (body.nctNumber !== undefined && typeof body.nctNumber !== 'string') {
       throw new ValidationError('nctNumber must be a string when provided')
     }
@@ -27,6 +33,7 @@ export async function POST(request: NextRequest) {
     const result = await runTrialMonitor({
       triggerSource: 'manual',
       force: body.force ?? true,
+      questionSelection: body.scope,
       nctNumber: body.nctNumber,
     })
 

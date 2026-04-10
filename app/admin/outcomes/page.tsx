@@ -16,6 +16,8 @@ import {
 
 export const dynamic = 'force-dynamic'
 
+type TrialMonitorQuestionSelection = 'eligible_queue' | 'all_open_trials' | 'specific_nct'
+
 function extractVerifierModelLabelFromRunDebugLog(debugLog: string | null | undefined): string {
   if (typeof debugLog !== 'string' || debugLog.trim().length === 0) {
     return 'Unknown model'
@@ -41,6 +43,23 @@ function extractScopedNctNumberFromRunDebugLog(debugLog: string | null | undefin
 
   const nctMatch = debugLog.match(/"scopedNctNumber":\s*"([^"]+)"/)
   return nctMatch?.[1] ?? null
+}
+
+function extractQuestionSelectionFromRunDebugLog(debugLog: string | null | undefined): TrialMonitorQuestionSelection | null {
+  if (typeof debugLog !== 'string' || debugLog.trim().length === 0) {
+    return null
+  }
+
+  const selectionMatch = debugLog.match(/"questionSelection":\s*"([^"]+)"/)
+  if (
+    selectionMatch?.[1] === 'eligible_queue' ||
+    selectionMatch?.[1] === 'all_open_trials' ||
+    selectionMatch?.[1] === 'specific_nct'
+  ) {
+    return selectionMatch[1]
+  }
+
+  return null
 }
 
 function parseScopedNctSearchParam(value: string | string[] | undefined): string | null {
@@ -74,6 +93,17 @@ function getRunScopedNctNumber(input: {
   debugLog: string | null | undefined
 }): string | null {
   return input.scopedNctNumber ?? extractScopedNctNumberFromRunDebugLog(input.debugLog)
+}
+
+function getRunQuestionSelection(input: {
+  scopedNctNumber: string | null
+  debugLog: string | null | undefined
+}): TrialMonitorQuestionSelection {
+  if (input.scopedNctNumber) {
+    return 'specific_nct'
+  }
+
+  return extractQuestionSelectionFromRunDebugLog(input.debugLog) ?? 'eligible_queue'
 }
 
 export default async function AdminOutcomesPage({
@@ -162,6 +192,10 @@ export default async function AdminOutcomesPage({
           id: run.id,
           triggerSource: run.triggerSource as 'cron' | 'manual',
           status: run.status as 'running' | 'completed' | 'failed' | 'paused',
+          questionSelection: getRunQuestionSelection({
+            scopedNctNumber: run.scopedNctNumber,
+            debugLog: run.debugLog,
+          }),
           verifierModelLabel: getRunVerifierModelLabel({
             verifierModelKey: run.verifierModelKey,
             debugLog: run.debugLog,

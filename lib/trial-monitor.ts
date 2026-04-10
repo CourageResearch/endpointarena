@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, like, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, like, ne, or, sql } from 'drizzle-orm'
 import Anthropic from '@anthropic-ai/sdk'
 import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
 import {
   db,
   phase2Trials,
+  predictionMarkets,
   trialMonitorRuns,
   trialOutcomeCandidateEvidence,
   trialOutcomeCandidates,
@@ -15,7 +16,7 @@ import { resolveMarketForTrialQuestion } from '@/lib/markets/engine'
 import { buildTrialOutcomeEvidenceHash } from '@/lib/trial-outcome-candidate-hash'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 import { getTrialMonitorConfig, type TrialMonitorConfig } from '@/lib/trial-monitor-config'
-import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
+import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import {
   ensureTrialMonitorVerifierConfigured,
   getTrialMonitorVerifierSpec,
@@ -48,7 +49,7 @@ type CandidateOutcome = 'YES' | 'NO' | 'NO_DECISION'
 type MonitorDebugStage = 'verifier' | 'run'
 type MonitorDebugLevel = 'info' | 'warn' | 'error'
 type MonitorDebugAttempt = 'initial' | 'retry'
-type TrialMonitorQuestionSelection = 'eligible_queue' | 'specific_nct'
+export type TrialMonitorQuestionSelection = 'eligible_queue' | 'all_open_trials' | 'specific_nct'
 type SourceExtractionMethod =
   | 'openai_web_search_sources'
   | 'xai_web_search_sources'
@@ -101,7 +102,7 @@ function compareTrialMonitorQuestionsByPriority(left: TrialQuestionWithTrial, ri
 }
 
 async function listMonitorableTrialOutcomeQuestionsInternal(): Promise<TrialQuestionWithTrial[]> {
-  return await db.query.trialQuestions.findMany({
+  const questions = await db.query.trialQuestions.findMany({
     where: and(
       eq(trialQuestions.status, 'live'),
       eq(trialQuestions.isBettable, true),
@@ -112,6 +113,46 @@ async function listMonitorableTrialOutcomeQuestionsInternal(): Promise<TrialQues
     },
     orderBy: [asc(trialQuestions.sortOrder), asc(trialQuestions.createdAt)],
   }) as TrialQuestionWithTrial[]
+
+  return filterSupportedTrialQuestions(questions)
+}
+
+async function listAllOpenTrialOutcomeQuestionsInternal(): Promise<TrialQuestionWithTrial[]> {
+  const openMarkets = await db.query.predictionMarkets.findMany({
+    where: and(
+      eq(predictionMarkets.status, 'OPEN'),
+      isNotNull(predictionMarkets.trialQuestionId),
+    ),
+    columns: {
+      trialQuestionId: true,
+    },
+    orderBy: [asc(predictionMarkets.openedAt), asc(predictionMarkets.id)],
+  })
+
+  const questionIds = Array.from(new Set(
+    openMarkets
+      .map((market) => market.trialQuestionId)
+      .filter((value): value is string => Boolean(value)),
+  ))
+
+  if (questionIds.length === 0) {
+    return []
+  }
+
+  const questions = await db.query.trialQuestions.findMany({
+    where: and(
+      inArray(trialQuestions.id, questionIds),
+      eq(trialQuestions.status, 'live'),
+      eq(trialQuestions.isBettable, true),
+      eq(trialQuestions.outcome, 'Pending'),
+    ),
+    with: {
+      trial: true,
+    },
+    orderBy: [asc(trialQuestions.sortOrder), asc(trialQuestions.createdAt)],
+  }) as TrialQuestionWithTrial[]
+
+  return filterSupportedTrialQuestions(questions)
 }
 
 async function getEligibleTrialOutcomeQuestionsInternal(config: Awaited<ReturnType<typeof getTrialMonitorConfig>>): Promise<TrialQuestionWithTrial[]> {
@@ -186,6 +227,7 @@ export type TrialMonitorRunResult = {
   reason?: 'disabled' | 'not_due'
   status?: 'completed' | 'paused'
   runId?: string
+  questionSelection?: TrialMonitorQuestionSelection
   questionsScanned: number
   candidatesCreated: number
   nextEligibleAt?: string
@@ -1582,16 +1624,28 @@ export async function listEligibleTrialOutcomeQuestionsForManualResearch(): Prom
 export async function runTrialMonitor(input: {
   triggerSource: MonitorTriggerSource
   force?: boolean
+  questionSelection?: TrialMonitorQuestionSelection
   nctNumber?: string | null
 }): Promise<TrialMonitorRunResult> {
   const config = await getTrialMonitorConfig()
   const processingConcurrency = getTrialMonitorRunConcurrency(config, input.triggerSource)
   const scopedNctNumber = normalizeScopedTrialMonitorNctNumber(input.nctNumber ?? null)
-  const questionSelection: TrialMonitorQuestionSelection = scopedNctNumber ? 'specific_nct' : 'eligible_queue'
+  const requestedQuestionSelection = input.questionSelection ?? (scopedNctNumber ? 'specific_nct' : 'eligible_queue')
+  if (requestedQuestionSelection === 'specific_nct' && !scopedNctNumber) {
+    throw new ValidationError('nctNumber is required when questionSelection is specific_nct')
+  }
+  if (requestedQuestionSelection !== 'specific_nct' && scopedNctNumber && input.questionSelection !== undefined) {
+    throw new ValidationError('nctNumber can only be used when questionSelection is specific_nct')
+  }
+
+  const questionSelection: TrialMonitorQuestionSelection = scopedNctNumber
+    ? 'specific_nct'
+    : requestedQuestionSelection
   if (!config.enabled) {
     return {
       executed: false,
       reason: 'disabled',
+      questionSelection,
       questionsScanned: 0,
       candidatesCreated: 0,
       scopedNctNumber: scopedNctNumber ?? undefined,
@@ -1616,6 +1670,7 @@ export async function runTrialMonitor(input: {
         return {
           executed: false,
           reason: 'not_due',
+          questionSelection,
           questionsScanned: 0,
           candidatesCreated: 0,
           nextEligibleAt: nextEligibleAt.toISOString(),
@@ -1628,7 +1683,9 @@ export async function runTrialMonitor(input: {
 
   const questionsToScan = scopedNctNumber
     ? await getScopedTrialOutcomeQuestionsInternal(scopedNctNumber)
-    : await getEligibleTrialOutcomeQuestionsInternal(config)
+    : questionSelection === 'all_open_trials'
+      ? (await listAllOpenTrialOutcomeQuestionsInternal()).sort(compareTrialMonitorQuestionsByPriority)
+      : await getEligibleTrialOutcomeQuestionsInternal(config)
 
   if (scopedNctNumber && questionsToScan.length === 0) {
     throw new NotFoundError(`No live pending outcome question was found for ${scopedNctNumber}`)
@@ -1793,6 +1850,7 @@ export async function runTrialMonitor(input: {
         executed: true,
         status: 'paused',
         runId: run.id,
+        questionSelection,
         questionsScanned,
         candidatesCreated,
         scopedNctNumber: scopedNctNumber ?? undefined,
@@ -1823,6 +1881,7 @@ export async function runTrialMonitor(input: {
       executed: true,
       status: 'completed',
       runId: run.id,
+      questionSelection,
       questionsScanned,
       candidatesCreated,
       scopedNctNumber: scopedNctNumber ?? undefined,

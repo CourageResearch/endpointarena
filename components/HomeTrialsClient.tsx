@@ -9,6 +9,7 @@ export function HomeTrialsClient({
   headerLinkHref,
   headerLinkLabel,
   initialOverview,
+  initialStatusTab,
   initialTypeFilter,
   variant,
 }: {
@@ -16,21 +17,25 @@ export function HomeTrialsClient({
   headerLinkHref?: string
   headerLinkLabel?: string
   initialOverview: OverviewResponse
+  initialStatusTab?: string | null
   initialTypeFilter?: string | null
   variant?: 'full' | 'table'
 }) {
   return (
     <Suspense fallback={null}>
       <TrialsBrowseHomepage
+        includeResolved
         autoRefresh={false}
         detailBasePath={detailBasePath}
         headerLinkHref={headerLinkHref}
         headerLinkLabel={headerLinkLabel}
-        headerLinkPlacement="both"
+        headerLinkPlacement="header"
         initialOverview={initialOverview}
+        initialStatusTab={initialStatusTab}
         initialTypeFilter={initialTypeFilter}
-        initialTableMaxRows={5}
+        initialTableMaxRows={10}
         showSearchControl
+        showStatusTabs
         showRowCount={false}
         variant={variant}
       />

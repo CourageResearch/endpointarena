@@ -29,8 +29,10 @@ function HeroGradientStem() {
 
 export function HomePageContent({
   initialTrialOverview,
+  initialStatusTab,
 }: {
   initialTrialOverview: OverviewResponse
+  initialStatusTab?: string | null
 }) {
   return (
     <PageFrame>
@@ -76,9 +78,8 @@ export function HomePageContent({
         <section className="mb-16">
           <HomeTrialsClient
             detailBasePath="/trials"
-            headerLinkHref="/trials"
-            headerLinkLabel="View all trials ->"
             initialOverview={initialTrialOverview}
+            initialStatusTab={initialStatusTab}
             variant="table"
           />
         </section>
