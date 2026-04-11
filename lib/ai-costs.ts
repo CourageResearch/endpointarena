@@ -98,8 +98,8 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     outputUsdPer1MTokens: 4,
   },
   'llama-4-scout': {
-    inputUsdPer1MTokens: 0.15,
-    outputUsdPer1MTokens: 0.6,
+    inputUsdPer1MTokens: 0.9,
+    outputUsdPer1MTokens: 0.9,
   },
   'kimi-k2.5': {
     inputUsdPer1MTokens: 2,

@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import { desc, sql } from 'drizzle-orm'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { db, phase2Trials } from '../lib/db'
+import { db, trials } from '../lib/db'
 import {
   buildReferenceIndexes,
   DEFAULT_PUBLIC_COMPANY_REFERENCE_FILE,
@@ -93,12 +93,12 @@ async function main() {
 
   const sponsorRows = await db
     .select({
-      sponsorName: phase2Trials.sponsorName,
+      sponsorName: trials.sponsorName,
       trialCount: sql<number>`count(*)::int`,
     })
-    .from(phase2Trials)
-    .groupBy(phase2Trials.sponsorName)
-    .orderBy(desc(sql<number>`count(*)::int`), phase2Trials.sponsorName)
+    .from(trials)
+    .groupBy(trials.sponsorName)
+    .orderBy(desc(sql<number>`count(*)::int`), trials.sponsorName)
 
   const publicSponsors: Array<{
     exchange: string | null

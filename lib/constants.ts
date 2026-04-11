@@ -111,10 +111,10 @@ export const MODEL_INFO: Record<ModelId, {
   },
   'llama-4-scout': {
     name: 'Llama',
-    fullName: 'Llama 4 Scout',
+    fullName: 'Llama 3.3 70B',
     color: '#2E7D32',
     provider: 'Fireworks',
-    features: ['Fast Inference', 'Reasoning'],
+    features: ['Reasoning', 'Long Context'],
   },
   'kimi-k2.5': {
     name: 'Kimi',
@@ -136,30 +136,19 @@ export const MODEL_INFO: Record<ModelId, {
 const QUESTION_OUTCOMES = ['Pending', 'YES', 'NO'] as const
 export type QuestionOutcome = (typeof QUESTION_OUTCOMES)[number]
 
-// Legacy FDA outcomes retained for compatibility with older pages/scripts.
-const FDA_OUTCOMES = ['Pending', 'Approved', 'Rejected'] as const
-export type FDAOutcome = (typeof FDA_OUTCOMES)[number]
-
 // Outcome colors (warm production palette)
-export const OUTCOME_COLORS: Record<QuestionOutcome | FDAOutcome, { bg: string; text: string }> = {
+export const OUTCOME_COLORS: Record<QuestionOutcome, { bg: string; text: string }> = {
   Pending: { bg: 'bg-[#b5aa9e]/10', text: 'text-[#b5aa9e]' },
   YES: { bg: 'bg-[#3a8a2e]/10', text: 'text-[#3a8a2e]' },
   NO: { bg: 'bg-[#c43a2b]/10', text: 'text-[#c43a2b]' },
-  Approved: { bg: 'bg-[#3a8a2e]/10', text: 'text-[#3a8a2e]' },
-  Rejected: { bg: 'bg-[#c43a2b]/10', text: 'text-[#c43a2b]' },
 }
 
 // Prediction outcomes
-const PREDICTION_OUTCOMES = ['approved', 'rejected'] as const
+const PREDICTION_OUTCOMES = ['yes', 'no'] as const
 export type PredictionOutcome = (typeof PREDICTION_OUTCOMES)[number]
 
-const BINARY_PREDICTION_OUTCOMES = ['yes', 'no'] as const
-export type BinaryPredictionOutcome = (typeof BINARY_PREDICTION_OUTCOMES)[number]
-
 // Prediction outcome colors
-export const PREDICTION_COLORS: Record<PredictionOutcome | BinaryPredictionOutcome, { bg: string; text: string }> = {
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400' },
+export const PREDICTION_COLORS: Record<PredictionOutcome, { bg: string; text: string }> = {
   yes: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
   no: { bg: 'bg-red-500/20', text: 'text-red-400' },
 }
@@ -177,7 +166,7 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   'gemini-3-pro': 'Gemini 3 Pro',
   'deepseek-v3.2': 'DeepSeek V3.2',
   'glm-5': 'GLM 5',
-  'llama-4-scout': 'Llama 4 Scout',
+  'llama-4-scout': 'Llama 3.3 70B',
   'kimi-k2.5': 'Kimi K2.5',
   'minimax-m2.5': 'MiniMax M2.5',
 }

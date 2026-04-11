@@ -4,17 +4,11 @@ import { ConfigurationError, ValidationError } from '@/lib/errors'
 
 const MARKET_RUNTIME_CONFIG_ID = 'default'
 const MAX_CONFIG_NUMBER = 10_000_000
-export const DEFAULT_TOY_TRIAL_COUNT = 2
-export const MIN_TOY_TRIAL_COUNT = 1
+export const DEFAULT_TOY_TRIAL_COUNT = 0
+export const MIN_TOY_TRIAL_COUNT = 0
 type MarketRuntimeConfigDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export type MarketRuntimeConfig = {
-  warmupRunCount: number
-  warmupMaxTradeUsd: number
-  warmupBuyCashFraction: number
-  steadyMaxTradeUsd: number
-  steadyBuyCashFraction: number
-  maxPositionPerSideShares: number
   openingLmsrB: number
   toyTrialCount: number
   createdAt: Date
@@ -22,26 +16,22 @@ export type MarketRuntimeConfig = {
 }
 
 export type MarketRuntimeConfigPatchInput = Partial<{
-  warmupRunCount: unknown
-  warmupMaxTradeUsd: unknown
-  warmupBuyCashFraction: unknown
-  steadyMaxTradeUsd: unknown
-  steadyBuyCashFraction: unknown
-  maxPositionPerSideShares: unknown
   openingLmsrB: unknown
   toyTrialCount: unknown
 }>
 
 type MarketRuntimeConfigPatch = Partial<{
-  warmupRunCount: number
-  warmupMaxTradeUsd: number
-  warmupBuyCashFraction: number
-  steadyMaxTradeUsd: number
-  steadyBuyCashFraction: number
-  maxPositionPerSideShares: number
   openingLmsrB: number
   toyTrialCount: number
 }>
+
+const marketRuntimeConfigColumns = {
+  id: true,
+  openingLmsrB: true,
+  toyTrialCount: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
 
 function coerceNumber(value: unknown, fieldName: string): number {
   const parsed = typeof value === 'number' ? value : Number(value)
@@ -53,54 +43,6 @@ function coerceNumber(value: unknown, fieldName: string): number {
 
 function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPatch {
   const patch: MarketRuntimeConfigPatch = {}
-
-  if (input.warmupRunCount !== undefined) {
-    const parsed = Math.round(coerceNumber(input.warmupRunCount, 'warmupRunCount'))
-    if (parsed < 0 || parsed > 365) {
-      throw new ValidationError('warmupRunCount must be between 0 and 365')
-    }
-    patch.warmupRunCount = parsed
-  }
-
-  if (input.warmupMaxTradeUsd !== undefined) {
-    const parsed = coerceNumber(input.warmupMaxTradeUsd, 'warmupMaxTradeUsd')
-    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
-      throw new ValidationError(`warmupMaxTradeUsd must be between 0 and ${MAX_CONFIG_NUMBER}`)
-    }
-    patch.warmupMaxTradeUsd = parsed
-  }
-
-  if (input.warmupBuyCashFraction !== undefined) {
-    const parsed = coerceNumber(input.warmupBuyCashFraction, 'warmupBuyCashFraction')
-    if (parsed < 0 || parsed > 1) {
-      throw new ValidationError('warmupBuyCashFraction must be between 0 and 1')
-    }
-    patch.warmupBuyCashFraction = parsed
-  }
-
-  if (input.steadyMaxTradeUsd !== undefined) {
-    const parsed = coerceNumber(input.steadyMaxTradeUsd, 'steadyMaxTradeUsd')
-    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
-      throw new ValidationError(`steadyMaxTradeUsd must be between 0 and ${MAX_CONFIG_NUMBER}`)
-    }
-    patch.steadyMaxTradeUsd = parsed
-  }
-
-  if (input.steadyBuyCashFraction !== undefined) {
-    const parsed = coerceNumber(input.steadyBuyCashFraction, 'steadyBuyCashFraction')
-    if (parsed < 0 || parsed > 1) {
-      throw new ValidationError('steadyBuyCashFraction must be between 0 and 1')
-    }
-    patch.steadyBuyCashFraction = parsed
-  }
-
-  if (input.maxPositionPerSideShares !== undefined) {
-    const parsed = coerceNumber(input.maxPositionPerSideShares, 'maxPositionPerSideShares')
-    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
-      throw new ValidationError(`maxPositionPerSideShares must be between 0 and ${MAX_CONFIG_NUMBER}`)
-    }
-    patch.maxPositionPerSideShares = parsed
-  }
 
   if (input.openingLmsrB !== undefined) {
     const parsed = Math.round(coerceNumber(input.openingLmsrB, 'openingLmsrB'))
@@ -127,12 +69,6 @@ function mapRow(row: typeof marketRuntimeConfigs.$inferSelect): MarketRuntimeCon
   }
 
   return {
-    warmupRunCount: row.warmupRunCount,
-    warmupMaxTradeUsd: row.warmupMaxTradeUsd,
-    warmupBuyCashFraction: row.warmupBuyCashFraction,
-    steadyMaxTradeUsd: row.steadyMaxTradeUsd,
-    steadyBuyCashFraction: row.steadyBuyCashFraction,
-    maxPositionPerSideShares: row.maxPositionPerSideShares,
     openingLmsrB: row.openingLmsrB,
     toyTrialCount: row.toyTrialCount ?? DEFAULT_TOY_TRIAL_COUNT,
     createdAt: row.createdAt,
@@ -144,6 +80,7 @@ export async function getMarketRuntimeConfig(
   dbClient: MarketRuntimeConfigDbClient = db,
 ): Promise<MarketRuntimeConfig> {
   const row = await dbClient.query.marketRuntimeConfigs.findFirst({
+    columns: marketRuntimeConfigColumns,
     where: eq(marketRuntimeConfigs.id, MARKET_RUNTIME_CONFIG_ID),
   })
 

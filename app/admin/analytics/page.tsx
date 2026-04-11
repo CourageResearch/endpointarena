@@ -159,7 +159,7 @@ export default async function AnalyticsPage({
 
   return (
     <AdminConsoleLayout
-      title="Traffic Analytics"
+      title="Analytics"
       activeTab="analytics"
       days={days}
     >

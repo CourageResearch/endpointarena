@@ -46,7 +46,7 @@ export default async function AdminContactPage() {
 
   return (
     <AdminConsoleLayout
-      title="Contact Messages"
+      title="Contact"
       activeTab="contact"
     >
       <section className="mb-6 grid grid-cols-2 gap-3 sm:max-w-sm">

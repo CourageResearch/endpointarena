@@ -1,5 +1,5 @@
 import { ExternalServiceError } from '@/lib/errors'
-import type { NormalizedPhase2TrialInput } from '@/lib/phase2-trial-ingestion'
+import type { NormalizedTrialInput } from '@/lib/trial-ingestion'
 
 const CLINICAL_TRIALS_API_BASE_URL = 'https://clinicaltrials.gov/api/v2'
 const CLINICAL_TRIALS_REQUEST_TIMEOUT_MS = 30_000
@@ -136,7 +136,7 @@ function normalizeWhitespace(value: string) {
 
 function truncate(value: string, maxLength: number) {
   if (value.length <= maxLength) return value
-  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}â€¦`
 }
 
 function titleizeToken(value: string) {
@@ -399,10 +399,10 @@ export function normalizeClinicalTrialsSponsorKey(value: string) {
   return normalizeWhitespace(value).toUpperCase()
 }
 
-export function mapClinicalTrialsStudyToPhase2TrialInput(
+export function mapClinicalTrialsStudyToTrialInput(
   study: ClinicalTrialsGovStudy,
   sponsorOverride?: ClinicalTrialsSponsorOverride,
-): NormalizedPhase2TrialInput | null {
+): NormalizedTrialInput | null {
   const nctNumber = getClinicalTrialsNctNumber(study)
   const briefTitle = normalizeWhitespace(
     study.protocolSection?.identificationModule?.briefTitle

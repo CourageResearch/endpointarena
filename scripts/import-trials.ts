@@ -184,7 +184,7 @@ function parseNctNumber(value: string, rowLabel: string): string {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (!args.filePath) {
-    throw new Error('Usage: npx tsx scripts/import-phase2-trials.ts --file /absolute/path/to/trials.csv [--apply] [--no-reset]')
+    throw new Error('Usage: npx tsx scripts/import-trials.ts --file /absolute/path/to/trials.csv [--apply] [--no-reset]')
   }
 
   const csvPath = path.resolve(process.cwd(), args.filePath)
@@ -196,8 +196,8 @@ async function main() {
   }
   const { rows: rawRows, extraHeaders } = parseRows(rawHeaders, dataRows)
 
-  const [{ ingestPhase2Trials }] = await Promise.all([
-    import('../lib/phase2-trial-ingestion'),
+  const [{ ingestTrials }] = await Promise.all([
+    import('../lib/trial-ingestion'),
   ])
 
   const summary = {
@@ -234,7 +234,7 @@ async function main() {
     return
   }
 
-  const ingestionSummary = await ingestPhase2Trials(
+  const ingestionSummary = await ingestTrials(
     rows.map((row) => {
       const nctNumber = parseNctNumber(row['NCT Number'], row['Short Title'].trim() || 'trial row')
       const rowLabel = `${nctNumber} / ${row['Short Title'].trim()}`

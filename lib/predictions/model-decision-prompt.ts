@@ -208,12 +208,6 @@ function sanitizeBinaryCall(value: unknown, probability: number): 'yes' | 'no' {
   if (normalized === 'yes' || normalized === 'no') {
     return normalized
   }
-  if (normalized === 'approved') {
-    return 'yes'
-  }
-  if (normalized === 'rejected') {
-    return 'no'
-  }
   return probability >= 0.5 ? 'yes' : 'no'
 }
 

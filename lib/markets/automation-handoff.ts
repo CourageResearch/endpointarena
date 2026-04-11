@@ -5,6 +5,7 @@ import { db, marketActions, predictionMarkets, trialQuestions } from '@/lib/db'
 import { ValidationError } from '@/lib/errors'
 import { normalizeRunDate } from '@/lib/markets/engine'
 import { prepareDailyRunContext, getDailyRunPositionKey } from '@/lib/markets/daily-run-planning'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import {
   buildDailyRunAutomationTaskKey,
   getDailyRunAutomationModelId,
@@ -291,6 +292,7 @@ export async function previewDailyRunAutomationImport(args: {
   const uniqueMarketIds = Array.from(new Set(parsed.decisions.map((item) => item.marketId)))
   const [markets, actorIdByModelId] = await Promise.all([
     db.query.predictionMarkets.findMany({
+      columns: predictionMarketColumns,
       where: inArray(predictionMarkets.id, uniqueMarketIds),
       with: {
         trialQuestion: {

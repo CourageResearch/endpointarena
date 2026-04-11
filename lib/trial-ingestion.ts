@@ -1,27 +1,34 @@
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import {
+  aiBatches,
   db,
+  marketActions,
   marketAccounts,
+  marketActors,
   marketDailySnapshots,
+  marketPositions,
   marketPriceSnapshots,
   marketRunLogs,
   marketRuns,
   modelDecisionSnapshots,
-  phase2Trials,
+  trials,
   predictionMarkets,
   trialMonitorRuns,
   trialOutcomeCandidateEvidence,
   trialOutcomeCandidates,
+  trialQuestionOutcomeHistory,
   trialQuestions,
   trialSyncRuns,
+  trialSyncRunItems,
 } from '@/lib/db'
 import { openMarketForTrialQuestion } from '@/lib/markets/engine'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
 
 const EXISTING_TRIAL_CHUNK_SIZE = 500
 
-export type NormalizedPhase2TrialInput = {
+export type NormalizedTrialInput = {
   nctNumber: string
   shortTitle: string
   sponsorName: string
@@ -41,7 +48,7 @@ export type NormalizedPhase2TrialInput = {
   standardBettingMarkets: string | null
 }
 
-export type Phase2IngestionSummary = {
+export type TrialIngestionSummary = {
   trialsUpserted: number
   questionsUpserted: number
   marketsOpened: number
@@ -57,7 +64,7 @@ export type Phase2IngestionSummary = {
   }>
 }
 
-export type IngestPhase2TrialsOptions = {
+export type IngestTrialOptions = {
   maxMarketsToOpen?: number
   reset?: boolean
   preserveExistingSponsorTickerOnNull?: boolean
@@ -77,7 +84,7 @@ function datesEqual(left: Date | null | undefined, right: Date | null | undefine
   return leftTime === rightTime
 }
 
-function shouldOpenMarketForTrial(row: NormalizedPhase2TrialInput, now: Date) {
+function shouldOpenMarketForTrial(row: NormalizedTrialInput, now: Date) {
   const normalizedStatus = row.currentStatus.trim().toLowerCase()
   if (normalizedStatus === 'completed' || normalizedStatus === 'terminated' || normalizedStatus === 'withdrawn' || normalizedStatus === 'suspended') {
     return false
@@ -87,8 +94,8 @@ function shouldOpenMarketForTrial(row: NormalizedPhase2TrialInput, now: Date) {
 }
 
 function compareRowsForMarketOpenPriority(
-  left: NormalizedPhase2TrialInput,
-  right: NormalizedPhase2TrialInput,
+  left: NormalizedTrialInput,
+  right: NormalizedTrialInput,
   now: Date,
 ) {
   const leftOpenable = shouldOpenMarketForTrial(left, now)
@@ -101,7 +108,7 @@ function compareRowsForMarketOpenPriority(
   return left.estPrimaryCompletionDate.getTime() - right.estPrimaryCompletionDate.getTime()
 }
 
-function buildChangeSummary(existingTrial: typeof phase2Trials.$inferSelect, nextTrial: NormalizedPhase2TrialInput & { sponsorTicker: string | null }) {
+function buildChangeSummary(existingTrial: typeof trials.$inferSelect, nextTrial: NormalizedTrialInput & { sponsorTicker: string | null }) {
   const changedFields: string[] = []
   const check = (label: string, changed: boolean) => {
     if (changed) changedFields.push(label)
@@ -130,8 +137,8 @@ function buildChangeSummary(existingTrial: typeof phase2Trials.$inferSelect, nex
 async function loadExistingTrialsByNctNumbers(nctNumbers: string[]) {
   const rows = await Promise.all(
     chunkArray(Array.from(new Set(nctNumbers)), EXISTING_TRIAL_CHUNK_SIZE).map((chunk) => (
-      db.query.phase2Trials.findMany({
-        where: inArray(phase2Trials.nctNumber, chunk),
+      db.query.trials.findMany({
+        where: inArray(trials.nctNumber, chunk),
       })
     )),
   )
@@ -139,30 +146,41 @@ async function loadExistingTrialsByNctNumbers(nctNumbers: string[]) {
   return new Map(rows.flat().map((row) => [row.nctNumber, row]))
 }
 
-async function resetPhase2TrialData(): Promise<void> {
+async function resetTrialData(): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.delete(aiBatches)
     await tx.delete(trialOutcomeCandidateEvidence)
+    await tx.delete(trialQuestionOutcomeHistory)
     await tx.delete(trialOutcomeCandidates)
+    await tx.delete(trialSyncRunItems)
     await tx.delete(trialMonitorRuns)
     await tx.delete(trialSyncRuns)
     await tx.delete(modelDecisionSnapshots)
+    await tx.delete(marketActions)
     await tx.delete(marketRunLogs)
     await tx.delete(marketRuns)
     await tx.delete(marketPriceSnapshots)
     await tx.delete(marketDailySnapshots)
+    await tx.delete(marketPositions)
     await tx.delete(predictionMarkets)
     await tx.delete(trialQuestions)
-    await tx.delete(phase2Trials)
-    await tx.delete(marketAccounts)
+    await tx.delete(trials)
+    await tx.execute(sql`
+      delete from market_accounts as account
+      using market_actors as actor
+      where account.actor_id = actor.id
+        and actor.actor_type = 'model'
+    `)
+    await tx.delete(marketActors).where(eq(marketActors.actorType, 'model'))
   })
 }
 
-export async function ingestPhase2Trials(
-  rows: NormalizedPhase2TrialInput[],
-  options: IngestPhase2TrialsOptions = {},
-): Promise<Phase2IngestionSummary> {
+export async function ingestTrials(
+  rows: NormalizedTrialInput[],
+  options: IngestTrialOptions = {},
+): Promise<TrialIngestionSummary> {
   if (options.reset) {
-    await resetPhase2TrialData()
+    await resetTrialData()
   }
 
   await getTrialMonitorConfig()
@@ -177,9 +195,9 @@ export async function ingestPhase2Trials(
 
   const existingTrialsByNct = options.preserveExistingSponsorTickerOnNull
     ? await loadExistingTrialsByNctNumbers(rows.map((row) => row.nctNumber))
-    : new Map<string, typeof phase2Trials.$inferSelect>()
+    : new Map<string, typeof trials.$inferSelect>()
 
-  const summary: Phase2IngestionSummary = {
+  const summary: TrialIngestionSummary = {
     trialsUpserted: 0,
     questionsUpserted: 0,
     marketsOpened: 0,
@@ -197,11 +215,12 @@ export async function ingestPhase2Trials(
       sponsorTicker,
     }
 
-    let trial: typeof phase2Trials.$inferSelect
+    let trial: typeof trials.$inferSelect
     if (!existingTrial) {
-      [trial] = await db.insert(phase2Trials)
+      [trial] = await db.insert(trials)
         .values({
           nctNumber: row.nctNumber,
+          source: 'sync_import',
           shortTitle: row.shortTitle,
           sponsorName: row.sponsorName,
           sponsorTicker,
@@ -237,7 +256,7 @@ export async function ingestPhase2Trials(
       const changeSummary = buildChangeSummary(existingTrial, normalizedRow)
 
       if (changeSummary) {
-        const [updated] = await db.update(phase2Trials)
+        const [updated] = await db.update(trials)
           .set({
             shortTitle: row.shortTitle,
             sponsorName: row.sponsorName,
@@ -257,7 +276,7 @@ export async function ingestPhase2Trials(
             standardBettingMarkets: row.standardBettingMarkets,
             updatedAt: new Date(),
           })
-          .where(eq(phase2Trials.id, existingTrial.id))
+          .where(eq(trials.id, existingTrial.id))
           .returning()
         trial = updated
         summary.trialsUpserted += 1
@@ -309,6 +328,7 @@ export async function ingestPhase2Trials(
       }
 
       const existingMarket = await db.query.predictionMarkets.findFirst({
+        columns: predictionMarketColumns,
         where: eq(predictionMarkets.trialQuestionId, question.id),
       })
       const canOpenAnotherMarket = options.maxMarketsToOpen == null || summary.marketsOpened < options.maxMarketsToOpen

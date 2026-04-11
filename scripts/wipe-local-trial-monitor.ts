@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   db,
-  phase2Trials,
+  trials,
   trialMonitorRuns,
   trialOutcomeCandidates,
   trialQuestions,
@@ -69,13 +69,13 @@ async function main() {
     }
 
     if (targetTrialIds.length > 0) {
-      const resetTrials = await tx.update(phase2Trials)
+      const resetTrials = await tx.update(trials)
         .set({
           lastMonitoredAt: null,
           updatedAt: new Date(),
         })
-        .where(inArray(phase2Trials.id, targetTrialIds))
-        .returning({ id: phase2Trials.id })
+        .where(inArray(trials.id, targetTrialIds))
+        .returning({ id: trials.id })
       resetTrialCount = resetTrials.length
     }
 

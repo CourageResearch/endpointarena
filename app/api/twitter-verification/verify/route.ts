@@ -5,6 +5,7 @@ import { createRequestId, errorResponse, parseJsonBody, successResponse } from '
 import { db, accounts, users } from '@/lib/db'
 import { UnauthorizedError, ValidationError } from '@/lib/errors'
 import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
+import { userColumns } from '@/lib/users/query-shapes'
 import {
   fetchTweetById,
   getTweetMustStayUntil,
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
 
     const [user, twitterAccount] = await Promise.all([
       db.query.users.findFirst({
+        columns: userColumns,
         where: eq(users.id, session.user.id),
       }),
       db.query.accounts.findFirst({

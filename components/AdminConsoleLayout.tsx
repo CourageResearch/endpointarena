@@ -13,7 +13,7 @@ import {
   type AdminDayFilterOption,
 } from '@/lib/admin-search-params'
 
-type AdminTab = 'predictions' | 'waitlist' | 'users' | 'contact' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes'
+type AdminTab = 'predictions' | 'trials' | 'waitlist' | 'users' | 'contact' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'tables'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -25,6 +25,7 @@ interface AdminConsoleLayoutProps {
 
 const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string; dayFilters?: readonly AdminDayFilterOption[] }> = [
   { id: 'ai', href: '/admin/ai', label: 'AI' },
+  { id: 'trials', href: '/admin/trials', label: 'Trials' },
   { id: 'outcomes', href: '/admin/outcomes', label: 'Oracle' },
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },
@@ -32,6 +33,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string; dayFilters?
   { id: 'searches', href: '/admin/searches', label: 'Searches', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
   { id: 'crashes', href: '/admin/crashes', label: 'Crashes', dayFilters: ADMIN_CRASH_DAY_FILTERS },
   { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
+  { id: 'tables', href: '/admin/tables', label: 'Tables' },
   { id: 'settings', href: '/admin/settings', label: 'Settings' },
 ]
 
@@ -182,7 +184,11 @@ export async function AdminConsoleLayout({
 
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <WhiteNavbar
+        bgClass="bg-[#F5F2ED]/80"
+        borderClass="border-[#e8ddd0]"
+        adminRuntimeLabel={activeDatabase?.label ?? null}
+      />
 
       <main className={`${SITE_CONTAINER_CLASS} py-8`}>
         <header className="mb-7">
@@ -191,14 +197,6 @@ export async function AdminConsoleLayout({
               <div className="flex items-center gap-2">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#b5aa9e]">Admin Console</p>
                 <HeaderDots />
-                {activeDatabase ? (
-                  <span
-                    title={activeDatabase.databaseName ? `Current database: ${activeDatabase.databaseName}` : undefined}
-                    className="rounded-none border border-[#d8ccb9] bg-[#fcfaf7] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-[#6f665b]"
-                  >
-                    {activeDatabase.label}
-                  </span>
-                ) : null}
               </div>
               <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
             </div>

@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 const SITE_NAME = 'Endpoint Arena'
 const DEFAULT_SITE_URL = 'https://endpointarena.com'
 export const DEFAULT_SITE_DESCRIPTION =
-  'Live benchmark and prediction market for Phase 2 clinical trial outcomes.'
+  'Live benchmark and prediction market for clinical trial outcomes.'
 
 const NO_INDEX_ROBOTS: NonNullable<Metadata['robots']> = {
   index: false,

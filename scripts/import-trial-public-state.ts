@@ -7,7 +7,7 @@ import {
   computeTrialPublicStateCounts,
   loadTrialPublicStateBundle,
   sanitizeForJson,
-  type Phase2TrialBundleRow,
+  type TrialBundleRow,
   type TrialMarketActionBundleRow,
   type TrialMarketBundleRow,
   type TrialMarketPositionBundleRow,
@@ -184,7 +184,7 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 }
 
 function isYesResolvingOutcome(outcome: string | null | undefined): boolean {
-  return outcome === 'Approved' || outcome === 'YES'
+  return outcome === 'YES'
 }
 
 function getActionCashDelta(row: { action: string; status: string; usd_amount: number }): number {
@@ -351,7 +351,7 @@ async function loadUserMaps(sql: postgres.Sql): Promise<UserMaps> {
 
 async function loadTargetTrialNamespaceCounts(sql: postgres.Sql): Promise<TrialPublicStateCounts> {
   const [row] = await sql<{
-    phase2_trials: string | number
+    trials: string | number
     trial_questions: string | number
     question_outcome_pending: string | number
     question_outcome_yes: string | number
@@ -399,7 +399,7 @@ async function loadTargetTrialNamespaceCounts(sql: postgres.Sql): Promise<TrialP
       where mrl.actor_id is null or actor.actor_type = 'model'
     )
     select
-      (select count(*)::bigint from phase2_trials) as phase2_trials,
+      (select count(*)::bigint from trials) as trials,
       (select count(*)::bigint from trial_questions) as trial_questions,
       (select count(*)::bigint from trial_questions where outcome = 'Pending') as question_outcome_pending,
       (select count(*)::bigint from trial_questions where outcome = 'YES') as question_outcome_yes,
@@ -475,7 +475,7 @@ async function loadTargetTrialNamespaceCounts(sql: postgres.Sql): Promise<TrialP
   `
 
   return {
-    phase2_trials: toNumber(row?.phase2_trials),
+    trials: toNumber(row?.trials),
     trial_questions: toNumber(row?.trial_questions),
     question_outcome_pending: toNumber(row?.question_outcome_pending),
     question_outcome_yes: toNumber(row?.question_outcome_yes),
@@ -504,7 +504,7 @@ async function loadTargetTrialNamespaceCounts(sql: postgres.Sql): Promise<TrialP
 async function loadTargetNctNumbers(sql: postgres.Sql): Promise<string[]> {
   const rows = await sql<{ nct_number: string }[]>`
     select nct_number
-    from phase2_trials
+    from trials
     order by nct_number
   `
 
@@ -512,7 +512,7 @@ async function loadTargetNctNumbers(sql: postgres.Sql): Promise<string[]> {
 }
 
 function buildSourceQuestionStateRows(bundle: TrialPublicStateBundle): QuestionStateRow[] {
-  const nctByTrialId = new Map(bundle.phase2Trials.map((trial) => [trial.id, trial.nct_number]))
+  const nctByTrialId = new Map(bundle.trials.map((trial) => [trial.id, trial.nct_number]))
 
   return bundle.trialQuestions
     .map((question) => ({
@@ -541,7 +541,7 @@ async function loadTargetQuestionStateRows(sql: postgres.Sql): Promise<QuestionS
       tq.outcome,
       tq.outcome_date
     from trial_questions tq
-    join phase2_trials pt on pt.id = tq.trial_id
+    join trials pt on pt.id = tq.trial_id
     order by pt.nct_number, tq.slug
   `
 
@@ -586,78 +586,31 @@ function diffQuestionStates(sourceRows: QuestionStateRow[], targetRows: Question
 }
 
 async function loadTargetTrialRunInfo(sql: postgres.Sql): Promise<TrialRunInfo> {
-  const [trialRunRows, sharedRunRows] = await Promise.all([
-    sql<{ id: string }[]>`
-      with trial_run_ids as (
-        select distinct run_id as id
-        from market_actions
-        where trial_question_id is not null
-          and run_id is not null
-        union
-        select distinct run_id as id
-        from model_decision_snapshots
-        where trial_question_id is not null
-          and run_id is not null
-        union
-        select distinct run_id as id
-        from market_run_logs
-        where trial_question_id is not null
-          and run_id is not null
-      )
-      select id
-      from trial_run_ids
-      order by id
-    `,
-    sql<{ id: string }[]>`
-      with trial_run_ids as (
-        select distinct run_id as id
-        from market_actions
-        where trial_question_id is not null
-          and run_id is not null
-        union
-        select distinct run_id as id
-        from model_decision_snapshots
-        where trial_question_id is not null
-          and run_id is not null
-        union
-        select distinct run_id as id
-        from market_run_logs
-        where trial_question_id is not null
-          and run_id is not null
-      )
-      select tri.id
-      from trial_run_ids tri
-      where exists (
-        select 1
-        from market_actions ma
-        where ma.run_id = tri.id
-          and ma.trial_question_id is null
-          and ma.fda_event_id is not null
-      )
-      or exists (
-        select 1
-        from model_decision_snapshots mds
-        where mds.run_id = tri.id
-          and mds.trial_question_id is null
-          and mds.fda_event_id is not null
-      )
-      or exists (
-        select 1
-        from market_run_logs mrl
-        left join prediction_markets pm on pm.id = mrl.market_id
-        where mrl.run_id = tri.id
-          and (
-            mrl.fda_event_id is not null
-            or pm.fda_event_id is not null
-          )
-      )
-      order by tri.id
-    `,
-  ])
+  const trialRunRows = await sql<{ id: string }[]>`
+    with trial_run_ids as (
+      select distinct run_id as id
+      from market_actions
+      where trial_question_id is not null
+        and run_id is not null
+      union
+      select distinct run_id as id
+      from model_decision_snapshots
+      where trial_question_id is not null
+        and run_id is not null
+      union
+      select distinct run_id as id
+      from market_run_logs
+      where trial_question_id is not null
+        and run_id is not null
+    )
+    select id
+    from trial_run_ids
+    order by id
+  `
 
   return {
     trialRunIds: trialRunRows.map((row) => row.id),
-    sharedTrialRunIds: sharedRunRows.map((row) => row.id),
+    sharedTrialRunIds: [],
   }
 }
 
@@ -725,8 +678,8 @@ async function loadTargetModelCashEffects(sql: postgres.Sql): Promise<Map<string
         actor.model_key,
         sum(
           case
-            when pm.status = 'RESOLVED' and pm.resolved_outcome in ('Approved', 'YES') then mp.yes_shares
-            when pm.status = 'RESOLVED' and pm.resolved_outcome in ('Rejected', 'NO') then mp.no_shares
+            when pm.status = 'RESOLVED' and pm.resolved_outcome = 'YES' then mp.yes_shares
+            when pm.status = 'RESOLVED' and pm.resolved_outcome = 'NO' then mp.no_shares
             else 0
           end
         ) as trial_cash_effect
@@ -792,7 +745,7 @@ async function loadTargetModelAccountRows(sql: postgres.Sql): Promise<ModelAccou
 function validateBundleIntegrity(bundle: TrialPublicStateBundle): string[] {
   const errors: string[] = []
 
-  const trialIds = new Set(bundle.phase2Trials.map((row) => row.id))
+  const trialIds = new Set(bundle.trials.map((row) => row.id))
   const questionIds = new Set(bundle.trialQuestions.map((row) => row.id))
   const marketIds = new Set(bundle.trialMarkets.map((row) => row.id))
   const candidateIds = new Set(bundle.trialOutcomeCandidates.map((row) => row.id))
@@ -1223,19 +1176,20 @@ async function deleteCurrentTrialNamespace(tx: postgres.Sql, trialRunIds: string
   await tx`delete from market_actions where trial_question_id is not null`
   await tx`delete from prediction_markets where trial_question_id is not null`
   await tx`delete from trial_questions`
-  await tx`delete from phase2_trials`
+  await tx`delete from trials`
 
   for (const runId of trialRunIds) {
     await tx`delete from market_runs where id = ${runId}`
   }
 }
 
-async function insertPhase2Trials(tx: postgres.Sql, rows: Phase2TrialBundleRow[]): Promise<void> {
+async function insertTrials(tx: postgres.Sql, rows: TrialBundleRow[]): Promise<void> {
   for (const row of rows) {
     await tx`
-      insert into phase2_trials (
+      insert into trials (
         id,
         nct_number,
+        source,
         short_title,
         sponsor_name,
         sponsor_ticker,
@@ -1259,6 +1213,7 @@ async function insertPhase2Trials(tx: postgres.Sql, rows: Phase2TrialBundleRow[]
       values (
         ${row.id},
         ${row.nct_number},
+        ${row.source},
         ${row.short_title},
         ${row.sponsor_name},
         ${row.sponsor_ticker},
@@ -1316,19 +1271,25 @@ async function insertTrialQuestions(tx: postgres.Sql, rows: TrialQuestionBundleR
   }
 }
 
-async function insertTrialMarkets(tx: postgres.Sql, rows: TrialMarketBundleRow[]): Promise<void> {
+async function insertTrialMarkets(
+  tx: postgres.Sql,
+  rows: TrialMarketBundleRow[],
+  openedByUserIdByMarketId: Map<string, string | null>,
+): Promise<void> {
   for (const row of rows) {
     await tx`
       insert into prediction_markets (
         id,
-        fda_event_id,
         trial_question_id,
         status,
         opening_probability,
+        house_opening_probability,
+        opening_line_source,
         b,
         q_yes,
         q_no,
         price_yes,
+        opened_by_user_id,
         opened_at,
         resolved_at,
         resolved_outcome,
@@ -1337,14 +1298,16 @@ async function insertTrialMarkets(tx: postgres.Sql, rows: TrialMarketBundleRow[]
       )
       values (
         ${row.id},
-        ${null},
         ${row.trial_question_id},
         ${row.status},
         ${row.opening_probability},
+        ${row.house_opening_probability},
+        ${row.opening_line_source},
         ${row.b},
         ${row.q_yes},
         ${row.q_no},
         ${row.price_yes},
+        ${openedByUserIdByMarketId.get(row.id) ?? null},
         ${row.opened_at},
         ${row.resolved_at},
         ${row.resolved_outcome},
@@ -1658,7 +1621,6 @@ async function insertTrialMarketActions(
       id: row.id,
       run_id: row.run_id,
       market_id: row.market_id,
-      fda_event_id: null,
       trial_question_id: row.trial_question_id,
       actor_id: targetActorId,
       run_date: row.run_date,
@@ -1684,7 +1646,6 @@ async function insertTrialMarketActions(
         'id',
         'run_id',
         'market_id',
-        'fda_event_id',
         'trial_question_id',
         'actor_id',
         'run_date',
@@ -1724,7 +1685,6 @@ async function insertTrialModelDecisionSnapshots(
       run_id: row.run_id,
       run_date: row.run_date,
       market_id: row.market_id,
-      fda_event_id: null,
       trial_question_id: row.trial_question_id,
       actor_id: targetActorId,
       run_source: row.run_source,
@@ -1769,7 +1729,6 @@ async function insertTrialModelDecisionSnapshots(
         'run_id',
         'run_date',
         'market_id',
-        'fda_event_id',
         'trial_question_id',
         'actor_id',
         'run_source',
@@ -1824,7 +1783,6 @@ async function insertTrialMarketRunLogs(
     error_count: row.error_count,
     skipped_count: row.skipped_count,
     market_id: row.market_id,
-    fda_event_id: null,
     trial_question_id: row.trial_question_id,
     actor_id: row.actor_id ? sourceActorIdToTargetActorId.get(row.actor_id) ?? null : null,
     activity_phase: row.activity_phase,
@@ -1848,7 +1806,6 @@ async function insertTrialMarketRunLogs(
         'error_count',
         'skipped_count',
         'market_id',
-        'fda_event_id',
         'trial_question_id',
         'actor_id',
         'activity_phase',
@@ -2071,7 +2028,7 @@ async function main(): Promise<void> {
       loadSupportedModelDecisionSnapshotCostSources(sql),
     ])
 
-    const sourceNctNumbers = bundle.phase2Trials.map((row) => row.nct_number).sort()
+    const sourceNctNumbers = bundle.trials.map((row) => row.nct_number).sort()
     const sourceNctSet = new Set(sourceNctNumbers)
     const targetNctSet = new Set(targetNctNumbers)
     const prodOnlyNctNumbers = targetNctNumbers.filter((nctNumber) => !sourceNctSet.has(nctNumber))
@@ -2094,6 +2051,14 @@ async function main(): Promise<void> {
     const unresolvedChangedByEmails = referencedChangedByEmails
       .filter((email) => !userMaps.userIdByEmail.has(email))
 
+    const referencedOpenedByEmails = Array.from(new Set(
+      bundle.trialMarkets
+        .map((row) => normalizeEmail(row.opened_by_user_email))
+        .filter((value): value is string => value !== null),
+    )).sort()
+    const unresolvedOpenedByEmails = referencedOpenedByEmails
+      .filter((email) => !userMaps.userIdByEmail.has(email))
+
     const sourceModelCashEffects = computeBundleModelCashEffects(bundle)
     const modelCashDeltas = mergeModelCashEffects({
       source: sourceModelCashEffects,
@@ -2110,6 +2075,9 @@ async function main(): Promise<void> {
     }
     if (unresolvedChangedByEmails.length > 0) {
       warnings.push(`Some changed_by_user_email values are missing on target and will import as null: ${unresolvedChangedByEmails.join(', ')}`)
+    }
+    if (unresolvedOpenedByEmails.length > 0) {
+      warnings.push(`Some opened_by_user_email values are missing on target and will import as null: ${unresolvedOpenedByEmails.join(', ')}`)
     }
     if (targetHumanTrialState.positionCount > 0 && targetHumanTrialState.nonzeroPositionCount === 0) {
       warnings.push('Target contains zero-share human trial positions that will be deleted/rebuilt with the trial markets.')
@@ -2154,6 +2122,10 @@ async function main(): Promise<void> {
           referenced: referencedChangedByEmails,
           unresolved: unresolvedChangedByEmails,
         },
+        openedByUserEmails: {
+          referenced: referencedOpenedByEmails,
+          unresolved: unresolvedOpenedByEmails,
+        },
         humanTrialState: targetHumanTrialState,
         modelCashDeltas,
         normalizedSnapshotCostSources,
@@ -2186,6 +2158,15 @@ async function main(): Promise<void> {
       }))
     }
 
+    const openedByUserIdByMarketId = new Map<string, string | null>()
+    for (const row of bundle.trialMarkets) {
+      openedByUserIdByMarketId.set(row.id, resolveTargetUserId({
+        sourceUserId: row.opened_by_user_id,
+        sourceUserEmail: row.opened_by_user_email,
+        userMaps,
+      }))
+    }
+
     const applySummary = await sql.begin(async (rawTx) => {
       const tx = rawTx as unknown as postgres.Sql
 
@@ -2208,9 +2189,9 @@ async function main(): Promise<void> {
 
       await deleteCurrentTrialNamespace(tx, targetTrialRunInfoBeforeDelete.trialRunIds)
 
-      await insertPhase2Trials(tx, bundle.phase2Trials)
+      await insertTrials(tx, bundle.trials)
       await insertTrialQuestions(tx, bundle.trialQuestions)
-      await insertTrialMarkets(tx, bundle.trialMarkets)
+      await insertTrialMarkets(tx, bundle.trialMarkets, openedByUserIdByMarketId)
       await insertTrialMarketPriceSnapshots(tx, bundle.trialMarketPriceSnapshots)
       await insertTrialMonitorRuns(tx, bundle.trialMonitorRuns)
       await insertTrialSyncRuns(tx, bundle.trialSyncRuns)
@@ -2290,6 +2271,10 @@ async function main(): Promise<void> {
       changedByUserEmails: {
         referenced: referencedChangedByEmails,
         unresolved: unresolvedChangedByEmails,
+      },
+      openedByUserEmails: {
+        referenced: referencedOpenedByEmails,
+        unresolved: unresolvedOpenedByEmails,
       },
       humanTrialStateBeforeApply: targetHumanTrialState,
       modelCashDeltas: applySummary.modelCashDeltas,

@@ -7,7 +7,10 @@ import type { OverviewResponse } from '@/lib/markets/overview-shared'
 async function requestTrialsOverview(
   marketId?: string | null,
   options: {
+    includeAccounts?: boolean
+    includeEquityHistory?: boolean
     includeResolved?: boolean
+    includeRecentRuns?: boolean
   } = {},
 ): Promise<OverviewResponse> {
   const params = new URLSearchParams()
@@ -16,6 +19,15 @@ async function requestTrialsOverview(
   }
   if (options.includeResolved) {
     params.set('includeResolved', '1')
+  }
+  if (options.includeAccounts === false) {
+    params.set('includeAccounts', '0')
+  }
+  if (options.includeEquityHistory === false) {
+    params.set('includeEquityHistory', '0')
+  }
+  if (options.includeRecentRuns === false) {
+    params.set('includeRecentRuns', '0')
   }
   const query = params.toString()
   const url = query ? `/api/trials/overview?${query}` : '/api/trials/overview'
@@ -31,8 +43,11 @@ export function useTrialsOverview(
   initialData: OverviewResponse | null = null,
   marketId?: string | null,
   options: {
+    includeAccounts?: boolean
+    includeEquityHistory?: boolean
     includeResolved?: boolean
     autoRefresh?: boolean
+    includeRecentRuns?: boolean
   } = {},
 ) {
   const [data, setData] = useState<OverviewResponse | null>(initialData)
@@ -82,7 +97,15 @@ export function useTrialsOverview(
         window.clearInterval(timer)
       }
     }
-  }, [initialData, marketId, options.autoRefresh, options.includeResolved])
+  }, [
+    initialData,
+    marketId,
+    options.autoRefresh,
+    options.includeAccounts,
+    options.includeEquityHistory,
+    options.includeRecentRuns,
+    options.includeResolved,
+  ])
 
   const reload = async () => {
     setRefreshing(true)

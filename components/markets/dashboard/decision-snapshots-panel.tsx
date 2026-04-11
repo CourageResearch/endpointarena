@@ -34,7 +34,7 @@ function getSnapshotCallMeta(binaryCall: string | null | undefined): {
   textClass: string
   badgeClass: string
 } {
-  if (binaryCall === 'approved' || binaryCall === 'yes') {
+  if (binaryCall === 'yes') {
     return {
       label: 'Yes',
       textClass: APPROVE_TEXT_CLASS,
@@ -42,7 +42,7 @@ function getSnapshotCallMeta(binaryCall: string | null | undefined): {
     }
   }
 
-  if (binaryCall === 'rejected' || binaryCall === 'no') {
+  if (binaryCall === 'no') {
     return {
       label: 'No',
       textClass: REJECT_TEXT_CLASS,

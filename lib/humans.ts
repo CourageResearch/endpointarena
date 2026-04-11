@@ -1,6 +1,7 @@
 import { and, eq, gt, isNotNull, sql } from 'drizzle-orm'
 import { db, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
+import { userColumns } from '@/lib/users/query-shapes'
 
 const DAILY_REFILL_POINTS = 5
 const DAILY_REFILL_BALANCE_CAP = 12000
@@ -21,6 +22,7 @@ export async function applyDailyRefillIfEligible(userId: string): Promise<{
 }> {
   const now = new Date()
   const user = await db.query.users.findFirst({
+    columns: userColumns,
     where: eq(users.id, userId),
   })
 

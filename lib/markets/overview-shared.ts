@@ -1,7 +1,7 @@
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import { formatEventDateLabel, isSoftDecisionDate } from '@/lib/event-dates'
-import { DEFAULT_PHASE2_RESULTS_QUESTION, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
+import { DEFAULT_TRIAL_RESULTS_QUESTION, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import type { DecisionDateKind, ModelDecisionSnapshot } from '@/lib/types'
 
 export interface AccountRow {
@@ -280,20 +280,20 @@ export function daysUntilUtc(dateLike: string | null | undefined): number | null
 }
 
 export function getMarketQuestion(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return DEFAULT_PHASE2_RESULTS_QUESTION
+  if (!market.event) return DEFAULT_TRIAL_RESULTS_QUESTION
   return normalizeTrialQuestionPrompt(market.event.questionPrompt)
 }
 
 export function getMarketSubtitle(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return 'Phase 2 trial'
+  if (!market.event) return 'Clinical trial'
   const sponsorName = market.event.sponsorName?.trim() || market.event.companyName
   const ticker = (market.event.sponsorTicker ?? market.event.symbols)?.trim()
   return ticker ? `${sponsorName} (${ticker})` : sponsorName
 }
 
-function normalizeBinaryCall(value: string | null | undefined): 'yes' | 'no' | 'approved' | 'rejected' | null {
+function normalizeBinaryCall(value: string | null | undefined): 'yes' | 'no' | null {
   const normalized = String(value ?? '').trim().toLowerCase()
-  if (normalized === 'yes' || normalized === 'no' || normalized === 'approved' || normalized === 'rejected') {
+  if (normalized === 'yes' || normalized === 'no') {
     return normalized
   }
   return null

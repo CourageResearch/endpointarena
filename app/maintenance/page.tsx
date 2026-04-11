@@ -30,7 +30,7 @@ export default function MaintenancePage() {
                   Endpoint Arena is temporarily offline while we ship a production update.
                 </h1>
                 <p className="mt-4 text-base leading-7 text-[#6d6358] sm:text-lg">
-                  We&apos;re applying database and data updates to the Phase 2 trials pipeline. Health checks remain online,
+                  We&apos;re applying database and data updates to the trials pipeline. Health checks remain online,
                   and normal site traffic will reopen as soon as validation is complete.
                 </p>
               </div>

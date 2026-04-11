@@ -16,6 +16,7 @@ import {
   runSellAction,
   upsertDailySnapshots,
 } from '@/lib/markets/engine'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { ConflictError } from '@/lib/errors'
 import type { DailyRunHooks, DailyRunPayload, DailyRunPlannedMarket, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
@@ -135,9 +136,6 @@ function applyRiskCap({
     accountCash: account.cashBalance,
     yesSharesHeld: position.yesShares,
     noSharesHeld: position.noShares,
-    marketOpenedAt: market.openedAt,
-    runDate,
-    config,
   })
   const tradeCapUsd = action === 'BUY_YES'
     ? tradeCaps.maxBuyYesUsd
@@ -159,7 +157,7 @@ function applyRiskCap({
   return {
     amountUsd: cappedAmount,
     capApplied: true,
-    note: `${tradeCaps.inWarmupWindow ? 'Warm-up' : 'Steady-state'} cap reduced request to $${cappedAmount.toFixed(2)}.`,
+    note: `Portfolio constraints reduced request to $${cappedAmount.toFixed(2)}.`,
   }
 }
 
@@ -561,6 +559,7 @@ export async function executeDailyRun(
           })
 
           const latestMarket = await db.query.predictionMarkets.findFirst({
+            columns: predictionMarketColumns,
             where: eq(predictionMarkets.id, market.id),
           })
 

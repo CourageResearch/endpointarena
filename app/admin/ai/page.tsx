@@ -18,6 +18,7 @@ function getDefaultAiDatasetForCurrentDatabase(): 'toy' | 'live' {
 export default async function AdminAiPage() {
   const session = await getServerSession(authOptions)
   const email = session?.user?.email ?? null
+  const activeDatabaseTarget = getActiveDatabaseTarget()
 
   if (!email || (email !== ADMIN_EMAIL && !isLocalDevBypassEmail(email))) {
     redirect('/login')
@@ -28,7 +29,11 @@ export default async function AdminAiPage() {
 
   return (
     <AdminConsoleLayout title="AI" activeTab="ai">
-      <AdminAiDesk initialState={initialState} initialProgress={initialProgress} />
+      <AdminAiDesk
+        initialState={initialState}
+        initialProgress={initialProgress}
+        activeDatabaseTarget={activeDatabaseTarget}
+      />
     </AdminConsoleLayout>
   )
 }

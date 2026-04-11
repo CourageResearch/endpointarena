@@ -11,11 +11,13 @@ import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { authOptions } from '@/lib/auth'
-import { db, fdaCalendarEvents, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
+import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
 import { STARTER_POINTS } from '@/lib/constants'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
 import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
+import { userColumns } from '@/lib/users/query-shapes'
 import { buildNoIndexMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
@@ -156,6 +158,7 @@ async function getProfileTradingData(userId: string): Promise<{
   const marketIds = Array.from(referencedMarketIds)
   const markets = marketIds.length > 0
     ? await db.query.predictionMarkets.findMany({
+        columns: predictionMarketColumns,
         where: inArray(predictionMarkets.id, marketIds),
       })
     : []
@@ -173,42 +176,21 @@ async function getProfileTradingData(userId: string): Promise<{
         },
       })
     : []
-  const eventIds = Array.from(new Set(
-    markets
-      .map((market) => market.fdaEventId)
-      .filter((value): value is string => Boolean(value)),
-  ))
-  const events = eventIds.length > 0
-    ? await db.query.fdaCalendarEvents.findMany({
-        where: inArray(fdaCalendarEvents.id, eventIds),
-      })
-    : []
   const supportedQuestionIds = new Set(filterSupportedTrialQuestions(rawQuestions).map((question) => question.id))
   const marketById = new Map(markets.map((market) => [market.id, market]))
   const openMarketById = new Map(markets.filter((market) => market.status === 'OPEN').map((market) => [market.id, market]))
   const questionById = new Map(rawQuestions.map((question) => [question.id, question]))
-  const eventById = new Map(events.map((event) => [event.id, event]))
 
   const getMarketDisplay = (market: typeof markets[number]) => {
-    if (typeof market.trialQuestionId === 'string') {
-      const question = questionById.get(market.trialQuestionId)
-      return {
-        marketHref: supportedQuestionIds.has(market.trialQuestionId) ? `/trials/${market.id}` : null,
+    const question = market.trialQuestionId ? questionById.get(market.trialQuestionId) : null
+    return {
+        marketHref: market.trialQuestionId && supportedQuestionIds.has(market.trialQuestionId) ? `/trials/${market.id}` : null,
         drugName: question?.trial.shortTitle?.trim() || 'Unknown trial',
         companyName: question?.trial.sponsorName?.trim() || '—',
         ticker: question?.trial.sponsorTicker?.trim() || '—',
         decisionDate: question?.trial.estPrimaryCompletionDate ?? null,
       }
-    }
 
-    const event = market.fdaEventId ? eventById.get(market.fdaEventId) : null
-    return {
-      marketHref: null,
-      drugName: event?.drugName?.trim() || 'Unknown event',
-      companyName: event?.companyName?.trim() || '—',
-      ticker: toTicker(event?.symbols),
-      decisionDate: event?.decisionDate ?? null,
-    }
   }
 
   const holdings = rawPositions
@@ -311,6 +293,7 @@ export default async function ProfilePage() {
   }
 
   const user = await db.query.users.findFirst({
+    columns: userColumns,
     where: eq(users.id, session.user.id),
   })
 

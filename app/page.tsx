@@ -7,8 +7,8 @@ import { buildPageMetadata } from '@/lib/seo'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Prediction Market for Phase 2 Clinical Trials',
-  description: 'Track live Phase 2 clinical trials, AI model rankings, and methodology on Endpoint Arena.',
+  title: 'Prediction Market for Clinical Trials',
+  description: 'Track live clinical trials, AI model rankings, and methodology on Endpoint Arena.',
   path: '/',
 })
 
@@ -29,7 +29,12 @@ export default async function Page({
   const resolvedSearchParams = (await searchParams) ?? {}
   const initialStatusTab = firstSearchParam(resolvedSearchParams.tab)
   const initialTrialOverview = createBrowseTrialsOverviewPayload(
-    await getTrialsOverviewData({ includeResolved: true }),
+    await getTrialsOverviewData({
+      includeResolved: true,
+      includeAccounts: false,
+      includeEquityHistory: false,
+      includeRecentRuns: false,
+    }),
   )
   if (!initialTrialOverview) {
     throw new Error('Homepage trials overview payload was unexpectedly empty.')

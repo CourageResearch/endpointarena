@@ -152,11 +152,17 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
           const showToyResetTarget = option.target === 'toy'
 
           return (
-            <article key={option.target} className="rounded-none border border-[#e8ddd0] bg-[#fcfaf7] p-4">
+            <article
+              key={option.target}
+              className={`rounded-none border bg-[#fcfaf7] p-4 ${
+                isActive
+                  ? 'border-[#3a8a2e] shadow-[inset_0_0_0_1px_rgba(58,138,46,0.18)]'
+                  : 'border-[#e8ddd0]'
+              }`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-sm font-semibold text-[#1a1a1a]">{option.label}</h4>
-                  <p className="mt-1 text-xs leading-5 text-[#8a8075]">{option.description}</p>
                 </div>
                 <span className={`rounded-none px-2 py-1 text-xs font-medium ${
                   isActive

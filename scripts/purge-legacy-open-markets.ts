@@ -1,5 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import path from 'node:path'
 import dotenv from 'dotenv'
 import postgres from 'postgres'
 
@@ -14,12 +12,15 @@ const TOTAL_CASH_RESTORE_TOLERANCE = 1
 
 type ParsedArgs = {
   execute: boolean
+  allowLocalExecute: boolean
   outputFile: string | null
   expectations: ExpectedBaseline
 }
 
 type ExpectedBaseline = {
   marketCount: number
+  openMarketCount: number
+  resolvedMarketCount: number
   positionCount: number
   actionCount: number
   priceSnapshotCount: number
@@ -28,8 +29,19 @@ type ExpectedBaseline = {
   affectedActorCount: number
   cashRestoreActorCount: number
   totalCashRestore: number
-  firstActionDate: string
-  lastActionDate: string
+  legacyTableCounts: LegacyTableCounts
+}
+
+type LegacyTableCounts = {
+  fda_calendar_events: number
+  fda_event_external_ids: number
+  fda_event_sources: number
+  fda_event_contexts: number
+  fda_event_analyses: number
+  event_monitor_configs: number
+  event_monitor_runs: number
+  event_outcome_candidates: number
+  event_outcome_candidate_evidence: number
 }
 
 type TargetMarketRow = {
@@ -144,6 +156,8 @@ type CashRestoreRow = { actor_id: string, cash_restore: number }
 
 type CleanupData = {
   markets: TargetMarketRow[]
+  openMarketIds: string[]
+  resolvedMarketIds: string[]
   positions: MarketPositionRow[]
   actions: MarketActionRow[]
   priceSnapshots: MarketPriceSnapshotRow[]
@@ -153,10 +167,13 @@ type CleanupData = {
   cashRestoreRows: CashRestoreRow[]
   accounts: MarketAccountRow[]
   dailySnapshots: MarketDailySnapshotRow[]
+  legacyTableCounts: LegacyTableCounts
 }
 
 type PreflightSummary = {
   marketCount: number
+  openMarketCount: number
+  resolvedMarketCount: number
   positionCount: number
   actionCount: number
   priceSnapshotCount: number
@@ -184,6 +201,7 @@ type PreflightSummary = {
     startsOn: string
     currentMarkedValue: number
   }>
+  legacyTableCounts: LegacyTableCounts
 }
 
 type PositionState = {
@@ -217,17 +235,28 @@ type CurrentSnapshotRefreshSummary = {
 }
 
 const DEFAULT_BASELINE: ExpectedBaseline = {
-  marketCount: 27,
-  positionCount: 407,
-  actionCount: 357,
-  priceSnapshotCount: 92,
-  decisionSnapshotCount: 109,
+  marketCount: 31,
+  openMarketCount: 27,
+  resolvedMarketCount: 4,
+  positionCount: 423,
+  actionCount: 465,
+  priceSnapshotCount: 120,
+  decisionSnapshotCount: 141,
   runLogCount: 301,
   affectedActorCount: 22,
   cashRestoreActorCount: 17,
   totalCashRestore: 862_982,
-  firstActionDate: '2026-02-24',
-  lastActionDate: '2026-03-14',
+  legacyTableCounts: {
+    fda_calendar_events: 72,
+    fda_event_external_ids: 74,
+    fda_event_sources: 42,
+    fda_event_contexts: 43,
+    fda_event_analyses: 2,
+    event_monitor_configs: 1,
+    event_monitor_runs: 1,
+    event_outcome_candidates: 1,
+    event_outcome_candidate_evidence: 2,
+  },
 }
 
 function getFlagValue(argv: string[], name: string): string | null {
@@ -255,17 +284,15 @@ function parseNumberArg(argv: string[], name: string, fallback: number): number 
   return parsed
 }
 
-function parseStringArg(argv: string[], name: string, fallback: string): string {
-  const raw = getFlagValue(argv, name)
-  return raw == null || raw.trim().length === 0 ? fallback : raw.trim()
-}
-
 function parseArgs(argv: string[]): ParsedArgs {
   return {
     execute: hasFlag(argv, '--execute'),
+    allowLocalExecute: hasFlag(argv, '--allow-local-execute'),
     outputFile: getFlagValue(argv, '--output-file'),
     expectations: {
       marketCount: parseNumberArg(argv, '--expect-markets', DEFAULT_BASELINE.marketCount),
+      openMarketCount: parseNumberArg(argv, '--expect-open-markets', DEFAULT_BASELINE.openMarketCount),
+      resolvedMarketCount: parseNumberArg(argv, '--expect-resolved-markets', DEFAULT_BASELINE.resolvedMarketCount),
       positionCount: parseNumberArg(argv, '--expect-positions', DEFAULT_BASELINE.positionCount),
       actionCount: parseNumberArg(argv, '--expect-actions', DEFAULT_BASELINE.actionCount),
       priceSnapshotCount: parseNumberArg(argv, '--expect-price-snapshots', DEFAULT_BASELINE.priceSnapshotCount),
@@ -274,8 +301,17 @@ function parseArgs(argv: string[]): ParsedArgs {
       affectedActorCount: parseNumberArg(argv, '--expect-affected-actors', DEFAULT_BASELINE.affectedActorCount),
       cashRestoreActorCount: parseNumberArg(argv, '--expect-cash-restore-actors', DEFAULT_BASELINE.cashRestoreActorCount),
       totalCashRestore: parseNumberArg(argv, '--expect-total-cash-restore', DEFAULT_BASELINE.totalCashRestore),
-      firstActionDate: parseStringArg(argv, '--expect-first-action-date', DEFAULT_BASELINE.firstActionDate),
-      lastActionDate: parseStringArg(argv, '--expect-last-action-date', DEFAULT_BASELINE.lastActionDate),
+      legacyTableCounts: {
+        fda_calendar_events: parseNumberArg(argv, '--expect-fda-calendar-events', DEFAULT_BASELINE.legacyTableCounts.fda_calendar_events),
+        fda_event_external_ids: parseNumberArg(argv, '--expect-fda-event-external-ids', DEFAULT_BASELINE.legacyTableCounts.fda_event_external_ids),
+        fda_event_sources: parseNumberArg(argv, '--expect-fda-event-sources', DEFAULT_BASELINE.legacyTableCounts.fda_event_sources),
+        fda_event_contexts: parseNumberArg(argv, '--expect-fda-event-contexts', DEFAULT_BASELINE.legacyTableCounts.fda_event_contexts),
+        fda_event_analyses: parseNumberArg(argv, '--expect-fda-event-analyses', DEFAULT_BASELINE.legacyTableCounts.fda_event_analyses),
+        event_monitor_configs: parseNumberArg(argv, '--expect-event-monitor-configs', DEFAULT_BASELINE.legacyTableCounts.event_monitor_configs),
+        event_monitor_runs: parseNumberArg(argv, '--expect-event-monitor-runs', DEFAULT_BASELINE.legacyTableCounts.event_monitor_runs),
+        event_outcome_candidates: parseNumberArg(argv, '--expect-event-outcome-candidates', DEFAULT_BASELINE.legacyTableCounts.event_outcome_candidates),
+        event_outcome_candidate_evidence: parseNumberArg(argv, '--expect-event-outcome-candidate-evidence', DEFAULT_BASELINE.legacyTableCounts.event_outcome_candidate_evidence),
+      },
     },
   }
 }
@@ -321,12 +357,6 @@ function sanitizeForJson(value: unknown): unknown {
   return value
 }
 
-function getDefaultOutputFilePath(execute: boolean): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const mode = execute ? 'execute' : 'dry-run'
-  return path.join(process.cwd(), 'tmp', 'backups', `legacy-open-market-purge-${mode}-${timestamp}.json`)
-}
-
 function describeMarket(market: TargetMarketRow): string {
   const parts = [
     market.company_name,
@@ -338,9 +368,9 @@ function describeMarket(market: TargetMarketRow): string {
   return parts.length > 0 ? parts.join(' | ') : market.id
 }
 
-function assertExecuteTarget(connectionString: string): void {
+function assertExecuteTarget(connectionString: string, allowLocalExecute: boolean): void {
   const normalized = connectionString.toLowerCase()
-  if (normalized.includes('localhost') || normalized.includes('127.0.0.1')) {
+  if (!allowLocalExecute && (normalized.includes('localhost') || normalized.includes('127.0.0.1'))) {
     throw new Error('Refusing to execute against a local DATABASE_URL')
   }
 
@@ -387,9 +417,14 @@ function computeMarkedValue(position: PositionState, priceYes: number): number {
 }
 
 function buildResidualPositionAdjustments(data: CleanupData): Map<string, ResidualPositionAdjustment> {
-  const derived = buildPositionStateMapFromActions(data.actions)
+  const openMarketIdSet = new Set(data.openMarketIds)
+  const derived = buildPositionStateMapFromActions(
+    data.actions.filter((action) => openMarketIdSet.has(action.market_id)),
+  )
   const currentByKey = new Map(
-    data.positions.map((position) => [`${position.market_id}:${position.actor_id}`, position]),
+    data.positions
+      .filter((position) => openMarketIdSet.has(position.market_id))
+      .map((position) => [`${position.market_id}:${position.actor_id}`, position]),
   )
   const allKeys = new Set([...derived.keys(), ...currentByKey.keys()])
   const mismatches: string[] = []
@@ -476,7 +511,10 @@ function buildPreflightSummary(
   residuals: Map<string, ResidualPositionAdjustment>,
 ): PreflightSummary {
   const cashRestoreByActor = buildCashRestoreMap(data.cashRestoreRows)
-  const currentResidualValueByActor = computeCurrentResidualValueByActor(data.markets, residuals)
+  const currentResidualValueByActor = computeCurrentResidualValueByActor(
+    data.markets.filter((market) => market.status === 'OPEN'),
+    residuals,
+  )
   const actionDates = data.actions
     .map((action) => toDateKey(action.created_at))
     .filter((value): value is string => typeof value === 'string')
@@ -484,6 +522,8 @@ function buildPreflightSummary(
 
   return {
     marketCount: data.markets.length,
+    openMarketCount: data.openMarketIds.length,
+    resolvedMarketCount: data.resolvedMarketIds.length,
     positionCount: data.positions.length,
     actionCount: data.actions.length,
     priceSnapshotCount: data.priceSnapshots.length,
@@ -515,14 +555,17 @@ function buildPreflightSummary(
         currentMarkedValue: currentResidualValueByActor.get(residual.actorId) ?? 0,
       }))
       .sort((a, b) => b.currentMarkedValue - a.currentMarkedValue || a.actorId.localeCompare(b.actorId)),
+    legacyTableCounts: data.legacyTableCounts,
   }
 }
 
 function assertPreflightMatches(summary: PreflightSummary, expected: ExpectedBaseline): void {
   const mismatches: string[] = []
 
-  const numericFields: Array<[Exclude<keyof ExpectedBaseline, 'totalCashRestore'>, number]> = [
+  const numericFields: Array<[keyof Omit<ExpectedBaseline, 'legacyTableCounts' | 'totalCashRestore'>, number]> = [
     ['marketCount', summary.marketCount],
+    ['openMarketCount', summary.openMarketCount],
+    ['resolvedMarketCount', summary.resolvedMarketCount],
     ['positionCount', summary.positionCount],
     ['actionCount', summary.actionCount],
     ['priceSnapshotCount', summary.priceSnapshotCount],
@@ -543,12 +586,11 @@ function assertPreflightMatches(summary: PreflightSummary, expected: ExpectedBas
     mismatches.push(`totalCashRestore: expected ${expected.totalCashRestore} but found ${summary.totalCashRestore}`)
   }
 
-  if (summary.firstActionDate !== expected.firstActionDate) {
-    mismatches.push(`firstActionDate: expected ${expected.firstActionDate} but found ${summary.firstActionDate ?? 'null'}`)
-  }
-
-  if (summary.lastActionDate !== expected.lastActionDate) {
-    mismatches.push(`lastActionDate: expected ${expected.lastActionDate} but found ${summary.lastActionDate ?? 'null'}`)
+  for (const [tableName, expectedCount] of Object.entries(expected.legacyTableCounts)) {
+    const actualCount = summary.legacyTableCounts[tableName as keyof LegacyTableCounts]
+    if (Math.abs(actualCount - expectedCount) > MONEY_EPSILON) {
+      mismatches.push(`${tableName}: expected ${expectedCount} but found ${actualCount}`)
+    }
   }
 
   if (mismatches.length > 0) {
@@ -560,6 +602,8 @@ function buildLegacyValueRemovalsBySnapshotRow(
   data: CleanupData,
   residuals: Map<string, ResidualPositionAdjustment>,
 ): SnapshotRepairRow[] {
+  const openMarketIdSet = new Set(data.openMarketIds)
+  const openMarkets = data.markets.filter((market) => openMarketIdSet.has(market.id))
   const relevantSnapshots = data.dailySnapshots
     .filter((snapshot) => {
       const snapshotDate = toDateKey(snapshot.snapshot_date)
@@ -576,6 +620,7 @@ function buildLegacyValueRemovalsBySnapshotRow(
   }
 
   const actions = data.actions
+    .filter((action) => openMarketIdSet.has(action.market_id))
     .filter((action) => action.status === 'ok')
     .sort((a, b) => (
       a.run_date.getTime() - b.run_date.getTime()
@@ -583,6 +628,7 @@ function buildLegacyValueRemovalsBySnapshotRow(
       || a.id.localeCompare(b.id)
     ))
   const priceSnapshots = data.priceSnapshots
+    .filter((snapshot) => openMarketIdSet.has(snapshot.market_id))
     .sort((a, b) => (
       a.snapshot_date.getTime() - b.snapshot_date.getTime()
       || a.market_id.localeCompare(b.market_id)
@@ -651,13 +697,11 @@ function buildLegacyValueRemovalsBySnapshotRow(
     const rows = snapshotsByDate.get(dateKey) ?? []
     for (const row of rows) {
       let legacyPositionsValue = 0
-      let residualValueToCash = 0
-      for (const market of data.markets) {
+      for (const market of openMarkets) {
         const position = positionsByActorMarket.get(`${market.id}:${row.actor_id}`) ?? { yes: 0, no: 0 }
-        const residual = residuals.get(`${market.id}:${row.actor_id}`)
-        const residualActive = Boolean(residual && residual.startsOn <= dateKey)
         const marketOpenedOn = toDateKey(market.opened_at) ?? HISTORY_START_DATE
-        const hasExposure = position.yes > 0 || position.no > 0 || residualActive
+        // Historical repairs only trust action-derived exposure; residuals are current-state cleanup only.
+        const hasExposure = position.yes > 0 || position.no > 0
 
         if (marketOpenedOn > dateKey && !hasExposure) {
           continue
@@ -674,24 +718,27 @@ function buildLegacyValueRemovalsBySnapshotRow(
         if (position.yes > 0 || position.no > 0) {
           legacyPositionsValue += computeMarkedValue(position, priceYes)
         }
-
-        if (residualActive && residual) {
-          const residualValue = computeMarkedValue({ yes: residual.yes, no: residual.no }, priceYes)
-          legacyPositionsValue += residualValue
-          residualValueToCash += residualValue
-        }
       }
 
-      const correctedCashBalance = clampNearZero(roundCash(
-        row.cash_balance + (runningCashRestoreByActor.get(row.actor_id) ?? 0) + residualValueToCash,
+      const correctedCashBalanceRaw = clampNearZero(roundCash(
+        row.cash_balance + (runningCashRestoreByActor.get(row.actor_id) ?? 0),
       ))
-      const correctedPositionsValue = clampNearZero(roundCash(row.positions_value - legacyPositionsValue))
+      const correctedPositionsValueRaw = roundCash(row.positions_value - legacyPositionsValue)
+      const correctedPositionsValueBase = correctedPositionsValueRaw < 0
+        && Math.abs(correctedPositionsValueRaw) <= POSITION_RECONCILIATION_EPSILON
+        ? 0
+        : clampNearZero(correctedPositionsValueRaw)
+      const correctedTotalEquityRaw = clampNearZero(roundCash(correctedCashBalanceRaw + correctedPositionsValueBase))
+
+      const correctedCashBalance = correctedCashBalanceRaw < 0 ? 0 : correctedCashBalanceRaw
+      const correctedPositionsValue = correctedCashBalanceRaw < 0
+        ? clampNearZero(roundCash(correctedTotalEquityRaw))
+        : correctedPositionsValueBase
       const correctedTotalEquity = clampNearZero(roundCash(correctedCashBalance + correctedPositionsValue))
 
-      if (correctedCashBalance < -MONEY_EPSILON) {
-        throw new Error(`Negative corrected cash balance for actor ${row.actor_id} on ${dateKey}`)
-      }
-      if (correctedPositionsValue < -MONEY_EPSILON) {
+      // When removing legacy sell proceeds pushes historical cash below zero, rebalance the
+      // deficit into positions_value so the snapshot stays valid while total equity is preserved.
+      if (correctedPositionsValue < -POSITION_RECONCILIATION_EPSILON) {
         throw new Error(`Negative corrected positions value for actor ${row.actor_id} on ${dateKey}`)
       }
       if (correctedTotalEquity < -MONEY_EPSILON) {
@@ -706,7 +753,7 @@ function buildLegacyValueRemovalsBySnapshotRow(
         correctedPositionsValue,
         correctedTotalEquity,
         legacyPositionsValueRemoved: roundCash(legacyPositionsValue),
-        cashRestoreApplied: roundCash((runningCashRestoreByActor.get(row.actor_id) ?? 0) + residualValueToCash),
+        cashRestoreApplied: roundCash(runningCashRestoreByActor.get(row.actor_id) ?? 0),
       })
     }
   }
@@ -727,14 +774,17 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
     from prediction_markets pm
     left join fda_calendar_events fe on fe.id = pm.fda_event_id
     where pm.trial_question_id is null
-      and pm.status = 'OPEN'
     order by pm.opened_at asc, pm.id asc
   `
 
   const marketIds = markets.map((market) => market.id)
+  const openMarketIds = markets.filter((market) => market.status === 'OPEN').map((market) => market.id)
+  const resolvedMarketIds = markets.filter((market) => market.status === 'RESOLVED').map((market) => market.id)
   if (marketIds.length === 0) {
     return {
       markets,
+      openMarketIds,
+      resolvedMarketIds,
       positions: [],
       actions: [],
       priceSnapshots: [],
@@ -744,10 +794,21 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
       cashRestoreRows: [],
       accounts: [],
       dailySnapshots: [],
+      legacyTableCounts: {
+        fda_calendar_events: 0,
+        fda_event_external_ids: 0,
+        fda_event_sources: 0,
+        fda_event_contexts: 0,
+        fda_event_analyses: 0,
+        event_monitor_configs: 0,
+        event_monitor_runs: 0,
+        event_outcome_candidates: 0,
+        event_outcome_candidate_evidence: 0,
+      },
     }
   }
 
-  const [positions, actions, priceSnapshots, decisionSnapshots, runLogs, affectedActorRows, cashRestoreRows] = await Promise.all([
+  const [positions, actions, priceSnapshots, decisionSnapshots, runLogs, affectedActorRows, cashRestoreRows, legacyTableCountRows] = await Promise.all([
     client<MarketPositionRow[]>`
       select *
       from market_positions
@@ -821,9 +882,24 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
           end
         ) as cash_restore
       from market_actions
-      where market_id in ${client(marketIds)}
+      where market_id in ${client(openMarketIds)}
       group by actor_id
       order by actor_id asc
+    `,
+    client<Array<{ table_name: keyof LegacyTableCounts, row_count: string }>>`
+      select table_name, count(*)::text as row_count
+      from (
+        select 'fda_calendar_events'::text as table_name from fda_calendar_events
+        union all select 'fda_event_external_ids' from fda_event_external_ids
+        union all select 'fda_event_sources' from fda_event_sources
+        union all select 'fda_event_contexts' from fda_event_contexts
+        union all select 'fda_event_analyses' from fda_event_analyses
+        union all select 'event_monitor_configs' from event_monitor_configs
+        union all select 'event_monitor_runs' from event_monitor_runs
+        union all select 'event_outcome_candidates' from event_outcome_candidates
+        union all select 'event_outcome_candidate_evidence' from event_outcome_candidate_evidence
+      ) rows
+      group by table_name
     `,
   ])
 
@@ -845,8 +921,25 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
       `,
     ]) as [MarketAccountRow[], MarketDailySnapshotRow[]]
 
+  const legacyTableCounts: LegacyTableCounts = {
+    fda_calendar_events: 0,
+    fda_event_external_ids: 0,
+    fda_event_sources: 0,
+    fda_event_contexts: 0,
+    fda_event_analyses: 0,
+    event_monitor_configs: 0,
+    event_monitor_runs: 0,
+    event_outcome_candidates: 0,
+    event_outcome_candidate_evidence: 0,
+  }
+  for (const row of legacyTableCountRows) {
+    legacyTableCounts[row.table_name] = Number(row.row_count)
+  }
+
   return {
     markets,
+    openMarketIds,
+    resolvedMarketIds,
     positions,
     actions,
     priceSnapshots,
@@ -856,12 +949,8 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
     cashRestoreRows,
     accounts,
     dailySnapshots,
+    legacyTableCounts,
   }
-}
-
-async function writeExportArtifact(outputFile: string, payload: unknown): Promise<void> {
-  await mkdir(path.dirname(outputFile), { recursive: true })
-  await writeFile(outputFile, `${JSON.stringify(sanitizeForJson(payload), null, 2)}\n`, 'utf8')
 }
 
 async function updateHistoricalSnapshots(
@@ -990,7 +1079,7 @@ async function refreshCurrentSnapshots(client: postgres.Sql): Promise<CurrentSna
 
 async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: string[], affectedActorIds: string[], snapshotDate: string) {
   const [
-    remainingLegacyOpenRow,
+    remainingLegacyMarketRow,
     remainingPositionRow,
     remainingActionRow,
     remainingPriceSnapshotRow,
@@ -998,12 +1087,12 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
     remainingRunLogRow,
     negativeAccountRow,
     refreshedSnapshotRow,
+    legacyTableCountRows,
   ] = await Promise.all([
     client<{ count: string }[]>`
       select count(*)::text as count
       from prediction_markets
       where trial_question_id is null
-        and status = 'OPEN'
     `,
     client<{ count: string }[]>`
       select count(*)::text as count
@@ -1033,18 +1122,48 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
     client<{ count: string }[]>`
       select count(*)::text as count
       from market_accounts
-      where actor_id in ${client(affectedActorIds)}
-        and cash_balance < 0
+      where cash_balance < 0
     `,
     client<{ count: string }[]>`
       select count(*)::text as count
       from market_daily_snapshots
-      where snapshot_date = ${snapshotDate}
+      where snapshot_date::date = ${snapshotDate}::date
+        and actor_id in ${client(affectedActorIds)}
+    `,
+    client<Array<{ table_name: keyof LegacyTableCounts, row_count: string }>>`
+      select table_name, count(*)::text as row_count
+      from (
+        select 'fda_calendar_events'::text as table_name from fda_calendar_events
+        union all select 'fda_event_external_ids' from fda_event_external_ids
+        union all select 'fda_event_sources' from fda_event_sources
+        union all select 'fda_event_contexts' from fda_event_contexts
+        union all select 'fda_event_analyses' from fda_event_analyses
+        union all select 'event_monitor_configs' from event_monitor_configs
+        union all select 'event_monitor_runs' from event_monitor_runs
+        union all select 'event_outcome_candidates' from event_outcome_candidates
+        union all select 'event_outcome_candidate_evidence' from event_outcome_candidate_evidence
+      ) rows
+      group by table_name
     `,
   ])
 
+  const legacyTableCounts: LegacyTableCounts = {
+    fda_calendar_events: 0,
+    fda_event_external_ids: 0,
+    fda_event_sources: 0,
+    fda_event_contexts: 0,
+    fda_event_analyses: 0,
+    event_monitor_configs: 0,
+    event_monitor_runs: 0,
+    event_outcome_candidates: 0,
+    event_outcome_candidate_evidence: 0,
+  }
+  for (const row of legacyTableCountRows) {
+    legacyTableCounts[row.table_name] = Number(row.row_count)
+  }
+
   return {
-    remainingLegacyOpenMarkets: Number(remainingLegacyOpenRow[0]?.count ?? '0'),
+    remainingLegacyMarkets: Number(remainingLegacyMarketRow[0]?.count ?? '0'),
     remainingDeletedMarketPositions: Number(remainingPositionRow[0]?.count ?? '0'),
     remainingDeletedMarketActions: Number(remainingActionRow[0]?.count ?? '0'),
     remainingDeletedMarketPriceSnapshots: Number(remainingPriceSnapshotRow[0]?.count ?? '0'),
@@ -1052,6 +1171,52 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
     remainingDeletedMarketRunLogs: Number(remainingRunLogRow[0]?.count ?? '0'),
     negativeAffectedAccounts: Number(negativeAccountRow[0]?.count ?? '0'),
     refreshedSnapshotRowCount: Number(refreshedSnapshotRow[0]?.count ?? '0'),
+    legacyTableCounts,
+  }
+}
+
+function assertVerificationClean(input: {
+  verification: Awaited<ReturnType<typeof verifyPostDeleteState>>
+  affectedActorCount: number
+}): void {
+  const { verification, affectedActorCount } = input
+  const failures: string[] = []
+
+  if (verification.remainingLegacyMarkets !== 0) {
+    failures.push(`remainingLegacyMarkets=${verification.remainingLegacyMarkets}`)
+  }
+  if (verification.remainingDeletedMarketPositions !== 0) {
+    failures.push(`remainingDeletedMarketPositions=${verification.remainingDeletedMarketPositions}`)
+  }
+  if (verification.remainingDeletedMarketActions !== 0) {
+    failures.push(`remainingDeletedMarketActions=${verification.remainingDeletedMarketActions}`)
+  }
+  if (verification.remainingDeletedMarketPriceSnapshots !== 0) {
+    failures.push(`remainingDeletedMarketPriceSnapshots=${verification.remainingDeletedMarketPriceSnapshots}`)
+  }
+  if (verification.remainingDeletedMarketDecisionSnapshots !== 0) {
+    failures.push(`remainingDeletedMarketDecisionSnapshots=${verification.remainingDeletedMarketDecisionSnapshots}`)
+  }
+  if (verification.remainingDeletedMarketRunLogs !== 0) {
+    failures.push(`remainingDeletedMarketRunLogs=${verification.remainingDeletedMarketRunLogs}`)
+  }
+  if (verification.negativeAffectedAccounts !== 0) {
+    failures.push(`negativeAccounts=${verification.negativeAffectedAccounts}`)
+  }
+  if (verification.refreshedSnapshotRowCount < affectedActorCount) {
+    failures.push(
+      `refreshedSnapshotRowCount=${verification.refreshedSnapshotRowCount} expectedAtLeast=${affectedActorCount}`,
+    )
+  }
+
+  for (const [tableName, count] of Object.entries(verification.legacyTableCounts)) {
+    if (count !== 0) {
+      failures.push(`${tableName}=${count}`)
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Post-delete verification failed:\n${failures.join('\n')}`)
   }
 }
 
@@ -1064,10 +1229,9 @@ async function main(): Promise<void> {
   }
 
   if (args.execute) {
-    assertExecuteTarget(connectionString)
+    assertExecuteTarget(connectionString, args.allowLocalExecute)
   }
 
-  const outputFile = args.outputFile ?? getDefaultOutputFilePath(args.execute)
   const sql = postgres(connectionString, {
     prepare: false,
     max: 1,
@@ -1081,18 +1245,8 @@ async function main(): Promise<void> {
       const summary = buildPreflightSummary(data, residuals)
       assertPreflightMatches(summary, args.expectations)
 
-      await writeExportArtifact(outputFile, {
-        mode: 'dry-run',
-        generatedAt: new Date(),
-        historyStartDate: HISTORY_START_DATE,
-        preflight: summary,
-        residualPositions: Array.from(residuals.values()),
-        data,
-      })
-
       console.log(JSON.stringify({
         mode: 'dry-run',
-        outputFile,
         preflight: summary,
       }, null, 2))
       return
@@ -1108,15 +1262,6 @@ async function main(): Promise<void> {
 
       const summary = buildPreflightSummary(data, residuals)
       assertPreflightMatches(summary, args.expectations)
-
-      await writeExportArtifact(outputFile, {
-        mode: 'execute',
-        generatedAt: new Date(),
-        historyStartDate: HISTORY_START_DATE,
-        preflight: summary,
-        residualPositions: Array.from(residuals.values()),
-        data,
-      })
 
       const repairedRows = buildLegacyValueRemovalsBySnapshotRow(data, residuals)
       const actionCashRestoreByActor = buildCashRestoreMap(data.cashRestoreRows)
@@ -1175,11 +1320,14 @@ async function main(): Promise<void> {
         throw new Error(`Deleted ${deletedMarkets.length} markets, expected ${data.markets.length}`)
       }
 
+      await tx`delete from event_monitor_runs`
+      await tx`delete from event_monitor_configs`
+      await tx`delete from fda_calendar_events`
+
       const refreshSummary = await refreshCurrentSnapshots(tx)
 
       return {
         preflight: summary,
-        outputFile,
         historicalSnapshotCount,
         deletedRunLogCount: deletedRunLogs.length,
         deletedMarketCount: deletedMarkets.length,
@@ -1199,10 +1347,13 @@ async function main(): Promise<void> {
       executionSummary.affectedActorIds,
       executionSummary.refreshSummary.snapshotDate,
     )
+    assertVerificationClean({
+      verification,
+      affectedActorCount: executionSummary.affectedActorIds.length,
+    })
 
     console.log(JSON.stringify({
       mode: 'execute',
-      outputFile: executionSummary.outputFile,
       preflight: executionSummary.preflight,
       historicalSnapshotCount: executionSummary.historicalSnapshotCount,
       deletedRunLogCount: executionSummary.deletedRunLogCount,

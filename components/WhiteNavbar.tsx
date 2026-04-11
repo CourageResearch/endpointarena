@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -15,16 +15,76 @@ const NAV_ITEMS = [
   { href: '/method', label: 'Methodology' },
 ]
 
-export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neutral-200' }: { bgClass?: string; borderClass?: string } = {}) {
+export function WhiteNavbar({
+  bgClass = 'bg-white/80',
+  borderClass = 'border-neutral-200',
+  adminRuntimeLabel = null,
+}: {
+  bgClass?: string
+  borderClass?: string
+  adminRuntimeLabel?: string | null
+} = {}) {
   const pathname = usePathname()
   const { data: session, status: sessionStatus } = useSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [resolvedAdminRuntimeLabel, setResolvedAdminRuntimeLabel] = useState<string | null>(adminRuntimeLabel)
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminUser = Boolean(session?.user?.email && session.user.email === ADMIN_EMAIL)
   const safeCallback = encodeURIComponent(pathname || '/')
   const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
   const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Sign up'
   const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null
+
+  useEffect(() => {
+    setResolvedAdminRuntimeLabel(adminRuntimeLabel)
+  }, [adminRuntimeLabel])
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setResolvedAdminRuntimeLabel(null)
+      return
+    }
+
+    if (adminRuntimeLabel) {
+      setResolvedAdminRuntimeLabel(adminRuntimeLabel)
+      return
+    }
+
+    let cancelled = false
+
+    const loadDatabaseTarget = async () => {
+      try {
+        const response = await fetch('/api/admin/database-target', {
+          method: 'GET',
+          cache: 'no-store',
+        })
+        if (!response.ok) return
+
+        const payload = await response.json() as {
+          target?: string
+          targets?: Array<{
+            target?: string
+            label?: string
+          }>
+        }
+
+        const activeTarget = typeof payload.target === 'string' ? payload.target : null
+        const activeLabel = payload.targets?.find((entry) => entry.target === activeTarget)?.label ?? null
+
+        if (!cancelled && typeof activeLabel === 'string' && activeLabel.trim().length > 0) {
+          setResolvedAdminRuntimeLabel(activeLabel)
+        }
+      } catch {
+        // Leave the admin pill visible even if the runtime target request fails.
+      }
+    }
+
+    void loadDatabaseTarget()
+
+    return () => {
+      cancelled = true
+    }
+  }, [adminRuntimeLabel, isAdminUser])
 
   const handleNavClick = () => {
     setMobileMenuOpen(false)
@@ -44,12 +104,23 @@ export function WhiteNavbar({ bgClass = 'bg-white/80', borderClass = 'border-neu
           <div className="flex min-w-0 items-center gap-1.5">
             <BrandLink onClick={handleNavClick} />
             {isAdminUser ? (
-              <Link
-                href="/admin"
-                className="hidden sm:inline-flex rounded-full border border-[#e8ddd0] bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a8075] transition-colors hover:bg-white hover:text-[#1a1a1a]"
-              >
-                Admin
-              </Link>
+              <div className="hidden sm:flex items-center gap-1.5">
+                <Link
+                  href="/admin"
+                  className="inline-flex rounded-full border border-[#e8ddd0] bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a8075] transition-colors hover:bg-white hover:text-[#1a1a1a]"
+                >
+                  Admin
+                </Link>
+                {resolvedAdminRuntimeLabel ? (
+                  <Link
+                    href="/admin/settings"
+                    title={`Current admin database: ${resolvedAdminRuntimeLabel}. Open settings.`}
+                    className="inline-flex rounded-full border border-[#e8ddd0] bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a8075] transition-colors hover:bg-white hover:text-[#1a1a1a]"
+                  >
+                    {resolvedAdminRuntimeLabel}
+                  </Link>
+                ) : null}
+              </div>
             ) : null}
           </div>
 

@@ -1,7 +1,8 @@
 import { useId } from 'react'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
-import { FooterGradientRule, PageFrame, SquareDivider } from '@/components/site/chrome'
+import { FooterGradientRule, PageFrame } from '@/components/site/chrome'
 import { HomeTrialsClient } from '@/components/HomeTrialsClient'
+import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 function HeroGradientStem() {
@@ -34,9 +35,16 @@ export function HomePageContent({
   initialTrialOverview: OverviewResponse
   initialStatusTab?: string | null
 }) {
+  const activeTarget = getActiveDatabaseTarget()
+  const activeDatabase = listDatabaseTargets().find((entry) => entry.target === activeTarget) ?? null
+
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <WhiteNavbar
+        bgClass="bg-[#F5F2ED]/80"
+        borderClass="border-[#e8ddd0]"
+        adminRuntimeLabel={activeDatabase?.label ?? null}
+      />
 
       {/* Hero */}
       <section className="relative overflow-hidden">
@@ -53,19 +61,10 @@ export function HomePageContent({
             <div className="min-w-0">
               <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-normal tracking-tight leading-[1.08] mb-5">
                 The{' '}
-                <span className="relative inline-block">
-                  <span className="relative z-10">prediction market</span>
-                  <span className="absolute inset-0 -inset-x-1 bottom-[0.1em] top-[0.55em] bg-[#D39D2E]/15 -skew-x-1 rounded-sm" />
-                </span>
+                <span className="inline-block">prediction market</span>
                 <br className="hidden sm:block" />
                 for{' '}
-                <span className="inline-block">
-                  <span className="relative inline-block">
-                    <span className="relative z-10">Phase 2</span>
-                    <span className="absolute inset-0 -inset-x-1 bottom-[0.1em] top-[0.55em] bg-[#D39D2E]/15 -skew-x-1 rounded-sm" />
-                  </span>{' '}
-                  clinical trials
-                </span>
+                <span className="inline-block">clinical trials</span>
                 .
               </h1>
             </div>
@@ -83,8 +82,6 @@ export function HomePageContent({
             variant="table"
           />
         </section>
-
-        <SquareDivider className="mb-16" />
 
         {/* Footer */}
         <FooterGradientRule />

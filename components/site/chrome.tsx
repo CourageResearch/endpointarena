@@ -24,16 +24,14 @@ const DOTS = [
 const DIVIDER_SQUARES = [BRAND_DOT_COLORS.coral, BRAND_DOT_COLORS.green, BRAND_DOT_COLORS.gold, BRAND_DOT_COLORS.blue]
 const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
   [
-    { href: '/trials', label: 'trials' },
-    { href: '/leaderboard', label: 'leaderboard' },
-  ],
-  [
     { href: '/waitlist', label: 'waitlist' },
     { href: '/contact', label: 'contact' },
-    { href: '/brand', label: 'brand kit' },
   ],
   [
+    { href: '/brand', label: 'brand kit' },
     { href: '/method', label: 'methodology' },
+  ],
+  [
     { href: '/glossary', label: 'glossary' },
     { href: '/pdf', label: 'pdf one pager' },
   ],

@@ -7,7 +7,7 @@ import {
   marketAccounts,
   marketPositions,
   modelDecisionSnapshots,
-  phase2Trials,
+  trials,
   predictionMarkets,
 } from '@/lib/db'
 import { type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
@@ -26,37 +26,30 @@ export type LeaderboardPredictionMode = 'first' | 'final'
 
 type UnifiedPredictionHistoryMap = Map<string, Map<string, PredictionHistoryEntry[]>>
 
-function computeCorrectness(prediction: string, eventOutcome: string): boolean | null {
-  if (
-    eventOutcome !== 'Approved' &&
-    eventOutcome !== 'Rejected' &&
-    eventOutcome !== 'YES' &&
-    eventOutcome !== 'NO'
-  ) {
+function computeCorrectness(prediction: string, questionOutcome: string): boolean | null {
+  if (questionOutcome !== 'YES' && questionOutcome !== 'NO') {
     return null
   }
 
   return (
-    (prediction === 'approved' && eventOutcome === 'Approved') ||
-    (prediction === 'rejected' && eventOutcome === 'Rejected') ||
-    (prediction === 'yes' && eventOutcome === 'YES') ||
-    (prediction === 'no' && eventOutcome === 'NO')
+    (prediction === 'yes' && questionOutcome === 'YES') ||
+    (prediction === 'no' && questionOutcome === 'NO')
   )
 }
 
 function mapSnapshotPrediction(
   row: typeof modelDecisionSnapshots.$inferSelect,
   predictorId: string,
-  eventOutcome: string,
+  questionOutcome: string,
 ): PredictionHistoryEntry {
   return {
     id: row.id,
     predictorId,
-    prediction: row.binaryCall,
+    prediction: row.binaryCall as 'yes' | 'no',
     confidence: row.confidence,
     reasoning: row.reasoning,
     durationMs: row.durationMs,
-    correct: computeCorrectness(row.binaryCall, eventOutcome),
+    correct: computeCorrectness(row.binaryCall, questionOutcome),
     createdAt: row.createdAt?.toISOString(),
     source: 'snapshot',
     runSource: row.runSource as 'manual' | 'cycle',
@@ -102,17 +95,17 @@ function buildLatestPrediction(history: PredictionHistoryEntry[]): Prediction | 
   }
 }
 
-export async function getUnifiedPredictionHistoriesByEventIds(
-  eventIds: string[],
-  eventOutcomeById: Map<string, string>,
+export async function getUnifiedPredictionHistoriesByQuestionIds(
+  questionIds: string[],
+  questionOutcomeById: Map<string, string>,
 ): Promise<UnifiedPredictionHistoryMap> {
-  if (eventIds.length === 0) {
+  if (questionIds.length === 0) {
     return new Map()
   }
 
   const [snapshotRows] = await Promise.all([
     db.query.modelDecisionSnapshots.findMany({
-      where: inArray(modelDecisionSnapshots.trialQuestionId, eventIds),
+      where: inArray(modelDecisionSnapshots.trialQuestionId, questionIds),
       orderBy: [desc(modelDecisionSnapshots.createdAt)],
       with: {
         actor: true,
@@ -120,14 +113,14 @@ export async function getUnifiedPredictionHistoriesByEventIds(
     }),
   ])
 
-  const historyByEventId = new Map<string, Map<string, PredictionHistoryEntry[]>>()
+  const historyByQuestionId = new Map<string, Map<string, PredictionHistoryEntry[]>>()
 
-  const pushHistory = (eventId: string, predictorId: string, entry: PredictionHistoryEntry) => {
-    const eventMap = historyByEventId.get(eventId) || new Map<string, PredictionHistoryEntry[]>()
-    const current = eventMap.get(predictorId) || []
+  const pushHistory = (questionId: string, predictorId: string, entry: PredictionHistoryEntry) => {
+    const questionMap = historyByQuestionId.get(questionId) || new Map<string, PredictionHistoryEntry[]>()
+    const current = questionMap.get(predictorId) || []
     current.push(entry)
-    eventMap.set(predictorId, current)
-    historyByEventId.set(eventId, eventMap)
+    questionMap.set(predictorId, current)
+    historyByQuestionId.set(questionId, questionMap)
   }
 
   for (const row of snapshotRows) {
@@ -138,34 +131,34 @@ export async function getUnifiedPredictionHistoriesByEventIds(
     pushHistory(
       ownerId,
       predictorId,
-      mapSnapshotPrediction(row, predictorId, eventOutcomeById.get(ownerId) || 'Pending'),
+      mapSnapshotPrediction(row, predictorId, questionOutcomeById.get(ownerId) || 'Pending'),
     )
   }
 
-  for (const eventMap of historyByEventId.values()) {
-    for (const [predictorId, history] of eventMap.entries()) {
-      eventMap.set(predictorId, sortHistoryDescending(history))
+  for (const questionMap of historyByQuestionId.values()) {
+    for (const [predictorId, history] of questionMap.entries()) {
+      questionMap.set(predictorId, sortHistoryDescending(history))
     }
   }
 
-  return historyByEventId
+  return historyByQuestionId
 }
 
-export async function attachUnifiedPredictionsToEvents<T extends { id: string; outcome: string }>(events: T[]): Promise<Array<T & { predictions: Prediction[] }>> {
-  const eventIds = events.map((event) => event.id)
-  const eventOutcomeById = new Map(events.map((event) => [event.id, event.outcome]))
-  const historyByEventId = await getUnifiedPredictionHistoriesByEventIds(eventIds, eventOutcomeById)
+export async function attachUnifiedPredictionsToQuestions<T extends { id: string; outcome: string }>(questions: T[]): Promise<Array<T & { predictions: Prediction[] }>> {
+  const questionIds = questions.map((question) => question.id)
+  const questionOutcomeById = new Map(questions.map((question) => [question.id, question.outcome]))
+  const historyByQuestionId = await getUnifiedPredictionHistoriesByQuestionIds(questionIds, questionOutcomeById)
 
-  return events.map((event) => {
-    const eventHistory = historyByEventId.get(event.id)
-    const predictions = eventHistory
-      ? Array.from(eventHistory.values())
+  return questions.map((question) => {
+    const questionHistory = historyByQuestionId.get(question.id)
+    const predictions = questionHistory
+      ? Array.from(questionHistory.values())
           .map((history) => buildLatestPrediction(history))
           .filter((prediction): prediction is Prediction => prediction != null)
       : []
 
     return {
-      ...event,
+      ...question,
       predictions,
     }
   })
@@ -173,7 +166,7 @@ export async function attachUnifiedPredictionsToEvents<T extends { id: string; o
 
 export async function getMarketDecisionHistoryByMarketIds(
   marketIds: string[],
-  eventOutcomeById: Map<string, string>,
+  questionOutcomeById: Map<string, string>,
 ): Promise<Map<string, PredictionHistoryEntry[]>> {
   if (marketIds.length === 0) {
     return new Map()
@@ -195,7 +188,7 @@ export async function getMarketDecisionHistoryByMarketIds(
       mapSnapshotPrediction(
         row,
         row.actor.modelKey ?? row.actorId,
-        eventOutcomeById.get(row.trialQuestionId ?? '') || 'Pending',
+        questionOutcomeById.get(row.trialQuestionId ?? '') || 'Pending',
       ),
     )
     historyByMarketId.set(row.marketId, current)
@@ -321,9 +314,10 @@ type ModelDecisionSnapshotArgs = {
   runId?: string | null
   modelId: ModelId
   actorId: string
+  recordedAt?: Date | null
   runDate: Date
-  trial: typeof phase2Trials.$inferSelect
-  trialQuestionId?: string | null
+  trial: typeof trials.$inferSelect
+  trialQuestionId: string
   questionPrompt: string
   market: typeof predictionMarkets.$inferSelect
   account: typeof marketAccounts.$inferSelect
@@ -382,15 +376,12 @@ export function buildModelDecisionSnapshotInput(args: ModelDecisionSnapshotArgs)
     accountCash: args.account.cashBalance,
     yesSharesHeld: args.position.yesShares,
     noSharesHeld: args.position.noShares,
-    marketOpenedAt: args.market.openedAt,
-    runDate: normalizedRunDate,
-    config: args.runtimeConfig,
   })
 
   const input: ModelDecisionInput = {
     meta: {
       eventId: args.trial.id,
-      trialQuestionId: args.trialQuestionId ?? null,
+      trialQuestionId: args.trialQuestionId,
       marketId: args.market.id,
       modelId: args.modelId,
       asOf: args.runDate.toISOString(),
@@ -452,7 +443,7 @@ async function insertStoredModelDecisionSnapshot(args: {
     runId: args.snapshotArgs.runSource === 'cycle' ? args.snapshotArgs.runId ?? null : null,
     runDate: normalizedRunDate,
     marketId: args.snapshotArgs.market.id,
-    trialQuestionId: args.snapshotArgs.trialQuestionId ?? null,
+    trialQuestionId: args.snapshotArgs.trialQuestionId,
     actorId: args.snapshotArgs.actorId,
     runSource: args.snapshotArgs.runSource,
     approvalProbability: args.decision.forecast.approvalProbability,
@@ -483,6 +474,7 @@ async function insertStoredModelDecisionSnapshot(args: {
     cacheReadInputTokens: args.usage.cacheReadInputTokens,
     webSearchRequests: args.usage.webSearchRequests,
     inferenceGeo: args.usage.inferenceGeo,
+    createdAt: args.snapshotArgs.recordedAt ?? undefined,
   }).returning()
 
   return {

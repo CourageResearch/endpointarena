@@ -16,6 +16,7 @@ import {
   ValidationError,
 } from '@/lib/errors'
 import { runBuyAction, runSellAction } from '@/lib/markets/engine'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
 import { ensureHumanMarketActor } from '@/lib/market-actors'
 
@@ -152,6 +153,7 @@ export async function GET(request: Request) {
     }
 
     const market = await db.query.predictionMarkets.findFirst({
+      columns: predictionMarketColumns,
       where: eq(predictionMarkets.id, marketId),
       with: {
         trialQuestion: {
@@ -224,6 +226,7 @@ export async function POST(request: Request) {
     }
 
     const market = await db.query.predictionMarkets.findFirst({
+      columns: predictionMarketColumns,
       where: eq(predictionMarkets.id, marketId),
       with: {
         trialQuestion: {

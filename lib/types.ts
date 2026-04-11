@@ -7,7 +7,7 @@ export interface PredictionAction {
 export interface DecisionForecast {
   approvalProbability?: number
   yesProbability?: number
-  binaryCall: string
+  binaryCall: 'yes' | 'no'
   confidence: number
   reasoning: string
 }
@@ -29,7 +29,7 @@ export interface ModelDecisionSnapshot {
 export interface PredictionHistoryEntry {
   id: string
   predictorId: string
-  prediction: string
+  prediction: 'yes' | 'no'
   confidence: number
   reasoning: string
   durationMs: number | null
@@ -45,7 +45,7 @@ export interface PredictionHistoryEntry {
 
 export interface Prediction {
   predictorId: string
-  prediction: string
+  prediction: 'yes' | 'no'
   confidence: number
   reasoning: string
   durationMs: number | null
@@ -75,7 +75,7 @@ export interface TrialQuestionView {
   sortOrder: number
 }
 
-export interface Phase2TrialView {
+export interface TrialView {
   id: string
   nctNumber: string
   shortTitle: string

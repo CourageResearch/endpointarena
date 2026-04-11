@@ -71,6 +71,55 @@
       "when": 1775831000000,
       "tag": "0009_nimble_ai_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775900000000,
+      "tag": "0010_remove_market_trade_caps",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1775921306470,
+      "tag": "0011_outstanding_vermin",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1775922379148,
+      "tag": "0012_remove_max_position_per_side_shares",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1775940000000,
+      "tag": "0013_season_reset_manual_intake",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1775943600000,
+      "tag": "0014_reconcile_legacy_schema_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1775947200000,
+      "tag": "0015_rename_phase2_trials_to_trials",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1775960400000,
+      "tag": "0016_default_zero_toy_trial_count",
+      "breakpoints": true
     }
   ]
 }

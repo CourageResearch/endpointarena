@@ -2,7 +2,7 @@
 
 ## Overview
 
-Endpoint Arena is a Next.js 16 app for Phase 2 clinical trial prediction markets. The primary product surface is the trials experience: live and resolved trials, model decision snapshots, admin daily runs, leaderboard, and profile/trading flows.
+Endpoint Arena is a Next.js 16 app for clinical trial prediction markets. The primary product surface is the trials experience: live and resolved trials, model decision snapshots, admin daily runs, leaderboard, and profile/trading flows.
 
 ## Current Routes
 
@@ -106,7 +106,7 @@ Primary providers in use:
 
 Provider routing notes:
 - DeepSeek, GLM, Kimi, and MiniMax run through Fireworks.
-- Llama runs through Groq.
+- Llama runs through Fireworks.
 
 On this Windows workstation, run `npm` and `railway` directly in PowerShell.
 
@@ -118,5 +118,5 @@ npm run dev:local
 npm run typecheck
 npm run check
 npm run build
-npm run db:import-phase2
+npm run db:import-trials
 ```

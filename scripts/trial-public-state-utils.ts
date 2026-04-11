@@ -1,10 +1,10 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-export const TRIAL_PUBLIC_STATE_SCHEMA_VERSION = 2
+export const TRIAL_PUBLIC_STATE_SCHEMA_VERSION = 3
 
 export type TrialPublicStateCounts = {
-  phase2_trials: number
+  trials: number
   trial_questions: number
   question_outcome_pending: number
   question_outcome_yes: number
@@ -55,9 +55,10 @@ export type TrialSyncConfigBundleRow = {
   updated_at: string
 }
 
-export type Phase2TrialBundleRow = {
+export type TrialBundleRow = {
   id: string
   nct_number: string
+  source: 'sync_import' | 'manual_admin'
   short_title: string
   sponsor_name: string
   sponsor_ticker: string | null
@@ -98,13 +99,17 @@ export type TrialMarketBundleRow = {
   trial_question_id: string
   status: string
   opening_probability: number
+  house_opening_probability: number
+  opening_line_source: 'house_model' | 'admin_override'
   b: number
   q_yes: number
   q_no: number
   price_yes: number
+  opened_by_user_id: string | null
+  opened_by_user_email: string | null
   opened_at: string
   resolved_at: string | null
-  resolved_outcome: string | null
+  resolved_outcome: 'YES' | 'NO' | null
   created_at: string
   updated_at: string
 }
@@ -250,7 +255,7 @@ export type TrialMarketActionBundleRow = {
   id: string
   run_id: string | null
   market_id: string
-  trial_question_id: string | null
+  trial_question_id: string
   actor_id: string
   run_date: string
   action_source: string
@@ -272,12 +277,12 @@ export type TrialModelDecisionSnapshotBundleRow = {
   run_id: string | null
   run_date: string
   market_id: string
-  trial_question_id: string | null
+  trial_question_id: string
   actor_id: string
   run_source: string
   approval_probability: number
   yes_probability: number | null
-  binary_call: string
+  binary_call: 'yes' | 'no'
   confidence: number
   reasoning: string
   proposed_action_type: string
@@ -336,7 +341,7 @@ export type TrialPublicStateBundle = {
   }
   trialMonitorConfig: TrialMonitorConfigBundleRow
   trialSyncConfig: TrialSyncConfigBundleRow
-  phase2Trials: Phase2TrialBundleRow[]
+  trials: TrialBundleRow[]
   trialQuestions: TrialQuestionBundleRow[]
   trialMarkets: TrialMarketBundleRow[]
   trialMarketPriceSnapshots: TrialMarketPriceSnapshotBundleRow[]
@@ -382,7 +387,7 @@ export function sanitizeForJson<T>(value: T): T {
 
 export function computeTrialPublicStateCounts(bundle: Pick<
   TrialPublicStateBundle,
-  | 'phase2Trials'
+  | 'trials'
   | 'trialQuestions'
   | 'trialMarkets'
   | 'trialMarketPriceSnapshots'
@@ -399,7 +404,7 @@ export function computeTrialPublicStateCounts(bundle: Pick<
   | 'trialMarketPositions'
 >): TrialPublicStateCounts {
   const counts: TrialPublicStateCounts = {
-    phase2_trials: bundle.phase2Trials.length,
+    trials: bundle.trials.length,
     trial_questions: bundle.trialQuestions.length,
     question_outcome_pending: 0,
     question_outcome_yes: 0,
@@ -480,7 +485,7 @@ export function assertTrialPublicStateBundle(value: unknown): asserts value is T
   }
 
   const requiredArrayKeys = [
-    'phase2Trials',
+    'trials',
     'trialQuestions',
     'trialMarkets',
     'trialMarketPriceSnapshots',

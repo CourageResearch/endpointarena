@@ -74,7 +74,7 @@ async function loadManualPublicSponsorMap() {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
-  const { db, phase2Trials } = await import('../lib/db')
+  const { db, trials } = await import('../lib/db')
 
   const manualSponsorMap = await loadManualPublicSponsorMap()
   const referenceFile = args.referenceFile
@@ -84,12 +84,12 @@ async function main() {
 
   const sponsorRows = await db
     .select({
-      sponsorName: phase2Trials.sponsorName,
+      sponsorName: trials.sponsorName,
       trialCount: sql<number>`count(*)::int`,
     })
-    .from(phase2Trials)
-    .groupBy(phase2Trials.sponsorName)
-    .orderBy(phase2Trials.sponsorName)
+    .from(trials)
+    .groupBy(trials.sponsorName)
+    .orderBy(trials.sponsorName)
 
   const changes: Array<{
     matchSource: 'manual' | 'reference_canonical' | 'reference_exact'
@@ -117,26 +117,26 @@ async function main() {
     }
 
     const updatedRows = args.apply
-      ? await db.update(phase2Trials)
+      ? await db.update(trials)
         .set({
           sponsorTicker: match.sponsorTicker,
           updatedAt: new Date(),
         })
         .where(and(
-          eq(phase2Trials.sponsorName, row.sponsorName),
+          eq(trials.sponsorName, row.sponsorName),
           or(
-            isNull(phase2Trials.sponsorTicker),
-            ne(phase2Trials.sponsorTicker, match.sponsorTicker),
+            isNull(trials.sponsorTicker),
+            ne(trials.sponsorTicker, match.sponsorTicker),
           ),
         ))
-        .returning({ id: phase2Trials.id })
-      : await db.select({ id: phase2Trials.id })
-        .from(phase2Trials)
+        .returning({ id: trials.id })
+      : await db.select({ id: trials.id })
+        .from(trials)
         .where(and(
-          eq(phase2Trials.sponsorName, row.sponsorName),
+          eq(trials.sponsorName, row.sponsorName),
           or(
-            isNull(phase2Trials.sponsorTicker),
-            ne(phase2Trials.sponsorTicker, match.sponsorTicker),
+            isNull(trials.sponsorTicker),
+            ne(trials.sponsorTicker, match.sponsorTicker),
           ),
         ))
 

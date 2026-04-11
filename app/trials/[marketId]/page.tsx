@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { TrialDashboard } from '@/components/TrialDashboard'
@@ -11,12 +12,26 @@ import { buildNoIndexMetadata, buildPageMetadata } from '@/lib/seo'
 
 export const revalidate = 300
 
-async function getMarketForMetadata(marketId: string) {
-  const data = await getTrialsOverviewData({ marketId }).catch(() => null)
+const getTrialDetailPageData = cache(async (marketId: string) => {
+  const overviewData = await getTrialsOverviewData({
+    marketId,
+    includeAccounts: false,
+    includeEquityHistory: false,
+    includeRecentRuns: false,
+  })
+  const selectedMarket = overviewData.openMarkets.find((market) => market.marketId === marketId)
+    || overviewData.resolvedMarkets.find((market) => market.marketId === marketId)
 
-  return data?.openMarkets.find((market) => market.marketId === marketId)
-    || data?.resolvedMarkets.find((market) => market.marketId === marketId)
-    || null
+  return {
+    overviewData,
+    selectedMarket: selectedMarket ?? null,
+  }
+})
+
+async function getMarketForMetadata(marketId: string) {
+  return getTrialDetailPageData(marketId)
+    .then((data) => data.selectedMarket)
+    .catch(() => null)
 }
 
 export async function generateMetadata({
@@ -36,7 +51,7 @@ export async function generateMetadata({
     })
   }
 
-  const drugName = market.event.drugName || 'Phase 2 trial'
+  const drugName = market.event.drugName || 'Clinical trial'
   const sponsorName = market.event.sponsorName?.trim() || market.event.companyName?.trim()
   const applicationType = market.event.applicationType?.trim()
   const decisionDateLabel = market.event.decisionDate
@@ -71,12 +86,12 @@ export default async function TrialDetailPage({
 }) {
   const { marketId: encodedMarketId } = await params
   const marketId = decodeURIComponent(encodedMarketId)
-  const overviewData = await getTrialsOverviewData({ marketId }).catch((error) => {
+  const detailData = await getTrialDetailPageData(marketId).catch((error) => {
     console.error('Failed to preload market overview for trial detail page:', error)
     return null
   })
-  const selectedMarket = overviewData?.openMarkets.find((market) => market.marketId === marketId)
-    || overviewData?.resolvedMarkets.find((market) => market.marketId === marketId)
+  const overviewData = detailData?.overviewData ?? null
+  const selectedMarket = detailData?.selectedMarket ?? null
 
   if (!selectedMarket) {
     notFound()

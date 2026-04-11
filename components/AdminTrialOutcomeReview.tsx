@@ -1146,7 +1146,7 @@ export function AdminTrialOutcomeReview({
               </p>
             ) : (
               <p className="mt-1 text-xs text-[#8a8075]">
-                Run the Phase 2 oracle monitor manually to refresh the review queue without waiting for Railway cron.
+                Run the trial oracle monitor manually to refresh the review queue without waiting for Railway cron.
               </p>
             )}
           </div>

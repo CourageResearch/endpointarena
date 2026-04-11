@@ -244,7 +244,11 @@ export function TrialDashboard({
 }: TrialDashboardProps = {}) {
   const pathname = usePathname()
   const { status: sessionStatus } = useSession()
-  const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId)
+  const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId, {
+    includeAccounts: false,
+    includeEquityHistory: false,
+    includeRecentRuns: false,
+  })
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(initialMarketId)
   const [marketSearch, setMarketSearch] = useState('')
   const [commentModelFilter, setCommentModelFilter] = useState<CommentModelFilter>('all')
@@ -653,9 +657,9 @@ export function TrialDashboard({
     const history = state.decisionHistory
     const binaryCall = latestDecision?.forecast.binaryCall ?? null
     const callToneClass =
-      binaryCall === 'approved'
+      binaryCall === 'yes'
         ? APPROVE_TEXT_CLASS
-        : binaryCall === 'rejected'
+        : binaryCall === 'no'
           ? REJECT_TEXT_CLASS
           : 'text-[#7c7267]'
 
@@ -665,10 +669,10 @@ export function TrialDashboard({
       latestDecision,
       history,
       callLabel:
-        binaryCall === 'approved'
-          ? 'Approve'
-          : binaryCall === 'rejected'
-            ? 'Reject'
+        binaryCall === 'yes'
+          ? 'Yes'
+          : binaryCall === 'no'
+            ? 'No'
             : 'Pending',
       callToneClass,
     }

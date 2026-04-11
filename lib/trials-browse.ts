@@ -19,11 +19,11 @@ function getBrowseDecisionCounts(market: OpenMarketRow) {
 
   for (const state of market.modelStates) {
     const binaryCall = state.latestDecision?.forecast.binaryCall
-    if (binaryCall === 'approved' || binaryCall === 'yes') {
+    if (binaryCall === 'yes') {
       approveCount += 1
       continue
     }
-    if (binaryCall === 'rejected' || binaryCall === 'no') {
+    if (binaryCall === 'no') {
       rejectCount += 1
     }
   }

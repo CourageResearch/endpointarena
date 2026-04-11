@@ -10,6 +10,12 @@ import { buildPageMetadata } from '@/lib/seo'
 export const dynamic = 'force-dynamic'
 
 const PANEL_GRADIENT = 'linear-gradient(135deg, #EF6F67, #5DBB63, #D39D2E, #5BA5ED)'
+const PANEL_FRAME_STYLE = {
+  border: '1px solid transparent',
+  backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)), ${PANEL_GRADIENT}`,
+  backgroundOrigin: 'border-box',
+  backgroundClip: 'padding-box, border-box',
+} as const
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'AI Accuracy Leaderboard',
@@ -31,8 +37,11 @@ function GradientPanel({
   innerClassName?: string
 }) {
   return (
-    <div className={`rounded-sm p-[1px] ${className}`.trim()} style={{ background: PANEL_GRADIENT }}>
-      <div className={`rounded-sm bg-white/95 ${innerClassName}`.trim()}>
+    <div
+      className={`rounded-sm border border-transparent ${className}`.trim()}
+      style={PANEL_FRAME_STYLE}
+    >
+      <div className={`rounded-sm ${innerClassName}`.trim()}>
         {children}
       </div>
     </div>
@@ -77,15 +86,12 @@ export default async function LeaderboardPage() {
             AI and human rankings across Endpoint Arena markets.
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Compare model accuracy on Phase 2 trials with current portfolio equity across all open markets.
+            Compare model accuracy across trials with current portfolio equity across all open markets.
           </p>
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader
-            title="AI Accuracy Rankings"
-            description="Ranked by decided Phase 2 results questions using the earliest pre-outcome snapshot per model."
-          />
+          <SectionHeader title="AI Accuracy Rankings" />
           <GradientPanel className="overflow-hidden">
             <div className="divide-y divide-[#e8ddd0]">
               {leaderboard.map((model, index) => (
@@ -115,10 +121,7 @@ export default async function LeaderboardPage() {
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader
-            title="AI Money Rankings"
-            description="Ranked by current total equity across all open Endpoint Arena markets."
-          />
+          <SectionHeader title="AI Money Rankings" />
           <GradientPanel className="overflow-hidden">
             <div className="divide-y divide-[#e8ddd0]">
               {moneyLeaderboard.map((model, index) => (
@@ -143,10 +146,7 @@ export default async function LeaderboardPage() {
         </section>
 
         <section className="mb-12 space-y-4">
-          <SectionHeader
-            title="Top Human Traders"
-            description="Verified traders ranked by current total portfolio equity."
-          />
+          <SectionHeader title="Top Human Traders" />
           <GradientPanel className="overflow-hidden">
             {topHumanLeaderboard.length === 0 ? (
               <div className="px-4 py-8 text-sm text-[#8a8075]">No verified human traders yet.</div>

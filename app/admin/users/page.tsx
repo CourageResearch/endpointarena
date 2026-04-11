@@ -9,6 +9,7 @@ import { accounts, db, marketAccounts, marketActions, marketActors, marketPositi
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
+import { userColumns } from '@/lib/users/query-shapes'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,6 +99,7 @@ async function deleteUser(formData: FormData) {
   if (!userId) return
 
   const user = await db.query.users.findFirst({
+    columns: userColumns,
     where: eq(users.id, userId),
   })
 
@@ -117,6 +119,7 @@ async function deleteUser(formData: FormData) {
 async function getUsersData() {
   const [userRows, totalRows] = await Promise.all([
     db.query.users.findMany({
+      columns: userColumns,
       orderBy: [desc(users.createdAt)],
     }),
     db.select({ count: sql<number>`count(*)` }).from(users),

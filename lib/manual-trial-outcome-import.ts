@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import {
   db,
-  phase2Trials,
+  trials,
   trialMonitorRuns,
   trialOutcomeCandidateEvidence,
   trialOutcomeCandidates,
@@ -19,7 +19,7 @@ const MAX_EXCERPT_CHARS = 320
 type ManualReviewSourceType = (typeof MANUAL_REVIEW_SOURCE_TYPES)[number]
 type CandidateOutcome = 'YES' | 'NO' | 'NO_DECISION'
 type TrialQuestionWithTrial = typeof trialQuestions.$inferSelect & {
-  trial: typeof phase2Trials.$inferSelect
+  trial: typeof trials.$inferSelect
 }
 
 export const MANUAL_CHAT_REVIEW_VERIFIER_KEY = 'manual-chat-review'
@@ -481,12 +481,12 @@ export async function importManualTrialOutcomeDecisions(input: {
 
       if (!updatedTrialIds.has(question.trial.id)) {
         updatedTrialIds.add(question.trial.id)
-        await tx.update(phase2Trials)
+        await tx.update(trials)
           .set({
             lastMonitoredAt: now,
             updatedAt: now,
           })
-          .where(eq(phase2Trials.id, question.trial.id))
+          .where(eq(trials.id, question.trial.id))
       }
     }
 

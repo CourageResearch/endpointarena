@@ -21,7 +21,7 @@ async function main() {
   ])
 
   const resetRows = await db.execute(sql`
-    update phase2_trials as trial
+    update trials as trial
     set
       last_monitored_at = null,
       updated_at = now()

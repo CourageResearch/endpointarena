@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
 import {
   db,
-  phase2Trials,
+  trials,
   predictionMarkets,
   trialMonitorRuns,
   trialOutcomeCandidateEvidence,
@@ -58,7 +58,7 @@ type SourceExtractionMethod =
   | 'none'
 
 type TrialQuestionWithTrial = typeof trialQuestions.$inferSelect & {
-  trial: typeof phase2Trials.$inferSelect
+  trial: typeof trials.$inferSelect
 }
 
 export type EligibleTrialOutcomeQuestion = {
@@ -272,7 +272,7 @@ function normalizeMonitorText(value: string): string {
 function truncateMonitorText(value: string, maxChars: number): string {
   const trimmed = normalizeMonitorText(value)
   if (trimmed.length <= maxChars) return trimmed
-  return `${trimmed.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
+  return `${trimmed.slice(0, Math.max(0, maxChars - 1)).trimEnd()}â€¦`
 }
 
 function getErrorMessage(error: unknown): string {
@@ -957,7 +957,7 @@ function buildOnePassVerificationPrompt(
     : []
 
   return [
-    'You are verifying whether a Phase 2 trial produced an overall positive or negative public readout.',
+    'You are verifying whether a clinical trial produced an overall positive or negative public readout.',
     'Do the full job in one response: search the live web, reason briefly, decide yes/no/no_decision, and return only the citations you actually used.',
     'Use low-depth reasoning. Stop searching once you have enough evidence to justify the decision.',
     'Classify yes only when the cited sources clearly frame this exact trial as positive, encouraging, clinically meaningful, supportive, met efficacy goals, or equivalent.',
@@ -1546,12 +1546,12 @@ async function processTrialMonitorQuestion(input: {
       })
     }
 
-    await db.update(phase2Trials)
+    await db.update(trials)
       .set({
         lastMonitoredAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(phase2Trials.id, question.trial.id))
+      .where(eq(trials.id, question.trial.id))
 
     return {
       candidateCreated,
@@ -2068,12 +2068,12 @@ export async function reviewTrialOutcomeCandidate(input: {
       await tx.delete(trialOutcomeCandidates)
         .where(eq(trialOutcomeCandidates.id, candidate.id))
 
-      await tx.update(phase2Trials)
+      await tx.update(trials)
         .set({
           lastMonitoredAt: null,
           updatedAt: now,
         })
-        .where(eq(phase2Trials.id, candidate.question.trialId))
+        .where(eq(trials.id, candidate.question.trialId))
     })
     return
   }

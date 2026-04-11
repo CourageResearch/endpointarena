@@ -6,6 +6,7 @@ import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
 import { db, marketAccounts, marketPositions, modelDecisionSnapshots, predictionMarkets, trialQuestions } from '@/lib/db'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { generateAndStoreModelDecisionSnapshot } from '@/lib/model-decision-snapshots'
 import { getModelActorId } from '@/lib/market-actors'
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     const market = await db.query.predictionMarkets.findFirst({
+      columns: predictionMarketColumns,
       where: and(
         eq(predictionMarkets.trialQuestionId, trialQuestionId),
         eq(predictionMarkets.status, 'OPEN'),

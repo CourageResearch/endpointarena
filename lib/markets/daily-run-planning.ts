@@ -3,11 +3,12 @@ import {
   db,
   marketAccounts,
   marketPositions,
-  phase2Trials,
+  trials,
   predictionMarkets,
   trialQuestions,
 } from '@/lib/db'
 import { isModelId, type ModelId } from '@/lib/constants'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import {
   ensureMarketAccounts,
   ensureMarketPositions,
@@ -18,12 +19,12 @@ import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { getModelActorIds } from '@/lib/market-actors'
 import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
 
-export type Phase2OpenMarket = typeof predictionMarkets.$inferSelect & {
+export type OpenTrialMarket = typeof predictionMarkets.$inferSelect & {
   trialQuestionId: string
 }
 
 export type TrialQuestionWithTrial = typeof trialQuestions.$inferSelect & {
-  trial: typeof phase2Trials.$inferSelect
+  trial: typeof trials.$inferSelect
 }
 
 export interface DailyRunPreparationOptions {
@@ -47,7 +48,7 @@ export interface DailyRunPreparedContext {
   runtimeConfig: Awaited<ReturnType<typeof getMarketRuntimeConfig>>
   modelOrder: ModelId[]
   scopedNctNumber: string | null
-  scopedOpenMarkets: Phase2OpenMarket[]
+  scopedOpenMarkets: OpenTrialMarket[]
   orderedMarketPlan: DailyRunPlannedMarket[]
   questionById: Map<string, TrialQuestionWithTrial>
   actorIdByModelId: Map<ModelId, string>
@@ -109,6 +110,7 @@ export async function prepareDailyRunContext(
   const [runtimeConfig, rawOpenMarkets] = await Promise.all([
     getMarketRuntimeConfig(),
     db.query.predictionMarkets.findMany({
+      columns: predictionMarketColumns,
       where: and(
         eq(predictionMarkets.status, 'OPEN'),
         isNotNull(predictionMarkets.trialQuestionId),
@@ -116,7 +118,7 @@ export async function prepareDailyRunContext(
     }),
   ])
 
-  const openMarkets = rawOpenMarkets.filter((market): market is Phase2OpenMarket => (
+  const openMarkets = rawOpenMarkets.filter((market): market is OpenTrialMarket => (
     typeof market.trialQuestionId === 'string' && market.trialQuestionId.length > 0
   ))
 

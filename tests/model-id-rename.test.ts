@@ -43,6 +43,8 @@ test('shared registries stay aligned with canonical model ids', () => {
   assert.deepEqual(sortedKeys(MODEL_PROVIDER_MODEL_IDS), expectedKeys)
   assert.equal(MODEL_PROVIDER_MODEL_IDS['gpt-5.4'], 'gpt-5.4')
   assert.equal(MODEL_PROVIDER_MODEL_IDS['deepseek-v3.2'], 'accounts/fireworks/models/deepseek-v3p2')
+  assert.equal(MODEL_PROVIDER_MODEL_IDS['llama-4-scout'], 'accounts/fireworks/models/llama-v3p3-70b-instruct')
+  assert.equal(MODEL_INFO['llama-4-scout'].fullName, 'Llama 3.3 70B')
 })
 
 test('subscription and automation lanes point at gpt-5.4', () => {

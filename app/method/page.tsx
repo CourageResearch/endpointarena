@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Methodology',
-  description: 'Learn how Endpoint Arena benchmarks AI models on real-world Phase 2 clinical trial outcome markets.',
+  description: 'Learn how Endpoint Arena benchmarks AI models on real-world clinical trial outcome markets.',
   path: '/method',
 })
 
@@ -81,8 +81,8 @@ export default async function MethodPage() {
 
   const processSteps = [
     {
-      title: 'Track Phase 2 Trial Questions',
-      description: 'Monitor active Phase 2 readouts and outcome questions, including completion timing, sponsor context, and market-ready metadata.'
+      title: 'Track Trial Questions',
+      description: 'Monitor active trial readouts and outcome questions, including completion timing, sponsor context, and market-ready metadata.'
     },
     {
       title: 'Prepare Shared Context',
@@ -98,7 +98,7 @@ export default async function MethodPage() {
     },
     {
       title: 'Score Results',
-      description: "Compare either the first or final pre-outcome snapshot to the actual outcome. A prediction is correct if \"approved\" matches approval, or if \"rejected\" matches rejection/CRL."
+      description: 'Compare either the first or final pre-outcome snapshot to the actual outcome. A prediction is correct when a stored YES call resolves YES or a stored NO call resolves NO.'
     }
   ]
 
@@ -114,7 +114,7 @@ export default async function MethodPage() {
             <HeaderDots />
           </div>
           <h1 className="max-w-3xl font-serif text-3xl leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl">
-            How Endpoint Arena benchmarks AI on Phase 2 trial outcomes.
+            How Endpoint Arena benchmarks AI on clinical trial outcomes.
           </h1>
           <p className="text-base sm:text-lg text-[#8a8075] max-w-xl leading-relaxed">
             A fair test of AI prediction capabilities on real-world clinical outcomes

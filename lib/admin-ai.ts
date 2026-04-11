@@ -6,7 +6,7 @@ import {
   marketPositions,
   predictionMarkets,
   trialQuestions,
-  phase2Trials,
+  trials,
   type AiBatch as AiBatchRow,
 } from '@/lib/db'
 import {
@@ -48,6 +48,7 @@ import {
   runHoldAction,
   runSellAction,
   recordMarketActionError,
+  upsertDailySnapshots,
 } from '@/lib/markets/engine'
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors'
 import { getModelActorIds } from '@/lib/market-actors'
@@ -55,13 +56,14 @@ import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { getModelDecisionGeneratorDisabledReason, MODEL_DECISION_GENERATORS } from '@/lib/predictions/model-decision-generators'
 import { buildModelDecisionPrompt, parseModelDecisionResponse, type ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
 import { buildModelDecisionSnapshotInput, generateAndStoreModelDecisionSnapshot, linkSnapshotToMarketAction, storeImportedModelDecisionSnapshot } from '@/lib/model-decision-snapshots'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getMarketModelResponseTimeoutMs } from '@/lib/markets/run-health'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 type OpenTrialCandidate = {
   market: typeof predictionMarkets.$inferSelect
   question: typeof trialQuestions.$inferSelect & {
-    trial: typeof phase2Trials.$inferSelect
+    trial: typeof trials.$inferSelect
   }
 }
 
@@ -69,6 +71,7 @@ type CreateAiBatchInput = {
   dataset: AiDataset
   enabledModelIds: ModelId[]
   apiConcurrency?: number
+  runDate?: Date
 }
 
 type JsonRecord = Record<string, unknown>
@@ -240,6 +243,7 @@ function buildLog(message: string, tone: AiBatchState['logs'][number]['tone'] = 
 
 async function listOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
   const markets = await db.query.predictionMarkets.findMany({
+    columns: predictionMarketColumns,
     where: and(
       eq(predictionMarkets.status, 'OPEN'),
       isNotNull(predictionMarkets.trialQuestionId),
@@ -304,12 +308,15 @@ async function buildDatasetSummaries(): Promise<AiDatasetSummary[]> {
     getMarketRuntimeConfig(),
   ])
   const candidateCount = candidates.length
+  const toyCandidateCount = runtimeConfig.toyTrialCount > 0
+    ? Math.min(runtimeConfig.toyTrialCount, candidateCount)
+    : candidateCount
   return [
     {
       key: 'toy',
       label: getAiDatasetLabel('toy'),
       description: getAiDatasetDescription('toy'),
-      candidateCount: Math.min(runtimeConfig.toyTrialCount, candidateCount),
+      candidateCount: toyCandidateCount,
     },
     {
       key: 'live',
@@ -326,9 +333,10 @@ function pickDatasetTrials(
   toyTrialCount: number,
 ): OpenTrialCandidate[] {
   if (dataset === 'toy') {
-    const slice = candidates.slice(0, toyTrialCount)
+    const resolvedToyTrialCount = toyTrialCount > 0 ? toyTrialCount : candidates.length
+    const slice = candidates.slice(0, resolvedToyTrialCount)
     if (slice.length === 0) {
-      throw new ValidationError('Toy mode needs at least 1 open trial to open a batch.')
+      throw new ValidationError('Toy mode needs at least 1 open trial in Toy DB to open a batch.')
     }
     return slice
   }
@@ -340,7 +348,7 @@ function pickDatasetTrials(
   return candidates
 }
 
-function buildFrozenMarketSnapshot(candidate: OpenTrialCandidate): AiFrozenMarketSnapshot {
+function buildFrozenMarketSnapshot(candidate: OpenTrialCandidate, snapshotAt: Date): AiFrozenMarketSnapshot {
   return {
     priceYes: candidate.market.priceYes,
     priceNo: 1 - candidate.market.priceYes,
@@ -348,7 +356,7 @@ function buildFrozenMarketSnapshot(candidate: OpenTrialCandidate): AiFrozenMarke
     qNo: candidate.market.qNo,
     b: candidate.market.b,
     openedAt: toIsoString(candidate.market.openedAt),
-    snapshotAt: new Date().toISOString(),
+    snapshotAt: snapshotAt.toISOString(),
   }
 }
 
@@ -368,9 +376,6 @@ function buildFrozenPortfolio(input: {
     accountCash: input.account.cashBalance,
     yesSharesHeld: input.position.yesShares,
     noSharesHeld: input.position.noShares,
-    marketOpenedAt: input.market.openedAt,
-    runDate: input.runDate,
-    config: input.runtimeConfig,
   })
 
   return {
@@ -384,7 +389,7 @@ function buildFrozenPortfolio(input: {
   }
 }
 
-function buildBatchTrial(candidate: OpenTrialCandidate): AiBatchState['trials'][number] {
+function buildBatchTrial(candidate: OpenTrialCandidate, snapshotAt: Date): AiBatchState['trials'][number] {
   return {
     marketId: candidate.market.id,
     trialQuestionId: candidate.question.id,
@@ -401,7 +406,7 @@ function buildBatchTrial(candidate: OpenTrialCandidate): AiBatchState['trials'][
     primaryEndpoint: candidate.question.trial.primaryEndpoint,
     currentStatus: candidate.question.trial.currentStatus,
     briefSummary: candidate.question.trial.briefSummary,
-    marketSnapshot: buildFrozenMarketSnapshot(candidate),
+    marketSnapshot: buildFrozenMarketSnapshot(candidate, snapshotAt),
   }
 }
 
@@ -481,7 +486,7 @@ function buildInitialBatchState(input: {
 }): AiBatchState {
   const createdAtIso = input.createdAt.toISOString()
   const normalizedRunDate = normalizeRunDate(input.createdAt)
-  const trials = input.trials.map((candidate) => buildBatchTrial(candidate))
+  const trials = input.trials.map((candidate) => buildBatchTrial(candidate, input.createdAt))
   const tasks: AiDecisionTask[] = []
 
   for (const trial of trials) {
@@ -653,7 +658,7 @@ function reconstructSnapshotArgs(batch: AiBatchState, task: AiDecisionTask) {
     estPrimaryCompletionDate: new Date(trial.decisionDate),
     currentStatus: trial.currentStatus,
     briefSummary: trial.briefSummary,
-  } as typeof phase2Trials.$inferSelect
+  } as typeof trials.$inferSelect
 
   const runtimeMarket = {
     id: trial.marketId,
@@ -683,6 +688,7 @@ function reconstructSnapshotArgs(batch: AiBatchState, task: AiDecisionTask) {
       runSource: 'manual' as const,
       modelId: task.modelId,
       actorId: task.actorId,
+      recordedAt: new Date(batch.createdAt),
       runDate: new Date(batch.createdAt),
       trial: runtimeTrial,
       trialQuestionId: trial.trialQuestionId,
@@ -878,6 +884,7 @@ function normalizeRawSubscriptionImport(args: {
 async function getLiveFillState(task: AiDecisionTask) {
   const [market, account, position] = await Promise.all([
     db.query.predictionMarkets.findFirst({
+      columns: predictionMarketColumns,
       where: eq(predictionMarkets.id, task.marketId),
     }),
     db.query.marketAccounts.findFirst({
@@ -934,9 +941,6 @@ function applyRiskCap(args: {
     accountCash: args.account.cashBalance,
     yesSharesHeld: args.position.yesShares,
     noSharesHeld: args.position.noShares,
-    marketOpenedAt: args.market.openedAt,
-    runDate: args.runDate,
-    config: args.config,
   })
 
   const tradeCapUsd = args.action === 'BUY_YES'
@@ -957,7 +961,7 @@ function applyRiskCap(args: {
 
   return {
     amountUsd: capped,
-    note: `${tradeCaps.inWarmupWindow ? 'Warm-up' : 'Steady-state'} cap reduced request to $${capped.toFixed(2)}.`,
+    note: `Portfolio constraints reduced request to $${capped.toFixed(2)}.`,
   }
 }
 
@@ -1149,6 +1153,7 @@ async function clearBatch(batchId: string): Promise<void> {
           .filter(Boolean)
           .join(' ')
           .trim()
+        const effectiveRunAt = new Date(current.createdAt)
 
         let fillEvent: AiBatchState['fills'][number]
         let fillSummary: AiDecisionTask['fill']
@@ -1158,7 +1163,8 @@ async function clearBatch(batchId: string): Promise<void> {
             marketId: market.id,
             trialQuestionId: market.trialQuestionId ?? currentTask.trialQuestionId,
             actorId: currentTask.actorId,
-            runDate: new Date(),
+            createdAt: effectiveRunAt,
+            runDate: effectiveRunAt,
             explanation,
             priceYes: market.priceYes,
             actionSource: 'human',
@@ -1183,7 +1189,8 @@ async function clearBatch(batchId: string): Promise<void> {
           const result = await runBuyAction({
             market,
             actorId: currentTask.actorId,
-            runDate: new Date(),
+            createdAt: effectiveRunAt,
+            runDate: effectiveRunAt,
             side: decision.action.type,
             requestedUsd: cap.amountUsd,
             explanation,
@@ -1209,7 +1216,8 @@ async function clearBatch(batchId: string): Promise<void> {
           const result = await runSellAction({
             market,
             actorId: currentTask.actorId,
-            runDate: new Date(),
+            createdAt: effectiveRunAt,
+            runDate: effectiveRunAt,
             side: decision.action.type,
             requestedUsd: cap.amountUsd,
             explanation,
@@ -1271,11 +1279,13 @@ async function clearBatch(batchId: string): Promise<void> {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown clearing error'
         const { market } = await getLiveFillState(currentTask)
+        const effectiveRunAt = new Date(current.createdAt)
         const action = await recordMarketActionError({
           marketId: market.id,
           trialQuestionId: market.trialQuestionId ?? currentTask.trialQuestionId,
           actorId: currentTask.actorId,
-          runDate: new Date(),
+          createdAt: effectiveRunAt,
+          runDate: effectiveRunAt,
           priceYes: market.priceYes,
           message,
           actionSource: 'human',
@@ -1322,6 +1332,10 @@ async function clearBatch(batchId: string): Promise<void> {
         return
       }
     }
+  }
+
+  if (state.dataset === 'toy') {
+    await upsertDailySnapshots(new Date(state.createdAt))
   }
 
   await mutateBatchState(batchId, async (currentState) => hydratePortfolioStates({
@@ -1414,6 +1428,9 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
   if (enabledModelIds.length === 0) {
     throw new ValidationError('Select at least one model before opening a batch.')
   }
+  if (input.runDate && input.dataset !== 'toy') {
+    throw new ValidationError('runDate is only supported for toy batches.')
+  }
 
   const availableModels = new Map(getAiAvailableModels().map((model) => [model.modelId, model]))
   for (const modelId of enabledModelIds) {
@@ -1438,8 +1455,9 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
 
   const runtimeConfig = await getMarketRuntimeConfig()
   const candidates = pickDatasetTrials(input.dataset, await listOpenTrialCandidates(), runtimeConfig.toyTrialCount)
-  const createdAt = new Date()
-  const clearOrder = rotateModelOrder(normalizeRunDate(createdAt)).filter((modelId) => enabledModelIds.includes(modelId))
+  const effectiveRunAt = input.runDate ?? new Date()
+  const rowCreatedAt = new Date()
+  const clearOrder = rotateModelOrder(normalizeRunDate(effectiveRunAt)).filter((modelId) => enabledModelIds.includes(modelId))
 
   await ensureMarketAccounts()
   await Promise.all(candidates.map((candidate) => ensureMarketPositions(candidate.market.id)))
@@ -1476,7 +1494,7 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
     accountByActorId,
     positionByMarketActorKey,
     runtimeConfig,
-    createdAt,
+    createdAt: effectiveRunAt,
     apiConcurrency,
   })
   state = await hydratePortfolioStates(state)
@@ -1488,8 +1506,8 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
       status: state.status,
       state: serializeBatchState(state),
       error: null,
-      createdAt,
-      updatedAt: createdAt,
+      createdAt: rowCreatedAt,
+      updatedAt: rowCreatedAt,
     })
     .returning()
 

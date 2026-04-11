@@ -76,9 +76,9 @@ const MARKET_CONTROL_SELECT_STYLE = {
 const ALL_TYPES_FILTER = '__all_types__'
 const TYPE_FILTER_PARAM = 'type'
 const TAB_FILTER_PARAM = 'tab'
-const PHASE_2_TRIALS_HEADING = 'Phase 2 Trials'
-const UPCOMING_TRIALS_HEADING = 'Phase 2 Upcoming Trials'
-const RESOLVED_TRIALS_HEADING = 'Phase 2 Resolved Trials'
+const TRIALS_HEADING = 'Clinical Trials'
+const UPCOMING_TRIALS_HEADING = 'Upcoming Trials'
+const RESOLVED_TRIALS_HEADING = 'Resolved Trials'
 const UPCOMING_SORT_OPTIONS: ReadonlyArray<{ value: UpcomingSortMode; label: string }> = [
   { value: 'earliest', label: 'Earliest date' },
   { value: 'latest', label: 'Latest date' },
@@ -358,11 +358,11 @@ function getModelDecisionMap(entry: MarketCardEntry): Map<string, 'APPROVE' | 'R
   const decisions = new Map<string, 'APPROVE' | 'REJECT' | 'PENDING'>()
   for (const state of entry.market.modelStates) {
     const binaryCall = state.latestDecision?.forecast.binaryCall
-    if (binaryCall === 'approved' || binaryCall === 'yes') {
+    if (binaryCall === 'yes') {
       decisions.set(state.modelId, 'APPROVE')
       continue
     }
-    if (binaryCall === 'rejected' || binaryCall === 'no') {
+    if (binaryCall === 'no') {
       decisions.set(state.modelId, 'REJECT')
       continue
     }
@@ -471,6 +471,18 @@ function SortableMarketTableHeader({
       </button>
     </th>
   )
+}
+
+function isInteractiveRowTarget(
+  target: EventTarget | null,
+  currentTarget: EventTarget | null,
+): boolean {
+  if (!(target instanceof HTMLElement) || !(currentTarget instanceof HTMLElement)) {
+    return false
+  }
+
+  const interactiveAncestor = target.closest('a, button, input, select, textarea, [role="button"], [role="link"]')
+  return interactiveAncestor !== null && interactiveAncestor !== currentTarget
 }
 
 function MarketCard({
@@ -677,6 +689,15 @@ function MarketTable({
     router.push(href)
   }
 
+  function prefetchMarket(href: string) {
+    router.prefetch(href)
+  }
+
+  function handleRowClick(event: React.MouseEvent<HTMLTableRowElement>, href: string) {
+    if (isInteractiveRowTarget(event.target, event.currentTarget)) return
+    navigateToMarket(href)
+  }
+
   function handleRowKeyDown(event: React.KeyboardEvent<HTMLTableRowElement>, href: string) {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
@@ -688,8 +709,6 @@ function MarketTable({
   const showHeaderLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'header' || headerLinkPlacement === 'both')
   const showFooterLink = Boolean(resolvedHeaderLinkHref) && (headerLinkPlacement === 'footer' || headerLinkPlacement === 'both')
   const visibleRowCount = effectivePageSize ? sortedRows.length : visibleRows.length
-  const paginationStartRow = effectivePageSize ? (currentPage - 1) * effectivePageSize + 1 : 0
-  const paginationEndRow = effectivePageSize ? Math.min(currentPage * effectivePageSize, sortedRows.length) : 0
 
   return (
     <section className="mt-10">
@@ -837,12 +856,14 @@ function MarketTable({
                         tabIndex={0}
                         role="link"
                         aria-label={`Open ${drugName}`}
-                        onClick={() => navigateToMarket(marketHref)}
+                        onClick={(event) => handleRowClick(event, marketHref)}
                         onKeyDown={(event) => handleRowKeyDown(event, marketHref)}
+                        onMouseEnter={() => prefetchMarket(marketHref)}
+                        onFocus={() => prefetchMarket(marketHref)}
                         className="cursor-pointer border-b border-[#e8ddd0] align-top transition-colors hover:bg-[#f7f1e8]/45 focus-visible:bg-[#f7f1e8]/45 focus-visible:outline-none"
                       >
                         <td className="px-4 py-3.5">
-                          <Link href={marketHref} className="block">
+                          <Link href={marketHref} onClick={(event) => event.stopPropagation()} className="block">
                             <div className="text-base font-medium text-[#1a1a1a] hover:text-[#111111]">
                               {drugName}
                             </div>
@@ -913,17 +934,13 @@ function MarketTable({
       </div>
 
       {effectivePageSize && sortedRows.length > 0 ? (
-        <div className="mt-5 flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-[12px] text-[#8a8075]">
-            Showing {paginationStartRow}-{paginationEndRow} of {sortedRows.length.toLocaleString('en-US')}
-          </div>
-
-          <div className="flex items-center gap-4 sm:gap-6">
+        <div className="mt-5 px-1 sm:px-0">
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-6">
             <button
               type="button"
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={currentPage <= 1}
-              className="inline-flex min-w-[8.5rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-4 py-3 text-[13px] text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:bg-[#fbf7f1] disabled:text-[#c4b7a8]"
+              className="inline-flex w-full min-w-[8.5rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-4 py-3 text-[13px] text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:bg-[#fbf7f1] disabled:text-[#c4b7a8] sm:w-auto sm:justify-self-start"
             >
               Previous
             </button>
@@ -934,7 +951,7 @@ function MarketTable({
               type="button"
               onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
               disabled={currentPage >= pageCount}
-              className="inline-flex min-w-[8.5rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-4 py-3 text-[13px] text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:bg-[#fbf7f1] disabled:text-[#c4b7a8]"
+              className="inline-flex w-full min-w-[8.5rem] items-center justify-center rounded-none border border-[#e7ddd0] bg-white px-4 py-3 text-[13px] text-[#5b5148] transition-colors hover:border-[#d7c8b6] hover:bg-[#fbf8f4] disabled:cursor-not-allowed disabled:bg-[#fbf7f1] disabled:text-[#c4b7a8] sm:w-auto sm:justify-self-end"
             >
               Next
             </button>
@@ -1271,7 +1288,7 @@ export function TrialsBrowseHomepage({
           headerLinkPlacement={headerLinkPlacement}
           pageSize={initialTableMaxRows}
           searchControl={tableSearchControl}
-          heading={PHASE_2_TRIALS_HEADING}
+          heading={TRIALS_HEADING}
           headerTabs={tableStatusTabs}
           sortResetKey={`${selectedTab}:${upcomingSortMode}`}
           showRowCount={showRowCount}

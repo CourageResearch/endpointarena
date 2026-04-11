@@ -2,10 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { GoogleGenAI } from '@google/genai'
 import type { ModelId } from '@/lib/constants'
-import {
-  FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR,
-  MODEL_PROVIDER_MODEL_IDS,
-} from '@/lib/model-runtime-metadata'
+import { MODEL_PROVIDER_MODEL_IDS } from '@/lib/model-runtime-metadata'
 import {
   buildFireworksModelDecisionJsonSchema,
   buildModelDecisionJsonSchema,
@@ -49,6 +46,7 @@ interface OpenAICompatibleResponseFormat {
 
 const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1'
 const FIREWORKS_DECISION_SCHEMA_NAME = 'trial_market_decision'
+const FIREWORKS_NON_STREAM_MAX_TOKENS = 4096
 const DEFAULT_USAGE: ProviderUsageSnapshot = {
   inputTokens: null,
   outputTokens: null,
@@ -248,26 +246,28 @@ async function generateGptDecision(
 ): Promise<ModelDecisionGeneration> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
-  const response = await client.responses.create({
-    model: MODEL_PROVIDER_MODEL_IDS['gpt-5.4'],
-    input: prompt,
-    max_output_tokens: 8000,
-    tools: [{ type: 'web_search' }],
-    reasoning: { effort: 'high' },
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'trial_market_decision',
-        strict: true,
-        description: 'Structured market forecast and action decision for a biotech trial question.',
-        schema: buildModelDecisionJsonSchema(
-          input.constraints.allowedActions,
-          input.constraints.explanationMaxChars,
-        ),
+  const response = await client.responses.create(
+    {
+      model: MODEL_PROVIDER_MODEL_IDS['gpt-5.4'],
+      input: prompt,
+      max_output_tokens: 8000,
+      tools: [{ type: 'web_search' }],
+      reasoning: { effort: 'high' },
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'trial_market_decision',
+          strict: true,
+          description: 'Structured market forecast and action decision for a biotech trial question.',
+          schema: buildModelDecisionJsonSchema(
+            input.constraints.allowedActions,
+            input.constraints.explanationMaxChars,
+          ),
+        },
       },
     },
-    signal: options?.signal,
-  } as any)
+    options?.signal ? { signal: options.signal } : undefined,
+  )
 
   const content = extractResponseText(response)
   if (!content) {
@@ -287,13 +287,15 @@ async function generateGrokDecision(
   })
 
   const prompt = buildModelDecisionPrompt(input)
-  const completion = await client.chat.completions.create({
-    model: MODEL_PROVIDER_MODEL_IDS['grok-4.1'],
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 4000,
-    search_mode: 'auto',
-    signal: options?.signal,
-  } as any)
+  const completion = await client.chat.completions.create(
+    {
+      model: MODEL_PROVIDER_MODEL_IDS['grok-4.1'],
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 4000,
+      search_mode: 'auto',
+    } as any,
+    options?.signal ? { signal: options.signal } : undefined,
+  )
 
   const content = extractChatCompletionText(completion)
   if (!content) {
@@ -350,10 +352,13 @@ async function generateFireworksDecision(args: {
   }
 
   const prompt = buildModelDecisionPrompt(args.input)
+  const requestedMaxTokens = args.maxTokens ?? FIREWORKS_NON_STREAM_MAX_TOKENS
   const requestBody: Record<string, unknown> = {
     model: args.model,
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: args.maxTokens ?? 8192,
+    // Fireworks rejects non-streaming chat completions above 4096 output tokens.
+    // Clamp here so individual model configs cannot trip the provider requirement.
+    max_tokens: Math.min(requestedMaxTokens, FIREWORKS_NON_STREAM_MAX_TOKENS),
     temperature: args.temperature ?? 0.6,
   }
 
@@ -464,15 +469,10 @@ async function generateLlama4Decision(
   input: ModelDecisionInput,
   options?: { signal?: AbortSignal },
 ): Promise<ModelDecisionGeneration> {
-  const deployment = process.env[FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR]?.trim()
-  if (!deployment) {
-    throw new Error(getModelDecisionGeneratorDisabledReason('llama-4-scout'))
-  }
-
   return generateFireworksDecision({
-    model: deployment,
+    model: MODEL_PROVIDER_MODEL_IDS['llama-4-scout'],
     input,
-    errorLabel: 'Llama 4 Scout',
+    errorLabel: 'Llama 3.3 70B',
     maxTokens: 8192,
     temperature: 0.2,
     responseFormat: { type: 'json_object' },
@@ -530,8 +530,14 @@ async function generateMiniMaxDecision(
 export function getModelDecisionGeneratorDisabledReason(
   modelId: ModelId,
 ): string {
-  if (modelId === 'llama-4-scout') {
-    return `llama-4-scout generator is disabled because ${FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR} and FIREWORKS_API_KEY must both be configured`
+  if (
+    modelId === 'deepseek-v3.2'
+    || modelId === 'glm-5'
+    || modelId === 'llama-4-scout'
+    || modelId === 'kimi-k2.5'
+    || modelId === 'minimax-m2.5'
+  ) {
+    return `${modelId} generator is disabled because FIREWORKS_API_KEY is not configured`
   }
 
   return `${modelId} generator is disabled because its API key is not configured`
@@ -564,7 +570,7 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
   },
   'llama-4-scout': {
     generator: generateLlama4Decision,
-    enabled: () => !!process.env.FIREWORKS_API_KEY && !!process.env[FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR]?.trim(),
+    enabled: () => !!process.env.FIREWORKS_API_KEY,
   },
   'kimi-k2.5': {
     generator: generateKimiDecision,

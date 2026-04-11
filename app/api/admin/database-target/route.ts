@@ -8,6 +8,7 @@ import {
   parseDatabaseTarget,
   setActiveDatabaseTarget,
 } from '@/lib/database-target'
+import { ensureToyDatabaseSchema } from '@/lib/toy-database'
 
 type RequestBody = {
   target?: unknown
@@ -40,6 +41,9 @@ export async function PATCH(request: NextRequest) {
 
     const body = await parseJsonBody<RequestBody>(request)
     const target = parseDatabaseTarget(body.target)
+    if (target === 'toy') {
+      await ensureToyDatabaseSchema()
+    }
     const activeTarget = setActiveDatabaseTarget(target)
 
     revalidatePath('/', 'layout')

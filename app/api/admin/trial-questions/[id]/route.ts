@@ -1,6 +1,6 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { db, phase2Trials, trialQuestions } from '@/lib/db'
+import { db, trials, trialQuestions } from '@/lib/db'
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { NotFoundError } from '@/lib/errors'
@@ -36,7 +36,7 @@ export async function DELETE(
       const siblingCount = siblingRows[0]?.count ?? 0
 
       if (siblingCount === 0) {
-        await tx.delete(phase2Trials).where(eq(phase2Trials.id, question.trialId))
+        await tx.delete(trials).where(eq(trials.id, question.trialId))
         return { deletedTrialId: question.trialId, deletedQuestionId: id, deletedWholeTrial: true }
       }
 

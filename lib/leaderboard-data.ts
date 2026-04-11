@@ -1,7 +1,7 @@
 import { desc, isNotNull } from 'drizzle-orm'
 import { db, trialQuestions, users } from '@/lib/db'
 import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
-import { getUnifiedPredictionHistoriesByEventIds, type LeaderboardPredictionMode, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
+import { getUnifiedPredictionHistoriesByQuestionIds, type LeaderboardPredictionMode, selectPredictionFromHistory } from '@/lib/model-decision-snapshots'
 import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-name'
 import { loadOpenMarketActorState } from '@/lib/market-read-model'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
@@ -70,7 +70,7 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
   const recentResolvedQuestions = filterSupportedTrialQuestions(rawRecentResolvedQuestions)
 
   const questionOutcomeById = new Map(allQuestions.map((question) => [question.id, question.outcome]))
-  const historyByQuestionId = await getUnifiedPredictionHistoriesByEventIds(
+  const historyByQuestionId = await getUnifiedPredictionHistoriesByQuestionIds(
     allQuestions.map((question) => question.id),
     questionOutcomeById,
   )

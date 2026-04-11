@@ -4,6 +4,7 @@ import { applyDailyRefillIfEligible, getVerifiedHumansRank } from '@/lib/humans'
 import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
 import { fetchTweetById, isXConnectionExpiredError } from '@/lib/twitter-verification'
 import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
+import { userColumns } from '@/lib/users/query-shapes'
 
 type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
 
@@ -32,6 +33,7 @@ type TwitterVerificationStatus = {
 export async function getTwitterVerificationStatusForUser(userId: string): Promise<TwitterVerificationStatus | null> {
   const [user, twitterAccount] = await Promise.all([
     db.query.users.findFirst({
+      columns: userColumns,
       where: eq(users.id, userId),
     }),
     db.query.accounts.findFirst({

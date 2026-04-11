@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
-import { phase2Trials, db, trialSyncRunItems, trialSyncRuns } from '@/lib/db'
+import { trials, db, trialSyncRunItems, trialSyncRuns } from '@/lib/db'
 import { ExternalServiceError } from '@/lib/errors'
 import {
   buildClinicalTrialsIncrementalQueryTerm,
@@ -14,12 +14,12 @@ import {
   isClinicalTrialsBaseUniverseStudy,
   isClinicalTrialsStudyOnOrAfterDate,
   isClinicalTrialsStudyInRollingWindow,
-  mapClinicalTrialsStudyToPhase2TrialInput,
+  mapClinicalTrialsStudyToTrialInput,
   normalizeClinicalTrialsSponsorKey,
   parseClinicalTrialsDate,
   toUtcDayStart,
 } from '@/lib/clinicaltrials-gov'
-import { ingestPhase2Trials } from '@/lib/phase2-trial-ingestion'
+import { ingestTrials } from '@/lib/trial-ingestion'
 import { getTrialSyncConfig, updateTrialSyncConfig } from '@/lib/trial-sync-config'
 
 const EXISTING_TRIAL_LOOKUP_CHUNK_SIZE = 500
@@ -136,8 +136,8 @@ async function loadExistingNctNumbers(nctNumbers: string[]) {
 
   const rows = await Promise.all(
     chunkArray(Array.from(new Set(nctNumbers)), EXISTING_TRIAL_LOOKUP_CHUNK_SIZE).map((chunk) => (
-      db.query.phase2Trials.findMany({
-        where: inArray(phase2Trials.nctNumber, chunk),
+      db.query.trials.findMany({
+        where: inArray(trials.nctNumber, chunk),
         columns: {
           nctNumber: true,
         },
@@ -375,7 +375,7 @@ export async function runTrialSync(input: TrialSyncInput): Promise<TrialSyncRunR
     }
 
     const normalizedRows = studiesToNormalize
-      .map((study) => mapClinicalTrialsStudyToPhase2TrialInput(
+      .map((study) => mapClinicalTrialsStudyToTrialInput(
         study,
         (() => {
           const nctNumber = getClinicalTrialsNctNumber(study)
@@ -384,7 +384,7 @@ export async function runTrialSync(input: TrialSyncInput): Promise<TrialSyncRunR
       ))
       .filter((row): row is NonNullable<typeof row> => row !== null)
 
-    const ingestionSummary = await ingestPhase2Trials(normalizedRows, {
+    const ingestionSummary = await ingestTrials(normalizedRows, {
       maxMarketsToOpen: input.maxMarketsToOpen,
       preserveExistingSponsorTickerOnNull: true,
     })

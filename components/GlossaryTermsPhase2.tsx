@@ -219,7 +219,7 @@ export function GlossaryTermsPhase2() {
           <div className="grid gap-6 rounded-sm bg-white/95 p-5 sm:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.9fr)] sm:p-8">
             <div>
               <p className="max-w-2xl text-base leading-relaxed text-[#5f564d] sm:text-lg">
-                Endpoint Arena now centers on Phase 2 clinical trials and one uniform question for each market:
+                Endpoint Arena now centers on clinical trials and one uniform question for each market:
                 whether the results will be positive.
               </p>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#8a8075] sm:text-base">

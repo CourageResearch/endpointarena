@@ -5,7 +5,7 @@ import {
   computeTrialPublicStateCounts,
   getDefaultTrialPublicStateOutputPath,
   sanitizeForJson,
-  type Phase2TrialBundleRow,
+  type TrialBundleRow,
   type TrialMarketActionBundleRow,
   type TrialMarketBundleRow,
   type TrialMarketPositionBundleRow,
@@ -82,7 +82,7 @@ async function main() {
     const [
       trialMonitorConfig,
       trialSyncConfig,
-      phase2Trials,
+      trials,
       trialQuestions,
       trialMarkets,
       trialMarketPriceSnapshots,
@@ -147,10 +147,11 @@ async function main() {
         from trial_sync_configs
         where id = 'default'
       `,
-      sql<Phase2TrialBundleRow[]>`
+      sql<TrialBundleRow[]>`
         select
           id,
           nct_number,
+          source,
           short_title,
           sponsor_name,
           sponsor_ticker,
@@ -170,7 +171,7 @@ async function main() {
           last_monitored_at,
           created_at,
           updated_at
-        from phase2_trials
+        from trials
         order by nct_number
       `,
       sql<TrialQuestionBundleRow[]>`
@@ -191,21 +192,26 @@ async function main() {
       `,
       sql<TrialMarketBundleRow[]>`
         select
-          id,
-          trial_question_id,
-          status,
-          opening_probability,
-          b,
-          q_yes,
-          q_no,
-          price_yes,
-          opened_at,
-          resolved_at,
-          resolved_outcome,
-          created_at,
-          updated_at
-        from prediction_markets
-        where trial_question_id is not null
+          pm.id,
+          pm.trial_question_id,
+          pm.status,
+          pm.opening_probability,
+          pm.house_opening_probability,
+          pm.opening_line_source,
+          pm.b,
+          pm.q_yes,
+          pm.q_no,
+          pm.price_yes,
+          pm.opened_by_user_id,
+          u.email as opened_by_user_email,
+          pm.opened_at,
+          pm.resolved_at,
+          pm.resolved_outcome,
+          pm.created_at,
+          pm.updated_at
+        from prediction_markets pm
+        left join users u on u.id = pm.opened_by_user_id
+        where pm.trial_question_id is not null
         order by trial_question_id, id
       `,
       sql<TrialMarketPriceSnapshotBundleRow[]>`
@@ -573,7 +579,7 @@ async function main() {
         source_active_model_ids: [...MODEL_IDS],
         source_disabled_model_ids: ALL_MODEL_IDS.filter((modelId) => !MODEL_IDS.includes(modelId)),
         counts: {
-          phase2_trials: 0,
+          trials: 0,
           trial_questions: 0,
           question_outcome_pending: 0,
           question_outcome_yes: 0,
@@ -600,7 +606,7 @@ async function main() {
       },
       trialMonitorConfig: monitorConfigRow,
       trialSyncConfig: syncConfigRow,
-      phase2Trials,
+      trials,
       trialQuestions,
       trialMarkets,
       trialMarketPriceSnapshots,

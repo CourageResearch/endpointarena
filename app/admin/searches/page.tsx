@@ -146,7 +146,7 @@ export default async function AdminSearchesPage({
 
   return (
     <AdminConsoleLayout
-      title="Search Analytics"
+      title="Search"
       activeTab="searches"
       days={days}
     >

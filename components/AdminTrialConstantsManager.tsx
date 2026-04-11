@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
 
@@ -9,22 +9,8 @@ interface Props {
 }
 
 type FormState = {
-  warmupRunCount: string
-  warmupMaxTradeUsd: string
-  warmupBuyCashFraction: string
-  steadyMaxTradeUsd: string
-  steadyBuyCashFraction: string
-  maxPositionPerSideShares: string
   openingLmsrB: string
   toyTrialCount: string
-}
-
-function formatMoney(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function parseField(value: string, fieldLabel: string): number {
@@ -36,12 +22,6 @@ function parseField(value: string, fieldLabel: string): number {
 }
 
 export interface TrialRuntimeConfigDto {
-  warmupRunCount: number
-  warmupMaxTradeUsd: number
-  warmupBuyCashFraction: number
-  steadyMaxTradeUsd: number
-  steadyBuyCashFraction: number
-  maxPositionPerSideShares: number
   openingLmsrB: number
   toyTrialCount: number
   createdAt: string
@@ -50,12 +30,6 @@ export interface TrialRuntimeConfigDto {
 
 function toFormState(config: TrialRuntimeConfigDto): FormState {
   return {
-    warmupRunCount: String(config.warmupRunCount),
-    warmupMaxTradeUsd: String(config.warmupMaxTradeUsd),
-    warmupBuyCashFraction: String(config.warmupBuyCashFraction),
-    steadyMaxTradeUsd: String(config.steadyMaxTradeUsd),
-    steadyBuyCashFraction: String(config.steadyBuyCashFraction),
-    maxPositionPerSideShares: String(config.maxPositionPerSideShares),
     openingLmsrB: String(config.openingLmsrB),
     toyTrialCount: String(config.toyTrialCount),
   }
@@ -68,35 +42,6 @@ export function AdminTrialConstantsManager({ initialConfig }: Props) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  const parsedPreview = useMemo(() => {
-    const warmupRunCount = Number(form.warmupRunCount)
-    const warmupMaxTradeUsd = Number(form.warmupMaxTradeUsd)
-    const warmupBuyCashFraction = Number(form.warmupBuyCashFraction)
-    const steadyMaxTradeUsd = Number(form.steadyMaxTradeUsd)
-    const steadyBuyCashFraction = Number(form.steadyBuyCashFraction)
-    const maxPositionPerSideShares = Number(form.maxPositionPerSideShares)
-
-    if (
-      !Number.isFinite(warmupRunCount) ||
-      !Number.isFinite(warmupMaxTradeUsd) ||
-      !Number.isFinite(warmupBuyCashFraction) ||
-      !Number.isFinite(steadyMaxTradeUsd) ||
-      !Number.isFinite(steadyBuyCashFraction) ||
-      !Number.isFinite(maxPositionPerSideShares)
-    ) {
-      return null
-    }
-
-    return {
-      warmupRunCount,
-      warmupBuyCapAtStartingCash: Math.min(warmupMaxTradeUsd, 100_000 * warmupBuyCashFraction),
-      warmupBuyCapAtTenThousandCash: Math.min(warmupMaxTradeUsd, 10_000 * warmupBuyCashFraction),
-      steadyBuyCapAtStartingCash: Math.min(steadyMaxTradeUsd, 100_000 * steadyBuyCashFraction),
-      steadyBuyCapAtTenThousandCash: Math.min(steadyMaxTradeUsd, 10_000 * steadyBuyCashFraction),
-      maxPositionPerSideShares,
-    }
-  }, [form])
 
   const updateField = (key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -115,12 +60,6 @@ export function AdminTrialConstantsManager({ initialConfig }: Props) {
 
     try {
       const payload = {
-        warmupRunCount: parseField(form.warmupRunCount, 'Warm-up runs'),
-        warmupMaxTradeUsd: parseField(form.warmupMaxTradeUsd, 'Warm-up max trade USD'),
-        warmupBuyCashFraction: parseField(form.warmupBuyCashFraction, 'Warm-up buy cash fraction'),
-        steadyMaxTradeUsd: parseField(form.steadyMaxTradeUsd, 'Steady-state max trade USD'),
-        steadyBuyCashFraction: parseField(form.steadyBuyCashFraction, 'Steady-state buy cash fraction'),
-        maxPositionPerSideShares: parseField(form.maxPositionPerSideShares, 'Max position per side shares'),
         openingLmsrB: parseField(form.openingLmsrB, 'Opening LMSR b'),
         toyTrialCount: parseField(form.toyTrialCount, 'Toy trial count'),
       }
@@ -174,87 +113,6 @@ export function AdminTrialConstantsManager({ initialConfig }: Props) {
       <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Warm-up Runs</span>
-            <input
-              type="number"
-              min={0}
-              max={365}
-              step={1}
-              value={form.warmupRunCount}
-              onChange={(e) => updateField('warmupRunCount', e.target.value)}
-              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
-            />
-            <p className="text-xs text-[#8a8075]">How many opening daily cycles use the warm-up cap.</p>
-          </label>
-
-          <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Warm-up Max Trade (USD)</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={form.warmupMaxTradeUsd}
-              onChange={(e) => updateField('warmupMaxTradeUsd', e.target.value)}
-              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
-            />
-            <p className="text-xs text-[#8a8075]">Absolute USD cap per action during warm-up.</p>
-          </label>
-
-          <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Warm-up Buy Cash Fraction</span>
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.001}
-              value={form.warmupBuyCashFraction}
-              onChange={(e) => updateField('warmupBuyCashFraction', e.target.value)}
-              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
-            />
-            <p className="text-xs text-[#8a8075]">Buy cap is min(max trade USD, cash * fraction).</p>
-          </label>
-
-          <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Steady Max Trade (USD)</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={form.steadyMaxTradeUsd}
-              onChange={(e) => updateField('steadyMaxTradeUsd', e.target.value)}
-              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
-            />
-            <p className="text-xs text-[#8a8075]">Absolute USD cap per action after warm-up.</p>
-          </label>
-
-          <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Steady Buy Cash Fraction</span>
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.001}
-              value={form.steadyBuyCashFraction}
-              onChange={(e) => updateField('steadyBuyCashFraction', e.target.value)}
-              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
-            />
-            <p className="text-xs text-[#8a8075]">Steady-state buy cap is min(max trade USD, cash * fraction).</p>
-          </label>
-
-          <label className="space-y-1.5">
-            <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Max Position Per Side (Shares)</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={form.maxPositionPerSideShares}
-              onChange={(e) => updateField('maxPositionPerSideShares', e.target.value)}
-              className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
-            />
-            <p className="text-xs text-[#8a8075]">Blocks additional buys once YES/NO holdings hit this cap in a trial.</p>
-          </label>
-
-          <label className="space-y-1.5">
             <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Opening LMSR b</span>
             <input
               type="number"
@@ -264,20 +122,20 @@ export function AdminTrialConstantsManager({ initialConfig }: Props) {
               onChange={(e) => updateField('openingLmsrB', e.target.value)}
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
-            <p className="text-xs text-[#8a8075]">Liquidity applied when a new trial is opened.</p>
+            <p className="text-xs text-[#8a8075]">Liquidity applied when a new trial market is opened.</p>
           </label>
 
           <label className="space-y-1.5">
             <span className="text-xs uppercase tracking-[0.08em] text-[#8a8075]">Toy Trial Count</span>
             <input
               type="number"
-              min={1}
+              min={0}
               step={1}
               value={form.toyTrialCount}
               onChange={(e) => updateField('toyTrialCount', e.target.value)}
               className="w-full rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:border-[#8a8075] focus:outline-none"
             />
-            <p className="text-xs text-[#8a8075]">Used for Toy DB resets and toy-mode AI batches. Enter any whole number of 1 or more.</p>
+            <p className="text-xs text-[#8a8075]">Used for Toy DB resets. Set to 0 to keep Toy DB empty by default; toy AI batches will still use any open toy trials already in the database.</p>
           </label>
         </div>
 
@@ -301,43 +159,6 @@ export function AdminTrialConstantsManager({ initialConfig }: Props) {
           <span className="self-center text-xs text-[#8a8075]">Last updated: {updatedLabel} UTC</span>
         </div>
       </section>
-
-      {parsedPreview && (
-        <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-          <h3 className="text-sm font-semibold text-[#1a1a1a]">Preview</h3>
-          <p className="text-xs text-[#8a8075] mt-1">Estimated caps based on current settings.</p>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Window</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">
-                {parsedPreview.warmupRunCount} {parsedPreview.warmupRunCount === 1 ? 'run' : 'runs'}
-              </p>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Buy Cap @ $100k</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.warmupBuyCapAtStartingCash)}</p>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Warm-up Buy Cap @ $10k</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.warmupBuyCapAtTenThousandCash)}</p>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Steady Buy Cap @ $100k</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.steadyBuyCapAtStartingCash)}</p>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Steady Buy Cap @ $10k</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">{formatMoney(parsedPreview.steadyBuyCapAtTenThousandCash)}</p>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-white p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[#b5aa9e]">Position Cap / Side</p>
-              <p className="text-sm font-semibold text-[#1a1a1a] mt-1">
-                {Math.round(parsedPreview.maxPositionPerSideShares).toLocaleString('en-US')} shares
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
     </div>
   )
 }

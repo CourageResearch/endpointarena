@@ -1,9 +1,12 @@
+import { revalidatePath } from 'next/cache'
+import { and, eq, gte } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { authOptions } from '@/lib/auth'
+import { authOptions, ensureAdmin } from '@/lib/auth'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
+import { crashEvents, db } from '@/lib/db'
 import { getRecentCrashEvents } from '@/lib/crash-events'
 import {
   ADMIN_CRASH_DAY_FILTERS,
@@ -14,6 +17,40 @@ import {
 } from '@/lib/admin-search-params'
 
 export const dynamic = 'force-dynamic'
+
+async function deleteCrashEvent(formData: FormData) {
+  'use server'
+
+  await ensureAdmin()
+  const rawId = formData.get('crashEventId')
+  const crashEventId = typeof rawId === 'string' ? rawId.trim() : ''
+  if (!crashEventId) return
+
+  await db.delete(crashEvents).where(eq(crashEvents.id, crashEventId))
+  revalidatePath('/admin/crashes')
+}
+
+async function deleteCrashGroup(formData: FormData) {
+  'use server'
+
+  await ensureAdmin()
+  const rawFingerprint = formData.get('fingerprint')
+  const rawCreatedAfter = formData.get('createdAfterMs')
+  const fingerprint = typeof rawFingerprint === 'string' ? rawFingerprint.trim() : ''
+  const createdAfterMs = typeof rawCreatedAfter === 'string'
+    ? Number.parseInt(rawCreatedAfter, 10)
+    : Number.NaN
+
+  if (!fingerprint || !Number.isFinite(createdAfterMs) || createdAfterMs <= 0) {
+    return
+  }
+
+  await db.delete(crashEvents).where(and(
+    eq(crashEvents.fingerprint, fingerprint),
+    gte(crashEvents.createdAt, new Date(createdAfterMs)),
+  ))
+  revalidatePath('/admin/crashes')
+}
 
 function normalizeSearch(value: string): string {
   return value.trim().slice(0, 120)
@@ -149,7 +186,7 @@ export default async function AdminCrashesPage({
 
   return (
     <AdminConsoleLayout
-      title="Crash Tracker"
+      title="Crashes"
       activeTab="crashes"
       days={days}
     >
@@ -243,6 +280,7 @@ export default async function AdminCrashesPage({
                   <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Error</th>
                   <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Top Frame</th>
                   <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Request ID</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,6 +302,18 @@ export default async function AdminCrashesPage({
                     </td>
                     <td className="px-2 py-2 text-[#8a8075] font-mono text-xs">{truncate(group.topFrame, 68)}</td>
                     <td className="px-2 py-2 text-[#8a8075] font-mono text-xs">{truncate(group.requestId, 18)}</td>
+                    <td className="px-2 py-2 text-right whitespace-nowrap">
+                      <form action={deleteCrashGroup} className="inline">
+                        <input type="hidden" name="fingerprint" value={group.fingerprint} />
+                        <input type="hidden" name="createdAfterMs" value={String(since.getTime())} />
+                        <button
+                          type="submit"
+                          className="inline-flex h-7 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-2 text-[11px] font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
+                        >
+                          Delete Group
+                        </button>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -296,6 +346,18 @@ export default async function AdminCrashesPage({
                     {truncate(row.path, 80)} • digest {truncate(row.digest, 16)} • req {truncate(row.requestId, 20)}
                   </p>
                 </summary>
+
+                <div className="mt-3 flex justify-end">
+                  <form action={deleteCrashEvent}>
+                    <input type="hidden" name="crashEventId" value={row.id} />
+                    <button
+                      type="submit"
+                      className="inline-flex h-8 items-center justify-center rounded-none border border-[#e8ddd0] bg-white px-2.5 text-xs font-medium text-[#8a8075] transition-colors hover:border-[#c24f45]/30 hover:bg-[#c24f45]/5 hover:text-[#c24f45]"
+                    >
+                      Delete Event
+                    </button>
+                  </form>
+                </div>
 
                 <div className="mt-3 grid gap-2 text-xs text-[#6d645a] sm:grid-cols-2">
                   <p><span className="font-medium text-[#1a1a1a]">Fingerprint:</span> <span className="font-mono">{row.fingerprint}</span></p>

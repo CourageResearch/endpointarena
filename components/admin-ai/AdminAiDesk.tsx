@@ -28,6 +28,28 @@ const EMPTY_TASK_COUNTS: AiBatchTaskCounts = {
   error: 0,
 }
 
+function taskCountsChanged(left: AiBatchTaskCounts | null | undefined, right: AiBatchTaskCounts | null | undefined): boolean {
+  if (!left || !right) return left !== right
+
+  return left.total !== right.total
+    || left.queued !== right.queued
+    || left.running !== right.running
+    || left.waitingImport !== right.waitingImport
+    || left.ready !== right.ready
+    || left.cleared !== right.cleared
+    || left.error !== right.error
+}
+
+function shouldRefreshLiveBatchSnapshot(current: AiBatchProgress | null, next: AiBatchProgress): boolean {
+  if (!current || current.batchId !== next.batchId) return true
+  if (current.status !== next.status) return true
+  if (current.logCount !== next.logCount || current.fillCount !== next.fillCount) return true
+  if (taskCountsChanged(current.taskCounts, next.taskCounts)) return true
+  if (taskCountsChanged(current.laneCounts.api, next.laneCounts.api)) return true
+  if (taskCountsChanged(current.laneCounts.subscription, next.laneCounts.subscription)) return true
+  return false
+}
+
 function formatUsd(value: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -46,6 +68,19 @@ function formatDate(value: string): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function formatDateInputValue(value: Date): string {
+  const year = value.getFullYear()
+  const month = `${value.getMonth() + 1}`.padStart(2, '0')
+  const day = `${value.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function addLocalDays(value: Date, deltaDays: number): Date {
+  const next = new Date(value)
+  next.setDate(next.getDate() + deltaDays)
+  return next
 }
 
 function formatClockTime(value: string): string {
@@ -246,9 +281,10 @@ function getLaneStatus(batch: AiBatchState | null, modelIds: string[]): string {
 type Props = {
   initialState: AiDeskState
   initialProgress: AiBatchProgress | null
+  activeDatabaseTarget: 'main' | 'toy'
 }
 
-export function AdminAiDesk({ initialState, initialProgress }: Props) {
+export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarget }: Props) {
   const [deskState, setDeskState] = useState(initialState)
   const [dataset, setDataset] = useState<AiDataset>(initialState.batch?.dataset ?? initialState.dataset)
   const [selectedModels, setSelectedModels] = useState<AiAvailableModel['modelId'][]>(
@@ -263,14 +299,25 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
   const [exportPackets, setExportPackets] = useState<Record<string, string>>({})
   const [importTexts, setImportTexts] = useState<Record<string, string>>({})
   const [copiedPacketModelId, setCopiedPacketModelId] = useState<AiSubscriptionModelId | null>(null)
+  const [toyRunDate, setToyRunDate] = useState<string>(() => {
+    const seed = initialState.batch?.dataset === 'toy' && initialState.batch.createdAt
+      ? new Date(initialState.batch.createdAt)
+      : new Date()
+    return formatDateInputValue(seed)
+  })
   const [progress, setProgress] = useState<AiBatchProgress | null>(initialProgress)
   const snapshotRefreshInFlightRef = useRef(false)
+  const progressRef = useRef<AiBatchProgress | null>(initialProgress)
 
   const batch = deskState.batch
   const availableModelById = useMemo(() => (
     new Map(deskState.availableModels.map((model) => [model.modelId, model] as const))
   ), [deskState.availableModels])
   const liveProgress = progress
+
+  useEffect(() => {
+    progressRef.current = progress
+  }, [progress])
 
   const replaceBatch = useEffectEvent((nextBatch: AiBatchState | null) => {
     startTransition(() => {
@@ -337,20 +384,21 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
   useEffect(() => {
     if (!batch || isTerminal(batch.status)) return
 
-    let previousStatus = batch.status
     const source = new EventSource(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/stream`)
     source.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as { type?: string; progress?: AiBatchProgress | null; message?: string }
         if (payload.type === 'progress' && payload.progress) {
           const nextProgress = payload.progress
+          const currentProgress = progressRef.current
+          const shouldRefreshSnapshot = shouldRefreshLiveBatchSnapshot(currentProgress, nextProgress)
+
+          progressRef.current = nextProgress
           startTransition(() => {
             setProgress(nextProgress)
           })
 
-          const statusChanged = nextProgress.status !== previousStatus
-          previousStatus = nextProgress.status
-          if (statusChanged || isTerminal(nextProgress.status)) {
+          if (shouldRefreshSnapshot || isTerminal(nextProgress.status)) {
             void refreshBatchSnapshot(batch.id, { force: true, silent: true })
           }
         }
@@ -481,6 +529,8 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
     ? `${liveProgress.trialCount} trials / ${liveProgress.modelCount} models / ${liveTaskCounts.total} tasks`
     : 'No active batch'
   const fullRefreshIntervalSeconds = Math.round(ACTIVE_BATCH_FULL_REFRESH_INTERVAL_MS / 1000)
+  const toyBacktestEnabled = activeDatabaseTarget === 'toy' && dataset === 'toy'
+  const toyRunDatePresets = [0, 1, 2, 3, 4, 5]
   const laneCards = useMemo(() => {
     return [
       {
@@ -507,6 +557,12 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
     ]
   }, [apiModels, batch])
 
+  useEffect(() => {
+    if (batch?.dataset === 'toy' && batch.createdAt) {
+      setToyRunDate(formatDateInputValue(new Date(batch.createdAt)))
+    }
+  }, [batch?.createdAt, batch?.dataset, batch?.id])
+
   async function refreshState(nextDataset: AiDataset) {
     const response = await fetchJson<AiDeskState>(`/api/admin/ai/state?dataset=${encodeURIComponent(nextDataset)}`)
     startTransition(() => {
@@ -532,6 +588,7 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
           dataset,
           enabledModelIds: selectedModels,
           apiConcurrency: selectedApiConcurrency,
+          runDate: toyBacktestEnabled ? toyRunDate : undefined,
         }),
       })
       replaceBatch(payload.batch)
@@ -751,40 +808,65 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
               })}
             </div>
           </div>
-          <div className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">API Parallelization</p>
-                <p className="mt-2 text-sm text-[#1a1a1a]">
-                  Choose how many API trial tasks can run at once in the API lane.
-                </p>
+          <div className={`flex flex-col gap-3 ${toyBacktestEnabled ? 'xl:flex-row xl:items-start' : ''}`}>
+            <div className="shrink-0 self-start border border-[#d8ccb9] bg-[#fcfaf7] px-5 py-3">
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-3 text-sm text-[#5f564c]">
+                  <span className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Concurrent tasks</span>
+                  <select
+                    value={displayedApiConcurrency}
+                    disabled={busyKey != null || apiConcurrencyLocked || Boolean(batch && isTerminal(batch.status))}
+                    onChange={(event) => void updateApiConcurrency(Number(event.target.value))}
+                    className="border border-[#d8ccb9] bg-white px-3 py-2 text-sm text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {Array.from({ length: AI_API_CONCURRENCY_MAX - AI_API_CONCURRENCY_MIN + 1 }, (_, index) => {
+                      const value = AI_API_CONCURRENCY_MIN + index
+                      return (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </label>
               </div>
-              <label className="flex items-center gap-3 text-sm text-[#5f564c]">
-                <span>Concurrent tasks</span>
-                <select
-                  value={displayedApiConcurrency}
-                  disabled={busyKey != null || apiConcurrencyLocked || Boolean(batch && isTerminal(batch.status))}
-                  onChange={(event) => void updateApiConcurrency(Number(event.target.value))}
-                  className="border border-[#d8ccb9] bg-white px-3 py-2 text-sm text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {Array.from({ length: AI_API_CONCURRENCY_MAX - AI_API_CONCURRENCY_MIN + 1 }, (_, index) => {
-                    const value = AI_API_CONCURRENCY_MIN + index
-                    return (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    )
-                  })}
-                </select>
-              </label>
             </div>
-            <p className="mt-3 text-[11px] text-[#8a8075]">
-              {batch
-                ? apiConcurrencyLocked
-                  ? `Locked for this run at ${batch.apiConcurrency} concurrent API task${batch.apiConcurrency === 1 ? '' : 's'}.`
-                  : `Saved to this staged batch at ${batch.apiConcurrency} concurrent API task${batch.apiConcurrency === 1 ? '' : 's'}.`
-                : `New batches default to ${AI_API_CONCURRENCY_DEFAULT} concurrent API tasks.`}
-            </p>
+            {toyBacktestEnabled ? (
+              <div className="flex-1 border border-[#d8ccb9] bg-[#fcfaf7] px-5 py-4">
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Toy Backtest Date</p>
+                  </div>
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <input
+                      type="date"
+                      value={toyRunDate}
+                      max={formatDateInputValue(new Date())}
+                      disabled={busyKey != null || (batch != null && !isTerminal(batch.status))}
+                      onChange={(event) => setToyRunDate(event.target.value)}
+                      className="border border-[#d8ccb9] bg-white px-3 py-2 text-sm text-[#1a1a1a] xl:w-[190px] disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                    <div className="flex flex-wrap gap-2 xl:flex-nowrap xl:gap-1.5">
+                      {toyRunDatePresets.map((daysAgo) => {
+                        const presetValue = formatDateInputValue(addLocalDays(new Date(), -daysAgo))
+                        const active = toyRunDate === presetValue
+                        return (
+                          <button
+                            key={daysAgo}
+                            type="button"
+                            disabled={busyKey != null || (batch != null && !isTerminal(batch.status))}
+                            onClick={() => setToyRunDate(presetValue)}
+                            className={`border px-3 py-2 text-xs font-medium whitespace-nowrap xl:px-2.5 xl:text-[11px] disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'border-[#c9b59a] bg-[#efe5d7] text-[#5b4d3f]' : 'border-[#d8ccb9] bg-white text-[#6f665b]'}`}
+                          >
+                            {daysAgo === 0 ? 'Today' : `${daysAgo}d ago`}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-3">
             <button
@@ -836,7 +918,7 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
                 ? liveApiLaneReadyForClear
                   ? `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the shared AMM can clear.`
                   : `The API lane is live. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect.`
-                : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix refreshes every ${fullRefreshIntervalSeconds}s while live run health updates continue every second.`}
+                : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix now refreshes automatically as tasks finish.`}
             </div>
           ) : null}
           {batch?.status === 'failed' && successfulFillCount === 0 ? (
@@ -869,7 +951,7 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
             </div>
             <p className="text-xs text-[#8a8075]">
               {batch?.runStartedAt && !isTerminal(batch.status)
-                ? `Live counts update every second. The order book refreshes every ${fullRefreshIntervalSeconds}s.`
+                ? `Live counts update every second, and the order book refreshes as tasks change.`
                 : liveBatchSizeLabel}
             </p>
           </div>
@@ -1163,7 +1245,7 @@ export function AdminAiDesk({ initialState, initialProgress }: Props) {
             <h3 className="mt-1 text-lg font-semibold text-[#1a1a1a]">Batch-wide decision matrix</h3>
             {batch?.runStartedAt && !isTerminal(batch.status) ? (
               <p className="mt-2 text-xs text-[#8a8075]">
-                This matrix refreshes every {fullRefreshIntervalSeconds}s while the run is active. Use Run Health and Live Debug for second-by-second updates.
+                This matrix refreshes automatically when live task state changes, with a background full sync every {fullRefreshIntervalSeconds}s.
               </p>
             ) : null}
           </div>

@@ -2,18 +2,27 @@
 
 This repo deploys from GitHub to Railway. GitHub is the source of truth for code, and Railway is the source of truth for runtime state.
 
+## Active production cutover
+
+The current production rollout is a maintenance-window cutover for the trial schema rename, legacy market cleanup, season reset, and curated trial import.
+
+Use a clean release branch such as `codex/prod-cutover-2026-04-11` for the candidate commit. Do not release directly from a dirty `master` worktree.
+
 ## Windows command notes
 
-On this workstation, run `npm` and `railway` directly in PowerShell:
-
-- `npm run typecheck`
-- `npm run build`
-- `railway status`
+On this workstation, run `npm`, `gh`, `railway`, `pg_dump`, and `pg_restore` directly in PowerShell.
 
 If Railway CLI reports `Unauthorized`, re-authenticate before continuing:
 
-- `railway login`
-- `railway login --browserless`
+```powershell
+railway login
+```
+
+If the browser flow fails, fall back to:
+
+```powershell
+railway login --browserless
+```
 
 ## GitHub CI build env
 
@@ -29,9 +38,9 @@ gh variable set CI_NEXTAUTH_URL --repo CourageResearch/endpointarena --body "htt
 
 The workflow also carries safe inline fallbacks so forked PR builds do not fail if repository secrets are unavailable.
 
-## Railway CLI link and env checks
+## Railway project link
 
-This repo is already connected to Railway through GitHub deployments. The current production environment discovered from GitHub is:
+This repo is already connected to Railway through GitHub deployments. The current production environment is:
 
 - Project: `f109ef0b-d201-42d1-b2cd-5b64b065d860`
 - Environment: `4a8cf2da-561b-4465-a1a9-06e2b445af10`
@@ -40,78 +49,164 @@ After logging in locally, link the repo:
 
 ```powershell
 railway link --project f109ef0b-d201-42d1-b2cd-5b64b065d860 --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
-railway status
-railway variable list --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
+railway status --json
+railway variable list --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --json
 ```
 
 `railway.json` already points Railway health checks at `/api/health`.
 
-Verify these production variables exist before cutting a release:
+## Required production variables
+
+Verify these app variables exist before cutting the release:
 
 - `DATABASE_URL`
 - `NEXTAUTH_SECRET`
 - `NEXTAUTH_URL`
 - `NEXT_PUBLIC_SITE_URL`
 - `SITE_URL`
-- At least one provider key such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, or `FIREWORKS_API_KEY`
-- `FIREWORKS_LLAMA_4_DEPLOYMENT` if the `llama-4-scout` slot should be enabled, set to the full Fireworks dedicated deployment resource accepted by the chat completions API
+- `MAINTENANCE_MODE`
+- At least one model-provider key such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, or `FIREWORKS_API_KEY`
+- `TRIAL_MONITOR_CRON_SECRET`
+- `TRIAL_SYNC_CRON_SECRET`
 
-For this release, `TRIAL_MONITOR_CRON_SECRET` and `TRIAL_SYNC_CRON_SECRET` are intentionally deferred because scheduled jobs remain manual.
+`OPENAI_API_KEY` is recommended for AI-assisted manual trial drafts. If it is missing, `/admin/trials` still works, but draft enrichment falls back to the ClinicalTrials.gov baseline and opening-line fallback.
 
-## Manual watched release
+## Release candidate checks
 
-1. Make sure the intended commit is pushed to GitHub and the worktree is clean enough to release from.
-2. Run the local preflight checks:
+From the exact candidate commit, run:
 
 ```powershell
 npm run typecheck
 npm run build
+npm run knip
+node --import tsx --test tests\model-id-rename.test.ts tests\market-engine.test.ts tests\fireworks-model-decision.test.ts
 ```
 
-3. Apply the pending production schema migration directly against the Railway Postgres service:
+Push the release branch and wait for green GitHub `CI` before touching `master`.
+
+## Maintenance window cutover
+
+1. Prepare the curated import file at `output/prod-cutover/2026-04-11/trials.csv`.
+2. Freeze public traffic:
 
 ```powershell
-Get-Content -Raw .\drizzle\0001_rapid_spitfire.sql | railway connect postgres-green
+railway variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af10 MAINTENANCE_MODE=true
 ```
 
-The required migration for this release is `drizzle/0001_rapid_spitfire.sql`. Do not use `railway run npm run db:migrate` from this workstation for production, because `railway run` executes locally and the production `DATABASE_URL` currently points at an internal Railway hostname.
-
-4. For the canonical model ID cutover release, pause admin AI activity and preview the one-off rename migration:
+3. Wait for the maintenance deployment, then verify:
+   - `https://endpointarena.com/api/health` returns `200`
+   - `/` and `/trials` rewrite to `/maintenance`
+   - `/login` and `/admin` remain reachable
+4. Export the production public database URL into the current shell. Do not use `railway run`, because it executes locally and the app-service `DATABASE_URL` points at Railway private networking:
 
 ```powershell
-npm run db:rename-model-ids -- --dry-run
+$env:DATABASE_URL = (railway variable list --service postgres-green --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --json | ConvertFrom-Json).DATABASE_PUBLIC_URL
 ```
 
-This dry run reports legacy `market_actors.model_key` rows, verifier-key rows, pending AI batch rewrites, and any queued admin AI handoff files that will be archived. Run the apply step only during the short maintenance window after the app deploy is live:
+5. Take a pre-cutover backup:
 
 ```powershell
-npm run db:rename-model-ids -- --apply
+pg_dump --format=custom --file "backups/prod-cutover-2026-04-11-before-reset.dump" $env:DATABASE_URL
 ```
 
-5. Trigger one watched production deploy:
+6. Apply only missing migrations from the final release commit:
 
 ```powershell
-railway up --ci
+npm run db:migrate
 ```
 
-If GitHub has already started the Railway deploy for the pushed commit, watch that deployment instead of creating a second one. If you do use `railway up --ci`, run it only from a clean checkout that matches the pushed commit.
-
-6. Watch health and logs:
+7. Run the legacy-market purge dry-run:
 
 ```powershell
+npm run db:purge-legacy-open-markets -- --output-file output/prod-cutover/2026-04-11/purge-preflight.json
+```
+
+If the baked baseline mismatches production, stop and resolve the drift before any destructive step.
+
+8. Run the purge apply:
+
+```powershell
+npm run db:purge-legacy-open-markets -- --execute --output-file output/prod-cutover/2026-04-11/purge-apply.json
+```
+
+9. Run the season-reset dry-run:
+
+```powershell
+npm run db:reset-season -- --output-file output/prod-cutover/2026-04-11/season-reset-preflight.json
+```
+
+10. Run the season-reset apply using the exact dry-run file:
+
+```powershell
+npm run db:reset-season -- --execute --expect-file output/prod-cutover/2026-04-11/season-reset-preflight.json --output-file output/prod-cutover/2026-04-11/season-reset-apply.json
+```
+
+11. Run the import dry-run:
+
+```powershell
+npm run db:import-trials:dry-run -- --file output/prod-cutover/2026-04-11/trials.csv
+```
+
+12. Run the import apply with `--no-reset`. This is required so the import does not wipe the freshly recreated model roster after the season reset:
+
+```powershell
+npm run db:import-trials -- --file output/prod-cutover/2026-04-11/trials.csv --no-reset
+```
+
+13. Merge or fast-forward the validated release candidate to `master`, push `origin/master`, and watch the GitHub-triggered Railway deployment for that exact commit. Do not run `railway up` if GitHub has already started the deploy for the pushed SHA.
+
+## Cutover smoke tests
+
+While maintenance is still enabled, validate:
+
+- `https://endpointarena.com/api/health`
+- `https://endpointarena.com/trials`
+- One `https://endpointarena.com/trials/[marketId]`
+- `https://endpointarena.com/leaderboard`
+- `https://endpointarena.com/admin/settings`
+- `https://endpointarena.com/admin/trials`
+- `https://endpointarena.com/admin/outcomes`
+- `https://endpointarena.com/admin/ai`
+- `https://endpointarena.com/admin/tables`
+
+Also run:
+
+- One admin trial-monitor job from `/admin/outcomes`
+- One daily market cycle if open markets exist
+- One `/admin/trials` draft or preview for an unused NCT number
+
+Do not publish a new manual trial during smoke. Accept `fallback_default` if `OPENAI_API_KEY` is missing.
+
+## Reopen and observe
+
+Reopen traffic only after the maintenance-window validation is healthy:
+
+```powershell
+railway variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af10 MAINTENANCE_MODE=false
 curl.exe -sS https://endpointarena.com/api/health
 railway logs --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --latest --lines 200
 ```
 
-7. Smoke test:
+After reopen, re-check:
 
-- `https://endpointarena.com/api/health`
-- `https://endpointarena.com/trials`
-- Login/auth flow
-- One DB-backed admin route such as trial run state
+- `/`
+- `/trials`
+- One `/trials/[marketId]`
+- `/leaderboard`
+- `/admin/outcomes`
 
-8. Confirm the active Railway deployment SHA matches the intended GitHub commit. Railway GitHub deployment records on April 1, 2026 showed a newer deployment entry that did not record a `success` state even though production remained healthy, so verify the deployed SHA explicitly in Railway or via the GitHub deployment history.
+Leave cron triggers disabled until the reopened site is stable. The provisioned `TRIAL_MONITOR_CRON_SECRET` and `TRIAL_SYNC_CRON_SECRET` only make the internal endpoints ready for scheduler wiring.
 
-## After the watched release
+## Rollback
 
-If the watched production release is healthy, continue using the existing GitHub-to-Railway auto deploy flow for future merges to `master`.
+If any destructive step or post-deploy smoke fails:
+
+1. Keep `MAINTENANCE_MODE=true`.
+2. Restore the backup against the same exported `DATABASE_URL`:
+
+```powershell
+pg_restore --clean --if-exists --no-owner --no-privileges --dbname $env:DATABASE_URL "backups/prod-cutover-2026-04-11-before-reset.dump"
+```
+
+3. Redeploy the previous healthy Railway app deployment.
+4. Re-validate `/api/health` before reopening traffic.

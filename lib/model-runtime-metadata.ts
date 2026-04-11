@@ -1,7 +1,5 @@
 import type { ModelId } from '@/lib/constants'
 
-export const FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR = 'FIREWORKS_LLAMA_4_DEPLOYMENT'
-
 export type ModelMethodBinding = {
   version: string
   internet: boolean
@@ -85,15 +83,14 @@ const MODEL_RUNTIME_METADATA: Record<ModelId, ModelRuntimeMetadata> = {
     },
   },
   'llama-4-scout': {
-    providerModelId: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    requestModelEnvVar: FIREWORKS_LLAMA_4_SCOUT_DEPLOYMENT_ENV_VAR,
+    providerModelId: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
     method: {
-      version: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      version: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
       internet: false,
       internetDetail: 'No web-search tool configured in the combined decision generator',
       reasoning: 'Provider default',
       reasoningDetail: 'No explicit reasoning parameter configured',
-      maxTokens: '8,192 output',
+      maxTokens: '4,096 output',
     },
   },
   'kimi-k2.5': {

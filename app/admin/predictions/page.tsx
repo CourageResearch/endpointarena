@@ -6,13 +6,15 @@ import { DecisionSnapshotRunner } from '@/components/DecisionSnapshotRunner'
 import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL, MODEL_IDS } from '@/lib/constants'
 import { db, predictionMarkets, trialQuestions } from '@/lib/db'
-import { attachUnifiedPredictionsToEvents } from '@/lib/model-decision-snapshots'
+import { predictionMarketColumns } from '@/lib/markets/query-shapes'
+import { attachUnifiedPredictionsToQuestions } from '@/lib/model-decision-snapshots'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 export const dynamic = 'force-dynamic'
 
 async function getData() {
   const openMarkets = await db.query.predictionMarkets.findMany({
+    columns: predictionMarketColumns,
     where: and(
       eq(predictionMarkets.status, 'OPEN'),
       isNotNull(predictionMarkets.trialQuestionId),
@@ -47,7 +49,7 @@ async function getData() {
       .filter((market) => supportedQuestionIds.has(market.trialQuestionId as string))
       .map((market) => [market.trialQuestionId as string, market]),
   )
-  const questionsWithPredictions = await attachUnifiedPredictionsToEvents(questions)
+  const questionsWithPredictions = await attachUnifiedPredictionsToQuestions(questions)
 
   const stats = {
     openMarkets: questionsWithPredictions.length,

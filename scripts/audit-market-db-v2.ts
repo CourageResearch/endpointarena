@@ -60,17 +60,6 @@ const CHECKS: Check[] = [
     `,
   },
   {
-    id: 'orphan_actions_event',
-    severity: 'error',
-    sql: `
-      select count(*)::int as value
-      from market_actions a
-      left join fda_calendar_events e on e.id = a.fda_event_id
-      where a.fda_event_id is not null
-        and e.id is null
-    `,
-  },
-  {
     id: 'orphan_actions_actor',
     severity: 'error',
     sql: `
@@ -115,13 +104,14 @@ const CHECKS: Check[] = [
     `,
   },
   {
-    id: 'snapshot_links_non_cycle_action',
+    id: 'snapshot_action_source_mismatch',
     severity: 'error',
     sql: `
       select count(*)::int as value
       from model_decision_snapshots s
       join market_actions a on a.id = s.linked_market_action_id
-      where a.action_source <> 'cycle'
+      where (s.run_source = 'cycle' and a.action_source <> 'cycle')
+         or (s.run_source = 'manual' and a.action_source <> 'human')
     `,
   },
   {
@@ -281,6 +271,64 @@ const CHECKS: Check[] = [
     `,
   },
   {
+    id: 'missing_trial_source',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from trials
+      where source is null
+         or btrim(source) = ''
+    `,
+  },
+  {
+    id: 'invalid_trial_source',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from trials
+      where source not in ('sync_import', 'manual_admin')
+    `,
+  },
+  {
+    id: 'house_opening_probability_out_of_range',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from prediction_markets
+      where house_opening_probability < 0
+         or house_opening_probability > 1
+    `,
+  },
+  {
+    id: 'invalid_opening_line_source',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from prediction_markets
+      where opening_line_source not in ('house_model', 'admin_override')
+    `,
+  },
+  {
+    id: 'house_model_opening_line_drift',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from prediction_markets
+      where opening_line_source = 'house_model'
+        and abs(opening_probability - house_opening_probability) > 0.000001
+    `,
+  },
+  {
+    id: 'admin_override_missing_opened_by_user',
+    severity: 'warn',
+    sql: `
+      select count(*)::int as value
+      from prediction_markets
+      where opening_line_source = 'admin_override'
+        and opened_by_user_id is null
+    `,
+  },
+  {
     id: 'action_direction_inconsistent',
     severity: 'error',
     sql: `
@@ -306,6 +354,43 @@ const CHECKS: Check[] = [
         or
         (status = 'RESOLVED' and resolved_outcome is not null and resolved_at is not null)
       )
+    `,
+  },
+  {
+    id: 'ownerless_market_actions',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from market_actions
+      where trial_question_id is null
+    `,
+  },
+  {
+    id: 'ownerless_model_snapshots',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from model_decision_snapshots
+      where trial_question_id is null
+    `,
+  },
+  {
+    id: 'invalid_market_outcomes',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from prediction_markets
+      where resolved_outcome is not null
+        and resolved_outcome not in ('YES', 'NO')
+    `,
+  },
+  {
+    id: 'invalid_snapshot_binary_calls',
+    severity: 'error',
+    sql: `
+      select count(*)::int as value
+      from model_decision_snapshots
+      where binary_call not in ('yes', 'no')
     `,
   },
   {

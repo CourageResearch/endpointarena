@@ -89,8 +89,8 @@ const CURRENT_MODEL_PRICING: Record<ModelId, ModelPricing> = {
     outputReasoningMultiplier: 1,
   },
   'llama-4-scout': {
-    inputUsdPer1MTokens: 0.15,
-    outputUsdPer1MTokens: 0.6,
+    inputUsdPer1MTokens: 0.9,
+    outputUsdPer1MTokens: 0.9,
     outputReasoningMultiplier: 1,
   },
   'kimi-k2.5': {

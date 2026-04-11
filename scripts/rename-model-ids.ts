@@ -41,8 +41,6 @@ type VerifierTableName =
   | 'trial_monitor_configs'
   | 'trial_monitor_runs'
   | 'trial_outcome_candidates'
-  | 'event_monitor_configs'
-  | 'event_outcome_candidates'
 
 type MigrationSummary = {
   apply: boolean
@@ -241,21 +239,7 @@ async function countVerifierRows(sql: postgres.Sql, tableName: VerifierTableName
     `
     return toInt(row?.row_count)
   }
-  if (tableName === 'event_monitor_configs') {
-    const [row] = await sql<{ row_count: number | string }[]>`
-      select count(*)::int as row_count
-      from event_monitor_configs
-      where verifier_model_key = ${legacyKey}
-    `
-    return toInt(row?.row_count)
-  }
-
-  const [row] = await sql<{ row_count: number | string }[]>`
-    select count(*)::int as row_count
-    from event_outcome_candidates
-    where verifier_model_key = ${legacyKey}
-  `
-  return toInt(row?.row_count)
+  return 0
 }
 
 async function applyVerifierKeyRename(tx: postgres.Sql, tableName: VerifierTableName, legacyKey: string, canonicalKey: string): Promise<void> {
@@ -283,20 +267,7 @@ async function applyVerifierKeyRename(tx: postgres.Sql, tableName: VerifierTable
     `
     return
   }
-  if (tableName === 'event_monitor_configs') {
-    await tx`
-      update event_monitor_configs
-      set verifier_model_key = ${canonicalKey}
-      where verifier_model_key = ${legacyKey}
-    `
-    return
-  }
-
-  await tx`
-    update event_outcome_candidates
-    set verifier_model_key = ${canonicalKey}
-    where verifier_model_key = ${legacyKey}
-  `
+  return
 }
 
 async function main(): Promise<void> {
@@ -325,8 +296,6 @@ async function main(): Promise<void> {
       'trial_monitor_configs',
       'trial_monitor_runs',
       'trial_outcome_candidates',
-      'event_monitor_configs',
-      'event_outcome_candidates',
     ]
 
     const verifierRowsByTableEntries = await Promise.all(verifierTables.map(async (tableName) => {

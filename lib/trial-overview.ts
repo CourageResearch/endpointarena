@@ -61,23 +61,36 @@ function toDecisionSnapshot(entry: PredictionHistoryEntry, marketId: string, own
 export async function getTrialsOverviewData(input: {
   marketId?: string | null
   includeResolved?: boolean
+  includeAccounts?: boolean
+  includeEquityHistory?: boolean
+  includeRecentRuns?: boolean
 } = {}): Promise<OverviewResponse> {
-  const [openMarketState, allSnapshots, recentRuns] = await Promise.all([
+  const includeAccounts = input.includeAccounts !== false
+  const includeEquityHistory = input.includeEquityHistory !== false
+  const includeRecentRuns = input.includeRecentRuns !== false
+  const [openMarketState, allSnapshotsResult, recentRunsResult] = await Promise.all([
     loadOpenMarketActorState({
       includeMarketIds: input.marketId ? [input.marketId] : [],
       includeResolved: input.includeResolved === true,
+      includePortfolioValues: includeAccounts,
     }),
-    db.query.marketDailySnapshots.findMany({
-      orderBy: [desc(marketDailySnapshots.snapshotDate)],
-      with: {
-        actor: true,
-      },
-    }),
-    db.query.marketRuns.findMany({
-      orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
-      limit: 30,
-    }),
+    includeEquityHistory
+      ? db.query.marketDailySnapshots.findMany({
+          orderBy: [desc(marketDailySnapshots.snapshotDate)],
+          with: {
+            actor: true,
+          },
+        })
+      : Promise.resolve(null),
+    includeRecentRuns
+      ? db.query.marketRuns.findMany({
+          orderBy: [desc(marketRuns.createdAt), desc(marketRuns.updatedAt)],
+          limit: 30,
+        })
+      : Promise.resolve(null),
   ])
+  const allSnapshots = allSnapshotsResult ?? []
+  const recentRuns = recentRunsResult ?? []
 
   const {
     accounts,
@@ -423,7 +436,7 @@ export async function getTrialsOverviewData(input: {
   return {
     success: true,
     generatedAt: new Date().toISOString(),
-    accounts: accountRows,
+    accounts: includeAccounts ? accountRows : [],
     openMarkets: openMarketRows,
     resolvedMarkets: resolvedMarketRows,
     equityHistory,

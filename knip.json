@@ -4,7 +4,7 @@
     ".claude/worktrees/**",
     "_archive/**",
     "scripts/audit-market-db-v2.ts",
-    "scripts/backfill-phase2-public-sponsor-tickers.ts",
+    "scripts/backfill-public-sponsor-tickers.ts",
     "scripts/check-local.ts",
     "scripts/cleanup-local-mock-market-data.ts",
     "scripts/cleanup-admin-ai-timeout-snapshots.ts",

@@ -10,18 +10,12 @@ import { AdminModelStartingBankroll } from '@/components/AdminModelStartingBankr
 import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
 import { ensureToyAdminUser } from '@/lib/toy-database'
 import { getTrialRuntimeConfig } from '@/lib/trial-runtime-config'
-import { db, getDbForTarget, phase2Trials, users } from '@/lib/db'
+import { db, getDbForTarget, trials, users } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 function toDto(config: Awaited<ReturnType<typeof getTrialRuntimeConfig>>): TrialRuntimeConfigDto {
   return {
-    warmupRunCount: config.warmupRunCount,
-    warmupMaxTradeUsd: config.warmupMaxTradeUsd,
-    warmupBuyCashFraction: config.warmupBuyCashFraction,
-    steadyMaxTradeUsd: config.steadyMaxTradeUsd,
-    steadyBuyCashFraction: config.steadyBuyCashFraction,
-    maxPositionPerSideShares: config.maxPositionPerSideShares,
     openingLmsrB: config.openingLmsrB,
     toyTrialCount: config.toyTrialCount,
     createdAt: config.createdAt.toISOString(),
@@ -48,7 +42,7 @@ async function buildDatabaseTargetOptions(): Promise<AdminDatabaseTargetOptionDt
       const targetDb = getDbForTarget(target.target)
       const [userRows, trialRows] = await Promise.all([
         targetDb.select({ count: sql<number>`count(*)::int` }).from(users),
-        targetDb.select({ count: sql<number>`count(*)::int` }).from(phase2Trials),
+        targetDb.select({ count: sql<number>`count(*)::int` }).from(trials),
       ])
 
       return {
@@ -82,7 +76,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <AdminConsoleLayout
-      title="Runtime Settings"
+      title="Settings"
       activeTab="settings"
     >
       <section className="mb-4">
