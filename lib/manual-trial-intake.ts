@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import OpenAI from 'openai'
 import { getServerSession } from 'next-auth'
@@ -35,7 +36,7 @@ import type { NormalizedTrialInput } from '@/lib/trial-ingestion'
 const MANUAL_TRIAL_DRAFT_MODEL = process.env.MANUAL_TRIAL_INTAKE_MODEL?.trim() || MODEL_PROVIDER_MODEL_IDS['gpt-5.4']
 const MANUAL_TRIAL_AI_TIMEOUT_MS = 90_000
 const MANUAL_TRIAL_SPONSOR_MAP_URL = new URL('../config/clinicaltrials-first-run-sponsors.json', import.meta.url)
-const PUBLIC_COMPANY_REFERENCE_URL = new URL('../tmp/reports/public-company-reference-current.json', import.meta.url)
+const PUBLIC_COMPANY_REFERENCE_PATH = path.resolve(process.cwd(), 'tmp', 'reports', 'public-company-reference-current.json')
 export type ManualTrialOpeningLineSource = 'draft_ai' | 'house_model' | 'fallback_default'
 const MANUAL_TRIAL_DRAFT_SCHEMA = {
   type: 'object',
@@ -506,7 +507,7 @@ async function loadManualPublicSponsorMap() {
 }
 
 async function loadPublicCompanyReferenceIndexes(): Promise<ReferenceIndexes | null> {
-  const raw = await readFile(PUBLIC_COMPANY_REFERENCE_URL, 'utf8').catch(() => null)
+  const raw = await readFile(PUBLIC_COMPANY_REFERENCE_PATH, 'utf8').catch(() => null)
   if (!raw) {
     return null
   }
