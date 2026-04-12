@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { XInlineMark, XLogoMark } from '@/components/XMark'
@@ -42,7 +42,7 @@ export function ProfileVerificationPanel() {
   const [statusData, setStatusData] = useState<VerificationStatus | null>(null)
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)
   const [tweetInput, setTweetInput] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ReactNode>('')
   const [twitterAvailable, setTwitterAvailable] = useState<boolean | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
@@ -57,9 +57,17 @@ export function ProfileVerificationPanel() {
     }
     const oauthError = params.get('error')
     if (oauthError === 'Callback' || oauthError === 'OAuthCallback') {
-      setError('X login consent completed but callback failed. Check OAuth2 client secret and redirect URI in X app settings.')
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> login consent completed but callback failed. Check OAuth2 client secret and redirect URI in <XInlineMark className="mx-0.5" /> app settings.
+        </>,
+      )
     } else if (oauthError === 'AccessDenied') {
-      setError('X authorization was cancelled. Authorize the app to continue.')
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> authorization was cancelled. Authorize the app to continue.
+        </>,
+      )
     } else if (oauthError) {
       setError(`Authentication error: ${oauthError}`)
     }
@@ -115,7 +123,11 @@ export function ProfileVerificationPanel() {
 
   const startXConnection = async () => {
     if (twitterAvailable === false) {
-      setError('X login is not configured yet. Add TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET.')
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">TWITTER_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">TWITTER_CLIENT_SECRET</code>.
+        </>,
+      )
       return
     }
 
@@ -147,7 +159,11 @@ export function ProfileVerificationPanel() {
 
   const handleConnectX = async () => {
     if (twitterAvailable === false) {
-      setError('X login is not configured yet. Add TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET.')
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">TWITTER_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">TWITTER_CLIENT_SECRET</code>.
+        </>,
+      )
       return
     }
 

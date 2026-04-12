@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { startTransition, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -273,7 +273,7 @@ export function TrialDashboard({
   const [tradeOutcome, setTradeOutcome] = useState<HumanTradeOutcome>('yes')
   const [tradeAmountUsd, setTradeAmountUsd] = useState('1')
   const [tradeSubmitting, setTradeSubmitting] = useState(false)
-  const [tradeError, setTradeError] = useState<string | null>(null)
+  const [tradeError, setTradeError] = useState<ReactNode | null>(null)
   const [tradeNotice, setTradeNotice] = useState<string | null>(null)
   const [traderSnapshot, setTraderSnapshot] = useState<TraderSnapshot | null>(null)
   const [traderSnapshotLoading, setTraderSnapshotLoading] = useState(false)
@@ -771,7 +771,11 @@ export function TrialDashboard({
     }
 
     if (!verificationStatus?.verified) {
-      setTradeError('Complete X verification before trading')
+      setTradeError(
+        <>
+          Complete <XInlineMark className="mx-0.5" /> verification before trading
+        </>,
+      )
       return
     }
 

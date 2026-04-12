@@ -1,6 +1,6 @@
 'use client'
 
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
 import { XInlineMark } from '@/components/XMark'
@@ -82,7 +82,7 @@ export function MarketTradePanel({
   tradeAmountUsd: string
   canSubmitTrade: boolean
   tradeSubmitting: boolean
-  tradeError: string | null
+  tradeError: ReactNode | null
   tradeNotice: string | null
   traderSnapshot: TraderSnapshot | null
   traderSnapshotLoading: boolean

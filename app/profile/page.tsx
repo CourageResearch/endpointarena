@@ -9,6 +9,7 @@ import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/com
 import { LogoutButton } from '@/components/LogoutButton'
 import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { LocalDateTime } from '@/components/ui/local-date-time'
+import { XInlineMark } from '@/components/XMark'
 import { authOptions } from '@/lib/auth'
 import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
@@ -341,7 +342,7 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
                 <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{identity}</p>
@@ -374,17 +375,12 @@ export default async function ProfilePage() {
                 </div>
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Portfolio</p>
-                <dl className="mt-3 space-y-3">
-                  <div>
-                    <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Open Positions</dt>
-                    <dd className="mt-1 text-xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</dd>
-                  </div>
-                  <div className="border-t border-[#ece2d6] pt-3">
-                    <dt className="text-[10px] uppercase tracking-[0.16em] text-[#b5aa9e]">Total Equity</dt>
-                    <dd className="mt-1 text-xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(totalEquity)}</dd>
-                  </div>
-                </dl>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Open Positions</p>
+                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</p>
+              </div>
+              <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Total Equity</p>
+                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(totalEquity)}</p>
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Humans Rank</p>
@@ -395,7 +391,7 @@ export default async function ProfilePage() {
             <div className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
               <div className="grid gap-3 text-sm text-[#7f7469] sm:grid-cols-2">
                 <p>
-                  X connected: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.connected ? 'Yes' : 'No'}</span>
+                  <XInlineMark className="mr-1" /> connected: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.connected ? 'Yes' : 'No'}</span>
                 </p>
                 <p>
                   Tweet verification: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.verified ? 'Verified' : 'Not verified'}</span>

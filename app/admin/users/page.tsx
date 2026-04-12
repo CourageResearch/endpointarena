@@ -8,6 +8,7 @@ import { ADMIN_EMAIL } from '@/lib/constants'
 import { accounts, db, marketAccounts, marketActions, marketActors, marketPositions, predictionMarkets, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
+import { XInlineMark } from '@/components/XMark'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
 import { userColumns } from '@/lib/users/query-shapes'
 
@@ -392,7 +393,9 @@ export default async function AdminUsersPage({
                       Region{sortDirectionMark('region')}
                     </Link>
                   </th>
-                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">X</th>
+                  <th className="px-1.5 py-2 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
+                    <XInlineMark />
+                  </th>
                   <th className="px-1.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.14em] text-[#b5aa9e]">
                     <Link
                       href={buildSortHref({ currentSortKey: sortKey, currentSortDirection: sortDirection, targetSortKey: 'money' })}

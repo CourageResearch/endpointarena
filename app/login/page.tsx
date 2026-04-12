@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
+import { XInlineMark } from '@/components/XMark'
 import { buildProfileCallbackUrl, ensureAuthGeo, normalizeCallbackUrl, resolveDestination } from '@/lib/auth/client-navigation'
 
 export default function LoginPage() {
@@ -12,7 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ReactNode>('')
   const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [geo, setGeo] = useState({ country: '', state: '' })
 
@@ -22,19 +23,47 @@ export default function LoginPage() {
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
     const oauthError = params.get('error')
     if (oauthError === 'TwitterAccountAlreadyLinked') {
-      setError('That X account is already linked to a different Endpoint Arena account. Sign in to the original account or use another X account.')
+      setError(
+        <>
+          That <XInlineMark className="mx-0.5" /> account is already linked to a different Endpoint Arena account. Sign in to the original account or use another <XInlineMark className="mx-0.5" /> account.
+        </>,
+      )
     } else if (oauthError === 'TwitterSessionExpired') {
-      setError('Your Endpoint Arena session expired before X could be connected. Sign in again, then reconnect X from your profile.')
+      setError(
+        <>
+          Your Endpoint Arena session expired before <XInlineMark className="mx-0.5" /> could be connected. Sign in again, then reconnect <XInlineMark className="mx-0.5" /> from your profile.
+        </>,
+      )
     } else if (oauthError === 'OAuthAccountNotLinked') {
-      setError('This X account is not linked to the Endpoint Arena account you are using. Sign in with the original account first, then reconnect X from your profile.')
+      setError(
+        <>
+          This <XInlineMark className="mx-0.5" /> account is not linked to the Endpoint Arena account you are using. Sign in with the original account first, then reconnect <XInlineMark className="mx-0.5" /> from your profile.
+        </>,
+      )
     } else if (oauthError === 'TwitterConnectionFailed') {
-      setError('Failed to connect your X account. Please try again.')
+      setError(
+        <>
+          Failed to connect your <XInlineMark className="mx-0.5" /> account. Please try again.
+        </>,
+      )
     } else if (oauthError === 'Callback' || oauthError === 'OAuthCallback') {
-      setError('X login reached consent but failed on callback. This usually means OAuth client secret or redirect settings are incorrect in X Developer Portal.')
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> login reached consent but failed on callback. This usually means OAuth client secret or redirect settings are incorrect in <XInlineMark className="mx-0.5" /> Developer Portal.
+        </>,
+      )
     } else if (oauthError === 'OAuthSignin') {
-      setError('Could not start X login. Check OAuth app configuration and try again.')
+      setError(
+        <>
+          Could not start <XInlineMark className="mx-0.5" /> login. Check OAuth app configuration and try again.
+        </>,
+      )
     } else if (oauthError === 'AccessDenied') {
-      setError('X authorization was denied. Please authorize the app to continue.')
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> authorization was denied. Please authorize the app to continue.
+        </>,
+      )
     } else if (oauthError) {
       setError(`Authentication error: ${oauthError}`)
     }
