@@ -4,7 +4,11 @@ import { ModelIcon } from '@/components/ModelIcon'
 import { HeaderDots } from '@/components/site/chrome'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { MODEL_INFO } from '@/lib/constants'
-import { formatPercent, type RecentMarketActionRow } from '@/lib/markets/overview-shared'
+import {
+  formatPercent,
+  formatPriceMovePoints,
+  type RecentMarketActionRow,
+} from '@/lib/markets/overview-shared'
 import { cn } from '@/lib/utils'
 import {
   APPROVE_TEXT_CLASS,
@@ -58,7 +62,7 @@ function MarketCommentCard({ action }: { action: RecentMarketActionRow }) {
   const priceMove = action.priceAfter - action.priceBefore
   const hasPriceMove = Math.abs(priceMove) >= 0.0001
   const moveTone = priceMove > 0.0001 ? 'up' : priceMove < -0.0001 ? 'down' : 'default'
-  const changeText = hasPriceMove ? `${priceMove >= 0 ? '+' : '-'}${(Math.abs(priceMove) * 100).toFixed(1)} pts` : 'No change'
+  const changeText = hasPriceMove ? formatPriceMovePoints(priceMove, 1) : '0.0 pts'
   const changeClass =
     moveTone === 'up'
       ? APPROVE_TEXT_CLASS
@@ -129,7 +133,7 @@ function MarketCommentCard({ action }: { action: RecentMarketActionRow }) {
             <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <dt className={cn('shrink-0', DETAILS_TOP_LABEL_CLASS)}>Size:</dt>
               <dd className="shrink-0 break-words tabular-nums text-[#6d645a]">{sizeText}</dd>
-              <dt className={cn('ml-2 shrink-0', DETAILS_TOP_LABEL_CLASS)}>Delta:</dt>
+              <dt className={cn('ml-2 shrink-0', DETAILS_TOP_LABEL_CLASS)}>Price Move:</dt>
               <dd className="min-w-0 flex-1 break-words font-medium tabular-nums">
                 <span className={cn('font-medium tabular-nums', changeClass)}>{changeText}</span>
                 <span className="text-[#6d645a]"> ({probabilityRangeText})</span>

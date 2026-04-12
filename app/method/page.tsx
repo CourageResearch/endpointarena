@@ -1,12 +1,16 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import { db, modelDecisionSnapshots, trialQuestions } from '@/lib/db'
-import { sql } from 'drizzle-orm'
 import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
 import { MODEL_METHOD_BINDINGS } from '@/lib/model-runtime-metadata'
 import { ModelIcon } from '@/components/ModelIcon'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
+import {
+  METHOD_PAGE_EXAMPLE_RESPONSE_TEXT,
+  METHOD_PAGE_PROMPT_TEXT,
+  METHOD_PAGE_SCHEMA_TEXT,
+  METHOD_PAGE_SCORING_NOTE,
+} from '@/lib/methodology-page'
 import { buildPageMetadata } from '@/lib/seo'
 import { cn } from '@/lib/utils'
 
@@ -44,22 +48,7 @@ function SoftOutlinePanel({
   )
 }
 
-async function getData() {
-  const [trialQuestionCount, snapshotCount] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(trialQuestions),
-    db.select({ count: sql<number>`count(*)` }).from(modelDecisionSnapshots),
-  ])
-
-  return {
-    trialQuestionCount: trialQuestionCount[0]?.count ?? 0,
-    predictionCount: snapshotCount[0]?.count ?? 0,
-    snapshotCount: snapshotCount[0]?.count ?? 0,
-  }
-}
-
 export default async function MethodPage() {
-  const { trialQuestionCount, predictionCount, snapshotCount } = await getData()
-
   const models = MODEL_IDS.map((modelId) => {
     const binding = MODEL_METHOD_BINDINGS[modelId]
     const info = MODEL_INFO[modelId]
@@ -98,7 +87,7 @@ export default async function MethodPage() {
     },
     {
       title: 'Score Results',
-      description: 'Compare either the first or final pre-outcome snapshot to the actual outcome. A prediction is correct when a stored YES call resolves YES or a stored NO call resolves NO.'
+      description: METHOD_PAGE_SCORING_NOTE,
     }
   ]
 
@@ -252,63 +241,10 @@ export default async function MethodPage() {
           </div>
           <SoftOutlinePanel className="overflow-hidden">
             <div className="px-4 py-3 border-b border-[#e8ddd0] bg-[#f3ebe0]/50">
-              <span className="text-sm text-[#8a8075]">All models receive the same two-stage decision prompt</span>
+              <span className="text-sm text-[#8a8075]">Generated from the runtime decision prompt builder</span>
             </div>
-            <pre className="p-3 sm:p-6 text-sm text-[#8a8075] overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
-{`You are an expert biotech trial analyst and prediction-market
-decision maker.
-
-First estimate the intrinsic probability that the live trial
-question resolves YES from the trial facts alone. Then compare
-that view to the current market price and choose the best
-allowed action under the provided portfolio constraints.
-
-Stage 1: Intrinsic forecast
-- Use only the trial fields.
-- Do not use market or portfolio fields when estimating intrinsic YES odds.
-- Produce:
-  - yesProbability: number from 0 to 1
-  - binaryCall: yes if yesProbability >= 0.5, otherwise no
-  - confidence: integer from 50 to 100
-  - reasoning: 120 to 220 words
-
-Stage 2: Market action
-- After forming the intrinsic forecast, compare it to the market price.
-- Use market and portfolio fields only in this stage.
-- Choose exactly one action from allowedActions.
-- Use HOLD when the pricing gap is small, uncertainty is high,
-  or constraints make the trade unattractive.
-- amountUsd must not exceed the relevant buy/sell cap.
-- Size the action using only this market's price and the provided portfolio caps.
-- action.explanation must be plain language and <= 220 chars.
-
-Input JSON includes:
-{
-  "trial": {
-    "shortTitle": "...",
-    "sponsorName": "...",
-    "indication": "...",
-    "intervention": "...",
-    "primaryEndpoint": "...",
-    "questionPrompt": "Will the results be positive?"
-  },
-  "market": {
-    "yesPrice": 0.43,
-    "noPrice": 0.57
-  },
-  "portfolio": {
-    "cashAvailable": 100000,
-    "yesSharesHeld": 0,
-    "noSharesHeld": 0,
-    "maxBuyUsd": 1000,
-    "maxSellYesUsd": 0,
-    "maxSellNoUsd": 0
-  },
-  "constraints": {
-    "allowedActions": ["BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO", "HOLD"],
-    "explanationMaxChars": 220
-  }
-}`}
+            <pre className="p-3 sm:p-6 text-xs sm:text-sm text-[#8a8075] overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
+              {METHOD_PAGE_PROMPT_TEXT}
             </pre>
           </SoftOutlinePanel>
         </section>
@@ -322,67 +258,14 @@ Input JSON includes:
             </div>
           </div>
           <SoftOutlinePanel className="overflow-hidden">
-            <pre className="p-3 sm:p-6 text-sm overflow-x-auto font-mono">
-<span className="text-[#b5aa9e]">{'{'}</span>
-{`\n  `}<span className="text-[#7d8e6e]">"forecast"</span><span className="text-[#b5aa9e]">:</span> <span className="text-[#b5aa9e]">{'{'}</span>
-{`\n    `}<span className="text-[#7d8e6e]">"yesProbability"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">0.61</span><span className="text-[#b5aa9e]">,</span>
-{`\n    `}<span className="text-[#7d8e6e]">"binaryCall"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"yes"</span><span className="text-[#b5aa9e]">,</span>
-{`\n    `}<span className="text-[#7d8e6e]">"confidence"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">68</span><span className="text-[#b5aa9e]">,</span>
-{`\n    `}<span className="text-[#7d8e6e]">"reasoning"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"..."</span>
-{`\n  `}<span className="text-[#b5aa9e]">{'}'}</span><span className="text-[#b5aa9e]">,</span>
-{`\n  `}<span className="text-[#7d8e6e]">"action"</span><span className="text-[#b5aa9e]">:</span> <span className="text-[#b5aa9e]">{'{'}</span>
-{`\n    `}<span className="text-[#7d8e6e]">"type"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"BUY_YES"</span><span className="text-[#b5aa9e]">,</span>
-{`\n    `}<span className="text-[#7d8e6e]">"amountUsd"</span><span className="text-[#b5aa9e]">:</span> <span className="text-blue-600">450</span><span className="text-[#b5aa9e]">,</span>
-{`\n    `}<span className="text-[#7d8e6e]">"explanation"</span><span className="text-[#b5aa9e]">:</span> <span className="text-amber-600">"The model sees upside versus the current YES price."</span>
-{`\n  `}<span className="text-[#b5aa9e]">{'}'}</span>
-{`\n`}<span className="text-[#b5aa9e]">{'}'}</span>
+            <pre className="p-3 sm:p-6 text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed text-[#8a8075]">
+              {METHOD_PAGE_EXAMPLE_RESPONSE_TEXT}
             </pre>
             <div className="border-t border-[#e8ddd0] bg-[#f3ebe0]/40">
-              <div className="px-3 sm:px-6 py-2 text-xs text-[#8a8075]">Schema (shape + constraints)</div>
-              <pre className="px-3 sm:px-6 pb-4 sm:pb-6 text-xs sm:text-sm overflow-x-auto font-mono text-[#8a8075] leading-relaxed">{`{
-  "type": "object",
-  "required": ["forecast", "action"],
-  "properties": {
-    "forecast": {
-      "type": "object",
-      "required": ["yesProbability", "binaryCall", "confidence", "reasoning"]
-    },
-    "action": {
-      "type": "object",
-      "required": ["type", "amountUsd", "explanation"]
-    }
-  }
-}`}</pre>
-            </div>
-          </SoftOutlinePanel>
-        </section>
-
-        {/* Stats */}
-        <section className="mb-10 sm:mb-16">
-          <div className="mb-6 sm:mb-8">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Current Progress</span>
-              <HeaderDots />
-            </div>
-          </div>
-          <SoftOutlinePanel className="overflow-hidden">
-            <div className="grid grid-cols-1 divide-y divide-[#e8ddd0] sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
-              <div className="p-4 sm:p-6">
-                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{trialQuestionCount}</div>
-                <div className="text-sm text-[#b5aa9e] mt-1">Trial Questions Tracked</div>
-              </div>
-              <div className="p-4 sm:p-6">
-                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{predictionCount}</div>
-                <div className="text-sm text-[#b5aa9e] mt-1">Total Prediction Records</div>
-              </div>
-              <div className="p-4 sm:p-6">
-                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{snapshotCount}</div>
-                <div className="text-sm text-[#b5aa9e] mt-1">Decision Snapshots</div>
-              </div>
-              <div className="p-4 sm:p-6">
-                <div className="text-3xl font-mono font-medium tracking-tight text-[#1a1a1a]">{MODEL_IDS.length}</div>
-                <div className="text-sm text-[#b5aa9e] mt-1">Models Compared</div>
-              </div>
+              <div className="px-3 sm:px-6 py-2 text-xs text-[#8a8075]">Runtime JSON schema (shape + constraints)</div>
+              <pre className="px-3 sm:px-6 pb-4 sm:pb-6 text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap font-mono text-[#8a8075] leading-relaxed">
+                {METHOD_PAGE_SCHEMA_TEXT}
+              </pre>
             </div>
           </SoftOutlinePanel>
         </section>

@@ -33,7 +33,6 @@ import {
   daysUntilUtc,
   formatCompactMoney,
   formatPercent,
-  formatSignedPercent,
   formatShortDateUtc,
   getMarketQuestion,
   getMarketSubtitle,
@@ -206,7 +205,10 @@ function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentM
 
   return openMarkets
     .map((market) => {
-      const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes)
+      const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes, {
+        openingPrice: market.openingProbability,
+        openedAt: market.openedAt,
+      })
       const actions = actionsByMarket.get(market.marketId) || []
       const latestActionAt = actions
         .slice()
@@ -486,17 +488,10 @@ export function TrialDashboard({
     if (!selectedEntry) return null
 
     const market = selectedEntry.market
-    const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes)
     const recentComments = (data?.recentActions || []).filter((a) => a.marketId === market.marketId).length
     const totalComments = market.totalActionsCount ?? recentComments
-    const yesPrice = market.priceYes
-    const noPrice = 1 - yesPrice
 
     return {
-      yesPrice,
-      noPrice,
-      moveDelta: move.delta,
-      absMove: move.absDelta,
       totalComments,
       recentComments,
       totalVolumeUsd: market.totalVolumeUsd ?? 0,
@@ -820,11 +815,31 @@ export function TrialDashboard({
     }
   }
 
-  const detailTabs: Array<{ id: TrialDetailTab; label: string; accentClass: string }> = [
-    { id: 'details', label: 'Details', accentClass: 'after:bg-[#EF6F67]' },
-    { id: 'positions', label: 'Model Positions', accentClass: 'after:bg-[#D39D2E]' },
-    { id: 'snapshots', label: 'Model Snapshots', accentClass: 'after:bg-[#5DBB63]' },
-    { id: 'oracles', label: 'Oracle', accentClass: 'after:bg-[#5BA5ED]' },
+  const detailTabs: Array<{ id: TrialDetailTab; label: string; borderClass: string; hoverClass: string }> = [
+    {
+      id: 'details',
+      label: 'Details',
+      borderClass: 'border-[#EF6F67]',
+      hoverClass: 'hover:border-[#EF6F67]/55 hover:text-[#c86a63]',
+    },
+    {
+      id: 'positions',
+      label: 'Model Positions',
+      borderClass: 'border-[#D39D2E]',
+      hoverClass: 'hover:border-[#D39D2E]/55 hover:text-[#b8841f]',
+    },
+    {
+      id: 'snapshots',
+      label: 'Model Snapshots',
+      borderClass: 'border-[#5DBB63]',
+      hoverClass: 'hover:border-[#5DBB63]/55 hover:text-[#45934a]',
+    },
+    {
+      id: 'oracles',
+      label: 'Oracle',
+      borderClass: 'border-[#5BA5ED]',
+      hoverClass: 'hover:border-[#5BA5ED]/55 hover:text-[#4a8cca]',
+    },
   ]
 
   const tabContent = isTabbedView ? (() => {
@@ -942,15 +957,6 @@ export function TrialDashboard({
         </div>
       ) : null}
 
-      {sessionStatus === 'authenticated' && verificationStatus?.verified && !isResolvedMarket ? (
-        <div className="rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
-          <p className="font-medium text-[#2f7b40]">
-            Humans vs AI unlocked
-            {verificationStatus.profile ? ` \u2022 Cash ${formatCompactMoney(verificationStatus.profile.cashBalance)} \u2022 Rank #${verificationStatus.profile.rank}` : ''}
-          </p>
-        </div>
-      ) : null}
-
       <div className={cn('grid grid-cols-1 gap-5', showMarketList && 'xl:grid-cols-[20rem_minmax(0,1fr)]')}>
         {showMarketList ? (
           <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
@@ -1010,6 +1016,8 @@ export function TrialDashboard({
                           <TinyPriceSparkline
                             history={entry.market.priceHistory.slice(-20)}
                             currentPrice={entry.market.priceYes}
+                            openingPrice={entry.market.openingProbability}
+                            openedAt={entry.market.openedAt ?? null}
                             className={cn(active ? 'opacity-90' : 'opacity-100')}
                             stroke={active ? '#ffffff' : '#1a1a1a'}
                           />
@@ -1060,20 +1068,11 @@ export function TrialDashboard({
                       !useMarkets2Layout && !useStackedLayout && 'px-1 lg:col-span-6',
                       useStackedLayout && 'px-1',
                     )}>
-	                  <div className="mb-3">
-	                    <div>
-	                      <div className="flex items-center gap-3">
-	                        <div className={DASHBOARD_SECTION_LABEL_CLASS}>Market</div>
-	                        <HeaderDots />
-                      </div>
-                      <div className={cn(
-                          'mt-2 inline-flex items-center gap-1.5 text-sm font-medium',
-                          selectedStats.moveDelta > 0 ? 'text-emerald-700' : selectedStats.moveDelta < 0 ? 'text-rose-700' : 'text-[#7c7267]',
-                        )}>
-                          <span aria-hidden="true">
-                            {selectedStats.moveDelta > 0 ? '\u25B2' : selectedStats.moveDelta < 0 ? '\u25BC' : '\u2022'}
-                          </span>
-                          <span>{formatPercent(Math.abs(selectedStats.moveDelta), 1)}</span>
+                  <div className="mb-3">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className={DASHBOARD_SECTION_LABEL_CLASS}>Market</div>
+                        <HeaderDots />
                       </div>
                     </div>
                   </div>
@@ -1081,6 +1080,8 @@ export function TrialDashboard({
 	                  <MarketDetailChart
 	                    history={selectedMarket.priceHistory}
 	                    currentPrice={selectedMarket.priceYes}
+                      openingPrice={selectedMarket.openingProbability}
+                      openedAt={selectedMarket.openedAt ?? null}
 	                    className="rounded-none border-0 bg-transparent p-0"
 	                    showDateRangeFooter={false}
 	                    scrubSnapshotDate={chartScrubSnapshotDate}
@@ -1196,13 +1197,13 @@ export function TrialDashboard({
                         href={buildDetailTabHref(tab.id)}
                         scroll={false}
                         className={cn(
-                          'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
+                          'relative -mb-px inline-flex items-center border-b-2 pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
                           activeTab === tab.id
                             ? cn(
-                                'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full',
-                                tab.accentClass,
+                                'text-[#1a1a1a]',
+                                tab.borderClass,
                               )
-                            : 'text-[#9d9184] hover:text-[#3a342d]',
+                            : cn('border-transparent text-[#9d9184]', tab.hoverClass),
                         )}
                         aria-current={activeTab === tab.id ? 'page' : undefined}
                       >

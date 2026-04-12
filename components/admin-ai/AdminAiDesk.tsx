@@ -1306,7 +1306,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                                 <p className="text-[11px] text-[#8a8075]">
                                   {closedCount}/{orderedModelIds.length || trialTasks.length}
                                 </p>
-                                <p className="mt-1.5 text-[11px] text-[#8a8075]">{formatPercent(trial.marketSnapshot.priceYes)} start yes</p>
+                                <p className="mt-1.5 text-[11px] text-[#8a8075]">Frozen start {formatPercent(trial.marketSnapshot.priceYes)} yes</p>
                               </div>
                             </td>
                             {orderedModelIds.map((modelId, index) => {
@@ -1411,7 +1411,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 <div className="hidden">
                   <div className="hidden">
                     <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Frozen Start</p>
-                    <p className="mt-2">Price: {formatPercent(selectedTrial.marketSnapshot.priceYes)} yes</p>
+                    <p className="mt-2">Frozen price: {formatPercent(selectedTrial.marketSnapshot.priceYes)} yes</p>
                     <p className="mt-1">Decision date: {formatDate(selectedTrial.decisionDate)}</p>
                   </div>
                   <div className="border border-[#e8ddd0] bg-white px-3 py-3 text-sm text-[#5f564c]">
@@ -1453,7 +1453,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3">
                     <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Locked Snapshot</p>
-                    <p className="mt-2 text-sm text-[#1a1a1a]">Price: {formatPercent(task.frozenMarket.priceYes)} yes</p>
+                    <p className="mt-2 text-sm text-[#1a1a1a]">Frozen price: {formatPercent(task.frozenMarket.priceYes)} yes</p>
                     <p className="mt-1 text-xs text-[#6f665b]">Cash: {formatUsd(task.frozenPortfolio.cashAvailable)}</p>
                     <p className="mt-1 text-xs text-[#6f665b]">YES held: {task.frozenPortfolio.yesSharesHeld.toFixed(0)}</p>
                     <p className="mt-1 text-xs text-[#6f665b]">NO held: {task.frozenPortfolio.noSharesHeld.toFixed(0)}</p>

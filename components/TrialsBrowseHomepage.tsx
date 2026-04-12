@@ -134,7 +134,10 @@ function buildMarketCardEntries(openMarkets: OpenMarketRow[], recentActions: Rec
       const latestTs = parseTimestamp(latest)
       return currentTs > latestTs ? (action.createdAt || action.runDate) : latest
     }, null)
-    const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes)
+    const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes, {
+      openingPrice: market.openingProbability,
+      openedAt: market.openedAt,
+    })
 
     return {
       market,
@@ -1249,10 +1252,10 @@ export function TrialsBrowseHomepage({
         type="button"
         onClick={() => handleTabChange('upcoming')}
         className={cn(
-          'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
+          'relative -mb-px inline-flex items-center border-b-2 pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
           selectedTab === 'upcoming'
-            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:bg-[#5DBB63]'
-            : 'text-[#9d9184] hover:text-[#3a342d]',
+            ? 'border-[#5DBB63] text-[#1a1a1a]'
+            : 'border-transparent text-[#9d9184] hover:border-[#5DBB63]/55 hover:text-[#45934a]',
         )}
         >
           <span className={cn('tracking-[0.1em]', selectedTab === 'upcoming' ? 'text-[11px]' : 'text-[10px]')}>
@@ -1263,10 +1266,10 @@ export function TrialsBrowseHomepage({
         type="button"
         onClick={() => handleTabChange('resolved')}
         className={cn(
-          'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
+          'relative -mb-px inline-flex items-center border-b-2 pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
           selectedTab === 'resolved'
-            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:bg-[#EF6F67]'
-            : 'text-[#9d9184] hover:text-[#3a342d]',
+            ? 'border-[#EF6F67] text-[#1a1a1a]'
+            : 'border-transparent text-[#9d9184] hover:border-[#EF6F67]/55 hover:text-[#c86a63]',
         )}
       >
         <span className={cn('tracking-[0.1em]', selectedTab === 'resolved' ? 'text-[11px]' : 'text-[10px]')}>

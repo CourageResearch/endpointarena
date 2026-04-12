@@ -21,6 +21,7 @@ import {
 const METRIC_PILL_CLASS = 'inline-flex items-center rounded-sm border border-[#ddd2c5] bg-[#f9f4ec] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none text-[#6d645a]'
 const ACTION_PILL_BASE_CLASS = 'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none'
 const CONTENT_PANEL_CLASS = 'rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-4 py-3'
+const SNAPSHOT_SCROLL_PADDING_PX = 12
 
 function formatActionTypeLabel(actionType: string): string {
   if (actionType === 'BUY_YES') return 'Buy Yes'
@@ -120,6 +121,15 @@ function getSnapshotHistoryNote(snapshot: MarketDashboardDecisionRow['history'][
   return 'No notes recorded for this snapshot.'
 }
 
+function scrollSnapshotCardIntoView(element: HTMLElement) {
+  const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  const delta = element.getBoundingClientRect().top - SNAPSHOT_SCROLL_PADDING_PX
+
+  if (Math.abs(delta) < 1) return
+
+  window.scrollBy({ top: delta, behavior })
+}
+
 export function MarketDecisionSnapshotsPanel({
   className,
   selectedMarketId,
@@ -141,7 +151,7 @@ export function MarketDecisionSnapshotsPanel({
     if (!element) return
 
     const frame = window.requestAnimationFrame(() => {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      scrollSnapshotCardIntoView(element)
     })
 
     return () => window.cancelAnimationFrame(frame)
@@ -177,7 +187,7 @@ export function MarketDecisionSnapshotsPanel({
               <article
                 key={`${selectedMarketId}-decision-${state.modelId}`}
                 id={`decision-snapshot-${selectedMarketId}-${state.modelId}`}
-                className={cn('mx-1 scroll-mt-32', DETAILS_CARD_SHELL_CLASS)}
+                className={cn('mx-1', DETAILS_CARD_SHELL_CLASS)}
               >
                 <div
                   className={cn(

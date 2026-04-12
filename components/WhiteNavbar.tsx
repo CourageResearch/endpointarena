@@ -11,9 +11,21 @@ import { cn } from '@/lib/utils'
 import { ADMIN_EMAIL } from '@/lib/constants'
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Home' },
-  { href: '/leaderboard', label: 'Leaderboard' },
-  { href: '/method', label: 'Methodology' },
+  {
+    href: '/',
+    label: 'Home',
+    hoverClass: 'hover:text-[#45934a] focus-visible:text-[#45934a] hover:after:bg-[#5DBB63]/55 focus-visible:after:bg-[#5DBB63]/55',
+  },
+  {
+    href: '/leaderboard',
+    label: 'Leaderboard',
+    hoverClass: 'hover:text-[#c86a63] focus-visible:text-[#c86a63] hover:after:bg-[#EF6F67]/55 focus-visible:after:bg-[#EF6F67]/55',
+  },
+  {
+    href: '/method',
+    label: 'Methodology',
+    hoverClass: 'hover:text-[#b8841f] focus-visible:text-[#b8841f] hover:after:bg-[#D39D2E]/55 focus-visible:after:bg-[#D39D2E]/55',
+  },
 ]
 
 export function WhiteNavbar({
@@ -153,10 +165,10 @@ export function WhiteNavbar({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'relative rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                    "relative rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-none after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:rounded-full after:opacity-0 after:transition-opacity after:content-['']",
                     isActive
                       ? 'font-medium text-[#1a1a1a]'
-                      : 'text-[#8a8075] hover:text-[#1a1a1a]'
+                      : cn('text-[#8a8075] hover:after:opacity-100 focus-visible:after:opacity-100', item.hoverClass)
                   )}
                 >
                   {item.label}

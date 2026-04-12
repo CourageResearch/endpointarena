@@ -88,6 +88,7 @@ const LEGACY_AI_MODEL_ID_RENAMES: Record<string, ModelId> = {
   'gpt-5.2': 'gpt-5.4',
   'llama-4': 'llama-4-scout',
 }
+const AI_RUNNING_TASK_STALE_GRACE_MS = 60_000
 
 const ai2Workers = globalThis.__endpointArenaAiWorkers ?? new Map<string, Promise<void>>()
 const ai2Locks = globalThis.__endpointArenaAiLocks ?? new Map<string, Promise<void>>()
@@ -509,6 +510,7 @@ function buildInitialBatchState(input: {
         actorId,
         lane: getAiModelLane(modelId),
         status: buildTaskStatus(getAiModelLane(modelId)),
+        startedAt: null,
         frozenPortfolio: buildFrozenPortfolio({
           market: candidate.market,
           account,
@@ -993,6 +995,88 @@ async function withTimeout<T>(
   }
 }
 
+function toTimestampMs(value: string | null | undefined): number | null {
+  if (!value) return null
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function getAiTaskStartedAtMs(state: AiBatchState, task: AiDecisionTask): number | null {
+  const explicitStartedAt = toTimestampMs(task.startedAt ?? null)
+  if (explicitStartedAt != null) {
+    return explicitStartedAt
+  }
+
+  const startMessage = `Starting ${task.taskKey}.`
+  for (let index = state.logs.length - 1; index >= 0; index -= 1) {
+    const log = state.logs[index]
+    if (log?.message !== startMessage) continue
+
+    const loggedStartedAt = toTimestampMs(log.at)
+    if (loggedStartedAt != null) {
+      return loggedStartedAt
+    }
+  }
+
+  return toTimestampMs(state.runStartedAt)
+}
+
+function getStaleRunningApiTaskKeys(state: AiBatchState, nowMs: number = Date.now()): string[] {
+  return state.tasks
+    .filter((task) => task.lane === 'api' && task.status === 'running')
+    .filter((task) => {
+      const startedAtMs = getAiTaskStartedAtMs(state, task)
+      if (startedAtMs == null) return false
+
+      const timeoutWindowMs = getMarketModelResponseTimeoutMs(task.modelId) + AI_RUNNING_TASK_STALE_GRACE_MS
+      return nowMs - startedAtMs > timeoutWindowMs
+    })
+    .map((task) => task.taskKey)
+}
+
+async function recoverStaleRunningTasks(batchId: string): Promise<string[]> {
+  let staleTaskKeys: string[] = []
+
+  await mutateBatchState(batchId, (state) => {
+    if (state.status === 'reset' || state.status === 'cleared') {
+      return state
+    }
+
+    staleTaskKeys = getStaleRunningApiTaskKeys(state)
+    if (staleTaskKeys.length === 0) {
+      return state
+    }
+
+    const staleTaskKeySet = new Set(staleTaskKeys)
+    const staleLogs = state.tasks
+      .filter((task) => staleTaskKeySet.has(task.taskKey))
+      .map((task) => (
+        buildLog(
+          `${getAiModelLabel(task.modelId)} exceeded its timeout window on ${task.marketId}; re-queued after stale worker recovery.`,
+          'warning',
+        )
+      ))
+
+    return {
+      ...state,
+      failureMessage: null,
+      logs: [...state.logs, ...staleLogs],
+      tasks: state.tasks.map((task) => (
+        staleTaskKeySet.has(task.taskKey)
+          ? {
+              ...task,
+              status: 'queued',
+              startedAt: null,
+              errorMessage: null,
+            }
+          : task
+      )),
+    }
+  })
+
+  return staleTaskKeys
+}
+
 async function runApiTask(batchId: string, taskKey: string): Promise<void> {
   let claimedTask = false
   const runningState = await mutateBatchState(batchId, (state) => {
@@ -1003,12 +1087,13 @@ async function runApiTask(batchId: string, taskKey: string): Promise<void> {
     }
 
     claimedTask = true
+    const startedAt = new Date().toISOString()
     return {
       ...state,
       logs: [...state.logs, buildLog(`Starting ${taskKey}.`)],
       tasks: state.tasks.map((task) => (
         task.taskKey === taskKey && task.status === 'queued'
-          ? { ...task, status: 'running', errorMessage: null }
+          ? { ...task, status: 'running', startedAt, errorMessage: null }
           : task
       )),
     }
@@ -1351,9 +1436,17 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
     const row = await getBatchRowById(batchId)
     if (!row) return
 
-    const state = parseBatchState(row)
+    let state = parseBatchState(row)
     if (!state.runStartedAt) return
     if (state.status === 'reset' || state.status === 'cleared') return
+
+    const recoveredTaskKeys = await recoverStaleRunningTasks(batchId)
+    if (recoveredTaskKeys.length > 0) {
+      const refreshedAfterRecovery = await getBatchRowById(batchId)
+      if (!refreshedAfterRecovery) return
+      state = parseBatchState(refreshedAfterRecovery)
+      if (state.status === 'reset' || state.status === 'cleared') return
+    }
 
     const apiTasks = state.tasks.filter((task) => task.lane === 'api' && task.status === 'queued')
     if (apiTasks.length > 0) {

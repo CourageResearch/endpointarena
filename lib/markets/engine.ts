@@ -719,8 +719,7 @@ export async function runBuyAction({
   actionId: string | null
 }> {
   const resolvedActionSource = resolveActionSource(runId, actionSource)
-
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Lock and re-read rows inside the transaction so trade math is based on
     // current q/cash/position state, preventing stale overwrite races.
     await tx.execute(sql`
@@ -859,6 +858,8 @@ export async function runBuyAction({
       status: 'ok',
     })
 
+    await upsertDailySnapshots(createdAt ?? runDate, tx)
+
     return {
       spent,
       shares: trade.shares,
@@ -867,6 +868,7 @@ export async function runBuyAction({
       actionId: actionRecord.id,
     }
   })
+  return result
 }
 
 export async function runSellAction({
@@ -897,8 +899,7 @@ export async function runSellAction({
   actionId: string | null
 }> {
   const resolvedActionSource = resolveActionSource(runId, actionSource)
-
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await tx.execute(sql`
       SELECT 1
       FROM ${predictionMarkets}
@@ -1095,6 +1096,8 @@ export async function runSellAction({
       status: 'ok',
     })
 
+    await upsertDailySnapshots(createdAt ?? runDate, tx)
+
     return {
       proceeds: saleProceeds,
       shares: soldShares,
@@ -1103,6 +1106,7 @@ export async function runSellAction({
       actionId: actionRecord.id,
     }
   })
+  return result
 }
 
 export async function upsertDailySnapshots(runDate: Date, dbClient: MarketDbClient = db): Promise<void> {

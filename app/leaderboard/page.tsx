@@ -5,6 +5,7 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, HeaderDots } from '@/components/site/chrome'
 import { MODEL_NAMES } from '@/lib/constants'
 import { getLeaderboardData } from '@/lib/leaderboard-data'
+import { PUBLIC_LEADERBOARD_MODE } from '@/lib/public-leaderboard'
 import { buildPageMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
@@ -69,7 +70,7 @@ function SectionHeader({ title, description }: { title: string; description?: st
 }
 
 export default async function LeaderboardPage() {
-  const { leaderboard, moneyLeaderboard, humanLeaderboard } = await getLeaderboardData('first')
+  const { leaderboard, moneyLeaderboard, humanLeaderboard } = await getLeaderboardData(PUBLIC_LEADERBOARD_MODE)
   const topHumanLeaderboard = humanLeaderboard.slice(0, 3)
 
   return (

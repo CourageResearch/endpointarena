@@ -24,19 +24,114 @@ interface AdminConsoleLayoutProps {
   children: ReactNode
 }
 
-const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string; dayFilters?: readonly AdminDayFilterOption[] }> = [
-  { id: 'ai', href: '/admin/ai', label: 'AI' },
-  { id: 'trials', href: '/admin/trials', label: 'Trials' },
-  { id: 'outcomes', href: '/admin/outcomes', label: 'Oracle' },
-  { id: 'users', href: '/admin/users', label: 'Users' },
-  { id: 'contact', href: '/admin/contact', label: 'Contact' },
-  { id: 'review', href: '/admin/review', label: 'Suggestions' },
-  { id: 'analytics', href: '/admin/analytics', label: 'Analytics', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
-  { id: 'searches', href: '/admin/searches', label: 'Searches', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
-  { id: 'crashes', href: '/admin/crashes', label: 'Crashes', dayFilters: ADMIN_CRASH_DAY_FILTERS },
-  { id: 'waitlist', href: '/admin/waitlist', label: 'Waitlist' },
-  { id: 'tables', href: '/admin/tables', label: 'Tables' },
-  { id: 'settings', href: '/admin/settings', label: 'Settings' },
+const ADMIN_TABS: Array<{
+  id: AdminTab
+  href: string
+  label: string
+  activeClass: string
+  hoverClass: string
+  activeBadgeClass: string
+  dayFilters?: readonly AdminDayFilterOption[]
+}> = [
+  {
+    id: 'ai',
+    href: '/admin/ai',
+    label: 'AI',
+    activeClass: 'border-[#EF6F67] text-[#c86a63]',
+    hoverClass: 'hover:border-[#EF6F67]/55 hover:text-[#c86a63]',
+    activeBadgeClass: 'bg-[#EF6F67]/12 text-[#c86a63]',
+  },
+  {
+    id: 'trials',
+    href: '/admin/trials',
+    label: 'Trials',
+    activeClass: 'border-[#D39D2E] text-[#b8841f]',
+    hoverClass: 'hover:border-[#D39D2E]/55 hover:text-[#b8841f]',
+    activeBadgeClass: 'bg-[#D39D2E]/12 text-[#b8841f]',
+  },
+  {
+    id: 'outcomes',
+    href: '/admin/outcomes',
+    label: 'Oracle',
+    activeClass: 'border-[#5BA5ED] text-[#4a8cca]',
+    hoverClass: 'hover:border-[#5BA5ED]/55 hover:text-[#4a8cca]',
+    activeBadgeClass: 'bg-[#5BA5ED]/12 text-[#4a8cca]',
+  },
+  {
+    id: 'users',
+    href: '/admin/users',
+    label: 'Users',
+    activeClass: 'border-[#5DBB63] text-[#45934a]',
+    hoverClass: 'hover:border-[#5DBB63]/55 hover:text-[#45934a]',
+    activeBadgeClass: 'bg-[#5DBB63]/12 text-[#45934a]',
+  },
+  {
+    id: 'contact',
+    href: '/admin/contact',
+    label: 'Contact',
+    activeClass: 'border-[#EF6F67] text-[#c86a63]',
+    hoverClass: 'hover:border-[#EF6F67]/55 hover:text-[#c86a63]',
+    activeBadgeClass: 'bg-[#EF6F67]/12 text-[#c86a63]',
+  },
+  {
+    id: 'review',
+    href: '/admin/review',
+    label: 'Suggestions',
+    activeClass: 'border-[#D39D2E] text-[#b8841f]',
+    hoverClass: 'hover:border-[#D39D2E]/55 hover:text-[#b8841f]',
+    activeBadgeClass: 'bg-[#D39D2E]/12 text-[#b8841f]',
+  },
+  {
+    id: 'analytics',
+    href: '/admin/analytics',
+    label: 'Analytics',
+    activeClass: 'border-[#5DBB63] text-[#45934a]',
+    hoverClass: 'hover:border-[#5DBB63]/55 hover:text-[#45934a]',
+    activeBadgeClass: 'bg-[#5DBB63]/12 text-[#45934a]',
+    dayFilters: ADMIN_ACTIVITY_DAY_FILTERS,
+  },
+  {
+    id: 'searches',
+    href: '/admin/searches',
+    label: 'Searches',
+    activeClass: 'border-[#5BA5ED] text-[#4a8cca]',
+    hoverClass: 'hover:border-[#5BA5ED]/55 hover:text-[#4a8cca]',
+    activeBadgeClass: 'bg-[#5BA5ED]/12 text-[#4a8cca]',
+    dayFilters: ADMIN_ACTIVITY_DAY_FILTERS,
+  },
+  {
+    id: 'crashes',
+    href: '/admin/crashes',
+    label: 'Crashes',
+    activeClass: 'border-[#EF6F67] text-[#c86a63]',
+    hoverClass: 'hover:border-[#EF6F67]/55 hover:text-[#c86a63]',
+    activeBadgeClass: 'bg-[#EF6F67]/12 text-[#c86a63]',
+    dayFilters: ADMIN_CRASH_DAY_FILTERS,
+  },
+  {
+    id: 'waitlist',
+    href: '/admin/waitlist',
+    label: 'Waitlist',
+    activeClass: 'border-[#D39D2E] text-[#b8841f]',
+    hoverClass: 'hover:border-[#D39D2E]/55 hover:text-[#b8841f]',
+    activeBadgeClass: 'bg-[#D39D2E]/12 text-[#b8841f]',
+  },
+  {
+    id: 'tables',
+    href: '/admin/tables',
+    label: 'Tables',
+    activeClass: 'border-[#5DBB63] text-[#45934a]',
+    hoverClass: 'hover:border-[#5DBB63]/55 hover:text-[#45934a]',
+    activeBadgeClass: 'bg-[#5DBB63]/12 text-[#45934a]',
+  },
+  {
+    id: 'settings',
+    href: '/admin/settings',
+    label: 'Settings',
+    activeClass: 'border-[#5BA5ED] text-[#4a8cca]',
+    hoverClass: 'hover:border-[#5BA5ED]/55 hover:text-[#4a8cca]',
+    activeBadgeClass: 'bg-[#5BA5ED]/12 text-[#4a8cca]',
+  },
 ]
 
 async function getWaitlistBadgeData() {
@@ -144,8 +239,8 @@ export async function AdminConsoleLayout({
         aria-current={isActive ? 'page' : undefined}
         className={`inline-flex min-h-[40px] shrink-0 items-center gap-1.5 border-b-2 px-1.5 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
           isActive
-            ? 'border-[#1a1a1a] text-[#1a1a1a]'
-            : 'border-transparent text-[#8a8075] hover:border-[#d8ccb9] hover:text-[#1a1a1a]'
+            ? tab.activeClass
+            : `border-transparent text-[#8a8075] ${tab.hoverClass}`
         }`}
       >
         {tab.label}
@@ -154,7 +249,7 @@ export async function AdminConsoleLayout({
             title="Total waitlist signups"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-[#1a1a1a] text-white'
+                ? tab.activeBadgeClass
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
@@ -166,7 +261,7 @@ export async function AdminConsoleLayout({
             title="Total users"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-[#1a1a1a] text-white'
+                ? tab.activeBadgeClass
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
@@ -178,7 +273,7 @@ export async function AdminConsoleLayout({
             title="Total contact messages"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-[#1a1a1a] text-white'
+                ? tab.activeBadgeClass
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
@@ -190,7 +285,7 @@ export async function AdminConsoleLayout({
             title="Total market suggestions"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-[#1a1a1a] text-white'
+                ? tab.activeBadgeClass
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
@@ -202,7 +297,7 @@ export async function AdminConsoleLayout({
             title="Crash events in last 24 hours"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isActive
-                ? 'bg-[#1a1a1a] text-white'
+                ? tab.activeBadgeClass
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >

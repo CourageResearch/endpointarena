@@ -151,6 +151,7 @@ export type AiDecisionTask = {
   actorId: string
   lane: AiModelLane
   status: AiTaskStatus
+  startedAt?: string | null
   frozenPortfolio: AiFrozenPortfolio
   frozenMarket: AiFrozenMarketSnapshot
   decision: AiDecisionIntent | null

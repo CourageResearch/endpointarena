@@ -196,11 +196,19 @@ export function isMarketClosedToTrading(input: {
 
 const REASON_PREVIEW_MAX_CHARS = 220
 const EMPTY_HISTORY_SNAPSHOT_DATE = '1970-01-01T00:00:00.000Z'
+const PRICE_HISTORY_LIVE_PRICE_EPSILON = 0.0001
 
 type MarketStance = 'YES' | 'NO' | 'HOLD' | 'ERROR'
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
+}
+
+function toUtcDayKey(dateLike: string | null | undefined): string | null {
+  if (!dateLike) return null
+  const date = new Date(dateLike)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
 }
 
 function formatMoney(value: number): string {
@@ -241,9 +249,26 @@ export function formatPercent(value: number, digits = 0): string {
   return `${(clamp01(value) * 100).toFixed(digits)}%`
 }
 
+export function formatPriceMovePoints(
+  delta: number,
+  digits = 1,
+  options: {
+    showSign?: boolean
+  } = {},
+): string {
+  const safeDelta = Number.isFinite(delta) ? delta : 0
+  const absolutePoints = (Math.abs(safeDelta) * 100).toFixed(digits)
+  const showSign = options.showSign ?? true
+
+  if (!showSign || Math.abs(safeDelta) < PRICE_HISTORY_LIVE_PRICE_EPSILON) {
+    return `${absolutePoints} pts`
+  }
+
+  return `${safeDelta > 0 ? '+' : '-'}${absolutePoints} pts`
+}
+
 export function formatSignedPercent(delta: number, digits = 1): string {
-  const sign = delta >= 0 ? '+' : '-'
-  return `${sign}${(Math.abs(delta) * 100).toFixed(digits)} pts`
+  return formatPriceMovePoints(delta, digits)
 }
 
 export function formatShortDateUtc(dateLike: string | null | undefined): string {
@@ -315,18 +340,94 @@ function toReasonPreview(reason: string): string {
 export function getPriceMoveFromHistory(
   history: Array<{ snapshotDate: string; priceYes: number }>,
   currentPrice: number,
+  options: {
+    openingPrice?: number | null
+    openedAt?: string | null
+    now?: Date
+  } = {},
 ): {
   latest: number
   anchor: number
   delta: number
   absDelta: number
 } {
-  const series = history.length > 0 ? history : [{ snapshotDate: EMPTY_HISTORY_SNAPSHOT_DATE, priceYes: currentPrice }]
+  const series = getDisplayPriceHistory(history, currentPrice, options)
   const latest = series[series.length - 1]?.priceYes ?? currentPrice
   const anchorIndex = Math.max(0, series.length - 8)
   const anchor = series[anchorIndex]?.priceYes ?? series[0]?.priceYes ?? currentPrice
   const delta = latest - anchor
   return { latest, anchor, delta, absDelta: Math.abs(delta) }
+}
+
+export function getDisplayPriceHistory(
+  history: Array<{ snapshotDate: string; priceYes: number }>,
+  currentPrice: number,
+  options: {
+    openingPrice?: number | null
+    openedAt?: string | null
+    now?: Date
+  } = {},
+): Array<{ snapshotDate: string; priceYes: number }> {
+  const safeCurrentPrice = clamp01(currentPrice)
+  const now = options.now ?? new Date()
+  const currentDayKey = now.toISOString().slice(0, 10)
+  const openingPrice = typeof options.openingPrice === 'number' && Number.isFinite(options.openingPrice)
+    ? clamp01(options.openingPrice)
+    : null
+  const openedAt = typeof options.openedAt === 'string' && !Number.isNaN(Date.parse(options.openedAt))
+    ? options.openedAt
+    : null
+
+  let series = history.map((entry) => ({
+    snapshotDate: entry.snapshotDate,
+    priceYes: clamp01(entry.priceYes),
+  }))
+
+  if (openingPrice != null && openedAt) {
+    const openingDayKey = toUtcDayKey(openedAt)
+    const firstPoint = series[0] ?? null
+    const firstPointDayKey = firstPoint ? toUtcDayKey(firstPoint.snapshotDate) : null
+
+    if (!firstPoint) {
+      series = [{
+        snapshotDate: openedAt,
+        priceYes: openingPrice,
+      }]
+    } else if (openingDayKey === currentDayKey && firstPointDayKey === openingDayKey) {
+      series = [
+        {
+          snapshotDate: openedAt,
+          priceYes: openingPrice,
+        },
+        ...series.slice(1),
+      ]
+    } else if (openingDayKey === currentDayKey && Date.parse(openedAt) < Date.parse(firstPoint.snapshotDate)) {
+      series = [
+        {
+          snapshotDate: openedAt,
+          priceYes: openingPrice,
+        },
+        ...series,
+      ]
+    }
+  }
+
+  if (series.length === 0) {
+    series = [{ snapshotDate: EMPTY_HISTORY_SNAPSHOT_DATE, priceYes: safeCurrentPrice }]
+  }
+
+  const latest = series[series.length - 1]
+  if (!latest || Math.abs(latest.priceYes - safeCurrentPrice) < PRICE_HISTORY_LIVE_PRICE_EPSILON) {
+    return series
+  }
+
+  return [
+    ...series,
+    {
+      snapshotDate: now.toISOString(),
+      priceYes: safeCurrentPrice,
+    },
+  ]
 }
 
 function getModelStance(state: MarketModelState): MarketStance {

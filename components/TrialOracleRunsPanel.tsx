@@ -128,19 +128,6 @@ function getCandidateStatusBadge(status: OracleCandidateStatus): { label: string
   }
 }
 
-function getRunStatusBadge(status: OracleRun['status']): { label: string; className: string } {
-  switch (status) {
-    case 'completed':
-      return { label: 'Completed', className: 'border-[#5DBB63]/35 bg-[#5DBB63]/10 text-[#2f7b63]' }
-    case 'failed':
-      return { label: 'Failed', className: 'border-[#EF6F67]/35 bg-[#EF6F67]/10 text-[#b3566b]' }
-    case 'paused':
-      return { label: 'Paused', className: 'border-[#d9cdbf] bg-[#f9f4ec] text-[#6d645a]' }
-    default:
-      return { label: 'Running', className: 'border-[#5BA5ED]/35 bg-[#5BA5ED]/10 text-[#245f94]' }
-  }
-}
-
 function getHistorySourceLabel(source: OracleHistoryEntry['changeSource']): string {
   switch (source) {
     case 'accepted_candidate':
@@ -257,7 +244,6 @@ export function TrialOracleRunsPanel({
   const nctNumber = selectedMarket.event?.nctId ?? null
   const marketHref = `/trials/${encodeURIComponent(selectedMarket.marketId)}`
   const latestRun = runHistory[0] ?? null
-  const latestRunStatus = latestRun ? getRunStatusBadge(latestRun.status) : null
 
   return (
     <div className={embedded ? 'space-y-8' : 'space-y-10'}>
@@ -386,12 +372,12 @@ export function TrialOracleRunsPanel({
       <section className="space-y-4">
         <div className="px-1">
           <div className="flex items-center gap-3">
-            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Latest Run</div>
+            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Stats</div>
             <HeaderDots />
           </div>
         </div>
 
-        <div className="grid gap-3 px-1 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 px-1 sm:grid-cols-2 xl:grid-cols-3">
           <OracleStatCard
             label="Latest Run"
             value={(
@@ -401,19 +387,6 @@ export function TrialOracleRunsPanel({
                 className={CARD_VALUE_CLASS}
               />
             )}
-            meta={!latestRun ? (
-              <span className={cn('text-[12px] text-[#8a8075]', DASHBOARD_META_TEXT_CLASS)}>
-                Waiting for the first oracle run
-              </span>
-            ) : undefined}
-          />
-          <OracleStatCard
-            label="Status"
-            value={latestRunStatus ? (
-              <span className={cn(BADGE_BASE_CLASS, latestRunStatus.className)}>
-                {latestRunStatus.label}
-              </span>
-            ) : 'No runs yet'}
           />
           <OracleStatCard
             label="Model"

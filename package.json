@@ -40,6 +40,7 @@
     "db:switch-local-postgres": "npx tsx scripts/local-postgres.ts switch",
     "db:add-market-runtime-config": "npx tsx scripts/add-market-runtime-config.ts",
     "db:audit-market-v2": "node scripts/run-with-env.js .env.local -- npx tsx scripts/audit-market-db-v2.ts",
+    "db:audit-market-snapshot-drift": "node scripts/run-with-env.js .env.local -- npx tsx scripts/audit-market-price-snapshot-drift.ts",
     "db:seed": "npm run db:import-trials",
     "db:import-trials:dry-run": "npx tsx scripts/import-trials.ts",
     "db:import-trials": "npx tsx scripts/import-trials.ts --apply",

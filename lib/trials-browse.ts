@@ -46,7 +46,10 @@ function mapMarketToBrowseRow(market: OpenMarketRow): TrialsBrowseRow {
   const applicationTypeLabel = market.event?.applicationType
     ? abbreviateType(market.event.applicationType).display
     : '—'
-  const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes)
+  const move = getPriceMoveFromHistory(market.priceHistory, market.priceYes, {
+    openingPrice: market.openingProbability,
+    openedAt: market.openedAt,
+  })
   const counts = getBrowseDecisionCounts(market)
 
   return {

@@ -24,12 +24,13 @@ const DOTS = [
 const DIVIDER_SQUARES = [BRAND_DOT_COLORS.coral, BRAND_DOT_COLORS.green, BRAND_DOT_COLORS.gold, BRAND_DOT_COLORS.blue]
 const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
   [
+    { href: '/suggest', label: 'suggest a market' },
     { href: '/waitlist', label: 'waitlist' },
     { href: '/contact', label: 'contact' },
-    { href: '/suggest', label: 'suggest a market' },
   ],
   [
     { href: '/brand', label: 'brand kit' },
+    { href: '/leaderboard', label: 'leaderboard' },
     { href: '/method', label: 'methodology' },
   ],
   [
