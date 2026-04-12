@@ -217,9 +217,9 @@ export function MarketDecisionSnapshotsPanel({
                   {hasSnapshotContent ? (
                     <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
                       <section className={cn(CONTENT_PANEL_CLASS, 'sm:px-5 sm:py-4')}>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex flex-col gap-2">
                           <span className={DETAILS_TOP_LABEL_CLASS}>Latest Thesis</span>
-                          <div className="flex flex-wrap gap-2 sm:justify-end">
+                          <div className="flex flex-wrap gap-2">
                             <span className={cn('inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none', latestCall.badgeClass)}>
                               {latestCall.label}
                             </span>
@@ -253,7 +253,7 @@ export function MarketDecisionSnapshotsPanel({
                             </div>
                           )}
                           {latestActionExplanation ? (
-                            <div className={cn('mt-3 whitespace-pre-wrap break-words text-[12px] leading-[1.55] text-[#6d645a]', DASHBOARD_META_TEXT_CLASS)}>
+                            <div className={cn('mt-3 whitespace-pre-wrap break-words text-[#4d453c]', DETAILS_BODY_TEXT_CLASS, 'text-[0.81rem] sm:text-[0.84rem] leading-[1.7]')}>
                               {latestActionExplanation}
                             </div>
                           ) : null}
