@@ -1,6 +1,6 @@
-export const MARKET_SUGGESTION_HEADER = 'Market suggestion request'
-export const MARKET_SUGGESTION_REQUESTED_NCT_PREFIX = 'Requested NCT: '
-export const MARKET_SUGGESTION_DETAILS_LABEL = 'Additional context:'
+const MARKET_SUGGESTION_HEADER = 'Market suggestion request'
+const MARKET_SUGGESTION_REQUESTED_NCT_PREFIX = 'Requested NCT: '
+const MARKET_SUGGESTION_DETAILS_LABEL = 'Additional context:'
 export const EMPTY_MARKET_SUGGESTION_DETAILS = 'No additional context provided.'
 export const MARKET_SUGGESTION_MESSAGE_PREFIX = `${MARKET_SUGGESTION_HEADER}\n${MARKET_SUGGESTION_REQUESTED_NCT_PREFIX}`
 
@@ -20,7 +20,7 @@ export function buildMarketSuggestionMessage(nctNumber: string, details: string)
   ].join('\n')
 }
 
-export function isMarketSuggestionMessage(message: string | null | undefined): boolean {
+function isMarketSuggestionMessage(message: string | null | undefined): boolean {
   if (typeof message !== 'string') return false
   return message.replace(/\r\n/g, '\n').trim().startsWith(MARKET_SUGGESTION_MESSAGE_PREFIX)
 }
