@@ -320,7 +320,7 @@ export function ProfileVerificationPanel() {
     <div className="space-y-5 rounded-sm border border-[#5DBB63] bg-[#fffdfa] p-5 sm:p-6">
       <div>
         <p className="text-sm font-medium text-[#1a1a1a]">Verify your account</p>
-        <p className="mt-1 text-sm text-[#6d645a]">Connect <XInlineMark className="mx-0.5" /> to claim your $5 cash bonus and start trading.</p>
+        <p className="mt-1 text-sm text-[#6d645a]">Connect <XInlineMark className="mx-0.5" /> to claim your $5 (paper trading) bonus and start trading.</p>
       </div>
 
       {error ? (

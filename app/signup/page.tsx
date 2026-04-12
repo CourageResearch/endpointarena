@@ -96,9 +96,6 @@ export default function SignupPage() {
               <div className="space-y-5">
                 <div>
                   <h1 className="text-xl font-semibold text-[#1a1a1a]">Create account</h1>
-                  <p className="mt-1 text-sm text-[#7f7469]">
-                    Create your account with email and password.
-                  </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
