@@ -1,10 +1,11 @@
 import { revalidatePath } from 'next/cache'
-import { desc, eq, sql } from 'drizzle-orm'
+import { desc, eq, notLike, sql } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions, ensureAdmin } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { db, contactMessages } from '@/lib/db'
+import { MARKET_SUGGESTION_MESSAGE_PREFIX } from '@/lib/market-suggestions'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 
@@ -20,14 +21,19 @@ async function deleteContactMessage(formData: FormData) {
 
   await db.delete(contactMessages).where(eq(contactMessages.id, messageId))
   revalidatePath('/admin/contact')
+  revalidatePath('/admin/review')
 }
 
 async function getContactData() {
   const [messages, totalRows] = await Promise.all([
     db.query.contactMessages.findMany({
+      where: notLike(contactMessages.message, `${MARKET_SUGGESTION_MESSAGE_PREFIX}%`),
       orderBy: [desc(contactMessages.createdAt)],
     }),
-    db.select({ count: sql<number>`count(*)` }).from(contactMessages),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(contactMessages)
+      .where(notLike(contactMessages.message, `${MARKET_SUGGESTION_MESSAGE_PREFIX}%`)),
   ])
 
   return {

@@ -13,13 +13,16 @@ const resend = process.env.RESEND_API_KEY
   : null
 
 type ContactRequest = {
-  name?: string
-  email?: string
-  message?: string
+  kind?: unknown
+  name?: unknown
+  email?: unknown
+  message?: unknown
 }
 
-function normalizeName(value: string | undefined): string {
-  const name = value?.trim() ?? ''
+type ContactKind = 'contact' | 'market-suggestion'
+
+function normalizeName(value: unknown): string {
+  const name = typeof value === 'string' ? value.trim() : ''
 
   if (!name) {
     throw new ValidationError('Name is required')
@@ -32,8 +35,8 @@ function normalizeName(value: string | undefined): string {
   return name
 }
 
-function normalizeEmail(value: string | undefined): string {
-  const email = value?.trim().toLowerCase() ?? ''
+function normalizeEmail(value: unknown): string {
+  const email = typeof value === 'string' ? value.trim().toLowerCase() : ''
 
   if (!email) {
     throw new ValidationError('Email is required')
@@ -50,8 +53,8 @@ function normalizeEmail(value: string | undefined): string {
   return email
 }
 
-function normalizeMessage(value: string | undefined): string {
-  const message = value?.trim() ?? ''
+function normalizeMessage(value: unknown): string {
+  const message = typeof value === 'string' ? value.trim() : ''
 
   if (!message) {
     throw new ValidationError('Message is required')
@@ -62,6 +65,30 @@ function normalizeMessage(value: string | undefined): string {
   }
 
   return message
+}
+
+function normalizeOptionalName(value: unknown): string {
+  const name = typeof value === 'string' ? value.trim() : ''
+
+  if (name.length > 120) {
+    throw new ValidationError('Name is too long')
+  }
+
+  return name
+}
+
+function normalizeOptionalEmail(value: unknown): string {
+  const email = typeof value === 'string' ? value.trim() : ''
+
+  if (email.length > 320) {
+    throw new ValidationError('Email is too long')
+  }
+
+  return email
+}
+
+function normalizeContactKind(value: unknown): ContactKind {
+  return value === 'market-suggestion' ? 'market-suggestion' : 'contact'
 }
 
 function escapeHtml(value: string): string {
@@ -77,10 +104,25 @@ function formatIsoDate(date: Date): string {
   return date.toISOString().replace('T', ' ').replace('Z', ' UTC')
 }
 
-function buildAdminEmailText({ name, email, message, createdAt }: { name: string; email: string; message: string; createdAt: Date }): string {
-  return `New Contact Us message
+function buildAdminEmailText({
+  subjectLabel,
+  name,
+  email,
+  message,
+  createdAt,
+}: {
+  subjectLabel: string
+  name: string
+  email: string
+  message: string
+  createdAt: Date
+}): string {
+  const displayName = name || 'Anonymous'
+  const displayEmail = email || 'No email provided'
 
-From: ${name} <${email}>
+  return `New ${subjectLabel}
+
+From: ${displayName} <${displayEmail}>
 Received: ${formatIsoDate(createdAt)}
 
 Message:
@@ -89,18 +131,21 @@ ${message}
 }
 
 function buildAdminEmailHtml({
+  subjectLabel,
   name,
   email,
   message,
   createdAt,
 }: {
+  subjectLabel: string
   name: string
   email: string
   message: string
   createdAt: Date
 }): string {
-  const safeName = escapeHtml(name)
-  const safeEmail = escapeHtml(email)
+  const safeSubjectLabel = escapeHtml(subjectLabel)
+  const safeName = escapeHtml(name || 'Anonymous')
+  const safeEmail = escapeHtml(email || 'No email provided')
   const safeMessage = escapeHtml(message).replace(/\n/g, '<br />')
   const safeDate = escapeHtml(formatIsoDate(createdAt))
 
@@ -111,7 +156,7 @@ function buildAdminEmailHtml({
           <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;border:1px solid #e8ddd0;background:#fff;">
             <tr>
               <td style="padding:20px 24px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-                <h1 style="margin:0 0 16px;color:#1a1a1a;font-size:22px;line-height:1.2;">New Contact Us message</h1>
+                <h1 style="margin:0 0 16px;color:#1a1a1a;font-size:22px;line-height:1.2;">New ${safeSubjectLabel}</h1>
                 <p style="margin:0 0 8px;color:#4b4b4b;font-size:14px;line-height:1.5;"><strong>From:</strong> ${safeName} &lt;${safeEmail}&gt;</p>
                 <p style="margin:0 0 16px;color:#4b4b4b;font-size:14px;line-height:1.5;"><strong>Received:</strong> ${safeDate}</p>
                 <div style="border:1px solid #e8ddd0;background:#faf7f2;padding:14px;color:#1a1a1a;font-size:14px;line-height:1.6;">
@@ -127,11 +172,13 @@ function buildAdminEmailHtml({
 }
 
 async function sendAdminNotification({
+  kind,
   name,
   email,
   message,
   createdAt,
 }: {
+  kind: ContactKind
   name: string
   email: string
   message: string
@@ -147,14 +194,19 @@ async function sendAdminNotification({
     return false
   }
 
+  const subjectLabel = kind === 'market-suggestion' ? 'market suggestion' : 'Contact Us message'
+  const replyTo = EMAIL_PATTERN.test(email) ? email : undefined
+
   try {
     const result = await resend.emails.send({
       from: CONTACT_FROM_EMAIL,
       to: CONTACT_ADMIN_EMAIL,
-      replyTo: email,
-      subject: `New contact message from ${name}`,
-      text: buildAdminEmailText({ name, email, message, createdAt }),
-      html: buildAdminEmailHtml({ name, email, message, createdAt }),
+      replyTo,
+      subject: kind === 'market-suggestion'
+        ? `New market suggestion${name ? ` from ${name}` : ''}`
+        : `New contact message from ${name}`,
+      text: buildAdminEmailText({ subjectLabel, name, email, message, createdAt }),
+      html: buildAdminEmailHtml({ subjectLabel, name, email, message, createdAt }),
     })
 
     if (result.error) {
@@ -174,8 +226,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await parseJsonBody<ContactRequest>(request)
-    const name = normalizeName(body.name)
-    const email = normalizeEmail(body.email)
+    const kind = normalizeContactKind(body.kind)
+    const name = kind === 'market-suggestion'
+      ? normalizeOptionalName(body.name)
+      : normalizeName(body.name)
+    const email = kind === 'market-suggestion'
+      ? normalizeOptionalEmail(body.email)
+      : normalizeEmail(body.email)
     const message = normalizeMessage(body.message)
     const createdAt = new Date()
 
@@ -187,6 +244,7 @@ export async function POST(request: NextRequest) {
     })
 
     const adminEmailSent = await sendAdminNotification({
+      kind,
       name,
       email,
       message,

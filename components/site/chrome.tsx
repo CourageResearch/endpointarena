@@ -26,6 +26,7 @@ const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
   [
     { href: '/waitlist', label: 'waitlist' },
     { href: '/contact', label: 'contact' },
+    { href: '/suggest', label: 'suggest a market' },
   ],
   [
     { href: '/brand', label: 'brand kit' },

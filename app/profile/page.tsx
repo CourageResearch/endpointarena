@@ -39,8 +39,6 @@ type ProfileHoldingRow = {
   ticker: string
   yesShares: number
   noShares: number
-  priceYes: number
-  priceNo: number
   markValueUsd: number
   decisionDate: Date | null
 }
@@ -63,9 +61,9 @@ type ProfileTradeRow = {
 function formatShortDate(value: Date | null | undefined): string {
   if (!value) return '—'
   return value.toLocaleDateString('en-US', {
-    month: 'short',
+    month: 'numeric',
     day: 'numeric',
-    year: 'numeric',
+    year: '2-digit',
   })
 }
 
@@ -88,7 +86,7 @@ function formatPricePercent(value: number): string {
   return `${(safe * 100).toFixed(1).replace(/\.0$/, '')}%`
 }
 
-function toTradeActionLabel(action: ProfileTradeAction): string {
+function toTradeActionLabel(action: ProfileTradeAction): 'Buy Yes' | 'Buy No' | 'Sell Yes' | 'Sell No' {
   switch (action) {
     case 'BUY_YES':
       return 'Buy Yes'
@@ -215,8 +213,6 @@ async function getProfileTradingData(userId: string): Promise<{
         ticker: display.ticker,
         yesShares,
         noShares,
-        priceYes,
-        priceNo,
         markValueUsd,
         decisionDate: display.decisionDate,
       }]
@@ -350,7 +346,7 @@ export default async function ProfilePage() {
                 updateAction={updateProfileName}
               />
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Trading Cash</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash</p>
                 <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
                 <div className="mt-2 inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
                   Paper Trading
@@ -387,116 +383,133 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-[#1a1a1a]">Current Holdings</h2>
+            <div className="mt-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Holdings</h2>
+                <HeaderDots />
               </div>
 
-              {holdings.length === 0 ? (
-                <p className="mt-4 text-sm text-[#8a8075]">No open holdings yet.</p>
-              ) : (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[860px] text-sm">
+              <section className="mt-3 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
+                {holdings.length === 0 ? (
+                  <p className="text-sm text-[#8a8075]">No open holdings yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] table-fixed text-sm">
+                      <colgroup>
+                        <col className="w-[26rem]" />
+                        <col className="w-[5rem]" />
+                        <col className="w-[6rem]" />
+                        <col className="w-[6rem]" />
+                        <col className="w-[6rem]" />
+                      </colgroup>
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
-                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Price</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Price</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Mark Value</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Ticker</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Mark Value</th>
                       </tr>
                     </thead>
                     <tbody>
                       {holdings.map((holding) => (
                         <tr key={`${holding.marketId}-${holding.ticker}`} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
-                          <td className="px-3 py-2 text-[#1a1a1a]">
+                          <td className="px-2 py-2 text-[#8a8075]">
                             {holding.marketHref ? (
                               <Link
                                 href={holding.marketHref}
-                                className="font-medium transition-colors hover:text-[#6d645a]"
+                                className="transition-colors hover:text-[#6d645a]"
                               >
                                 {holding.drugName}
                               </Link>
                             ) : (
-                              <span className="font-medium">{holding.drugName}</span>
+                              <span>{holding.drugName}</span>
                             )}
-                            <div className="mt-0.5 text-xs text-[#8a8075]">
-                              {holding.companyName}
+                            <div className="hidden">
                               {holding.ticker !== '—' ? ` (${holding.ticker})` : ''}
-                              {holding.decisionDate ? ` • ${formatShortDate(holding.decisionDate)}` : ''}
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.yesShares)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(holding.noShares)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatPricePercent(holding.priceYes)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatPricePercent(holding.priceNo)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums font-medium text-[#1a1a1a]">{formatUsd(holding.markValueUsd)}</td>
+                          <td className="px-2 py-2 whitespace-nowrap text-[#8a8075]">{holding.ticker}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-[#8a8075]">{formatShares(holding.yesShares)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-[#8a8075]">{formatShares(holding.noShares)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-[#8a8075]">{formatUsd(holding.markValueUsd)}</td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </div>
 
-            <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-[#1a1a1a]">Transaction History</h2>
+            <div className="mt-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Transactions</h2>
+                <HeaderDots />
               </div>
 
-              {trades.length === 0 ? (
-                <p className="mt-4 text-sm text-[#8a8075]">No transactions yet.</p>
-              ) : (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[860px] text-sm">
+              <section className="mt-3 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
+                {trades.length === 0 ? (
+                  <p className="text-sm text-[#8a8075]">No transactions yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[860px] table-fixed border-collapse text-sm">
+                    <colgroup>
+                      <col className="w-[9rem]" />
+                      <col className="w-[15rem]" />
+                      <col className="w-[4.5rem]" />
+                      <col className="w-[5.5rem]" />
+                      <col className="w-[5.5rem]" />
+                      <col className="w-[5rem]" />
+                      <col className="w-[5rem]" />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
-                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Time</th>
-                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
-                        <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
-                        <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
+                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Date</th>
+                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
+                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Ticker</th>
+                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
+                        <th className="px-2 py-1 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
+                        <th className="px-2 py-1 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
+                        <th className="px-2 py-1 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
                       </tr>
                     </thead>
                     <tbody>
                       {trades.map((trade) => {
+                        const actionLabel = toTradeActionLabel(trade.action)
                         const actionTone = trade.action.startsWith('BUY') ? 'text-[#2f7b63]' : 'text-[#b3566b]'
 
                         return (
                           <tr key={trade.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
-                            <td className="px-3 py-2 whitespace-nowrap text-[#8a8075]">
+                            <td className="px-2 py-1.5 align-middle whitespace-nowrap leading-[1.2] text-[#8a8075]">
                               <LocalDateTime value={trade.timestamp.toISOString()} />
                             </td>
-                            <td className="px-3 py-2 text-[#1a1a1a]">
+                            <td className="px-2 py-1.5 align-middle leading-[1.2] text-[#8a8075]">
                               {trade.marketHref ? (
                                 <Link
                                   href={trade.marketHref}
-                                  className="font-medium transition-colors hover:text-[#6d645a]"
+                                  className="leading-[1.2] transition-colors hover:text-[#6d645a]"
                                 >
                                   {trade.drugName}
                                 </Link>
                               ) : (
-                                <span className="font-medium">{trade.drugName}</span>
+                                <span className="leading-[1.2]">{trade.drugName}</span>
                               )}
-                              <div className="mt-0.5 text-xs text-[#8a8075]">
-                                {trade.companyName}
-                                {trade.ticker !== '—' ? ` (${trade.ticker})` : ''}
-                              </div>
                             </td>
-                            <td className={`px-3 py-2 font-medium ${actionTone}`}>{toTradeActionLabel(trade.action)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatUsd(trade.usdAmount)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatShares(trade.shares)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-[#1a1a1a]">{formatPricePercent(trade.priceAfter)}</td>
+                            <td className="px-2 py-1.5 align-middle whitespace-nowrap leading-[1.2] text-[#8a8075]">{trade.ticker}</td>
+                            <td className={`px-2 py-1.5 align-middle whitespace-nowrap leading-[1.2] ${actionTone}`}>{actionLabel}</td>
+                            <td className="px-2 py-1.5 align-middle text-right tabular-nums leading-[1.2] text-[#8a8075]">{formatUsd(trade.usdAmount)}</td>
+                            <td className="px-2 py-1.5 align-middle text-right tabular-nums leading-[1.2] text-[#8a8075]">{formatShares(trade.shares)}</td>
+                            <td className="px-2 py-1.5 align-middle text-right tabular-nums leading-[1.2] text-[#8a8075]">{formatPricePercent(trade.priceAfter)}</td>
                           </tr>
                         )
                       })}
                     </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
               <LogoutButton />

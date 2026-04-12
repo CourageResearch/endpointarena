@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { gte, sql } from 'drizzle-orm'
+import { gte, like, notLike, sql } from 'drizzle-orm'
 import { db, contactMessages, crashEvents, users, waitlistEntries } from '@/lib/db'
 import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
+import { MARKET_SUGGESTION_MESSAGE_PREFIX } from '@/lib/market-suggestions'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import {
   ADMIN_ACTIVITY_DAY_FILTERS,
@@ -13,7 +14,7 @@ import {
   type AdminDayFilterOption,
 } from '@/lib/admin-search-params'
 
-type AdminTab = 'predictions' | 'trials' | 'waitlist' | 'users' | 'contact' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'tables'
+type AdminTab = 'predictions' | 'trials' | 'waitlist' | 'users' | 'contact' | 'review' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'tables'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -29,6 +30,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; href: string; label: string; dayFilters?
   { id: 'outcomes', href: '/admin/outcomes', label: 'Oracle' },
   { id: 'users', href: '/admin/users', label: 'Users' },
   { id: 'contact', href: '/admin/contact', label: 'Contact' },
+  { id: 'review', href: '/admin/review', label: 'Suggestions' },
   { id: 'analytics', href: '/admin/analytics', label: 'Analytics', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
   { id: 'searches', href: '/admin/searches', label: 'Searches', dayFilters: ADMIN_ACTIVITY_DAY_FILTERS },
   { id: 'crashes', href: '/admin/crashes', label: 'Crashes', dayFilters: ADMIN_CRASH_DAY_FILTERS },
@@ -74,10 +76,26 @@ async function getUsersCount() {
 
 async function getContactCount() {
   try {
-    const rows = await db.select({ count: sql<number>`count(*)` }).from(contactMessages)
+    const rows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(contactMessages)
+      .where(notLike(contactMessages.message, `${MARKET_SUGGESTION_MESSAGE_PREFIX}%`))
     return rows[0]?.count ?? 0
   } catch (error) {
     console.error('Failed to load contact count:', error)
+    return 0
+  }
+}
+
+async function getReviewCount() {
+  try {
+    const rows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(contactMessages)
+      .where(like(contactMessages.message, `${MARKET_SUGGESTION_MESSAGE_PREFIX}%`))
+    return rows[0]?.count ?? 0
+  } catch (error) {
+    console.error('Failed to load review count:', error)
     return 0
   }
 }
@@ -103,10 +121,11 @@ export async function AdminConsoleLayout({
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
-  const [waitlistBadge, usersCount, contactCount, crashes24hCount] = await Promise.all([
+  const [waitlistBadge, usersCount, contactCount, reviewCount, crashes24hCount] = await Promise.all([
     getWaitlistBadgeData(),
     getUsersCount(),
     getContactCount(),
+    getReviewCount(),
     getCrashes24hCount(),
   ])
   const activeDatabaseTarget = getActiveDatabaseTarget()
@@ -164,6 +183,18 @@ export async function AdminConsoleLayout({
             }`}
           >
             {contactCount}
+          </span>
+        ) : null}
+        {tab.id === 'review' ? (
+          <span
+            title="Total market suggestions"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isActive
+                ? 'bg-[#1a1a1a] text-white'
+                : 'bg-[#f3ebe0] text-[#8a8075]'
+            }`}
+          >
+            {reviewCount}
           </span>
         ) : null}
         {tab.id === 'crashes' ? (

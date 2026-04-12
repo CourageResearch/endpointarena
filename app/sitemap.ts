@@ -14,6 +14,7 @@ const STATIC_ROUTES = [
   '/glossary',
   '/waitlist',
   '/contact',
+  '/suggest',
   '/privacy',
   '/brand',
 ] as const
