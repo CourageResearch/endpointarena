@@ -28,6 +28,7 @@ import { MarketTradePanel } from '@/components/markets/dashboard/trade-panel'
 import { MarketDetailChart, TinyPriceSparkline } from '@/components/markets/marketOverviewCharts'
 import { useTrialsOverview } from '@/components/trials/useTrialsOverview'
 import { HeaderDots } from '@/components/site/chrome'
+import { dispatchAccountBalanceUpdated } from '@/lib/account-balance-events'
 import {
   daysUntilUtc,
   formatCompactMoney,
@@ -254,7 +255,7 @@ export function TrialDashboard({
 }: TrialDashboardProps = {}) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { status: sessionStatus, update: updateSession } = useSession()
+  const { status: sessionStatus } = useSession()
   const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId, {
     includeAccounts: false,
     includeEquityHistory: false,
@@ -811,7 +812,7 @@ export function TrialDashboard({
         `${humanTradeSideLabel(result.side)} executed: ${formatCompactMoney(result.executedUsd)} at ${formatPercent(result.priceAfter, 1)}`
       )
       await reload()
-      await updateSession()
+      dispatchAccountBalanceUpdated()
     } catch (err) {
       setTradeError(err instanceof Error ? err.message : 'Failed to execute trade')
   } finally {

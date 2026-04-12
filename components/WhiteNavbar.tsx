@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { LiveProfileBalanceLink } from '@/components/LiveProfileBalanceLink'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { BrandLink } from '@/components/site/Brand'
 import { cn } from '@/lib/utils'
@@ -15,20 +16,6 @@ const NAV_ITEMS = [
   { href: '/method', label: 'Methodology' },
 ]
 
-function formatNavbarBalance(value: number | null | undefined): string | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null
-
-  const safeValue = Math.max(0, value)
-  const showCents = !Number.isInteger(safeValue)
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: showCents ? 2 : 0,
-    maximumFractionDigits: 2,
-  }).format(safeValue)
-}
-
 export function WhiteNavbar({
   bgClass = 'bg-white/80',
   borderClass = 'border-neutral-200',
@@ -39,7 +26,7 @@ export function WhiteNavbar({
   adminRuntimeLabel?: string | null
 } = {}) {
   const pathname = usePathname()
-  const { data: session, status: sessionStatus, update: updateSession } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [resolvedAdminRuntimeLabel, setResolvedAdminRuntimeLabel] = useState<string | null>(adminRuntimeLabel)
   const isAdminRoute = pathname.startsWith('/admin')
@@ -48,18 +35,12 @@ export function WhiteNavbar({
   const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
   const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Sign up'
   const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null
-  const profileButtonLabel = formatNavbarBalance(session?.user?.cashBalance) ?? 'Profile'
-  const profileButtonTitle = [profileLabel, profileButtonLabel === 'Profile' ? null : profileButtonLabel].filter(Boolean).join(' • ') || undefined
-  const profileButtonAriaLabel = profileButtonLabel === 'Profile' ? 'Profile' : `Profile, balance ${profileButtonLabel}`
+  const showGuestCta = !isAdminRoute && sessionStatus === 'unauthenticated'
+  const showProfileBalance = sessionStatus === 'authenticated'
 
   useEffect(() => {
     setResolvedAdminRuntimeLabel(adminRuntimeLabel)
   }, [adminRuntimeLabel])
-
-  useEffect(() => {
-    if (sessionStatus !== 'authenticated') return
-    void updateSession()
-  }, [pathname, sessionStatus, updateSession])
 
   useEffect(() => {
     if (!isAdminUser) {
@@ -146,7 +127,6 @@ export function WhiteNavbar({
             ) : null}
           </div>
 
-          {/* Mobile Hamburger Button */}
           <button
             className="touch-target -mr-2 rounded-md p-1.5 text-[#8a8075] transition-colors hover:bg-white/70 hover:text-[#1a1a1a] xl:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -155,17 +135,16 @@ export function WhiteNavbar({
             aria-controls="site-mobile-nav"
           >
             {mobileMenuOpen ? (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             ) : (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             )}
           </button>
 
-          {/* Desktop Navigation */}
           <div className="hidden items-center gap-0.5 xl:flex">
             {NAV_ITEMS.map((item) => {
               const isActive = isItemActive(item)
@@ -190,7 +169,7 @@ export function WhiteNavbar({
                 </Link>
               )
             })}
-            {!isAdminRoute && sessionStatus !== 'authenticated' ? (
+            {showGuestCta ? (
               <Link
                 href={ctaHref}
                 className="ml-2 rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
@@ -198,23 +177,18 @@ export function WhiteNavbar({
                 {ctaLabel}
               </Link>
             ) : null}
-            {sessionStatus === 'authenticated' ? (
-              <Link
-                href="/profile"
+            {showProfileBalance ? (
+              <LiveProfileBalanceLink
+                profileLabel={profileLabel}
                 className="ml-2 rounded-sm border border-[#e8ddd0] bg-white/80 px-3 py-1.5 text-xs font-medium text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
-                title={profileButtonTitle}
-                aria-label={profileButtonAriaLabel}
-              >
-                {profileButtonLabel}
-              </Link>
+              />
             ) : null}
           </div>
         </div>
 
-        {/* Mobile Navigation Menu */}
         {mobileMenuOpen && (
           <div id="site-mobile-nav" className="mobile-menu-slide border-t border-[#e8ddd0] pb-2 pt-1.5 xl:hidden">
-            {!isAdminRoute && sessionStatus !== 'authenticated' ? (
+            {showGuestCta ? (
               <Link
                 href={ctaHref}
                 onClick={handleNavClick}
@@ -241,16 +215,12 @@ export function WhiteNavbar({
                 </Link>
               )
             })}
-            {sessionStatus === 'authenticated' ? (
-              <Link
-                href="/profile"
+            {showProfileBalance ? (
+              <LiveProfileBalanceLink
+                profileLabel={profileLabel}
                 onClick={handleNavClick}
                 className="touch-target mt-1 block rounded-md border border-[#e8ddd0] bg-white px-4 py-3 text-base text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
-                title={profileButtonTitle}
-                aria-label={profileButtonAriaLabel}
-              >
-                {profileButtonLabel}
-              </Link>
+              />
             ) : null}
           </div>
         )}

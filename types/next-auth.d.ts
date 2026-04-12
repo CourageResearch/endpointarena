@@ -7,7 +7,6 @@ declare module 'next-auth' {
       name?: string | null
       email?: string | null
       image?: string | null
-      cashBalance?: number | null
       xConnected?: boolean
       xUsername?: string | null
       xVerified?: boolean
