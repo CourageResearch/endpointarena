@@ -210,10 +210,6 @@ export default function BrandPage() {
             <h1 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Brand Kit</h1>
             <HeaderDots />
           </div>
-          <p className="max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Current brand system in production. This page now includes a literal copy-paste style brief for generating
-            infographics that match the app.
-          </p>
         </section>
 
         <section className="mb-10">

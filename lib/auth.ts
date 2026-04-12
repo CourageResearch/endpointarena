@@ -508,6 +508,11 @@ export const authOptions: NextAuthOptions = {
           .where(eq(users.id, token.sub))
           .limit(1)
         const currentUser = userRows[0] ?? null
+        const { account } = await ensureHumanTradingAccount({
+          userId: token.sub,
+          displayName: session.user.name ?? session.user.email ?? token.sub,
+        })
+        session.user.cashBalance = account.cashBalance
         session.user.xConnected = Boolean(currentUser?.xUserId)
         session.user.xUsername = currentUser?.xUsername ?? null
         session.user.xVerified = Boolean(currentUser?.xVerifiedAt)

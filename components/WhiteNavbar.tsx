@@ -15,6 +15,20 @@ const NAV_ITEMS = [
   { href: '/method', label: 'Methodology' },
 ]
 
+function formatNavbarBalance(value: number | null | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+
+  const safeValue = Math.max(0, value)
+  const showCents = !Number.isInteger(safeValue)
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: showCents ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(safeValue)
+}
+
 export function WhiteNavbar({
   bgClass = 'bg-white/80',
   borderClass = 'border-neutral-200',
@@ -34,6 +48,9 @@ export function WhiteNavbar({
   const ctaHref = sessionStatus === 'authenticated' ? `/profile?callbackUrl=${safeCallback}` : '/signup'
   const ctaLabel = sessionStatus === 'authenticated' ? 'Play Humans vs AI' : 'Sign up'
   const profileLabel = session?.user?.xUsername?.trim() || session?.user?.email?.trim() || null
+  const profileButtonLabel = formatNavbarBalance(session?.user?.cashBalance) ?? 'Profile'
+  const profileButtonTitle = [profileLabel, profileButtonLabel === 'Profile' ? null : profileButtonLabel].filter(Boolean).join(' • ') || undefined
+  const profileButtonAriaLabel = profileButtonLabel === 'Profile' ? 'Profile' : `Profile, balance ${profileButtonLabel}`
 
   useEffect(() => {
     setResolvedAdminRuntimeLabel(adminRuntimeLabel)
@@ -180,9 +197,10 @@ export function WhiteNavbar({
               <Link
                 href="/profile"
                 className="ml-2 rounded-sm border border-[#e8ddd0] bg-white/80 px-3 py-1.5 text-xs font-medium text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
-                title={profileLabel ?? undefined}
+                title={profileButtonTitle}
+                aria-label={profileButtonAriaLabel}
               >
-                Profile
+                {profileButtonLabel}
               </Link>
             ) : null}
           </div>
@@ -223,9 +241,10 @@ export function WhiteNavbar({
                 href="/profile"
                 onClick={handleNavClick}
                 className="touch-target mt-1 block rounded-md border border-[#e8ddd0] bg-white px-4 py-3 text-base text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
-                title={profileLabel ?? undefined}
+                title={profileButtonTitle}
+                aria-label={profileButtonAriaLabel}
               >
-                Profile
+                {profileButtonLabel}
               </Link>
             ) : null}
           </div>

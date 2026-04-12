@@ -128,7 +128,7 @@ function SortablePositionHeader({
   const isActive = sortState?.key === sortKey
   const direction = isActive ? sortState.direction : null
   const ariaSort = direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'
-  const icon = direction === 'asc' ? 'â†‘' : direction === 'desc' ? 'â†“' : 'â†•'
+  const icon = direction === 'asc' ? '\u2191' : direction === 'desc' ? '\u2193' : '\u2195'
 
   return (
     <th aria-sort={ariaSort} className={cn('py-3 font-medium whitespace-nowrap', className, align === 'right' ? 'text-right' : 'text-left')}>
@@ -944,7 +944,7 @@ export function TrialDashboard({
         <div className="rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
           <p className="font-medium text-[#2f7b40]">
             Humans vs AI unlocked
-            {verificationStatus.profile ? ` â€¢ Cash ${formatCompactMoney(verificationStatus.profile.cashBalance)} â€¢ Rank #${verificationStatus.profile.rank}` : ''}
+            {verificationStatus.profile ? ` \u2022 Cash ${formatCompactMoney(verificationStatus.profile.cashBalance)} \u2022 Rank #${verificationStatus.profile.rank}` : ''}
           </p>
         </div>
       ) : null}
@@ -1069,7 +1069,7 @@ export function TrialDashboard({
                           selectedStats.moveDelta > 0 ? 'text-emerald-700' : selectedStats.moveDelta < 0 ? 'text-rose-700' : 'text-[#7c7267]',
                         )}>
                           <span aria-hidden="true">
-                            {selectedStats.moveDelta > 0 ? 'â–²' : selectedStats.moveDelta < 0 ? 'â–¼' : 'â€¢'}
+                            {selectedStats.moveDelta > 0 ? '\u25B2' : selectedStats.moveDelta < 0 ? '\u25BC' : '\u2022'}
                           </span>
                           <span>{formatPercent(Math.abs(selectedStats.moveDelta), 1)}</span>
                       </div>
