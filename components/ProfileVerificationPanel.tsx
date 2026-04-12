@@ -14,7 +14,6 @@ type VerificationStatus = {
   requiresReconnect: boolean
   xCheckState: 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
   username: string | null
-  mustStayUntil: string | null
   verifiedAt: string | null
   challenge: ChallengePayload | null
   profile: {

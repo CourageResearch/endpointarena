@@ -58,7 +58,6 @@ export function buildLocalDevVerificationStatus(email?: string | null) {
     requiresReconnect: false,
     xCheckState: 'ok' as const,
     username,
-    mustStayUntil: null,
     verifiedAt: now.toISOString(),
     challenge: null,
     profile: {

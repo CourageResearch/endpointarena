@@ -67,7 +67,6 @@ export async function POST() {
       return successResponse({
         alreadyVerified: true,
         verifiedAt: user.xVerifiedAt.toISOString(),
-        mustStayUntil: user.xMustStayUntil?.toISOString() ?? null,
       }, {
         headers: {
           'X-Request-Id': requestId,

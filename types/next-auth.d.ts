@@ -10,7 +10,6 @@ declare module 'next-auth' {
       xConnected?: boolean
       xUsername?: string | null
       xVerified?: boolean
-      xVerificationMustStayUntil?: string | null
     }
   }
 }

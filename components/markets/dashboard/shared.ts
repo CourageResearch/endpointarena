@@ -23,7 +23,6 @@ export type XVerificationStatus = {
   connected: boolean
   verified: boolean
   username: string | null
-  mustStayUntil: string | null
   profile: {
     cashBalance: number
     rank: number

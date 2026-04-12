@@ -1,12 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { db, accounts, users } from '@/lib/db'
 import { getUsableXAccessToken } from '@/lib/x-auth'
-import {
-  fetchVerificationPostById,
-  getActiveXChallenge,
-  isXConnectionExpiredError,
-  type ActiveXChallenge,
-} from '@/lib/x-verification'
+import { getActiveXChallenge, type ActiveXChallenge } from '@/lib/x-verification'
 import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
 import { userColumns } from '@/lib/users/query-shapes'
 import { ensureHumanTradingAccount, getCanonicalHumanStartingCash, getVerifiedHumanCashProfile } from '@/lib/human-cash'
@@ -25,7 +20,6 @@ type XVerificationStatus = {
   requiresReconnect: boolean
   xCheckState: XCheckState
   username: string | null
-  mustStayUntil: string | null
   verifiedAt: string | null
   challenge: ActiveXChallenge | null
   profile: {
@@ -82,62 +76,8 @@ export async function getXVerificationStatusForUser(userId: string): Promise<XVe
 
   const connected = Boolean(resolvedXUserId && tokenResolution.account)
   let verified = Boolean(user.xVerifiedAt)
-  let mustStayUntil = user.xMustStayUntil
   let verifiedAt = user.xVerifiedAt
   let requiresReconnect = tokenResolution.requiresReconnect
-
-  if (
-    verified &&
-    mustStayUntil &&
-    mustStayUntil.getTime() > Date.now()
-  ) {
-    const canCheckLivePost = Boolean(
-      tokenResolution.accessToken &&
-      resolvedXUserId &&
-      user.xVerifiedPostId
-    )
-
-    let keepVerified = true
-
-    if (canCheckLivePost && tokenResolution.accessToken && user.xVerifiedPostId && resolvedXUserId) {
-      try {
-        const post = await fetchVerificationPostById(tokenResolution.accessToken, user.xVerifiedPostId)
-        keepVerified = Boolean(post && post.authorId === resolvedXUserId)
-      } catch (error) {
-        if (isXConnectionExpiredError(error)) {
-          requiresReconnect = true
-          xCheckState = 'requires_reconnect'
-          console.warn('X token expired while checking verification post', { userId: user.id })
-        } else {
-          xCheckState = 'temporarily_unavailable'
-          console.warn('Skipping live verification post check because X API is temporarily unavailable', { userId: user.id })
-        }
-      }
-    } else if (tokenResolution.requiresReconnect) {
-      requiresReconnect = true
-      xCheckState = 'requires_reconnect'
-      console.warn('Skipping live verification post check because X reconnect is required', { userId: user.id })
-    } else if (!resolvedXUserId || !user.xVerifiedPostId) {
-      xCheckState = 'temporarily_unavailable'
-      console.warn('Skipping live verification post check because verification metadata is incomplete', { userId: user.id })
-    }
-
-    if (!keepVerified) {
-      await db.update(users)
-        .set({
-          xVerifiedAt: null,
-          xVerifiedPostId: null,
-          xMustStayUntil: null,
-        })
-        .where(eq(users.id, user.id))
-
-      verified = false
-      mustStayUntil = null
-      verifiedAt = null
-      requiresReconnect = false
-      xCheckState = 'ok'
-    }
-  }
 
   let profile: {
     cashBalance: number
@@ -159,7 +99,6 @@ export async function getXVerificationStatusForUser(userId: string): Promise<XVe
     requiresReconnect,
     xCheckState,
     username: user.xUsername ?? null,
-    mustStayUntil: mustStayUntil?.toISOString() ?? null,
     verifiedAt: verifiedAt?.toISOString() ?? null,
     challenge,
     profile,

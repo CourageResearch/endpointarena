@@ -11,7 +11,6 @@ import { VERIFICATION_BONUS_CASH } from '@/lib/constants'
 import {
   extractVerificationChallengeToken,
   fetchVerificationPostById,
-  getVerificationPostMustStayUntil,
   hashChallengeToken,
   parseVerificationPostId,
 } from '@/lib/x-verification'
@@ -62,7 +61,6 @@ export async function POST(request: Request) {
         cashAwarded: getVerificationCashAward(true),
         cashBalance: account.cashBalance,
         verifiedAt: user.xVerifiedAt.toISOString(),
-        mustStayUntil: user.xMustStayUntil?.toISOString() ?? null,
         postId: user.xVerifiedPostId,
       }, {
         headers: {
@@ -137,7 +135,6 @@ export async function POST(request: Request) {
     }
 
     const now = new Date()
-    const mustStayUntil = getVerificationPostMustStayUntil(now)
     const verificationCash = getCanonicalHumanStartingCash(true)
 
     const verificationResult = await db.transaction(async (tx) => {
@@ -145,7 +142,6 @@ export async function POST(request: Request) {
         .set({
           xVerifiedAt: now,
           xVerifiedPostId: post.id,
-          xMustStayUntil: mustStayUntil,
           xChallengeToken: null,
           xChallengeTokenHash: null,
           xChallengeExpiresAt: null,
@@ -161,7 +157,6 @@ export async function POST(request: Request) {
       if (!updatedUser) {
         const [verifiedUser] = await tx.select({
           verifiedAt: users.xVerifiedAt,
-          mustStayUntil: users.xMustStayUntil,
           postId: users.xVerifiedPostId,
         })
           .from(users)
@@ -179,7 +174,6 @@ export async function POST(request: Request) {
           cashAwarded: getVerificationCashAward(true),
           cashBalance: account.cashBalance,
           verifiedAt: verifiedUser?.verifiedAt?.toISOString() ?? now.toISOString(),
-          mustStayUntil: verifiedUser?.mustStayUntil?.toISOString() ?? mustStayUntil.toISOString(),
           postId: verifiedUser?.postId ?? post.id,
         }
       }
@@ -196,7 +190,6 @@ export async function POST(request: Request) {
           cashAwarded: VERIFICATION_BONUS_CASH,
           cashBalance: account.cashBalance,
           verifiedAt: now.toISOString(),
-          mustStayUntil: mustStayUntil.toISOString(),
           postId: post.id,
         }
       }
@@ -220,7 +213,6 @@ export async function POST(request: Request) {
         cashAwarded: VERIFICATION_BONUS_CASH,
         cashBalance: updatedAccount.cashBalance,
         verifiedAt: now.toISOString(),
-        mustStayUntil: mustStayUntil.toISOString(),
         postId: post.id,
       }
     })
@@ -230,7 +222,6 @@ export async function POST(request: Request) {
       cashAwarded: verificationResult.cashAwarded,
       cashBalance: verificationResult.cashBalance,
       verifiedAt: verificationResult.verifiedAt,
-      mustStayUntil: verificationResult.mustStayUntil,
       postId: verificationResult.postId,
     }, {
       headers: {

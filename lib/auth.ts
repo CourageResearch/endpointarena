@@ -502,7 +502,6 @@ export const authOptions: NextAuthOptions = {
             xUserId: users.xUserId,
             xUsername: users.xUsername,
             xVerifiedAt: users.xVerifiedAt,
-            xMustStayUntil: users.xMustStayUntil,
           })
           .from(users)
           .where(eq(users.id, token.sub))
@@ -511,7 +510,6 @@ export const authOptions: NextAuthOptions = {
         session.user.xConnected = Boolean(currentUser?.xUserId)
         session.user.xUsername = currentUser?.xUsername ?? null
         session.user.xVerified = Boolean(currentUser?.xVerifiedAt)
-        session.user.xVerificationMustStayUntil = currentUser?.xMustStayUntil?.toISOString() ?? null
       }
       return session
     },
