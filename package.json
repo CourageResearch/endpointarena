@@ -62,7 +62,8 @@
     "db:sync-clinicaltrials": "node scripts/run-with-env.js .env.local -- npx tsx scripts/sync-clinicaltrials-gov.ts",
     "db:sync-clinicaltrials:from-file": "node scripts/run-with-env.js .env.local -- npx tsx scripts/sync-clinicaltrials-gov.ts --input-file",
     "test:model-ids": "node --import tsx --test tests/model-id-rename.test.ts",
-    "ops:check-prod-alerts": "npx tsx scripts/ops-check-prod-alerts.ts"
+    "ops:check-prod-alerts": "node scripts/run-with-env.js .env.local -- npx tsx scripts/ops-check-prod-alerts.ts",
+    "railway": "node scripts/run-railway.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

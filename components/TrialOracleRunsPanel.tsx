@@ -136,16 +136,41 @@ function getSourceTypeLabel(sourceType: OracleCandidate['evidence'][number]['sou
   return 'Sponsor'
 }
 
+function formatLatestRunCardDateTime(dateLike: string | null | undefined): string {
+  if (!dateLike) return '-'
+
+  const parsed = new Date(dateLike)
+  if (Number.isNaN(parsed.getTime())) return '-'
+
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).formatToParts(parsed)
+
+  const day = dateParts.find((part) => part.type === 'day')?.value ?? ''
+  const month = dateParts.find((part) => part.type === 'month')?.value ?? ''
+  const year = dateParts.find((part) => part.type === 'year')?.value ?? ''
+  const time = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(parsed)
+
+  return `${day} ${month} ${year}, ${time}`.trim()
+}
+
 export function TrialOracleRunsPanel({
   selectedMarket,
   allFindings,
   runHistory,
   historyEntries,
+  embedded = false,
 }: {
   selectedMarket: OpenMarketRow
   allFindings: OracleFinding[]
   runHistory: OracleRun[]
   historyEntries: OracleHistoryEntry[]
+  embedded?: boolean
 }) {
   const trialTitle = selectedMarket.event?.drugName || 'Trial'
   const nctNumber = selectedMarket.event?.nctId ?? null
@@ -153,48 +178,46 @@ export function TrialOracleRunsPanel({
   const latestRun = runHistory[0] ?? null
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-none border border-[#e8ddd0] bg-white/90 p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <Link
-              href={marketHref}
-              className="text-xs uppercase tracking-[0.12em] text-[#8a8075] transition-colors hover:text-[#5b5148]"
-            >
-              Back to Trial
-            </Link>
-            <h1 className="mt-3 text-2xl font-semibold leading-tight text-[#1a1a1a]">Oracle Runs</h1>
-            <p className="mt-2 text-sm leading-6 text-[#6f665b]">
-              Oracle findings and outcome history for {trialTitle}{nctNumber ? ` (${nctNumber})` : ''}.
-            </p>
-          </div>
+    <div className={embedded ? 'space-y-6' : 'space-y-8'}>
+      {!embedded ? (
+        <section className="rounded-none border border-[#e8ddd0] bg-white/90 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <Link
+                href={marketHref}
+                className="text-xs uppercase tracking-[0.12em] text-[#8a8075] transition-colors hover:text-[#5b5148]"
+              >
+                Back to Trial
+              </Link>
+              <h1 className="mt-3 text-2xl font-semibold leading-tight text-[#1a1a1a]">Oracle Runs</h1>
+              <p className="mt-2 text-sm leading-6 text-[#6f665b]">
+                Oracle findings and outcome history for {trialTitle}{nctNumber ? ` (${nctNumber})` : ''}.
+              </p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3 text-right sm:grid-cols-3">
-            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Runs</div>
-              <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{runHistory.length}</div>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Findings</div>
-              <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{allFindings.length}</div>
-            </div>
-            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Latest Run</div>
-              <div className="mt-1 text-sm font-medium text-[#1a1a1a]">
-                {latestRun ? formatLocalDateTime(latestRun.startedAt) : '-'}
+            <div className="grid grid-cols-2 gap-3 text-right">
+              <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
+                <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Runs</div>
+                <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{runHistory.length}</div>
+              </div>
+              <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2">
+                <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Latest Run</div>
+                <div className="mt-1 text-sm font-medium text-[#1a1a1a]">
+                  {latestRun ? formatLatestRunCardDateTime(latestRun.startedAt) : '-'}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      {selectedMarket.resolution ? (
+      {!embedded && selectedMarket.resolution ? (
         <MarketResolutionPanel selectedMarket={selectedMarket} />
       ) : null}
 
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
         <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-[#1a1a1a]">All Oracle Findings</div>
+          <div className="text-sm font-semibold text-[#1a1a1a]">Oracle Findings</div>
           <HeaderDots />
         </div>
         <p className="mt-2 text-xs leading-5 text-[#8a8075]">
@@ -277,69 +300,67 @@ export function TrialOracleRunsPanel({
         </div>
       </section>
 
-      <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-[#1a1a1a]">Outcome History</div>
-          <HeaderDots />
-        </div>
-        <p className="mt-2 text-xs leading-5 text-[#8a8075]">
-          Public history of accepted oracles and recorded outcome changes for this trial.
-        </p>
+      {historyEntries.length > 0 ? (
+        <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4">
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-semibold text-[#1a1a1a]">Outcome History</div>
+            <HeaderDots />
+          </div>
+          <p className="mt-2 text-xs leading-5 text-[#8a8075]">
+            Public history of accepted oracles and recorded outcome changes for this trial.
+          </p>
 
-        <div className="mt-4 space-y-4">
-          {historyEntries.length === 0 ? (
-            <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
-              No oracle outcome history is available for this trial yet.
-            </div>
-          ) : historyEntries.map((entry) => (
-            <article key={entry.id} className="rounded-none border border-[#e8ddd0] bg-white p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-none border border-[#d8ccb9] bg-[#faf7f2] px-2 py-1 text-xs text-[#7a7065]">
-                  {getHistorySourceLabel(entry.changeSource)}
-                </span>
-                <span className="text-xs text-[#8a8075]">{formatLocalDateTime(entry.changedAt)}</span>
-              </div>
-
-              <p className="mt-2 text-sm text-[#6f665b]">{entry.questionPrompt}</p>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                <span className={`rounded-none px-2 py-1 font-medium ${getOutcomeHistoryBadgeClass(entry.previousOutcome)}`}>
-                  {entry.previousOutcome ?? 'Unknown'}
-                </span>
-                <span className="text-[#8a8075]">to</span>
-                <span className={`rounded-none px-2 py-1 font-medium ${getOutcomeHistoryBadgeClass(entry.nextOutcome)}`}>
-                  {entry.nextOutcome}
-                </span>
-                <span className="text-[#8a8075]">current</span>
-                <span className={`rounded-none px-2 py-1 font-medium ${getOutcomeHistoryBadgeClass(entry.currentOutcome)}`}>
-                  {entry.currentOutcome}
-                </span>
-              </div>
-
-              {entry.candidate ? (
-                <div className="mt-4 rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-none border border-[#d8ccb9] bg-white px-2 py-1 text-xs text-[#7a7065]">
-                      {entry.candidate.verifierModelLabel}
-                    </span>
-                    <span className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1 text-xs text-[#7a7065]">
-                      {Math.round(entry.candidate.confidence * 100)}% confidence
-                    </span>
-                    {entry.candidate.reviewedAt ? (
-                      <span className="text-xs text-[#8a8075]">
-                        Reviewed {formatLocalDateTime(entry.candidate.reviewedAt)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#5b5148]">
-                    {entry.candidate.summary}
-                  </p>
+          <div className="mt-4 space-y-4">
+            {historyEntries.map((entry) => (
+              <article key={entry.id} className="rounded-none border border-[#e8ddd0] bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-none border border-[#d8ccb9] bg-[#faf7f2] px-2 py-1 text-xs text-[#7a7065]">
+                    {getHistorySourceLabel(entry.changeSource)}
+                  </span>
+                  <span className="text-xs text-[#8a8075]">{formatLocalDateTime(entry.changedAt)}</span>
                 </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      </section>
+
+                <p className="mt-2 text-sm text-[#6f665b]">{entry.questionPrompt}</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  <span className={`rounded-none px-2 py-1 font-medium ${getOutcomeHistoryBadgeClass(entry.previousOutcome)}`}>
+                    {entry.previousOutcome ?? 'Unknown'}
+                  </span>
+                  <span className="text-[#8a8075]">to</span>
+                  <span className={`rounded-none px-2 py-1 font-medium ${getOutcomeHistoryBadgeClass(entry.nextOutcome)}`}>
+                    {entry.nextOutcome}
+                  </span>
+                  <span className="text-[#8a8075]">current</span>
+                  <span className={`rounded-none px-2 py-1 font-medium ${getOutcomeHistoryBadgeClass(entry.currentOutcome)}`}>
+                    {entry.currentOutcome}
+                  </span>
+                </div>
+
+                {entry.candidate ? (
+                  <div className="mt-4 rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-none border border-[#d8ccb9] bg-white px-2 py-1 text-xs text-[#7a7065]">
+                        {entry.candidate.verifierModelLabel}
+                      </span>
+                      <span className="rounded-none border border-[#e8ddd0] bg-white px-2 py-1 text-xs text-[#7a7065]">
+                        {Math.round(entry.candidate.confidence * 100)}% confidence
+                      </span>
+                      {entry.candidate.reviewedAt ? (
+                        <span className="text-xs text-[#8a8075]">
+                          Reviewed {formatLocalDateTime(entry.candidate.reviewedAt)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#5b5148]">
+                      {entry.candidate.summary}
+                    </p>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 }

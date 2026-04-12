@@ -1,6 +1,6 @@
 const { existsSync } = require('fs')
 const path = require('path')
-const { spawn } = require('child_process')
+const { execFileSync, spawn } = require('child_process')
 const dotenv = require('dotenv')
 
 function loadEnvFile(filePath, override = false) {
@@ -11,8 +11,44 @@ function loadEnvFile(filePath, override = false) {
   dotenv.config({
     path: filePath,
     override,
+    quiet: true,
   })
   return true
+}
+
+function resolveCommand(command) {
+  if (process.platform !== 'win32') {
+    return command
+  }
+
+  if (command.includes('\\') || command.includes('/') || path.extname(command)) {
+    return command
+  }
+
+  try {
+    const resolved = execFileSync('where.exe', [command], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+
+    const preferred = resolved.find((entry) => /\.(exe|cmd|bat)$/i.test(entry))
+    return preferred || resolved[0] || command
+  } catch {
+    return command
+  }
+}
+
+function spawnCommand(command, args, options) {
+  const resolvedCommand = resolveCommand(command)
+
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(resolvedCommand)) {
+    return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', resolvedCommand, ...args], options)
+  }
+
+  return spawn(resolvedCommand, args, options)
 }
 
 const args = process.argv.slice(2)
@@ -45,11 +81,14 @@ if (!loadedRequested && fallbackEnvFile) {
   loadEnvFile(path.join(repoRoot, fallbackEnvFile), true)
 }
 
-const child = spawn(command, commandArgs, {
+// Keep Railway CLI auth in a dedicated local file so ops scripts can use a
+// scoped token without depending on the interactive CLI session.
+loadEnvFile(path.join(repoRoot, '.env.railway.local'), true)
+
+const child = spawnCommand(command, commandArgs, {
   cwd: repoRoot,
   env: process.env,
   stdio: 'inherit',
-  shell: process.platform === 'win32',
 })
 
 child.on('exit', (code, signal) => {

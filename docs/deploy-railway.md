@@ -10,7 +10,19 @@ Use a clean release branch such as `codex/prod-cutover-2026-04-11` for the candi
 
 ## Windows command notes
 
-On this workstation, run `npm`, `gh`, `railway`, `pg_dump`, and `pg_restore` directly in PowerShell.
+On this workstation, run `npm`, `gh`, `node scripts/run-railway.js`, `pg_dump`, and `pg_restore` directly in PowerShell.
+
+For repo-scoped Railway auth, keep a project token in `.env.railway.local`:
+
+```powershell
+Copy-Item .env.railway.example .env.railway.local
+```
+
+Then set `RAILWAY_TOKEN` in `.env.railway.local` once and prefer the repo wrapper for local Railway commands:
+
+```powershell
+node scripts/run-railway.js status --json
+```
 
 If Railway CLI reports `Unauthorized`, re-authenticate before continuing:
 
@@ -48,9 +60,9 @@ This repo is already connected to Railway through GitHub deployments. The curren
 After logging in locally, link the repo:
 
 ```powershell
-railway link --project f109ef0b-d201-42d1-b2cd-5b64b065d860 --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
-railway status --json
-railway variable list --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --json
+node scripts/run-railway.js link --project f109ef0b-d201-42d1-b2cd-5b64b065d860 --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10
+node scripts/run-railway.js status --json
+node scripts/run-railway.js variable list --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --json
 ```
 
 `railway.json` already points Railway health checks at `/api/health`.
@@ -90,7 +102,7 @@ Push the release branch and wait for green GitHub `CI` before touching `master`.
 2. Freeze public traffic:
 
 ```powershell
-railway variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af10 MAINTENANCE_MODE=true
+node scripts/run-railway.js variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af10 MAINTENANCE_MODE=true
 ```
 
 3. Wait for the maintenance deployment, then verify:
@@ -100,7 +112,7 @@ railway variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af
 4. Export the production public database URL into the current shell. Do not use `railway run`, because it executes locally and the app-service `DATABASE_URL` points at Railway private networking:
 
 ```powershell
-$env:DATABASE_URL = (railway variable list --service postgres-green --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --json | ConvertFrom-Json).DATABASE_PUBLIC_URL
+$env:DATABASE_URL = (node scripts/run-railway.js variable list --service postgres-green --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --json | ConvertFrom-Json).DATABASE_PUBLIC_URL
 ```
 
 5. Take a pre-cutover backup:
@@ -182,9 +194,9 @@ Do not publish a new manual trial during smoke. Accept `fallback_default` if `OP
 Reopen traffic only after the maintenance-window validation is healthy:
 
 ```powershell
-railway variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af10 MAINTENANCE_MODE=false
+node scripts/run-railway.js variable set -s endpoint-arena-app -e 4a8cf2da-561b-4465-a1a9-06e2b445af10 MAINTENANCE_MODE=false
 curl.exe -sS https://endpointarena.com/api/health
-railway logs --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --latest --lines 200
+node scripts/run-railway.js logs --service endpoint-arena-app --environment 4a8cf2da-561b-4465-a1a9-06e2b445af10 --latest --lines 200
 ```
 
 After reopen, re-check:

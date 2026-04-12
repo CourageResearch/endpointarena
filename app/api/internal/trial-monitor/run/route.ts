@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     const result = await runTrialMonitor({
       triggerSource: 'cron',
       force: false,
+      questionSelection: 'all_open_trials',
     })
 
     revalidatePath('/admin/outcomes')

@@ -4,14 +4,17 @@ import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { ModelIcon } from '@/components/ModelIcon'
+import { TrialOracleRunsPanel } from '@/components/TrialOracleRunsPanel'
 import { MarketActivityFeed } from '@/components/markets/dashboard/activity-feed'
 import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
 import { MarketDescriptionCard, MarketDetailsPanel, MarketResolutionPanel } from '@/components/markets/dashboard/details-panel'
 import {
+  MarketModelPositionsPanel,
+  type MarketPositionRow,
+} from '@/components/markets/dashboard/model-positions-panel'
+import {
   APPROVE_TEXT_CLASS,
   DASHBOARD_SECTION_LABEL_CLASS,
-  DETAILS_CARD_BORDER_STYLE,
   REJECT_TEXT_CLASS,
   type ActivityFilterOption,
   type HumanTradeDirection,
@@ -40,6 +43,8 @@ import {
 } from '@/lib/markets/overview-shared'
 import { getApiErrorMessage } from '@/lib/client-api'
 import { MODEL_IDS, MODEL_INFO, abbreviateType, type ModelId } from '@/lib/constants'
+import { type TrialDetailTab } from '@/lib/trial-detail-tabs'
+import { type TrialOracleTabData } from '@/lib/trial-oracle-types'
 import { cn } from '@/lib/utils'
 
 type CommentModelFilter = 'all' | ModelId[]
@@ -232,7 +237,9 @@ type TrialDashboardProps = {
   initialData?: OverviewResponse | null
   showMarketList?: boolean
   detailLayout?: 'default' | 'reason-under-graph' | 'stacked'
-  viewMode?: 'full' | 'decision-snapshots'
+  viewMode?: 'full' | 'decision-snapshots' | 'tabbed'
+  activeTab?: TrialDetailTab
+  oracleTabData?: TrialOracleTabData | null
 }
 
 export function TrialDashboard({
@@ -241,6 +248,8 @@ export function TrialDashboard({
   showMarketList = true,
   detailLayout = 'default',
   viewMode = 'full',
+  activeTab = 'details',
+  oracleTabData = null,
 }: TrialDashboardProps = {}) {
   const pathname = usePathname()
   const { status: sessionStatus } = useSession()
@@ -544,6 +553,7 @@ export function TrialDashboard({
   const scrubbedChartDayLabel = chartScrubSnapshotDate ? formatShortDateUtc(chartScrubSnapshotDate) : null
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
+  const isTabbedView = viewMode === 'tabbed'
   const isTradeVerified = Boolean(verificationStatus?.verified)
   const isResolvedMarket = isMarketClosedToTrading(selectedMarket)
   const showDetailSidebar = useStackedLayout
@@ -558,6 +568,7 @@ export function TrialDashboard({
   const oracleRunHref = selectedMarket.event?.nctId
     ? `${marketDetailHref}/oracle-runs`
     : null
+  const tabBasePath = pathname || `/trials2/${encodeURIComponent(selectedMarket.marketId)}`
   const yesPriceCents = Math.round(selectedMarket.priceYes * 100)
   const noPriceCents = Math.round((1 - selectedMarket.priceYes) * 100)
   const selectedOutcomePrice = tradeOutcome === 'yes' ? selectedMarket.priceYes : (1 - selectedMarket.priceYes)
@@ -602,8 +613,10 @@ export function TrialDashboard({
 
     return {
       index,
-      state,
-      model,
+      fullName: model.fullName,
+      modelId: state.modelId,
+      displayLabel: getPositionModelLabel(state.modelId, model.fullName),
+      compactLabel: model.provider === 'OpenAI' ? 'GPT' : model.name,
       yesShares,
       noShares,
       netShares,
@@ -646,10 +659,23 @@ export function TrialDashboard({
           if (netCmp !== 0) return positionSort.direction === 'asc' ? netCmp : -netCmp
         }
 
-        const modelCmp = a.model.fullName.localeCompare(b.model.fullName)
+        const modelCmp = a.fullName.localeCompare(b.fullName)
         if (modelCmp !== 0) return modelCmp
         return a.index - b.index
       })
+  const visiblePositionRows: MarketPositionRow[] = sortedPositionRows.map((row) => ({
+    modelId: row.modelId,
+    fullName: row.fullName,
+    displayLabel: row.displayLabel,
+    compactLabel: row.compactLabel,
+    yesShares: row.yesShares,
+    noShares: row.noShares,
+    hasBothSides: row.hasBothSides,
+    positionValueUsd: row.positionValueUsd,
+    pnlUsd: row.pnlUsd,
+    netDisplayLabel: row.netDisplayLabel,
+    netTextClass: row.netTextClass,
+  }))
 
   const decisionRows: MarketDashboardDecisionRow[] = selectedMarket.modelStates.map((state) => {
     const model = MODEL_INFO[state.modelId]
@@ -773,6 +799,73 @@ export function TrialDashboard({
       setTradeSubmitting(false)
     }
   }
+
+  const detailTabs: Array<{ id: TrialDetailTab; label: string }> = [
+    { id: 'details', label: 'Details' },
+    { id: 'positions', label: 'Model Positions' },
+    { id: 'snapshots', label: 'Model Snapshots' },
+    { id: 'oracles', label: 'Oracle' },
+  ]
+
+  const tabContent = isTabbedView ? (() => {
+    switch (activeTab) {
+      case 'positions':
+        return (
+          <MarketModelPositionsPanel
+            className="px-1"
+            marketId={selectedMarket.marketId}
+            rows={visiblePositionRows}
+            sortState={positionSort}
+            onSort={handlePositionSort}
+          />
+        )
+      case 'snapshots':
+        return (
+          <MarketDecisionSnapshotsPanel
+            className="px-1"
+            selectedMarketId={selectedMarket.marketId}
+            decisionRows={decisionRows}
+          />
+        )
+      case 'oracles':
+        if (!oracleTabData?.available) {
+          return (
+            <section className="space-y-4 px-1">
+              <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
+                {oracleTabData?.unavailableReason ?? 'Oracle data is unavailable for this trial right now.'}
+              </div>
+            </section>
+          )
+        }
+
+        return (
+          <div className="px-1">
+            <TrialOracleRunsPanel
+              selectedMarket={oracleTabData.selectedMarket ?? selectedMarket}
+              allFindings={oracleTabData.allFindings}
+              runHistory={oracleTabData.runHistory}
+              historyEntries={oracleTabData.historyEntries}
+              embedded
+            />
+          </div>
+        )
+      case 'details':
+      default:
+        return (
+          <div className="space-y-6 px-1">
+            <MarketDetailsPanel
+              selectedMarket={selectedMarket}
+              totalVolumeUsd={selectedStats.totalVolumeUsd}
+              applicationTypeMeta={applicationTypeMeta}
+              primaryTicker={primaryTicker}
+            />
+            {isResolvedMarket ? (
+              <MarketResolutionPanel selectedMarket={selectedMarket} />
+            ) : null}
+          </div>
+        )
+    }
+  })() : null
 
   if (viewMode === 'decision-snapshots') {
     return (
@@ -1038,147 +1131,13 @@ export function TrialDashboard({
 	                  {useMarkets2Layout ? (
 	                    <>
 	                      <div className="py-6" aria-hidden="true" />
-                      <div>
-                        <div className="mb-2 px-1">
-                          <div className="flex items-center gap-3">
-                            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Positions</div>
-                            <HeaderDots />
-                          </div>
-                        </div>
-                        <div className="mx-1 rounded-none">
-                          <div className="overflow-hidden rounded-none border border-transparent" style={DETAILS_CARD_BORDER_STYLE}>
-                            <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
-                              <table className={cn(
-                                'w-full table-fixed',
-                                useMarkets2Layout ? 'min-w-[420px]' : 'min-w-[560px] sm:min-w-[620px] xl:min-w-0',
-                              )}>
-                                <colgroup>
-                                  <col style={{ width: useMarkets2Layout ? '82px' : '140px' }} />
-                                  <col style={{ width: useMarkets2Layout ? '68px' : '92px' }} />
-                                  <col style={{ width: useMarkets2Layout ? '58px' : '70px' }} />
-                                  <col style={{ width: useMarkets2Layout ? '58px' : '70px' }} />
-                                  <col style={{ width: useMarkets2Layout ? '58px' : '82px' }} />
-                                  <col style={{ width: useMarkets2Layout ? '74px' : '82px' }} />
-                                </colgroup>
-                                <thead>
-                                  <tr
-                                    className={cn(
-                                      'border-b border-[#e8ddd0] uppercase text-[#b5aa9e]',
-                                      useMarkets2Layout ? 'text-[9px] tracking-[0.14em]' : 'text-[10px] tracking-[0.2em]',
-                                    )}
-                                  >
-                                    <SortablePositionHeader
-                                      label="Model"
-                                      sortKey="model"
-                                      sortState={positionSort}
-                                      onSort={handlePositionSort}
-                                      className={useMarkets2Layout ? 'px-1.5' : 'pl-[2.625rem] pr-5'}
-                                    />
-                                    <SortablePositionHeader
-                                      label="View"
-                                      sortKey="netStance"
-                                      sortState={positionSort}
-                                      onSort={handlePositionSort}
-                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                    />
-                                    <SortablePositionHeader
-                                      label="Yes"
-                                      sortKey="yesShares"
-                                      sortState={positionSort}
-                                      onSort={handlePositionSort}
-                                      align="right"
-                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                    />
-                                    <SortablePositionHeader
-                                      label="No"
-                                      sortKey="noShares"
-                                      sortState={positionSort}
-                                      onSort={handlePositionSort}
-                                      align="right"
-                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                    />
-                                    <SortablePositionHeader
-                                      label="Pos"
-                                      sortKey="position"
-                                      sortState={positionSort}
-                                      onSort={handlePositionSort}
-                                      align="right"
-                                      className={useMarkets2Layout ? 'px-1' : 'px-1.5'}
-                                    />
-                                    <SortablePositionHeader
-                                      label="P/L"
-                                      sortKey="pnl"
-                                      sortState={positionSort}
-                                      onSort={handlePositionSort}
-                                      align="right"
-                                      className={useMarkets2Layout ? 'px-1.5' : 'px-5'}
-                                    />
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {sortedPositionRows.map((row) => {
-                                    const {
-                                      state,
-                                      model,
-                                      yesShares,
-                                      noShares,
-                                      hasBothSides,
-                                      positionValueUsd,
-                                      pnlUsd,
-                                      netDisplayLabel,
-                                      netTextClass,
-                                    } = row
-                                    const compactModelLabel = model.provider === 'OpenAI' ? 'GPT' : model.name
-                                    return (
-                                      <tr key={`${selectedMarket.marketId}-${state.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
-                                        <td className={cn('align-top', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4')}>
-                                          <div className="flex items-center gap-1.5">
-                                            {!useMarkets2Layout ? (
-                                              <span
-                                                className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
-                                                aria-hidden="true"
-                                              >
-                                                <ModelIcon id={state.modelId} className="h-4 w-4 grayscale" />
-                                              </span>
-                                            ) : null}
-                                            <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
-                                              {useMarkets2Layout ? compactModelLabel : getPositionModelLabel(state.modelId, model.fullName)}
-                                            </span>
-                                          </div>
-                                        </td>
-                                        <td className={cn('align-top', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                          <div className="flex items-center gap-1.5">
-                                            <span className={cn('text-xs font-medium tracking-[0.02em]', netTextClass)}>
-                                              {netDisplayLabel}
-                                            </span>
-                                            {hasBothSides && !useMarkets2Layout ? (
-                                              <span className="text-[10px] text-[#9a8f82]">mixed</span>
-                                            ) : null}
-                                          </div>
-                                        </td>
-                                        <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                          {formatShares(yesShares)}
-                                        </td>
-                                        <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                          {formatShares(noShares)}
-                                        </td>
-                                        <td className={cn('text-right align-top text-xs tabular-nums', useMarkets2Layout ? 'px-1 py-3' : 'px-1.5 py-4')}>
-                                          <span title={`Cost basis ${formatCompactMoney(state.costBasisUsd || 0)}`}>
-                                            {formatCompactMoney(positionValueUsd)}
-                                          </span>
-                                        </td>
-                                        <td className={cn('text-right align-top text-xs font-medium tabular-nums', useMarkets2Layout ? 'px-1.5 py-3' : 'px-5 py-4', getSignedMoneyClass(pnlUsd))}>
-                                          {formatSignedCompactMoney(pnlUsd)}
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-	                      </div>
+                      <MarketModelPositionsPanel
+                        marketId={selectedMarket.marketId}
+                        rows={visiblePositionRows}
+                        sortState={positionSort}
+                        onSort={handlePositionSort}
+                        variant="compact"
+                      />
 	                    </>
 	                  ) : null}
 	                  </div>
@@ -1188,7 +1147,7 @@ export function TrialDashboard({
                         <MarketDescriptionCard drugDescriptionText={drugDescriptionText} />
                       </div>
                     ) : null}
-                    {useStackedLayout ? (
+                    {useStackedLayout && !isTabbedView ? (
                       <div className="px-1 lg:col-span-2 space-y-6">
                         <MarketDetailsPanel
                           selectedMarket={selectedMarket}
@@ -1207,174 +1166,76 @@ export function TrialDashboard({
 	              </div>
 	            </div>
 	            </div>
-	            {!useMarkets2Layout ? (
-                <MarketActivityFeed
-                  className="px-1"
-                  scrubbedChartDayKey={scrubbedChartDayKey}
-                  scrubbedChartDayLabel={scrubbedChartDayLabel}
-                  allModelsSelected={allModelsSelected}
-                  filterOptions={activityFilterOptions}
-                  commentSort={commentSort}
-                  selectedMarketActions={selectedMarketActions}
-                  visibleActivityActions={visibleActivityActions}
-                  hasMoreActivity={hasMoreActivity}
-                  showAllActivity={showAllActivity}
-                  onSelectAllModels={handleSelectAllCommentModels}
-                  onToggleModel={handleToggleCommentModel}
-                  onToggleSort={handleToggleCommentSort}
-                  onToggleShowAll={() => setShowAllActivity((current) => !current)}
-                />
-              ) : null}
-	            {!useMarkets2Layout ? (
-	              <div className="mt-10 px-1">
-	                <div className="mb-2 px-1">
-	                  <div className="flex items-center gap-3">
-	                    <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Positions</div>
-	                    <HeaderDots />
-	                  </div>
-	                </div>
-	                <div className="mx-1 rounded-none">
-	                  <div className="overflow-hidden rounded-none border border-transparent" style={DETAILS_CARD_BORDER_STYLE}>
-	                    <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
-	                      <table className="w-full table-fixed min-w-[560px] sm:min-w-[620px] xl:min-w-0">
-	                        <colgroup>
-	                          <col style={{ width: '140px' }} />
-	                          <col style={{ width: '92px' }} />
-	                          <col style={{ width: '70px' }} />
-	                          <col style={{ width: '70px' }} />
-	                          <col style={{ width: '82px' }} />
-	                          <col style={{ width: '82px' }} />
-	                        </colgroup>
-	                        <thead>
-	                          <tr className="border-b border-[#e8ddd0] uppercase text-[#b5aa9e] text-[10px] tracking-[0.2em]">
-	                            <SortablePositionHeader
-	                              label="Model"
-	                              sortKey="model"
-	                              sortState={positionSort}
-	                              onSort={handlePositionSort}
-	                              className="pl-[2.625rem] pr-5"
-	                            />
-	                            <SortablePositionHeader
-	                              label="View"
-	                              sortKey="netStance"
-	                              sortState={positionSort}
-	                              onSort={handlePositionSort}
-	                              className="px-1.5"
-	                            />
-	                            <SortablePositionHeader
-	                              label="Yes"
-	                              sortKey="yesShares"
-	                              sortState={positionSort}
-	                              onSort={handlePositionSort}
-	                              align="right"
-	                              className="px-1.5"
-	                            />
-	                            <SortablePositionHeader
-	                              label="No"
-	                              sortKey="noShares"
-	                              sortState={positionSort}
-	                              onSort={handlePositionSort}
-	                              align="right"
-	                              className="px-1.5"
-	                            />
-	                            <SortablePositionHeader
-	                              label="Pos"
-	                              sortKey="position"
-	                              sortState={positionSort}
-	                              onSort={handlePositionSort}
-	                              align="right"
-	                              className="px-1.5"
-	                            />
-	                            <SortablePositionHeader
-	                              label="P/L"
-	                              sortKey="pnl"
-	                              sortState={positionSort}
-	                              onSort={handlePositionSort}
-	                              align="right"
-	                              className="px-5"
-	                            />
-	                          </tr>
-	                        </thead>
-	                        <tbody>
-	                          {sortedPositionRows.map((row) => {
-	                            const {
-	                              state,
-	                              model,
-	                              yesShares,
-	                              noShares,
-	                              hasBothSides,
-	                              positionValueUsd,
-	                              pnlUsd,
-	                              netDisplayLabel,
-	                              netTextClass,
-	                            } = row
-	                            return (
-	                              <tr key={`${selectedMarket.marketId}-${state.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
-	                                <td className="align-top px-5 py-4">
-	                                  <div className="flex items-center gap-1.5">
-	                                    <span
-	                                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
-	                                      aria-hidden="true"
-	                                    >
-	                                      <ModelIcon id={state.modelId} className="h-4 w-4 grayscale" />
-	                                    </span>
-	                                    <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={model.fullName}>
-	                                      {getPositionModelLabel(state.modelId, model.fullName)}
-	                                    </span>
-	                                  </div>
-	                                </td>
-	                                <td className="align-top px-1.5 py-4">
-	                                  <div className="flex items-center gap-1.5">
-	                                    <span className={cn('text-xs font-medium tracking-[0.02em]', netTextClass)}>
-	                                      {netDisplayLabel}
-	                                    </span>
-	                                    {hasBothSides ? (
-	                                      <span className="text-[10px] text-[#9a8f82]">mixed</span>
-	                                    ) : null}
-	                                  </div>
-	                                </td>
-	                                <td className="text-right align-top text-xs tabular-nums px-1.5 py-4">
-	                                  {formatShares(yesShares)}
-	                                </td>
-	                                <td className="text-right align-top text-xs tabular-nums px-1.5 py-4">
-	                                  {formatShares(noShares)}
-	                                </td>
-	                                <td className="text-right align-top text-xs tabular-nums px-1.5 py-4">
-	                                  <span title={`Cost basis ${formatCompactMoney(state.costBasisUsd || 0)}`}>
-	                                    {formatCompactMoney(positionValueUsd)}
-	                                  </span>
-	                                </td>
-	                                <td className={cn('text-right align-top text-xs font-medium tabular-nums px-5 py-4', getSignedMoneyClass(pnlUsd))}>
-	                                  {formatSignedCompactMoney(pnlUsd)}
-	                                </td>
-	                              </tr>
-	                            )
-	                          })}
-	                        </tbody>
-	                      </table>
-	                    </div>
-	                  </div>
-	                </div>
-	              </div>
-	            ) : null}
-              <div className="mt-10 px-1">
-                <div className="mx-1 flex flex-col items-start gap-2">
-                  <Link
-                    href={decisionSnapshotsHref}
-                    className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
-                  >
-                    Model Snapshots
-                  </Link>
-                  {oracleRunHref ? (
-                    <Link
-                      href={oracleRunHref}
-                      className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
-                    >
-                      Oracle
-                    </Link>
-                  ) : null}
+	            {isTabbedView ? (
+                <div className="mt-10 space-y-6 px-1">
+                  <div className="mx-1 inline-flex w-fit flex-wrap items-end gap-5 self-start border-b border-[#e7ddd0]">
+                    {detailTabs.map((tab) => (
+                      <Link
+                        key={tab.id}
+                        href={`${tabBasePath}?tab=${tab.id}`}
+                        scroll={false}
+                        className={cn(
+                          'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
+                          activeTab === tab.id
+                            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:[background:linear-gradient(90deg,_#EF6F67,_#5DBB63,_#D39D2E,_#5BA5ED)]'
+                            : 'text-[#9d9184] hover:text-[#3a342d]',
+                        )}
+                        aria-current={activeTab === tab.id ? 'page' : undefined}
+                      >
+                        <span className={cn('tracking-[0.1em]', activeTab === tab.id ? 'text-[11px]' : 'text-[10px]')}>
+                          {tab.label}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+
+                  {tabContent}
                 </div>
-              </div>
+              ) : !useMarkets2Layout ? (
+                <>
+                  <MarketActivityFeed
+                    className="px-1"
+                    scrubbedChartDayKey={scrubbedChartDayKey}
+                    scrubbedChartDayLabel={scrubbedChartDayLabel}
+                    allModelsSelected={allModelsSelected}
+                    filterOptions={activityFilterOptions}
+                    commentSort={commentSort}
+                    selectedMarketActions={selectedMarketActions}
+                    visibleActivityActions={visibleActivityActions}
+                    hasMoreActivity={hasMoreActivity}
+                    showAllActivity={showAllActivity}
+                    onSelectAllModels={handleSelectAllCommentModels}
+                    onToggleModel={handleToggleCommentModel}
+                    onToggleSort={handleToggleCommentSort}
+                    onToggleShowAll={() => setShowAllActivity((current) => !current)}
+                  />
+                  <MarketModelPositionsPanel
+                    className="mt-10 px-1"
+                    marketId={selectedMarket.marketId}
+                    rows={visiblePositionRows}
+                    sortState={positionSort}
+                    onSort={handlePositionSort}
+                  />
+                  <div className="mt-10 px-1">
+                    <div className="mx-1 flex flex-col items-start gap-2">
+                      <Link
+                        href={decisionSnapshotsHref}
+                        className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
+                      >
+                        Model Snapshots
+                      </Link>
+                      {oracleRunHref ? (
+                        <Link
+                          href={oracleRunHref}
+                          className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
+                        >
+                          Oracle
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              ) : null}
 	          </section>
 
         </section>

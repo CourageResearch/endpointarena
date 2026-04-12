@@ -330,7 +330,7 @@ function getRunSelectionLabel(input: {
     case 'specific_nct':
       return 'One-off run'
     default:
-      return 'Eligible-queue run'
+      return 'Eligible-queue run (legacy)'
   }
 }
 
@@ -341,7 +341,7 @@ function getRunSelectionBadgeLabel(questionSelection: TrialMonitorQuestionSelect
     case 'specific_nct':
       return 'Specific NCT'
     default:
-      return 'Eligible Queue'
+      return 'Eligible Queue (Legacy)'
   }
 }
 
@@ -363,7 +363,9 @@ function MonitorSettingsGroup({
     <div className="flex h-full flex-col gap-3 border border-[#e8ddd0] bg-[#fcfaf7] p-4">
       <div className="space-y-1">
         <h4 className="text-sm font-semibold text-[#1a1a1a]">{title}</h4>
-        <p className="text-xs leading-5 text-[#6f6458]">{description}</p>
+        {description ? (
+          <p className="text-xs leading-5 text-[#6f6458]">{description}</p>
+        ) : null}
       </div>
       <div className={stackFields ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
         {children}
@@ -675,7 +677,7 @@ export function AdminTrialOutcomeReview({
 
     try {
       const normalizedScopedNctNumber = parseScopedNctNumber(options.nctNumber ?? '')
-      const questionSelection = options.questionSelection ?? (normalizedScopedNctNumber ? 'specific_nct' : 'eligible_queue')
+      const questionSelection = options.questionSelection ?? (normalizedScopedNctNumber ? 'specific_nct' : 'all_open_trials')
 
       if (options.nctNumber && !normalizedScopedNctNumber) {
         throw new Error('Use an NCT number like NCT01234567 for a one-off run.')
@@ -955,7 +957,7 @@ export function AdminTrialOutcomeReview({
                       ? `Scoped to ${activeRun.scopedNctNumber}. `
                       : activeRun.questionSelection === 'all_open_trials'
                         ? 'Running across all open trials. '
-                        : 'Running across the current eligible queue. '}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
+                        : 'Running across the legacy eligible queue. '}Scanned ${activeRun.questionsScanned} question${activeRun.questionsScanned === 1 ? '' : 's'} and created ${activeRun.candidatesCreated} queue item${activeRun.candidatesCreated === 1 ? '' : 's'} so far.`
                   : 'Starting the monitor run and waiting for the first heartbeat from the server.'}
               </p>
               <p className="mt-2 text-xs text-[#5b7ea6]">
@@ -1004,7 +1006,7 @@ export function AdminTrialOutcomeReview({
           <div className="grid gap-3 xl:grid-cols-3">
             <MonitorSettingsGroup
               title="Schedule"
-              description=""
+              description="Scheduled Railway runs now scan every open trial. These settings only control cadence and whether the monitor is on."
               stackFields
             >
               <MonitorSettingsField
@@ -1038,43 +1040,13 @@ export function AdminTrialOutcomeReview({
                   unit="hours"
                 />
               </MonitorSettingsField>
-
-              <MonitorSettingsField
-                label="Scan ahead"
-                description=""
-              >
-                <MonitorSettingsNumberInput
-                  value={form.lookaheadDays}
-                  onChange={(value) => {
-                    setForm((current) => ({ ...current, lookaheadDays: value }))
-                  }}
-                  min={0}
-                  max={365}
-                  unit="days"
-                />
-              </MonitorSettingsField>
             </MonitorSettingsGroup>
 
             <MonitorSettingsGroup
               title="Processing"
-              description=""
+              description="Concurrency controls how many trial checks can run in parallel."
               stackFields
             >
-              <MonitorSettingsField
-                label="Question cap"
-                description=""
-                inlineControl
-              >
-                <MonitorSettingsNumberInput
-                  value={form.maxQuestionsPerRun}
-                  onChange={(value) => {
-                    setForm((current) => ({ ...current, maxQuestionsPerRun: value }))
-                  }}
-                  min={1}
-                  max={500}
-                />
-              </MonitorSettingsField>
-
               <MonitorSettingsField
                 label="Scheduled worker"
                 description=""
@@ -1151,23 +1123,27 @@ export function AdminTrialOutcomeReview({
             )}
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
               <div className="flex h-full flex-col gap-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Eligible Queue</div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Open-Trial Scan</div>
                   <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-                    Scan only the trials that are currently due under the lookahead and overdue recheck rules.
+                    Scan every open trial with a live pending outcome question. This matches the scheduled Railway run.
                   </p>
+                </div>
+                <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Open Right Now</div>
+                  <div className="mt-1 text-lg font-semibold text-[#1a1a1a]">{allOpenTrialCount}</div>
                 </div>
                 <div className="mt-auto space-y-2">
                   <button
                     type="button"
-                    onClick={() => void runMonitor({ questionSelection: 'eligible_queue' })}
+                    onClick={() => void runMonitor({ questionSelection: 'all_open_trials' })}
                     disabled={isRunActive || isSavingConfig}
                     className="w-full rounded-none bg-[#1a1a1a] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run Eligible Queue'}
+                    {isRunActive ? 'Monitor Running...' : isSavingConfig ? 'Saving Settings...' : 'Run All Open Trials'}
                   </button>
                   {isRunActive ? (
                     <button
@@ -1184,34 +1160,11 @@ export function AdminTrialOutcomeReview({
             </div>
 
             <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
-              <div className="flex h-full flex-col gap-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">All Open Trials</div>
-                  <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-                    Bypass the queue filters and scan every open trial with a live pending outcome question.
-                  </p>
-                </div>
-                <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Open Right Now</div>
-                  <div className="mt-1 text-lg font-semibold text-[#1a1a1a]">{allOpenTrialCount}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void runMonitor({ questionSelection: 'all_open_trials' })}
-                  disabled={isRunActive || isSavingConfig}
-                  className="mt-auto w-full rounded-none border border-[#1a1a1a] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Run All Open Trials
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] p-3">
               <div className="space-y-3">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">One-Off NCT</div>
                   <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-                    Bypass the normal lookahead and recheck window, then scan only the live pending trial question for that trial.
+                    Skip the full open-trial scan and run only the live pending trial question for that trial.
                   </p>
                 </div>
 
@@ -1245,14 +1198,14 @@ export function AdminTrialOutcomeReview({
       <section className="rounded-none border border-[#e8ddd0] bg-white/85 p-4 md:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
-            <h3 className="text-sm font-semibold text-[#1a1a1a]">Eligible Queue</h3>
+            <h3 className="text-sm font-semibold text-[#1a1a1a]">Open Trials</h3>
             <p className="mt-1 text-xs leading-5 text-[#8a8075]">
-              These are the trials the monitor would scan right now if you run the eligible queue with the current settings.
+              These are the open trials the monitor will scan when you run the full pass.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-right">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Eligible Now</div>
+              <div className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Shown Here</div>
               <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{visibleEligibleQuestions.length}</div>
             </div>
             <div className="rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2 text-right">
@@ -1266,8 +1219,8 @@ export function AdminTrialOutcomeReview({
           {visibleEligibleQuestions.length === 0 ? (
             <div className="rounded-none border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-5 text-sm text-[#8a8075]">
               {scopedViewNctNumber
-                ? 'This trial is not currently eligible for the next monitor pass.'
-                : 'No trial questions are currently eligible for the next monitor pass.'}
+                ? 'This trial does not currently have an open pending outcome question to scan.'
+                : 'No open pending trial questions are available to scan right now.'}
             </div>
           ) : visibleEligibleQuestions.map((question) => {
             const normalizedQuestionNctNumber = parseScopedNctNumber(question.trial.nctNumber ?? '')

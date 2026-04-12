@@ -1596,6 +1596,24 @@ export async function listEligibleTrialOutcomeQuestions(): Promise<EligibleTrial
   }))
 }
 
+export async function listAllOpenTrialOutcomeQuestions(): Promise<EligibleTrialOutcomeQuestion[]> {
+  const questions = (await listAllOpenTrialOutcomeQuestionsInternal())
+    .sort(compareTrialMonitorQuestionsByPriority)
+
+  return questions.map((question) => ({
+    id: question.id,
+    prompt: normalizeTrialQuestionPrompt(question.prompt),
+    trial: {
+      shortTitle: question.trial.shortTitle,
+      sponsorName: question.trial.sponsorName,
+      sponsorTicker: question.trial.sponsorTicker,
+      nctNumber: question.trial.nctNumber,
+      estPrimaryCompletionDate: question.trial.estPrimaryCompletionDate,
+      lastMonitoredAt: question.trial.lastMonitoredAt,
+    },
+  }))
+}
+
 export async function countAllOpenTrialOutcomeQuestions(): Promise<number> {
   const questions = await listAllOpenTrialOutcomeQuestionsInternal()
   return questions.length
@@ -1635,7 +1653,7 @@ export async function runTrialMonitor(input: {
   const config = await getTrialMonitorConfig()
   const processingConcurrency = getTrialMonitorRunConcurrency(config, input.triggerSource)
   const scopedNctNumber = normalizeScopedTrialMonitorNctNumber(input.nctNumber ?? null)
-  const requestedQuestionSelection = input.questionSelection ?? (scopedNctNumber ? 'specific_nct' : 'eligible_queue')
+  const requestedQuestionSelection = input.questionSelection ?? (scopedNctNumber ? 'specific_nct' : 'all_open_trials')
   if (requestedQuestionSelection === 'specific_nct' && !scopedNctNumber) {
     throw new ValidationError('nctNumber is required when questionSelection is specific_nct')
   }

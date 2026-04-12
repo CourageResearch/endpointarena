@@ -16,6 +16,7 @@
     "scripts/export-trial-public-state.ts",
     "scripts/import-admin-ai-automation-decisions.ts",
     "scripts/import-manual-trial-outcomes.ts",
+    "scripts/ops-check-prod-alerts.ts",
     "scripts/reset-local-trial-monitor.ts",
     "scripts/report-public-sponsor-coverage.ts",
     "scripts/sync-ai-batches-to-prod.ts",

@@ -6,8 +6,7 @@ import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminTrialOutcomeReview } from '@/components/AdminTrialOutcomeReview'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import {
-  countAllOpenTrialOutcomeQuestions,
-  listEligibleTrialOutcomeQuestions,
+  listAllOpenTrialOutcomeQuestions,
   listPendingTrialOutcomeCandidates,
   listRecentTrialMonitorRuns,
 } from '@/lib/trial-monitor'
@@ -108,7 +107,7 @@ function getRunQuestionSelection(input: {
     return 'specific_nct'
   }
 
-  return extractQuestionSelectionFromRunDebugLog(input.debugLog) ?? 'eligible_queue'
+  return extractQuestionSelectionFromRunDebugLog(input.debugLog) ?? 'all_open_trials'
 }
 
 export default async function AdminOutcomesPage({
@@ -130,14 +129,14 @@ export default async function AdminOutcomesPage({
     ? initialScopedNctNumber
     : null
 
-  const [config, candidates, recentRuns, eligibleQuestions, allOpenTrialCount, historyEntries] = await Promise.all([
+  const [config, candidates, recentRuns, openQuestions, historyEntries] = await Promise.all([
     getTrialMonitorConfig(),
     listPendingTrialOutcomeCandidates(),
     listRecentTrialMonitorRuns(),
-    listEligibleTrialOutcomeQuestions(),
-    countAllOpenTrialOutcomeQuestions(),
+    listAllOpenTrialOutcomeQuestions(),
     listRecentTrialQuestionOutcomeHistory(),
   ])
+  const allOpenTrialCount = openQuestions.length
   const normalizedVerifierModelKey = normalizeTrialMonitorVerifierModelKey(config.verifierModelKey) ?? 'gpt-5.4'
   const verifierModelOptions = getTrialMonitorVerifierOptions({
     includeUnavailableSelectedKey: config.verifierModelKey,
@@ -218,7 +217,7 @@ export default async function AdminOutcomesPage({
           completedAt: run.completedAt ? run.completedAt.toISOString() : null,
           stopRequestedAt: run.stopRequestedAt ? run.stopRequestedAt.toISOString() : null,
         }))}
-        initialEligibleQuestions={eligibleQuestions.map((question) => ({
+        initialEligibleQuestions={openQuestions.map((question) => ({
           id: question.id,
           prompt: normalizeTrialQuestionPrompt(question.prompt),
           trial: {

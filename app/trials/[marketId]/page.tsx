@@ -8,9 +8,20 @@ import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { getTrialsOverviewData } from '@/lib/trial-overview'
 import { createDetailTrialsOverviewPayload } from '@/lib/trial-overview-payload'
 import { getMarketQuestion } from '@/lib/markets/overview-shared'
+import { resolveTrialDetailTab } from '@/lib/trial-detail-tabs'
+import { loadTrialOracleTabData } from '@/lib/trial-oracle-data'
 import { buildNoIndexMetadata, buildPageMetadata } from '@/lib/seo'
 
 export const revalidate = 300
+
+type PageSearchParams = {
+  tab?: string | string[]
+}
+
+function firstSearchParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
 
 const getTrialDetailPageData = cache(async (marketId: string) => {
   const overviewData = await getTrialsOverviewData({
@@ -81,11 +92,15 @@ export async function generateMetadata({
 
 export default async function TrialDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ marketId: string }>
+  searchParams?: Promise<PageSearchParams>
 }) {
   const { marketId: encodedMarketId } = await params
   const marketId = decodeURIComponent(encodedMarketId)
+  const resolvedSearchParams = (await searchParams) ?? {}
+  const activeTab = resolveTrialDetailTab(firstSearchParam(resolvedSearchParams.tab))
   const detailData = await getTrialDetailPageData(marketId).catch((error) => {
     console.error('Failed to preload market overview for trial detail page:', error)
     return null
@@ -98,6 +113,9 @@ export default async function TrialDetailPage({
   }
 
   const initialData = createDetailTrialsOverviewPayload(overviewData)
+  const oracleTabData = activeTab === 'oracles'
+    ? await loadTrialOracleTabData(selectedMarket)
+    : null
 
   return (
     <PageFrame>
@@ -109,6 +127,9 @@ export default async function TrialDetailPage({
           initialData={initialData}
           showMarketList={false}
           detailLayout="stacked"
+          viewMode="tabbed"
+          activeTab={activeTab}
+          oracleTabData={oracleTabData}
         />
 
         <FooterGradientRule className="mt-10" />
