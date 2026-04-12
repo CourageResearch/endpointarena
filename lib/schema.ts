@@ -34,17 +34,11 @@ export const users = pgTable('users', {
   tweetVerifiedAt: utcTimestamp('tweet_verified_at'),
   tweetVerifiedTweetId: text('tweet_verified_tweet_id'),
   tweetMustStayUntil: utcTimestamp('tweet_must_stay_until'),
-  pointsBalance: integer('points_balance').notNull().default(5),
-  lastPointsRefillAt: utcTimestamp('last_points_refill_at'),
 }, (table) => ({
   xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
   displayNameCheck: check(
     'users_display_name_check',
     sql`${table.name} ~ '^[A-Za-z0-9]{1,20}$'`
-  ),
-  pointsBalanceCheck: check(
-    'users_points_balance_check',
-    sql`${table.pointsBalance} >= 0`
   ),
 }))
 

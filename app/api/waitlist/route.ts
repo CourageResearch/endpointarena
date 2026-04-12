@@ -74,7 +74,7 @@ We will email you when your invite is ready.
 function buildWelcomeEmailHtml(safeGreeting: string): string {
   return `
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-      You're on the waitlist for first-wave invites, model alpha updates, and optional contribution points.
+      You're on the waitlist for first-wave invites, model alpha updates, and optional contributor perks.
     </div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0;padding:0;background:#f5f2ed;">
       <tr>

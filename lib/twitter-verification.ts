@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'crypto'
 import { ExternalServiceError, ValidationError, isAppError } from '@/lib/errors'
 
 const TWITTER_CHALLENGE_TTL_MINUTES = 10
-const TWEET_MUST_STAY_LIVE_HOURS = 12
+const VERIFICATION_POST_MUST_STAY_LIVE_HOURS = 12
 const X_CONNECTION_EXPIRED_REASON = 'x_connection_expired'
 const X_CREDITS_DEPLETED_REASON = 'x_credits_depleted'
 
@@ -14,7 +14,7 @@ type TwitterUserMeResponse = {
   }
 }
 
-type TwitterTweetResponse = {
+type TwitterPostResponse = {
   data?: {
     id?: string
     text?: string
@@ -29,7 +29,7 @@ type TwitterProblemResponse = {
   type?: string
 }
 
-type VerifiedTweet = {
+type VerifiedPost = {
   id: string
   text: string
   authorId: string
@@ -48,18 +48,18 @@ export function getChallengeExpiry(now: Date = new Date()): Date {
   return new Date(now.getTime() + TWITTER_CHALLENGE_TTL_MINUTES * 60 * 1000)
 }
 
-export function getTweetMustStayUntil(now: Date = new Date()): Date {
-  return new Date(now.getTime() + TWEET_MUST_STAY_LIVE_HOURS * 60 * 60 * 1000)
+export function getVerificationPostMustStayUntil(now: Date = new Date()): Date {
+  return new Date(now.getTime() + VERIFICATION_POST_MUST_STAY_LIVE_HOURS * 60 * 60 * 1000)
 }
 
-export function buildDefaultVerificationTweet(token: string): string {
+export function buildDefaultVerificationPost(token: string): string {
   return `Prediction markets for clinical trial outcomes.\nVerifying my account on https://endpointarena.com\n\nCode: ${token}`
 }
 
-export function parseTweetId(input: string): string {
+export function parseVerificationPostId(input: string): string {
   const raw = input.trim()
   if (!raw) {
-    throw new ValidationError('Tweet URL or ID is required')
+    throw new ValidationError('X post URL or ID is required')
   }
 
   if (/^\d{6,30}$/.test(raw)) {
@@ -76,7 +76,7 @@ export function parseTweetId(input: string): string {
     return queryMatch[1]
   }
 
-  throw new ValidationError('Could not parse tweet ID from the provided URL')
+  throw new ValidationError('Could not parse an X post ID from the provided URL')
 }
 
 function hasReason(error: unknown, reason: string): boolean {
@@ -164,9 +164,9 @@ async function fetchTwitterMe(accessToken: string): Promise<{ id: string; userna
   }
 }
 
-export async function fetchTweetById(accessToken: string, tweetId: string): Promise<VerifiedTweet | null> {
+export async function fetchVerificationPostById(accessToken: string, postId: string): Promise<VerifiedPost | null> {
   const response = await fetch(
-    `https://api.twitter.com/2/tweets/${encodeURIComponent(tweetId)}?tweet.fields=author_id,created_at,text`,
+    `https://api.twitter.com/2/tweets/${encodeURIComponent(postId)}?tweet.fields=author_id,created_at,text`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -207,7 +207,7 @@ export async function fetchTweetById(accessToken: string, tweetId: string): Prom
       })
     }
 
-    throw new ExternalServiceError('Failed to fetch tweet from X', {
+    throw new ExternalServiceError('Failed to fetch the verification post from X', {
       details: {
         status: response.status,
         body: payload.slice(0, 1000),
@@ -215,16 +215,16 @@ export async function fetchTweetById(accessToken: string, tweetId: string): Prom
     })
   }
 
-  const payload = await response.json() as TwitterTweetResponse
-  const tweet = payload.data
-  if (!tweet?.id || !tweet?.author_id || !tweet?.text) {
+  const payload = await response.json() as TwitterPostResponse
+  const post = payload.data
+  if (!post?.id || !post?.author_id || !post?.text) {
     return null
   }
 
   return {
-    id: tweet.id,
-    text: tweet.text,
-    authorId: tweet.author_id,
-    createdAt: tweet.created_at ?? null,
+    id: post.id,
+    text: post.text,
+    authorId: post.author_id,
+    createdAt: post.created_at ?? null,
   }
 }

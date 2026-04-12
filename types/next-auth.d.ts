@@ -9,8 +9,8 @@ declare module 'next-auth' {
       image?: string | null
       xConnected?: boolean
       xUsername?: string | null
-      tweetVerified?: boolean
-      tweetMustStayUntil?: string | null
+      xVerified?: boolean
+      xVerificationMustStayUntil?: string | null
     }
   }
 }

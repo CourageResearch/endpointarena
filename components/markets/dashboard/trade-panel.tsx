@@ -3,7 +3,6 @@
 import type { FormEvent, ReactNode } from 'react'
 import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
-import { XInlineMark } from '@/components/XMark'
 import {
   formatCompactMoney,
   type MarketResolutionRow,
@@ -20,7 +19,7 @@ import {
   type HumanTradeDirection,
   type HumanTradeOutcome,
   type TraderSnapshot,
-  type TweetVerificationStatus,
+  type XVerificationStatus,
 } from '@/components/markets/dashboard/shared'
 
 const TRADE_DIRECTION_TAB_CLASS = 'relative inline-flex h-7 items-end px-0 pb-[6px] !font-sans !text-[11px] !font-medium uppercase tracking-[0.18em] !leading-none transition-colors after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:scale-x-0 after:rounded-full after:bg-current after:transition-transform focus-visible:outline-none disabled:cursor-not-allowed'
@@ -72,7 +71,7 @@ export function MarketTradePanel({
   marketQuestion: string
   resolution?: MarketResolutionRow | null
   sessionStatus: 'authenticated' | 'unauthenticated' | 'loading'
-  verificationStatus: TweetVerificationStatus | null
+  verificationStatus: XVerificationStatus | null
   safeCallbackUrl: string
   isTradeVerified: boolean
   tradeDirection: HumanTradeDirection
@@ -107,19 +106,13 @@ export function MarketTradePanel({
       ? {
           href: `/signup?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`,
           label: 'Create account to trade',
-          body: 'Create your account to place paper trades and track your points.',
+          body: 'Create your account to place paper trades and track your cash.',
         }
       : showVerificationPrompt
         ? {
             href: `/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`,
             label: 'Complete verification',
-            body: verificationStatus?.connected
-              ? 'Post one verification tweet to unlock trading.'
-              : (
-                  <>
-                    Connect your <XInlineMark className="mx-0.5" /> account and post one verification tweet to unlock trading.
-                  </>
-                ),
+            body: null,
           }
         : null
 
@@ -298,9 +291,11 @@ export function MarketTradePanel({
 
                 {gatedTradeAction ? (
                   <>
-                    <p className="text-sm leading-relaxed text-[#6f665b]">
-                      {gatedTradeAction.body}
-                    </p>
+                    {gatedTradeAction.body ? (
+                      <p className="text-sm leading-relaxed text-[#6f665b]">
+                        {gatedTradeAction.body}
+                      </p>
+                    ) : null}
                     <Link
                       href={gatedTradeAction.href}
                       className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[#d9ccbc] bg-[#f7f2eb] px-4 text-sm font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"

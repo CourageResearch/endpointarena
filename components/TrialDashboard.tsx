@@ -22,7 +22,7 @@ import {
   type HumanTradeOutcome,
   type MarketDashboardDecisionRow,
   type TraderSnapshot,
-  type TweetVerificationStatus,
+  type XVerificationStatus,
 } from '@/components/markets/dashboard/shared'
 import { MarketTradePanel } from '@/components/markets/dashboard/trade-panel'
 import { MarketDetailChart, TinyPriceSparkline } from '@/components/markets/marketOverviewCharts'
@@ -267,7 +267,7 @@ export function TrialDashboard({
   const [chartScrubSnapshotDate, setChartScrubSnapshotDate] = useState<string | null>(null)
   const [positionSort, setPositionSort] = useState<PositionSortState | null>(null)
   const [showAllActivity, setShowAllActivity] = useState(false)
-  const [verificationStatus, setVerificationStatus] = useState<TweetVerificationStatus | null>(null)
+  const [verificationStatus, setVerificationStatus] = useState<XVerificationStatus | null>(null)
   const [verificationError, setVerificationError] = useState<string | null>(null)
   const [tradeDirection, setTradeDirection] = useState<HumanTradeDirection>('buy')
   const [tradeOutcome, setTradeOutcome] = useState<HumanTradeOutcome>('yes')
@@ -298,7 +298,7 @@ export function TrialDashboard({
           throw new Error(getApiErrorMessage(payload, 'Failed to load verification status'))
         }
         if (!cancelled) {
-          setVerificationStatus(payload as TweetVerificationStatus)
+          setVerificationStatus(payload as XVerificationStatus)
           setVerificationError(null)
         }
       } catch (err) {
@@ -924,7 +924,7 @@ export function TrialDashboard({
       {sessionStatus === 'unauthenticated' && !useStackedLayout && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
           <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
-          <p className="mt-1">Browsing is open, but trading and personal points unlock after one-time <XInlineMark className="mx-0.5" /> verification.</p>
+          <p className="mt-1">Browsing is open, but trading and your personal cash balance unlock after one-time <XInlineMark className="mx-0.5" /> verification.</p>
           <Link
             href={`/login?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
             className="mt-3 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
@@ -944,7 +944,7 @@ export function TrialDashboard({
         <div className="rounded-sm border border-[#5DBB63]/35 bg-[#5DBB63]/10 p-4 text-sm text-[#45754f]">
           <p className="font-medium text-[#2f7b40]">
             Humans vs AI unlocked
-            {verificationStatus.profile ? ` • ${verificationStatus.profile.pointsBalance.toLocaleString()} points • Rank #${verificationStatus.profile.rank}` : ''}
+            {verificationStatus.profile ? ` • Cash ${formatCompactMoney(verificationStatus.profile.cashBalance)} • Rank #${verificationStatus.profile.rank}` : ''}
           </p>
         </div>
       ) : null}

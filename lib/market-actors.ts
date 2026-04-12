@@ -64,7 +64,11 @@ export async function getModelActorId(modelId: ModelId, dbClient: MarketActorsDb
   return actorId
 }
 
-export async function ensureHumanMarketActor(userId: string, displayName?: string | null): Promise<MarketActorRow> {
+export async function ensureHumanMarketActor(
+  userId: string,
+  displayName?: string | null,
+  dbClient: MarketActorsDbClient = db,
+): Promise<MarketActorRow> {
   const normalizedUserId = normalizeNonEmpty(userId)
   if (!normalizedUserId) {
     throw new Error('userId is required')
@@ -72,7 +76,7 @@ export async function ensureHumanMarketActor(userId: string, displayName?: strin
 
   const normalizedDisplayName = normalizeNonEmpty(displayName)
 
-  await db.insert(marketActors)
+  await dbClient.insert(marketActors)
     .values({
       actorType: 'human',
       userId: normalizedUserId,
@@ -81,7 +85,7 @@ export async function ensureHumanMarketActor(userId: string, displayName?: strin
     .onConflictDoNothing({ target: marketActors.userId })
 
   if (normalizedDisplayName) {
-    await db.update(marketActors)
+    await dbClient.update(marketActors)
       .set({
         displayName: normalizedDisplayName,
         updatedAt: new Date(),
@@ -89,7 +93,7 @@ export async function ensureHumanMarketActor(userId: string, displayName?: strin
       .where(eq(marketActors.userId, normalizedUserId))
   }
 
-  const actor = await db.query.marketActors.findFirst({
+  const actor = await dbClient.query.marketActors.findFirst({
     where: eq(marketActors.userId, normalizedUserId),
   })
 

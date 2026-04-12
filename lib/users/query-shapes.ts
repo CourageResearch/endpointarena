@@ -18,6 +18,4 @@ export const userColumns = {
   tweetVerifiedAt: true,
   tweetVerifiedTweetId: true,
   tweetMustStayUntil: true,
-  pointsBalance: true,
-  lastPointsRefillAt: true,
 } as const satisfies Record<keyof typeof users.$inferSelect, true>
