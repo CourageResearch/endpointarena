@@ -808,16 +808,16 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
               })}
             </div>
           </div>
-          <div className={`flex flex-col gap-3 ${toyBacktestEnabled ? 'xl:flex-row xl:items-start' : ''}`}>
-            <div className="shrink-0 self-start border border-[#d8ccb9] bg-[#fcfaf7] px-5 py-4">
+          <div className={`flex flex-col gap-3 ${toyBacktestEnabled ? 'xl:flex-row xl:items-stretch' : ''}`}>
+            <div className="shrink-0 border border-[#d8ccb9] bg-[#fcfaf7] px-5 py-4">
               <div className="flex flex-col gap-3">
-                <label className="flex flex-col items-start gap-3 text-sm text-[#5f564c]">
-                  <span className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Concurrent tasks</span>
+                <label className="flex flex-col items-start gap-3">
+                  <span className="text-[11px] uppercase leading-[1.5] tracking-[0.08em] text-[#8a8075]">Concurrent tasks</span>
                   <select
                     value={displayedApiConcurrency}
                     disabled={busyKey != null || apiConcurrencyLocked || Boolean(batch && isTerminal(batch.status))}
                     onChange={(event) => void updateApiConcurrency(Number(event.target.value))}
-                    className="border border-[#d8ccb9] bg-white px-3 py-2 text-sm text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-[41px] border border-[#d8ccb9] bg-white px-3 py-2 text-sm text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {Array.from({ length: AI_API_CONCURRENCY_MAX - AI_API_CONCURRENCY_MIN + 1 }, (_, index) => {
                       const value = AI_API_CONCURRENCY_MIN + index
