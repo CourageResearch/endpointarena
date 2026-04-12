@@ -4,7 +4,6 @@ import type { FormEvent, ReactNode } from 'react'
 import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
 import {
-  formatCompactMoney,
   type MarketResolutionRow,
 } from '@/lib/markets/overview-shared'
 import { cn } from '@/lib/utils'
@@ -333,10 +332,6 @@ export function MarketTradePanel({
       {isTradeVerified && !isResolvedMarket ? (
         <>
           <dl className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 px-1', DASHBOARD_META_TEXT_CLASS)}>
-            <div className="inline-flex items-baseline gap-1.5">
-              <dt className={DETAILS_TOP_LABEL_CLASS}>Cash</dt>
-              <dd className={DASHBOARD_META_TEXT_CLASS}>{formatCompactMoney(traderSnapshot?.cashBalance ?? 0)}</dd>
-            </div>
             <div className="inline-flex items-baseline gap-1.5">
               <dt className={DETAILS_TOP_LABEL_CLASS}>YES Shares</dt>
               <dd className={DASHBOARD_META_TEXT_CLASS}>{formatShares(traderSnapshot?.yesShares ?? 0)}</dd>
