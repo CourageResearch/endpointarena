@@ -43,7 +43,7 @@ export function ProfileVerificationPanel() {
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)
   const [postInput, setPostInput] = useState('')
   const [error, setError] = useState<ReactNode>('')
-  const [twitterAvailable, setTwitterAvailable] = useState<boolean | null>(null)
+  const [xAuthAvailable, setXAuthAvailable] = useState<boolean | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
 
@@ -81,10 +81,10 @@ export function ProfileVerificationPanel() {
         const response = await fetch('/api/auth/providers', { cache: 'no-store' })
         const payload = await response.json().catch(() => ({}))
         if (!cancelled) {
-          setTwitterAvailable(Boolean(payload && typeof payload === 'object' && 'twitter' in payload))
+          setXAuthAvailable(Boolean(payload && typeof payload === 'object' && 'twitter' in payload))
         }
       } catch {
-        if (!cancelled) setTwitterAvailable(false)
+        if (!cancelled) setXAuthAvailable(false)
       }
     }
 
@@ -97,7 +97,7 @@ export function ProfileVerificationPanel() {
   const loadStatus = async () => {
     setStatusLoading(true)
     try {
-      const response = await fetch('/api/twitter-verification/status', {
+      const response = await fetch('/api/x-verification/status', {
         cache: 'no-store',
       })
       const payload = await response.json().catch(() => ({}))
@@ -122,7 +122,7 @@ export function ProfileVerificationPanel() {
   }, [challenge?.postTemplate])
 
   const startXConnection = async () => {
-    if (twitterAvailable === false) {
+    if (xAuthAvailable === false) {
       setError(
         <>
           <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
@@ -133,7 +133,7 @@ export function ProfileVerificationPanel() {
 
     const session = await getSession()
     if (!session?.user?.id) {
-      router.push(`/login?error=TwitterSessionExpired&callbackUrl=${encodeURIComponent(callbackUrl)}`)
+      router.push(`/login?error=XSessionExpired&callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
 
@@ -144,7 +144,7 @@ export function ProfileVerificationPanel() {
   }
 
   useEffect(() => {
-    if (twitterAvailable === null || window.location.hostname === 'localhost') return
+    if (xAuthAvailable === null || window.location.hostname === 'localhost') return
 
     const params = new URLSearchParams(window.location.search)
     if (params.get('connectX') !== '1') return
@@ -155,10 +155,10 @@ export function ProfileVerificationPanel() {
     window.history.replaceState(null, '', nextUrl)
 
     void startXConnection()
-  }, [twitterAvailable, callbackUrl, router])
+  }, [xAuthAvailable, callbackUrl, router])
 
   const handleConnectX = async () => {
-    if (twitterAvailable === false) {
+    if (xAuthAvailable === false) {
       setError(
         <>
           <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
@@ -182,7 +182,7 @@ export function ProfileVerificationPanel() {
     setError('')
     setIsGenerating(true)
     try {
-      const response = await fetch('/api/twitter-verification/challenge', {
+      const response = await fetch('/api/x-verification/challenge', {
         method: 'POST',
       })
       const payload = await response.json().catch(() => ({}))
@@ -214,7 +214,7 @@ export function ProfileVerificationPanel() {
     setError('')
     setIsVerifying(true)
     try {
-      const response = await fetch('/api/twitter-verification/verify', {
+      const response = await fetch('/api/x-verification/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,7 +242,7 @@ export function ProfileVerificationPanel() {
 
   if (statusLoading && !statusData) {
     return (
-      <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 text-sm text-[#8a8075]">Loading verification…</div>
+      <div className="rounded-sm border border-[#ef6f67]/45 bg-white/80 p-4 text-sm text-[#8a8075]">Loading verification...</div>
     )
   }
 
@@ -256,7 +256,7 @@ export function ProfileVerificationPanel() {
             <button
               type="button"
               onClick={handleConnectX}
-              disabled={twitterAvailable === false}
+              disabled={xAuthAvailable === false}
               className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reconnect <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> account
@@ -284,7 +284,7 @@ export function ProfileVerificationPanel() {
           <button
             type="button"
             onClick={handleConnectX}
-            disabled={twitterAvailable === false}
+            disabled={xAuthAvailable === false}
             className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Reconnect <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> account
@@ -306,13 +306,13 @@ export function ProfileVerificationPanel() {
           <button
             type="button"
             onClick={handleConnectX}
-            disabled={twitterAvailable === false}
+            disabled={xAuthAvailable === false}
             className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span aria-hidden="true" className="mr-2 inline-flex h-4 w-4 items-center justify-center">
               <XLogoMark className="h-4 w-4" />
             </span>
-            {twitterAvailable === false ? (
+            {xAuthAvailable === false ? (
               'Login unavailable'
             ) : localhostRedirectUrl ? (
               'Open 127.0.0.1 and continue'

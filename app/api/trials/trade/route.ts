@@ -17,7 +17,7 @@ import {
 } from '@/lib/errors'
 import { runBuyAction, runSellAction } from '@/lib/markets/engine'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
-import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
+import { getXVerificationStatusForUser } from '@/lib/x-status'
 import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
 
 type TradeSide = 'BUY_YES' | 'BUY_NO' | 'SELL_YES' | 'SELL_NO'
@@ -62,7 +62,7 @@ async function requireAuthenticatedUserId(): Promise<string> {
 }
 
 async function requireVerifiedTrader(userId: string): Promise<void> {
-  const status = await getTwitterVerificationStatusForUser(userId)
+  const status = await getXVerificationStatusForUser(userId)
   if (!status?.verified) {
     throw new ForbiddenError('Complete X verification before trading')
   }

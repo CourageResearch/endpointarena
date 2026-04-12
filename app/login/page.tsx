@@ -22,13 +22,13 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
     const oauthError = params.get('error')
-    if (oauthError === 'TwitterAccountAlreadyLinked') {
+    if (oauthError === 'XAccountAlreadyLinked') {
       setError(
         <>
           That <XInlineMark className="mx-0.5" /> account is already linked to a different Endpoint Arena account. Sign in to the original account or use another <XInlineMark className="mx-0.5" /> account.
         </>,
       )
-    } else if (oauthError === 'TwitterSessionExpired') {
+    } else if (oauthError === 'XSessionExpired') {
       setError(
         <>
           Your Endpoint Arena session expired before <XInlineMark className="mx-0.5" /> could be connected. Sign in again, then reconnect <XInlineMark className="mx-0.5" /> from your profile.
@@ -40,7 +40,7 @@ export default function LoginPage() {
           This <XInlineMark className="mx-0.5" /> account is not linked to the Endpoint Arena account you are using. Sign in with the original account first, then reconnect <XInlineMark className="mx-0.5" /> from your profile.
         </>,
       )
-    } else if (oauthError === 'TwitterConnectionFailed') {
+    } else if (oauthError === 'XConnectionFailed') {
       setError(
         <>
           Failed to connect your <XInlineMark className="mx-0.5" /> account. Please try again.

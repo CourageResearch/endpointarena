@@ -29,11 +29,11 @@ export const users = pgTable('users', {
   xUserId: text('x_user_id'),
   xUsername: text('x_username'),
   xConnectedAt: utcTimestamp('x_connected_at'),
-  tweetChallengeTokenHash: text('tweet_challenge_token_hash'),
-  tweetChallengeExpiresAt: utcTimestamp('tweet_challenge_expires_at'),
-  tweetVerifiedAt: utcTimestamp('tweet_verified_at'),
-  tweetVerifiedTweetId: text('tweet_verified_tweet_id'),
-  tweetMustStayUntil: utcTimestamp('tweet_must_stay_until'),
+  xChallengeTokenHash: text('x_challenge_token_hash'),
+  xChallengeExpiresAt: utcTimestamp('x_challenge_expires_at'),
+  xVerifiedAt: utcTimestamp('x_verified_at'),
+  xVerifiedPostId: text('x_verified_post_id'),
+  xMustStayUntil: utcTimestamp('x_must_stay_until'),
 }, (table) => ({
   xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
   displayNameCheck: check(

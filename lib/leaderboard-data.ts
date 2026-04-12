@@ -58,7 +58,7 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
       limit: 10,
     }),
     db.query.users.findMany({
-      where: isNotNull(users.tweetVerifiedAt),
+      where: isNotNull(users.xVerifiedAt),
       columns: {
         id: true,
         name: true,

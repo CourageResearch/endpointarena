@@ -3,10 +3,10 @@ import { accounts, db } from '@/lib/db'
 import { ExternalServiceError } from '@/lib/errors'
 import { getXClientCredentials } from '@/lib/x-env'
 
-const TWITTER_TOKEN_REFRESH_ENDPOINT = 'https://api.twitter.com/2/oauth2/token'
+const X_TOKEN_REFRESH_ENDPOINT = 'https://api.twitter.com/2/oauth2/token'
 const TOKEN_EXPIRY_SKEW_SECONDS = 60
 
-type TwitterAccountRow = typeof accounts.$inferSelect
+type XAccountRow = typeof accounts.$inferSelect
 
 type TokenRefreshSuccess = {
   accessToken: string
@@ -22,7 +22,7 @@ type TokenRefreshReconnect = {
 
 type TokenRefreshResult = TokenRefreshSuccess | TokenRefreshReconnect
 
-type TwitterTokenRefreshPayload = {
+type XTokenRefreshPayload = {
   access_token?: string
   refresh_token?: string
   token_type?: string
@@ -31,8 +31,8 @@ type TwitterTokenRefreshPayload = {
   error?: string
 }
 
-type TwitterTokenResolution = {
-  account: TwitterAccountRow | null
+type XTokenResolution = {
+  account: XAccountRow | null
   accessToken: string | null
   requiresReconnect: boolean
 }
@@ -52,7 +52,7 @@ function isAccessTokenExpired(expiresAt: number | null | undefined, nowEpochSeco
   return expiresAt <= nowEpochSeconds + TOKEN_EXPIRY_SKEW_SECONDS
 }
 
-function refreshFailureRequiresReconnect(status: number, payload: TwitterTokenRefreshPayload | null): boolean {
+function refreshFailureRequiresReconnect(status: number, payload: XTokenRefreshPayload | null): boolean {
   if (status === 400 || status === 401 || status === 403) return true
   const code = payload?.error
   return code === 'invalid_grant'
@@ -61,7 +61,7 @@ function refreshFailureRequiresReconnect(status: number, payload: TwitterTokenRe
     || code === 'invalid_client'
 }
 
-async function refreshTwitterAccessToken({
+async function refreshXAccessToken({
   refreshToken,
   clientId,
   clientSecret,
@@ -79,7 +79,7 @@ async function refreshTwitterAccessToken({
 
   let response: Response
   try {
-    response = await fetch(TWITTER_TOKEN_REFRESH_ENDPOINT, {
+    response = await fetch(X_TOKEN_REFRESH_ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${credentials}`,
@@ -95,9 +95,9 @@ async function refreshTwitterAccessToken({
   }
 
   const rawPayload = await response.text().catch(() => '')
-  let parsed: TwitterTokenRefreshPayload | null = null
+  let parsed: XTokenRefreshPayload | null = null
   try {
-    parsed = rawPayload ? JSON.parse(rawPayload) as TwitterTokenRefreshPayload : null
+    parsed = rawPayload ? JSON.parse(rawPayload) as XTokenRefreshPayload : null
   } catch {
     parsed = null
   }
@@ -133,10 +133,10 @@ async function refreshTwitterAccessToken({
   }
 }
 
-export async function getUsableTwitterAccessToken(
+export async function getUsableXAccessToken(
   userId: string,
-  accountOverride?: TwitterAccountRow | null,
-): Promise<TwitterTokenResolution> {
+  accountOverride?: XAccountRow | null,
+): Promise<XTokenResolution> {
   const account = accountOverride !== undefined
     ? accountOverride
     : await db.query.accounts.findFirst({
@@ -194,7 +194,7 @@ export async function getUsableTwitterAccessToken(
 
   let refreshed: TokenRefreshResult
   try {
-    refreshed = await refreshTwitterAccessToken({
+    refreshed = await refreshXAccessToken({
       refreshToken,
       clientId,
       clientSecret,

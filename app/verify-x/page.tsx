@@ -5,7 +5,7 @@ import { buildNoIndexMetadata } from '@/lib/seo'
 export const metadata: Metadata = buildNoIndexMetadata({
   title: 'Verify X Account',
   description: 'Private verification flow for linking an X account to Endpoint Arena.',
-  path: '/verify-twitter',
+  path: '/verify-x',
 })
 
 function normalizeCallbackUrl(raw: string | null | undefined): string {
@@ -15,7 +15,7 @@ function normalizeCallbackUrl(raw: string | null | undefined): string {
   return raw
 }
 
-export default async function VerifyTwitterPage({
+export default async function VerifyXPage({
   searchParams,
 }: {
   searchParams: Promise<{ callbackUrl?: string }>

@@ -104,7 +104,7 @@ export async function getVerifiedHumanCashProfile(userId: string): Promise<Verif
         on position.actor_id = actor.id
       left join prediction_markets market
         on market.id = position.market_id
-      where u.tweet_verified_at is not null
+      where u.x_verified_at is not null
       group by u.id, actor.display_name, u.name, u.email, account.cash_balance
     )
     select
