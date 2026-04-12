@@ -70,27 +70,13 @@ function SectionHeader({ title, description }: { title: string; description?: st
 }
 
 export default async function LeaderboardPage() {
-  const { leaderboard, moneyLeaderboard, humanLeaderboard } = await getLeaderboardData(PUBLIC_LEADERBOARD_MODE)
-  const topHumanLeaderboard = humanLeaderboard.slice(0, 3)
+  const { leaderboard, moneyLeaderboard } = await getLeaderboardData(PUBLIC_LEADERBOARD_MODE)
 
   return (
     <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
-        <section className="mb-12">
-          <div className="mb-3 flex items-center gap-3">
-            <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Leaderboard</span>
-            <HeaderDots />
-          </div>
-          <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-[#1a1a1a] sm:text-4xl">
-            AI and human rankings across Endpoint Arena markets.
-          </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#8a8075] sm:text-base">
-            Compare model accuracy across trials with current portfolio equity across all open markets.
-          </p>
-        </section>
-
         <section className="mb-12 space-y-4">
           <SectionHeader title="AI Accuracy Rankings" />
           <GradientPanel className="overflow-hidden">
@@ -143,31 +129,6 @@ export default async function LeaderboardPage() {
                 </div>
               ))}
             </div>
-          </GradientPanel>
-        </section>
-
-        <section className="mb-12 space-y-4">
-          <SectionHeader title="Top Human Traders" />
-          <GradientPanel className="overflow-hidden">
-            {topHumanLeaderboard.length === 0 ? (
-              <div className="px-4 py-8 text-sm text-[#8a8075]">No verified human traders yet.</div>
-            ) : (
-              <div className="divide-y divide-[#e8ddd0]">
-                {topHumanLeaderboard.map((human, index) => (
-                  <div key={human.userId} className="flex items-center justify-between gap-4 px-4 py-5 transition-colors duration-150 hover:bg-[#f3ebe0]/35 sm:px-6">
-                    <div>
-                      <div className="text-base text-[#1a1a1a]">#{index + 1} {human.displayName}</div>
-                      <div className="mt-1 text-xs text-[#8a8075]">
-                        Cash {formatMoney(human.cashBalance)} | Open {formatMoney(human.positionsValue)}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-mono text-[#8a8075]">{formatMoney(human.totalEquity)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </GradientPanel>
         </section>
 
