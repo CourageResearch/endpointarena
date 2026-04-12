@@ -254,7 +254,7 @@ export function TrialDashboard({
 }: TrialDashboardProps = {}) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { status: sessionStatus } = useSession()
+  const { status: sessionStatus, update: updateSession } = useSession()
   const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId, {
     includeAccounts: false,
     includeEquityHistory: false,
@@ -811,6 +811,7 @@ export function TrialDashboard({
         `${humanTradeSideLabel(result.side)} executed: ${formatCompactMoney(result.executedUsd)} at ${formatPercent(result.priceAfter, 1)}`
       )
       await reload()
+      await updateSession()
     } catch (err) {
       setTradeError(err instanceof Error ? err.message : 'Failed to execute trade')
   } finally {

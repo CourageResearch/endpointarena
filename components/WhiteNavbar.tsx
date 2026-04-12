@@ -39,7 +39,7 @@ export function WhiteNavbar({
   adminRuntimeLabel?: string | null
 } = {}) {
   const pathname = usePathname()
-  const { data: session, status: sessionStatus } = useSession()
+  const { data: session, status: sessionStatus, update: updateSession } = useSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [resolvedAdminRuntimeLabel, setResolvedAdminRuntimeLabel] = useState<string | null>(adminRuntimeLabel)
   const isAdminRoute = pathname.startsWith('/admin')
@@ -55,6 +55,11 @@ export function WhiteNavbar({
   useEffect(() => {
     setResolvedAdminRuntimeLabel(adminRuntimeLabel)
   }, [adminRuntimeLabel])
+
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return
+    void updateSession()
+  }, [pathname, sessionStatus, updateSession])
 
   useEffect(() => {
     if (!isAdminUser) {

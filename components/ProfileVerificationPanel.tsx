@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { getSession, signIn } from 'next-auth/react'
+import { getSession, signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { XInlineMark, XLogoMark } from '@/components/XMark'
 import { getApiErrorMessage } from '@/lib/client-api'
@@ -37,6 +37,7 @@ function normalizeCallbackUrl(raw: string | null): string {
 
 export function ProfileVerificationPanel() {
   const router = useRouter()
+  const { update: updateSession } = useSession()
   const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [localhostRedirectUrl, setLocalhostRedirectUrl] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -255,6 +256,7 @@ export function ProfileVerificationPanel() {
       }
 
       await loadStatus()
+      await updateSession()
       setChallenge(null)
       setPostInput('')
       router.refresh()
