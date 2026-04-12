@@ -62,6 +62,7 @@ export function HomePageContent({
               <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-normal tracking-tight leading-[1.08] mb-5">
                 The{' '}
                 <span className="inline-block">prediction market</span>
+                <span className="sm:hidden">{' '}</span>
                 <br className="hidden sm:block" />
                 for{' '}
                 <span className="inline-block">clinical trials</span>

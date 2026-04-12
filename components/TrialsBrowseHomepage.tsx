@@ -604,7 +604,6 @@ function MarketTableMobileCard({
 }) {
   const { entry, drugName, companyName, consensus, isAwaitingFirstRun } = row
   const marketHref = `${detailBasePath}/${encodeURIComponent(entry.market.marketId)}`
-  const daysBadge = getDaysBadge(entry.daysUntil, entry.market.event?.decisionDateKind)
   const resolvedOutcome = getResolvedOutcomeLabel(entry)
   const outcomeClassName = resolvedOutcome === 'YES'
     ? 'text-[#3a8a2e]'
@@ -627,12 +626,7 @@ function MarketTableMobileCard({
           <span className={cn('shrink-0 text-sm font-semibold tabular-nums', outcomeClassName)}>
             {resolvedOutcome}
           </span>
-        ) : (
-          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#3f5f86]">
-            <span>{daysBadge.label}</span>
-            {entry.market.event?.decisionDateKind === 'soft' ? <ExpectedDateInfoButton /> : null}
-          </span>
-        )}
+        ) : null}
       </div>
 
       <p className="mt-3 text-xs leading-relaxed text-[#8a8075]">{entry.description}</p>
