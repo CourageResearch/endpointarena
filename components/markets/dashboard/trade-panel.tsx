@@ -3,6 +3,7 @@
 import type { FormEvent } from 'react'
 import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
+import { XInlineMark } from '@/components/XMark'
 import {
   formatCompactMoney,
   type MarketResolutionRow,
@@ -114,7 +115,11 @@ export function MarketTradePanel({
             label: 'Complete verification',
             body: verificationStatus?.connected
               ? 'Post one verification tweet to unlock trading.'
-              : 'Connect your X account and post one verification tweet to unlock trading.',
+              : (
+                  <>
+                    Connect your <XInlineMark className="mx-0.5" /> account and post one verification tweet to unlock trading.
+                  </>
+                ),
           }
         : null
 

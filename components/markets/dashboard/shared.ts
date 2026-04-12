@@ -68,13 +68,6 @@ export function formatDateUtcCompact(value: string | null | undefined): string {
   })
 }
 
-export function clipText(value: string | null | undefined, maxChars: number): string {
-  const normalized = (value || '').replace(/\s+/g, ' ').trim()
-  if (!normalized) return 'No details'
-  if (normalized.length <= maxChars) return normalized
-  return `${normalized.slice(0, maxChars).replace(/[ ,;:]+$/, '')}...`
-}
-
 export function formatShares(value: number): string {
   const abs = Math.abs(value)
   const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2

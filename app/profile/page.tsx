@@ -8,11 +8,9 @@ import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { LogoutButton } from '@/components/LogoutButton'
 import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
-import { ProfilePointsBalance } from '@/components/ProfilePointsBalance'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { authOptions } from '@/lib/auth'
 import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
-import { STARTER_POINTS } from '@/lib/constants'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
@@ -309,19 +307,7 @@ export default async function ProfilePage() {
     }),
   ])
   const isVerified = Boolean(verificationStatus?.verified)
-  const pointsState = isVerified
-    ? {
-        pointsBalance: verificationStatus?.profile?.pointsBalance ?? (user.pointsBalance ?? STARTER_POINTS),
-        lastPointsRefillAt: verificationStatus?.profile?.lastPointsRefillAt
-          ? new Date(verificationStatus.profile.lastPointsRefillAt)
-          : (user.lastPointsRefillAt ?? null),
-      }
-    : {
-        pointsBalance: user.pointsBalance ?? STARTER_POINTS,
-        lastPointsRefillAt: user.lastPointsRefillAt ?? null,
-      }
   const rank = isVerified ? (verificationStatus?.profile?.rank ?? null) : null
-  const refillAwarded = verificationStatus?.profile?.refillAwarded ?? 0
   const nameLabel = user.name
   const generatedIdentity = getGeneratedDisplayName(user.email || user.id)
   const identity = nameLabel || generatedIdentity
@@ -355,7 +341,7 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
                 <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{identity}</p>
@@ -400,17 +386,6 @@ export default async function ProfilePage() {
                   </div>
                 </dl>
               </div>
-              <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <div className="flex flex-wrap items-start gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Rewards Balance</p>
-                </div>
-                <ProfilePointsBalance
-                  pointsBalance={pointsState.pointsBalance}
-                  pointsAwarded={refillAwarded}
-                  userId={user.id}
-                  userCreatedAtIso={user.createdAt ? user.createdAt.toISOString() : null}
-                />
-              </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Humans Rank</p>
                 <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '—'}</p>
@@ -424,13 +399,6 @@ export default async function ProfilePage() {
                 </p>
                 <p>
                   Tweet verification: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.verified ? 'Verified' : 'Not verified'}</span>
-                </p>
-                <p>
-                  Last daily refill:{' '}
-                  <LocalDateTime
-                    value={pointsState.lastPointsRefillAt ? pointsState.lastPointsRefillAt.toISOString() : null}
-                    className="font-medium text-[#1a1a1a]"
-                  />
                 </p>
                 <p>
                   Verified at:{' '}

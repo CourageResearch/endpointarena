@@ -1,10 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 import { db, accounts, users } from '@/lib/db'
-import { applyDailyRefillIfEligible, getVerifiedHumansRank } from '@/lib/humans'
+import { getVerifiedHumansRank } from '@/lib/humans'
 import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
 import { fetchTweetById, isXConnectionExpiredError } from '@/lib/twitter-verification'
 import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
 import { userColumns } from '@/lib/users/query-shapes'
+import { STARTER_POINTS } from '@/lib/constants'
 
 type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
 
@@ -25,8 +26,6 @@ type TwitterVerificationStatus = {
   profile: {
     pointsBalance: number
     rank: number
-    lastPointsRefillAt: string | null
-    refillAwarded: number
   } | null
 }
 
@@ -138,17 +137,13 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
   let profile: {
     pointsBalance: number
     rank: number
-    lastPointsRefillAt: string | null
-    refillAwarded: number
   } | null = null
   if (verified) {
-    const pointsState = await applyDailyRefillIfEligible(user.id)
-    const rank = await getVerifiedHumansRank(pointsState.pointsBalance)
+    const pointsBalance = user.pointsBalance ?? STARTER_POINTS
+    const rank = await getVerifiedHumansRank(pointsBalance)
     profile = {
-      pointsBalance: pointsState.pointsBalance,
+      pointsBalance,
       rank,
-      lastPointsRefillAt: pointsState.lastPointsRefillAt?.toISOString() ?? null,
-      refillAwarded: pointsState.refillAwarded,
     }
   }
 

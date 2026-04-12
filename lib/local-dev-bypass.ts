@@ -65,8 +65,6 @@ export function buildLocalDevVerificationStatus(email?: string | null) {
     profile: {
       pointsBalance: STARTER_POINTS,
       rank: 1,
-      lastPointsRefillAt: null,
-      refillAwarded: 0,
     },
   }
 }

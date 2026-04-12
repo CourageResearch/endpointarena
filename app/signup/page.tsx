@@ -5,7 +5,6 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
 import { GradientBorder, PageFrame } from '@/components/site/chrome'
-import { STARTER_POINTS } from '@/lib/constants'
 import { buildProfileCallbackUrl, ensureAuthGeo, normalizeCallbackUrl, resolveDestination } from '@/lib/auth/client-navigation'
 
 export default function SignupPage() {
@@ -69,14 +68,8 @@ export default function SignupPage() {
       })
 
       if (result?.ok) {
-        // Trigger first-account points celebration on profile load.
-        sessionStorage.setItem('ea-points-award', String(STARTER_POINTS))
-        localStorage.setItem('ea-points-award-pending', String(STARTER_POINTS))
         const destination = resolveDestination(result.url, profileCallbackUrl)
-        const [pathname, queryString = ''] = destination.split('?')
-        const params = new URLSearchParams(queryString)
-        params.set('signupAward', String(STARTER_POINTS))
-        router.push(`${pathname}?${params.toString()}`)
+        router.push(destination)
         router.refresh()
       } else if (result?.error === 'CredentialsSignin') {
         setError('An account with that email already exists. Please sign in instead.')

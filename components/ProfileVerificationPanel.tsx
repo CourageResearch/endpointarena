@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { XInlineMark, XLogoMark } from '@/components/XMark'
 import { getApiErrorMessage } from '@/lib/client-api'
 
 type VerificationStatus = {
@@ -26,23 +27,6 @@ type ChallengePayload = {
   tweetTemplate: string
 }
 
-function XLogoMark({ className = 'h-4 w-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  )
-}
-
-function XInlineMark({ className = '', logoClassName = 'h-[0.95em] w-[0.95em]' }: { className?: string; logoClassName?: string }) {
-  return (
-    <span className={`inline-flex items-center align-[-0.14em] ${className}`}>
-      <span className="sr-only">X</span>
-      <XLogoMark className={logoClassName} />
-    </span>
-  )
-}
-
 function normalizeCallbackUrl(raw: string | null): string {
   if (!raw) return '/trials'
   if (!raw.startsWith('/')) return '/trials'
@@ -53,6 +37,7 @@ function normalizeCallbackUrl(raw: string | null): string {
 export function ProfileVerificationPanel() {
   const router = useRouter()
   const [callbackUrl, setCallbackUrl] = useState('/trials')
+  const [localhostRedirectUrl, setLocalhostRedirectUrl] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusData, setStatusData] = useState<VerificationStatus | null>(null)
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)
@@ -65,6 +50,11 @@ export function ProfileVerificationPanel() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setCallbackUrl(normalizeCallbackUrl(params.get('callbackUrl')))
+    if (window.location.hostname === 'localhost') {
+      const normalizedUrl = new URL(window.location.href)
+      normalizedUrl.hostname = '127.0.0.1'
+      setLocalhostRedirectUrl(normalizedUrl.toString())
+    }
     const oauthError = params.get('error')
     if (oauthError === 'Callback' || oauthError === 'OAuthCallback') {
       setError('X login consent completed but callback failed. Check OAuth2 client secret and redirect URI in X app settings.')
@@ -222,10 +212,6 @@ export function ProfileVerificationPanel() {
       if (!response.ok) {
         throw new Error(getApiErrorMessage(payload, 'Failed to verify tweet'))
       }
-      const pointsAwarded = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : 0
-      if (pointsAwarded > 0) {
-        sessionStorage.setItem('ea-points-award', String(pointsAwarded))
-      }
 
       await loadStatus()
       setChallenge(null)
@@ -250,14 +236,14 @@ export function ProfileVerificationPanel() {
         <p className="font-medium text-[#2f7b40]">Trading unlocked.</p>
         {statusData.requiresReconnect ? (
           <div className="mt-3 rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-3 text-[#b94e47]">
-            <p>Your X session expired. Reconnect X to continue verification checks.</p>
+            <p>Your <XInlineMark className="mx-0.5" /> session expired. Reconnect <XInlineMark className="mx-0.5" /> to continue verification checks.</p>
             <button
               type="button"
               onClick={handleConnectX}
               disabled={twitterAvailable === false}
               className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Reconnect X account
+              Reconnect <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> account
             </button>
           </div>
         ) : null}
@@ -269,7 +255,7 @@ export function ProfileVerificationPanel() {
     <div className="space-y-5 rounded-sm border border-[#ef6f67] bg-[#fffdfa] p-5 sm:p-6">
       <div>
         <p className="text-sm font-medium text-[#1a1a1a]">Verify your account</p>
-        <p className="mt-1 text-sm text-[#6d645a]">Connect X and post one confirmation tweet to start trading.</p>
+        <p className="mt-1 text-sm text-[#6d645a]">Connect <XInlineMark className="mx-0.5" /> to earn bonus and start trading.</p>
       </div>
 
       {error ? (
@@ -278,14 +264,14 @@ export function ProfileVerificationPanel() {
 
       {statusData?.requiresReconnect ? (
         <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-3 text-sm text-[#b94e47]">
-          <p>Your X session expired. Reconnect X to continue verification checks.</p>
+          <p>Your <XInlineMark className="mx-0.5" /> session expired. Reconnect <XInlineMark className="mx-0.5" /> to continue verification checks.</p>
           <button
             type="button"
             onClick={handleConnectX}
             disabled={twitterAvailable === false}
             className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Reconnect X account
+            Reconnect <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> account
           </button>
         </div>
       ) : null}
@@ -296,6 +282,11 @@ export function ProfileVerificationPanel() {
           <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">
             Connect your <XInlineMark className="mx-0.5" /> account
           </h3>
+          {localhostRedirectUrl ? (
+            <p className="mt-2 rounded-sm border border-[#eadcc9] bg-[#f8f3ec] px-3 py-2 text-sm text-[#6d645a]">
+              Local <XInlineMark className="mx-0.5" /> auth only works from <span className="font-medium text-[#1a1a1a]">127.0.0.1</span>. We&apos;ll switch you there before opening <XInlineMark className="mx-0.5" />.
+            </p>
+          ) : null}
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
             Use the profile you'll post from. We'll only use this connection to confirm the tweet came from you.
           </p>
@@ -310,6 +301,8 @@ export function ProfileVerificationPanel() {
             </span>
             {twitterAvailable === false ? (
               'Login unavailable'
+            ) : localhostRedirectUrl ? (
+              'Open 127.0.0.1 and continue'
             ) : (
               'Connect account'
             )}
@@ -346,7 +339,7 @@ export function ProfileVerificationPanel() {
             <div className="space-y-4">
               <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 2</p>
-                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Post this tweet on X</h3>
+                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Post this tweet on <XInlineMark className="ml-1" /></h3>
                 <p className="mt-2 text-sm leading-6 text-[#6d645a]">
                   Open the composer below and publish the tweet as written. Keep the unique verification tag exactly as shown.
                 </p>
@@ -357,7 +350,7 @@ export function ProfileVerificationPanel() {
                   rel="noopener noreferrer"
                   className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
                 >
-                  Open X composer
+                  Open <XInlineMark className="mx-1" logoClassName="h-[0.95em] w-[0.95em]" /> composer
                 </a>
               </div>
 

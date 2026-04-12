@@ -127,9 +127,7 @@ export async function POST(request: Request) {
         tweetMustStayUntil: mustStayUntil,
         tweetChallengeTokenHash: null,
         tweetChallengeExpiresAt: null,
-        // One-time unlock bonus; set refill marker so +1000 daily refill starts next UTC day.
         pointsBalance: sql`${users.pointsBalance} + ${UNLOCK_BONUS_POINTS}`,
-        lastPointsRefillAt: now,
       })
       .where(eq(users.id, user.id))
 

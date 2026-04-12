@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { ModelIcon } from '@/components/ModelIcon'
 import { HeaderDots } from '@/components/site/chrome'
 import type { ModelId } from '@/lib/constants'
@@ -10,7 +11,7 @@ import {
   DETAILS_CARD_BORDER_STYLE,
 } from '@/components/markets/dashboard/shared'
 
-export type PositionSortKey = 'model' | 'netStance' | 'yesShares' | 'noShares' | 'position' | 'pnl'
+export type PositionSortKey = 'model' | 'view' | 'yesShares' | 'noShares' | 'position' | 'pnl'
 export type PositionSortDirection = 'asc' | 'desc'
 export type PositionSortState = { key: PositionSortKey; direction: PositionSortDirection }
 
@@ -21,11 +22,10 @@ export type MarketPositionRow = {
   compactLabel: string
   yesShares: number
   noShares: number
-  hasBothSides: boolean
   positionValueUsd: number
   pnlUsd: number
-  netDisplayLabel: string
-  netTextClass: string
+  viewDisplayLabel: string
+  viewTextClass: string
 }
 
 function formatShares(value: number): string {
@@ -92,6 +92,7 @@ export function MarketModelPositionsPanel({
   rows,
   sortState,
   onSort,
+  getModelHref,
   variant = 'default',
   showHeader = true,
 }: {
@@ -100,6 +101,7 @@ export function MarketModelPositionsPanel({
   rows: MarketPositionRow[]
   sortState: PositionSortState | null
   onSort: (key: PositionSortKey) => void
+  getModelHref?: ((modelId: ModelId) => string) | null
   variant?: 'default' | 'compact'
   showHeader?: boolean
 }) {
@@ -144,7 +146,7 @@ export function MarketModelPositionsPanel({
                   />
                   <SortablePositionHeader
                     label="View"
-                    sortKey="netStance"
+                    sortKey="view"
                     sortState={sortState}
                     onSort={onSort}
                     className={compact ? 'px-1' : 'px-1.5'}
@@ -187,28 +189,43 @@ export function MarketModelPositionsPanel({
                 {rows.map((row) => (
                   <tr key={`${marketId}-${row.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
                     <td className={cn('align-top', compact ? 'px-1.5 py-3' : 'px-5 py-4')}>
-                      <div className="flex items-center gap-1.5">
-                        {!compact ? (
-                          <span
-                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
-                            aria-hidden="true"
-                          >
-                            <ModelIcon id={row.modelId} className="h-4 w-4 grayscale" />
+                      {getModelHref ? (
+                        <Link
+                          href={getModelHref(row.modelId)}
+                          scroll={false}
+                          className="group flex items-center gap-1.5 rounded-sm transition-colors focus-visible:outline-none"
+                        >
+                          {!compact ? (
+                            <span
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
+                              aria-hidden="true"
+                            >
+                              <ModelIcon id={row.modelId} className="h-4 w-4 grayscale" />
+                            </span>
+                          ) : null}
+                          <span className="truncate text-[13px] font-medium text-[#1a1a1a] transition-colors group-hover:text-[#3a342d] group-focus-visible:text-[#3a342d]" title={row.fullName}>
+                            {compact ? row.compactLabel : row.displayLabel}
                           </span>
-                        ) : null}
-                        <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={row.fullName}>
-                          {compact ? row.compactLabel : row.displayLabel}
-                        </span>
-                      </div>
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          {!compact ? (
+                            <span
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
+                              aria-hidden="true"
+                            >
+                              <ModelIcon id={row.modelId} className="h-4 w-4 grayscale" />
+                            </span>
+                          ) : null}
+                          <span className="truncate text-[13px] font-medium text-[#1a1a1a]" title={row.fullName}>
+                            {compact ? row.compactLabel : row.displayLabel}
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className={cn('align-top', compact ? 'px-1 py-3' : 'px-1.5 py-4')}>
                       <div className="flex items-center gap-1.5">
-                        <span className={cn('text-xs font-medium tracking-[0.02em]', row.netTextClass)}>
-                          {row.netDisplayLabel}
-                        </span>
-                        {row.hasBothSides && !compact ? (
-                          <span className="text-[10px] text-[#9a8f82]">mixed</span>
-                        ) : null}
+                        <span className={cn('text-xs font-medium tracking-[0.02em]', row.viewTextClass)}>{row.viewDisplayLabel}</span>
                       </div>
                     </td>
                     <td className={cn('text-right align-top text-xs tabular-nums', compact ? 'px-1 py-3' : 'px-1.5 py-4')}>

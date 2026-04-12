@@ -352,16 +352,46 @@ function getBaseAuthAdapter(): Adapter {
 }
 
 const authAdapter = new Proxy({} as Adapter, {
-  get(_target, prop, receiver) {
+  get(_target, prop) {
     if (prop === 'createUser') {
       return async (user: Omit<AdapterUser, 'id'>) => await createAdapterUser(user)
     }
 
     const adapter = getBaseAuthAdapter()
-    const value = Reflect.get(adapter as object, prop, receiver)
+    const value = Reflect.get(adapter as object, prop)
     return typeof value === 'function'
       ? value.bind(adapter)
       : value
+  },
+  has(_target, prop) {
+    if (prop === 'createUser') return true
+    return Reflect.has(getBaseAuthAdapter() as object, prop)
+  },
+  ownKeys() {
+    const keys = new Set<string | symbol>(Reflect.ownKeys(getBaseAuthAdapter() as object) as Array<string | symbol>)
+    keys.add('createUser')
+    return [...keys]
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    if (prop === 'createUser') {
+      return {
+        configurable: true,
+        enumerable: true,
+        writable: false,
+        value: async (user: Omit<AdapterUser, 'id'>) => await createAdapterUser(user),
+      }
+    }
+
+    const descriptor = Reflect.getOwnPropertyDescriptor(getBaseAuthAdapter() as object, prop)
+    if (!descriptor) {
+      return undefined
+    }
+
+    return {
+      ...descriptor,
+      configurable: true,
+      enumerable: true,
+    }
   },
 }) as Adapter
 

@@ -2,12 +2,13 @@
 
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { TrialOracleRunsPanel } from '@/components/TrialOracleRunsPanel'
 import { MarketActivityFeed } from '@/components/markets/dashboard/activity-feed'
 import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
 import { MarketDescriptionCard, MarketDetailsPanel, MarketResolutionPanel } from '@/components/markets/dashboard/details-panel'
+import { XInlineMark } from '@/components/XMark'
 import {
   MarketModelPositionsPanel,
   type MarketPositionRow,
@@ -49,7 +50,7 @@ import { cn } from '@/lib/utils'
 
 type CommentModelFilter = 'all' | ModelId[]
 type CommentSort = 'newest' | 'oldest'
-type PositionSortKey = 'model' | 'netStance' | 'yesShares' | 'noShares' | 'position' | 'pnl'
+type PositionSortKey = 'model' | 'view' | 'yesShares' | 'noShares' | 'position' | 'pnl'
 type PositionSortDirection = 'asc' | 'desc'
 type PositionSortState = { key: PositionSortKey; direction: PositionSortDirection }
 
@@ -105,7 +106,7 @@ function formatTradeAmountInput(value: number): string {
 }
 
 function getInitialPositionSortDirection(key: PositionSortKey): PositionSortDirection {
-  if (key === 'model' || key === 'netStance') return 'asc'
+  if (key === 'model' || key === 'view') return 'asc'
   return 'desc'
 }
 
@@ -252,6 +253,7 @@ export function TrialDashboard({
   oracleTabData = null,
 }: TrialDashboardProps = {}) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { status: sessionStatus } = useSession()
   const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId, {
     includeAccounts: false,
@@ -569,6 +571,26 @@ export function TrialDashboard({
     ? `${marketDetailHref}/oracle-runs`
     : null
   const tabBasePath = pathname || `/trials2/${encodeURIComponent(selectedMarket.marketId)}`
+  const buildDetailTabHref = (
+    tabId: TrialDetailTab,
+    extraParams?: Record<string, string | null | undefined>,
+  ) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    params.set('tab', tabId)
+    params.delete('model')
+
+    if (extraParams) {
+      for (const [key, value] of Object.entries(extraParams)) {
+        if (value) {
+          params.set(key, value)
+        } else {
+          params.delete(key)
+        }
+      }
+    }
+
+    return `${tabBasePath}?${params.toString()}`
+  }
   const yesPriceCents = Math.round(selectedMarket.priceYes * 100)
   const noPriceCents = Math.round((1 - selectedMarket.priceYes) * 100)
   const selectedOutcomePrice = tradeOutcome === 'yes' ? selectedMarket.priceYes : (1 - selectedMarket.priceYes)
@@ -590,26 +612,27 @@ export function TrialDashboard({
     const model = MODEL_INFO[state.modelId]
     const yesShares = Math.max(0, state.yesShares)
     const noShares = Math.max(0, state.noShares)
-    const netShares = yesShares - noShares
-    const hasBothSides = yesShares > 0.001 && noShares > 0.001
     const positionValueUsd = (yesShares * selectedMarket.priceYes) + (noShares * (1 - selectedMarket.priceYes))
     const pnlUsd = positionValueUsd - (state.costBasisUsd || 0)
-
-    const netLabel = Math.abs(netShares) <= 0.001
-      ? (yesShares > 0.001 || noShares > 0.001 ? 'Hedged' : 'Flat')
-      : netShares > 0 ? 'YES' : 'NO'
-    const netDisplayLabel =
-      netLabel === 'YES'
+    const binaryCall = state.latestDecision?.forecast.binaryCall ?? null
+    const viewDisplayLabel =
+      binaryCall === 'yes'
         ? 'Yes'
-        : netLabel === 'NO'
+        : binaryCall === 'no'
           ? 'No'
-          : netLabel
-    const netTextClass =
-      netLabel === 'YES'
+          : 'Pending'
+    const viewTextClass =
+      binaryCall === 'yes'
         ? APPROVE_TEXT_CLASS
-        : netLabel === 'NO'
+        : binaryCall === 'no'
           ? REJECT_TEXT_CLASS
           : 'text-[#7c7267]'
+    const viewSortRank =
+      binaryCall === 'yes'
+        ? 0
+        : binaryCall === 'no'
+          ? 1
+          : 2
 
     return {
       index,
@@ -619,16 +642,13 @@ export function TrialDashboard({
       compactLabel: model.provider === 'OpenAI' ? 'GPT' : model.name,
       yesShares,
       noShares,
-      netShares,
-      hasBothSides,
       positionValueUsd,
       pnlUsd,
-      netLabel,
-      netDisplayLabel,
-      netTextClass,
+      viewDisplayLabel,
+      viewTextClass,
       sortValues: {
         model: model.fullName.toLowerCase(),
-        netStance: netDisplayLabel.toLowerCase(),
+        view: viewSortRank,
         yesShares,
         noShares,
         position: positionValueUsd,
@@ -654,11 +674,6 @@ export function TrialDashboard({
           return positionSort.direction === 'asc' ? cmp : -cmp
         }
 
-        if (positionSort.key === 'netStance') {
-          const netCmp = a.netShares - b.netShares
-          if (netCmp !== 0) return positionSort.direction === 'asc' ? netCmp : -netCmp
-        }
-
         const modelCmp = a.fullName.localeCompare(b.fullName)
         if (modelCmp !== 0) return modelCmp
         return a.index - b.index
@@ -670,11 +685,10 @@ export function TrialDashboard({
     compactLabel: row.compactLabel,
     yesShares: row.yesShares,
     noShares: row.noShares,
-    hasBothSides: row.hasBothSides,
     positionValueUsd: row.positionValueUsd,
     pnlUsd: row.pnlUsd,
-    netDisplayLabel: row.netDisplayLabel,
-    netTextClass: row.netTextClass,
+    viewDisplayLabel: row.viewDisplayLabel,
+    viewTextClass: row.viewTextClass,
   }))
 
   const decisionRows: MarketDashboardDecisionRow[] = selectedMarket.modelStates.map((state) => {
@@ -817,6 +831,7 @@ export function TrialDashboard({
             rows={visiblePositionRows}
             sortState={positionSort}
             onSort={handlePositionSort}
+            getModelHref={(modelId) => buildDetailTabHref('snapshots', { model: modelId })}
           />
         )
       case 'snapshots':
@@ -905,7 +920,7 @@ export function TrialDashboard({
       {sessionStatus === 'unauthenticated' && !useStackedLayout && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
           <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
-          <p className="mt-1">Browsing is open, but trading and personal points unlock after one-time X verification.</p>
+          <p className="mt-1">Browsing is open, but trading and personal points unlock after one-time <XInlineMark className="mx-0.5" /> verification.</p>
           <Link
             href={`/login?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
             className="mt-3 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
@@ -1172,7 +1187,7 @@ export function TrialDashboard({
                     {detailTabs.map((tab) => (
                       <Link
                         key={tab.id}
-                        href={`${tabBasePath}?tab=${tab.id}`}
+                        href={buildDetailTabHref(tab.id)}
                         scroll={false}
                         className={cn(
                           'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
