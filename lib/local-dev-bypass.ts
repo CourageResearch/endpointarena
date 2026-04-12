@@ -1,4 +1,5 @@
 import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
+import { getLocalDevXBypassEmailsRaw, isLocalDevXBypassEnabled } from '@/lib/x-env'
 
 function normalizeEmail(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
@@ -24,10 +25,6 @@ function isLocalDevBypassEnabled(): boolean {
   return process.env.LOCAL_DEV_ADMIN_BYPASS === '1'
 }
 
-function isLocalDevTwitterBypassEnabled(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.LOCAL_DEV_TWITTER_BYPASS === '1'
-}
-
 export function isLocalDevBypassEmail(email: string | null | undefined): boolean {
   if (!isLocalDevBypassEnabled()) return false
   return normalizeEmail(email) === normalizeEmail(ADMIN_EMAIL)
@@ -41,11 +38,11 @@ export function canUseLocalDevVerificationBypass(email: string | null | undefine
     return true
   }
 
-  if (!isLocalDevTwitterBypassEnabled()) {
+  if (!isLocalDevXBypassEnabled()) {
     return false
   }
 
-  const allowedEmails = parseEmailList(process.env.LOCAL_DEV_TWITTER_BYPASS_EMAILS)
+  const allowedEmails = parseEmailList(getLocalDevXBypassEmailsRaw())
   return allowedEmails.has(normalizedEmail)
 }
 

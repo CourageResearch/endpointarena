@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { and, desc, eq, gt, inArray, or } from 'drizzle-orm'
 import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { ProfileHandleCard } from '@/components/ProfileHandleCard'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { LogoutButton } from '@/components/LogoutButton'
 import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
@@ -342,31 +343,12 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Identity</p>
-                <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{identity}</p>
-                <p className="mt-1 text-xs text-[#8a8075]">{secondaryIdentity || 'No email on file'}</p>
-                <form action={updateProfileName} className="mt-3 flex items-center gap-2">
-                  <input
-                    name="name"
-                    type="text"
-                    defaultValue={editableIdentity}
-                    placeholder="Set display name"
-                    required
-                    pattern="[A-Za-z0-9]+"
-                    title="Use letters and numbers only."
-                    maxLength={DISPLAY_NAME_MAX_LENGTH}
-                    className="h-9 w-full rounded-sm border border-[#e8ddd0] bg-white px-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    className="inline-flex h-9 shrink-0 items-center rounded-sm border border-[#d9cdbf] bg-white px-3 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
-                  >
-                    Save
-                  </button>
-                </form>
-              </div>
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <ProfileHandleCard
+                handle={editableIdentity}
+                maxLength={DISPLAY_NAME_MAX_LENGTH}
+                updateAction={updateProfileName}
+              />
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Trading Cash</p>
                 <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
@@ -378,10 +360,6 @@ export default async function ProfilePage() {
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Open Positions</p>
                 <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</p>
               </div>
-              <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Total Equity</p>
-                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(totalEquity)}</p>
-              </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Humans Rank</p>
                 <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '—'}</p>
@@ -390,6 +368,9 @@ export default async function ProfilePage() {
 
             <div className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
               <div className="grid gap-3 text-sm text-[#7f7469] sm:grid-cols-2">
+                <p>
+                  Email: <span className="font-medium text-[#1a1a1a]">{secondaryIdentity || 'No email on file'}</span>
+                </p>
                 <p>
                   <XInlineMark className="mr-1" /> connected: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.connected ? 'Yes' : 'No'}</span>
                 </p>
@@ -403,20 +384,12 @@ export default async function ProfilePage() {
                     className="font-medium text-[#1a1a1a]"
                   />
                 </p>
-                <p className="sm:col-span-2">
-                  Must keep tweet live until:{' '}
-                  <LocalDateTime
-                    value={verificationStatus?.mustStayUntil ?? null}
-                    className="font-medium text-[#1a1a1a]"
-                  />
-                </p>
               </div>
             </div>
 
             <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Current Holdings</h2>
-                <p className="text-xs text-[#8a8075]">All open portfolio positions</p>
               </div>
 
               {holdings.length === 0 ? (
@@ -470,7 +443,6 @@ export default async function ProfilePage() {
             <section className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Transaction History</h2>
-                <p className="text-xs text-[#8a8075]">Newest first</p>
               </div>
 
               {trades.length === 0 ? (

@@ -125,7 +125,7 @@ export function ProfileVerificationPanel() {
     if (twitterAvailable === false) {
       setError(
         <>
-          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">TWITTER_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">TWITTER_CLIENT_SECRET</code>.
+          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
         </>,
       )
       return
@@ -161,7 +161,7 @@ export function ProfileVerificationPanel() {
     if (twitterAvailable === false) {
       setError(
         <>
-          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">TWITTER_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">TWITTER_CLIENT_SECRET</code>.
+          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
         </>,
       )
       return
@@ -303,9 +303,6 @@ export function ProfileVerificationPanel() {
               Local <XInlineMark className="mx-0.5" /> auth only works from <span className="font-medium text-[#1a1a1a]">127.0.0.1</span>. We&apos;ll switch you there before opening <XInlineMark className="mx-0.5" />.
             </p>
           ) : null}
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
-            Use the profile you'll post from. We'll only use this connection to confirm the tweet came from you.
-          </p>
           <button
             type="button"
             onClick={handleConnectX}

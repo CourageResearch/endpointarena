@@ -149,12 +149,12 @@ function describeAppEnvAudit(appVars: Record<string, string>): {
     warnings.push('MAINTENANCE_MODE is unset; writes default to enabled unless explicitly frozen')
   }
 
-  const hasTwitterId = hasNonEmptyVar(appVars, 'TWITTER_CLIENT_ID')
-  const hasTwitterSecret = hasNonEmptyVar(appVars, 'TWITTER_CLIENT_SECRET')
+  const hasTwitterId = hasNonEmptyVar(appVars, 'X_CLIENT_ID')
+  const hasTwitterSecret = hasNonEmptyVar(appVars, 'X_CLIENT_SECRET')
   if (hasTwitterId !== hasTwitterSecret) {
-    warnings.push('Twitter OAuth is partially configured; set both TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET or neither')
+    warnings.push('X OAuth is partially configured; set both X_CLIENT_ID and X_CLIENT_SECRET or neither')
   } else if (!hasTwitterId) {
-    warnings.push('Twitter OAuth is not configured; Twitter sign-in/linking is disabled')
+    warnings.push('X OAuth is not configured; X sign-in/linking is disabled')
   }
 
   if (!hasNonEmptyVar(appVars, 'RESEND_API_KEY')) {

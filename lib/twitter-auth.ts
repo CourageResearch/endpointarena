@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { accounts, db } from '@/lib/db'
 import { ExternalServiceError } from '@/lib/errors'
+import { getXClientCredentials } from '@/lib/x-env'
 
 const TWITTER_TOKEN_REFRESH_ENDPOINT = 'https://api.twitter.com/2/oauth2/token'
 const TOKEN_EXPIRY_SKEW_SECONDS = 60
@@ -181,10 +182,9 @@ export async function getUsableTwitterAccessToken(
     }
   }
 
-  const clientId = trimOrNull(process.env.TWITTER_CLIENT_ID)
-  const clientSecret = trimOrNull(process.env.TWITTER_CLIENT_SECRET)
+  const { clientId, clientSecret } = getXClientCredentials()
   if (!clientId || !clientSecret) {
-    console.warn('X token refresh cannot run because Twitter app credentials are missing', { userId })
+    console.warn('X token refresh cannot run because X app credentials are missing', { userId })
     return {
       account,
       accessToken: null,

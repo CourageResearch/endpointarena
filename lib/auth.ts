@@ -13,6 +13,7 @@ import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
 import { isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
+import { getXClientCredentials } from '@/lib/x-env'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const MIN_PASSWORD_LENGTH = 8
@@ -278,11 +279,13 @@ function getProviders() {
     })
   )
 
-  if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
+  const { clientId: xClientId, clientSecret: xClientSecret } = getXClientCredentials()
+
+  if (xClientId && xClientSecret) {
     providers.push(
       TwitterProvider({
-        clientId: process.env.TWITTER_CLIENT_ID,
-        clientSecret: process.env.TWITTER_CLIENT_SECRET,
+        clientId: xClientId,
+        clientSecret: xClientSecret,
         version: '2.0',
         authorization: {
           url: 'https://x.com/i/oauth2/authorize',
