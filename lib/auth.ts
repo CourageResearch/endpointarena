@@ -7,12 +7,13 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import TwitterProvider from 'next-auth/providers/twitter'
 import { accounts, db, getActiveDb, sessions, users, verificationTokens } from '@/lib/db'
 import { and, eq } from 'drizzle-orm'
-import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
+import { ADMIN_EMAIL, STARTER_CASH } from '@/lib/constants'
 import { getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { inferGeoFromHeaders, type HeaderCollection } from '@/lib/geo-country'
 import { isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
+import { ensureHumanTradingAccount } from '@/lib/human-cash'
 import { getXClientCredentials } from '@/lib/x-env'
 
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
@@ -118,7 +119,6 @@ async function createCredentialUser(
       email,
       passwordHash,
       ...signupGeo,
-      pointsBalance: STARTER_POINTS,
     }).returning({
       id: users.id,
       email: users.email,
@@ -133,7 +133,6 @@ async function createCredentialUser(
         name: generatedName,
         email,
         passwordHash,
-        pointsBalance: STARTER_POINTS,
       }).returning({
         id: users.id,
         email: users.email,
@@ -142,8 +141,23 @@ async function createCredentialUser(
         signupLocation: users.signupLocation,
         signupState: users.signupState,
       })
+      if (withoutLocation) {
+        await ensureHumanTradingAccount({
+          userId: withoutLocation.id,
+          displayName: withoutLocation.name,
+          dbClient: tx,
+          startingCash: STARTER_CASH,
+        })
+      }
       return withoutLocation ?? null
     }
+
+    await ensureHumanTradingAccount({
+      userId: newUser.id,
+      displayName: newUser.name,
+      dbClient: tx,
+      startingCash: STARTER_CASH,
+    })
 
     return newUser
   })
@@ -156,7 +170,6 @@ async function createAdapterUser(user: Omit<AdapterUser, 'id'>): Promise<Adapter
       email: user.email,
       emailVerified: user.emailVerified,
       image: user.image,
-      pointsBalance: STARTER_POINTS,
     }).returning({
       id: users.id,
       name: users.name,
@@ -168,6 +181,13 @@ async function createAdapterUser(user: Omit<AdapterUser, 'id'>): Promise<Adapter
     if (!createdUser) {
       throw new Error('Failed to create user')
     }
+
+    await ensureHumanTradingAccount({
+      userId: createdUser.id,
+      displayName: createdUser.name,
+      dbClient: tx,
+      startingCash: STARTER_CASH,
+    })
 
     return createdUser as AdapterUser
   })
@@ -490,8 +510,8 @@ export const authOptions: NextAuthOptions = {
         const currentUser = userRows[0] ?? null
         session.user.xConnected = Boolean(currentUser?.xUserId)
         session.user.xUsername = currentUser?.xUsername ?? null
-        session.user.tweetVerified = Boolean(currentUser?.tweetVerifiedAt)
-        session.user.tweetMustStayUntil = currentUser?.tweetMustStayUntil?.toISOString() ?? null
+        session.user.xVerified = Boolean(currentUser?.tweetVerifiedAt)
+        session.user.xVerificationMustStayUntil = currentUser?.tweetMustStayUntil?.toISOString() ?? null
       }
       return session
     },

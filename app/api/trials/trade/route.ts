@@ -7,7 +7,7 @@ import {
   parseOptionalJsonBody,
   successResponse,
 } from '@/lib/api-response'
-import { db, marketAccounts, marketPositions, predictionMarkets, users } from '@/lib/db'
+import { db, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
 import {
   ConflictError,
   ForbiddenError,
@@ -18,7 +18,7 @@ import {
 import { runBuyAction, runSellAction } from '@/lib/markets/engine'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
-import { ensureHumanMarketActor } from '@/lib/market-actors'
+import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
 
 type TradeSide = 'BUY_YES' | 'BUY_NO' | 'SELL_YES' | 'SELL_NO'
 
@@ -68,35 +68,7 @@ async function requireVerifiedTrader(userId: string): Promise<void> {
   }
 }
 
-async function getUserPointsBalance(userId: string): Promise<number> {
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: {
-      pointsBalance: true,
-    },
-  })
-
-  if (!user) {
-    throw new UnauthorizedError('User account not found')
-  }
-
-  if (!Number.isFinite(user.pointsBalance)) return 0
-  return Math.max(0, Math.round(user.pointsBalance))
-}
-
-async function ensureHumanTraderState(
-  actorId: string,
-  marketId: string,
-  initialCashBalance: number,
-): Promise<void> {
-  await db.insert(marketAccounts)
-    .values({
-      actorId,
-      startingCash: initialCashBalance,
-      cashBalance: initialCashBalance,
-    })
-    .onConflictDoNothing({ target: marketAccounts.actorId })
-
+async function ensureHumanTraderState(actorId: string, marketId: string): Promise<void> {
   await db.insert(marketPositions)
     .values({
       marketId,
@@ -172,10 +144,12 @@ export async function GET(request: Request) {
       throw new ConflictError('This market is no longer open')
     }
 
-    const actor = await ensureHumanMarketActor(userId)
+    const { actor } = await ensureHumanTradingAccount({
+      userId,
+      startingCash: getCanonicalHumanStartingCash(true),
+    })
     const actorId = actor.id
-    const pointsBalance = await getUserPointsBalance(userId)
-    await ensureHumanTraderState(actorId, market.id, pointsBalance)
+    await ensureHumanTraderState(actorId, market.id)
     const snapshot = await getTraderSnapshot(actorId, market.id)
 
     return successResponse({
@@ -245,10 +219,12 @@ export async function POST(request: Request) {
       throw new ConflictError('This market is no longer open')
     }
 
-    const actor = await ensureHumanMarketActor(userId)
+    const { actor } = await ensureHumanTradingAccount({
+      userId,
+      startingCash: getCanonicalHumanStartingCash(true),
+    })
     const actorId = actor.id
-    const pointsBalance = await getUserPointsBalance(userId)
-    await ensureHumanTraderState(actorId, market.id, pointsBalance)
+    await ensureHumanTraderState(actorId, market.id)
 
     const beforeSnapshot = await getTraderSnapshot(actorId, market.id)
     const runDate = new Date()

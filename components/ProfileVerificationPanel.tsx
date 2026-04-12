@@ -16,7 +16,7 @@ type VerificationStatus = {
   mustStayUntil: string | null
   verifiedAt: string | null
   profile: {
-    pointsBalance: number
+    cashBalance: number
     rank: number
   } | null
 }
@@ -24,7 +24,7 @@ type VerificationStatus = {
 type ChallengePayload = {
   challengeToken: string
   expiresAt: string
-  tweetTemplate: string
+  postTemplate: string
 }
 
 function normalizeCallbackUrl(raw: string | null): string {
@@ -41,7 +41,7 @@ export function ProfileVerificationPanel() {
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusData, setStatusData] = useState<VerificationStatus | null>(null)
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)
-  const [tweetInput, setTweetInput] = useState('')
+  const [postInput, setPostInput] = useState('')
   const [error, setError] = useState<ReactNode>('')
   const [twitterAvailable, setTwitterAvailable] = useState<boolean | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -117,9 +117,9 @@ export function ProfileVerificationPanel() {
   }, [])
 
   const intentHref = useMemo(() => {
-    if (!challenge?.tweetTemplate) return '#'
-    return `https://twitter.com/intent/tweet?text=${encodeURIComponent(challenge.tweetTemplate)}`
-  }, [challenge?.tweetTemplate])
+    if (!challenge?.postTemplate) return '#'
+    return `https://twitter.com/intent/tweet?text=${encodeURIComponent(challenge.postTemplate)}`
+  }, [challenge?.postTemplate])
 
   const startXConnection = async () => {
     if (twitterAvailable === false) {
@@ -201,13 +201,13 @@ export function ProfileVerificationPanel() {
     }
   }
 
-  const handleVerifyTweet = async () => {
+  const handleVerifyPost = async () => {
     if (!challenge?.challengeToken) {
       setError('Create a challenge token first')
       return
     }
-    if (!tweetInput.trim()) {
-      setError('Paste your tweet URL first')
+    if (!postInput.trim()) {
+      setError('Paste your X post URL first')
       return
     }
 
@@ -220,21 +220,21 @@ export function ProfileVerificationPanel() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          tweetUrl: tweetInput.trim(),
+          postUrl: postInput.trim(),
           challengeToken: challenge.challengeToken,
         }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload, 'Failed to verify tweet'))
+        throw new Error(getApiErrorMessage(payload, 'Failed to verify X post'))
       }
 
       await loadStatus()
       setChallenge(null)
-      setTweetInput('')
+      setPostInput('')
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to verify tweet')
+      setError(err instanceof Error ? err.message : 'Failed to verify X post')
     } finally {
       setIsVerifying(false)
     }
@@ -271,7 +271,7 @@ export function ProfileVerificationPanel() {
     <div className="space-y-5 rounded-sm border border-[#ef6f67] bg-[#fffdfa] p-5 sm:p-6">
       <div>
         <p className="text-sm font-medium text-[#1a1a1a]">Verify your account</p>
-        <p className="mt-1 text-sm text-[#6d645a]">Connect <XInlineMark className="mx-0.5" /> to earn bonus and start trading.</p>
+        <p className="mt-1 text-sm text-[#6d645a]">Connect <XInlineMark className="mx-0.5" /> to claim your $5 cash bonus and start trading.</p>
       </div>
 
       {error ? (
@@ -328,9 +328,9 @@ export function ProfileVerificationPanel() {
           {!challenge ? (
             <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
               <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 2</p>
-              <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Generate your ready-to-post verification tweet</h3>
+              <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Generate your ready-to-post X verification post</h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
-                We will create the exact tweet text with your unique verification tag. Post it publicly without editing or removing that tag.
+                We will create the exact post text with your unique verification tag. Post it publicly without editing or removing that tag.
               </p>
               {statusData.username ? (
                 <p className="mt-2 text-xs text-[#8a8075]">
@@ -343,7 +343,7 @@ export function ProfileVerificationPanel() {
                 disabled={isGenerating}
                 className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isGenerating ? 'Generating...' : 'Generate verification tweet'}
+                {isGenerating ? 'Generating...' : 'Generate X verification post'}
               </button>
             </div>
           ) : null}
@@ -352,11 +352,11 @@ export function ProfileVerificationPanel() {
             <div className="space-y-4">
               <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 2</p>
-                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Post this tweet on <XInlineMark className="ml-1" /></h3>
+                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Post this on <XInlineMark className="ml-1" /></h3>
                 <p className="mt-2 text-sm leading-6 text-[#6d645a]">
-                  Open the composer below and publish the tweet as written. Keep the unique verification tag exactly as shown.
+                  Open the composer below and publish the post as written. Keep the unique verification tag exactly as shown.
                 </p>
-                <p className="mt-3 rounded-sm bg-[#f8f3ec] p-3 text-xs leading-6 text-[#4d453c]">{challenge.tweetTemplate}</p>
+                <p className="mt-3 rounded-sm bg-[#f8f3ec] p-3 text-xs leading-6 text-[#4d453c]">{challenge.postTemplate}</p>
                 <a
                   href={intentHref}
                   target="_blank"
@@ -369,24 +369,24 @@ export function ProfileVerificationPanel() {
 
               <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 3</p>
-                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Paste the live tweet URL to unlock trading</h3>
+                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Paste the live X post URL to unlock trading</h3>
                 <p className="mt-2 text-sm leading-6 text-[#6d645a]">
-                  After the tweet is posted, copy its public link and paste it below. Example: https://x.com/username/status/...
+                  After the post is published, copy its public link and paste it below. Example: https://x.com/username/status/...
                 </p>
                 <input
                   type="text"
-                  value={tweetInput}
-                  onChange={(event) => setTweetInput(event.target.value)}
+                  value={postInput}
+                  onChange={(event) => setPostInput(event.target.value)}
                   placeholder="https://x.com/username/status/..."
                   className="mt-4 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 py-2.5 text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
                 />
                 <button
                   type="button"
-                  onClick={handleVerifyTweet}
+                  onClick={handleVerifyPost}
                   disabled={isVerifying}
                   className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isVerifying ? 'Verifying...' : 'Verify tweet and unlock'}
+                  {isVerifying ? 'Verifying...' : 'Verify X post and unlock'}
                 </button>
               </div>
             </div>

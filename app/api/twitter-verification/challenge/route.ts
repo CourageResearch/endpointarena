@@ -7,7 +7,7 @@ import { UnauthorizedError, ValidationError } from '@/lib/errors'
 import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
 import { userColumns } from '@/lib/users/query-shapes'
 import {
-  buildDefaultVerificationTweet,
+  buildDefaultVerificationPost,
   generateChallengeToken,
   getChallengeExpiry,
   hashChallengeToken,
@@ -87,7 +87,7 @@ export async function POST() {
     return successResponse({
       challengeToken: token,
       expiresAt: expiresAt.toISOString(),
-      tweetTemplate: buildDefaultVerificationTweet(token),
+      postTemplate: buildDefaultVerificationPost(token),
     }, {
       headers: {
         'X-Request-Id': requestId,

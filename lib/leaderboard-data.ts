@@ -150,16 +150,20 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
   })
 
   const humanLeaderboard: HumanLeaderboardEntry[] = verifiedUsers
-    .map((user) => {
+    .flatMap((user) => {
       const account = openMarketState.accountMaps.byUserId.get(user.id)
-      const cashBalance = account?.cashBalance ?? 0
-      const positionsValue = account ? (openMarketState.portfolioPositionsValueByActorId.get(account.actorId) ?? 0) : 0
-      const startingCash = account?.startingCash ?? 0
+      if (!account) {
+        return []
+      }
+
+      const cashBalance = account.cashBalance
+      const positionsValue = openMarketState.portfolioPositionsValueByActorId.get(account.actorId) ?? 0
+      const startingCash = account.startingCash
       const totalEquity = cashBalance + positionsValue
       const pnl = totalEquity - startingCash
-      const normalizedName = normalizeDisplayName(user.name)
+      const normalizedName = normalizeDisplayName(account.actor.displayName ?? user.name)
 
-      return {
+      return [{
         userId: user.id,
         displayName: normalizedName ?? getGeneratedDisplayName(user.email || user.id),
         cashBalance,
@@ -167,11 +171,11 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
         startingCash,
         totalEquity,
         pnl,
-      }
+      }]
     })
     .sort((a, b) => {
       if (a.totalEquity !== b.totalEquity) return b.totalEquity - a.totalEquity
-      if (a.pnl !== b.pnl) return b.pnl - a.pnl
+      if (a.cashBalance !== b.cashBalance) return b.cashBalance - a.cashBalance
       const byName = a.displayName.localeCompare(b.displayName, 'en-US', { sensitivity: 'base' })
       if (byName !== 0) return byName
       return a.userId.localeCompare(b.userId)

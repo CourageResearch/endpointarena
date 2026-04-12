@@ -120,6 +120,13 @@
       "when": 1775960400000,
       "tag": "0016_default_zero_toy_trial_count",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1776033600000,
+      "tag": "0017_cash_canonicalization",
+      "breakpoints": true
     }
   ]
 }

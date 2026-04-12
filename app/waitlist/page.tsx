@@ -23,7 +23,7 @@ const BENEFITS = [
   },
   {
     title: 'Contribute to the Model',
-    description: 'Opt in to share data, earn points, and improve model quality.',
+    description: 'Opt in to share data, unlock contributor perks, and improve model quality.',
     markerColor: '#5BA5ED',
   },
 ]
@@ -55,7 +55,7 @@ export default function WaitlistPage() {
                   Be first to know.
                 </h2>
                 <p className="max-w-2xl text-base leading-relaxed text-[#8a8075] sm:text-lg">
-                  Join the waitlist to get invited early, receive alerts when trial outlooks move, and optionally earn points by sharing data that improves the model.
+                  Join the waitlist to get invited early, receive alerts when trial outlooks move, and optionally unlock contributor perks by sharing data that improves the model.
                 </p>
               </div>
 

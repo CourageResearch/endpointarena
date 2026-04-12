@@ -8,8 +8,9 @@ import { glossaryTermAnchor } from './glossary'
 // Admin email for access control
 export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
 
-// Points economy defaults
-export const STARTER_POINTS = 5
+// Human trading cash defaults.
+export const STARTER_CASH = 5
+export const VERIFICATION_BONUS_CASH = 5
 
 // All known model IDs supported by the application.
 export const ALL_MODEL_IDS = [

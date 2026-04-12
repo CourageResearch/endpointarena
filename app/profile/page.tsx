@@ -12,9 +12,10 @@ import { ProfileVerificationPanel } from '@/components/ProfileVerificationPanel'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { XInlineMark } from '@/components/XMark'
 import { authOptions } from '@/lib/auth'
-import { db, marketActions, marketAccounts, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
+import { db, marketActions, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
+import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
 import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
 import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
 import { userColumns } from '@/lib/users/query-shapes'
@@ -105,37 +106,23 @@ function toTicker(symbols: string | null | undefined): string {
   return first || '—'
 }
 
-async function getProfileTradingData(userId: string): Promise<{
+async function getProfileTradingData(actorId: string, tradingCashBalance: number): Promise<{
   tradingCashBalance: number
   positionsValue: number
   totalEquity: number
   holdings: ProfileHoldingRow[]
   trades: ProfileTradeRow[]
 }> {
-  const actor = await db.query.marketActors.findFirst({
-    where: and(
-      eq(marketActors.actorType, 'human'),
-      eq(marketActors.userId, userId),
-    ),
-  })
-
-  if (!actor) {
-    return { tradingCashBalance: 0, positionsValue: 0, totalEquity: 0, holdings: [], trades: [] }
-  }
-
-  const [account, rawPositions, rawActions] = await Promise.all([
-    db.query.marketAccounts.findFirst({
-      where: eq(marketAccounts.actorId, actor.id),
-    }),
+  const [rawPositions, rawActions] = await Promise.all([
     db.query.marketPositions.findMany({
       where: and(
-        eq(marketPositions.actorId, actor.id),
+        eq(marketPositions.actorId, actorId),
         or(gt(marketPositions.yesShares, 0), gt(marketPositions.noShares, 0)),
       ),
     }),
     db.query.marketActions.findMany({
       where: and(
-        eq(marketActions.actorId, actor.id),
+        eq(marketActions.actorId, actorId),
         eq(marketActions.actionSource, 'human'),
         eq(marketActions.status, 'ok'),
         inArray(marketActions.action, [...PROFILE_TRADE_ACTIONS]),
@@ -251,7 +238,6 @@ async function getProfileTradingData(userId: string): Promise<{
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
 
   const positionsValue = holdings.reduce((sum, holding) => sum + holding.markValueUsd, 0)
-  const tradingCashBalance = account?.cashBalance ?? 0
 
   return {
     tradingCashBalance,
@@ -279,6 +265,16 @@ async function updateProfileName(formData: FormData) {
     .set({ name: nextName })
     .where(eq(users.id, session.user.id))
 
+  await db.update(marketActors)
+    .set({
+      displayName: nextName,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(marketActors.actorType, 'human'),
+      eq(marketActors.userId, session.user.id),
+    ))
+
   revalidatePath('/profile')
 }
 
@@ -297,8 +293,14 @@ export default async function ProfilePage() {
     redirect('/login?callbackUrl=/profile')
   }
 
+  const { actor, account } = await ensureHumanTradingAccount({
+    userId: user.id,
+    displayName: user.name,
+    startingCash: getCanonicalHumanStartingCash(Boolean(user.tweetVerifiedAt)),
+  })
+
   const [{ tradingCashBalance, positionsValue, totalEquity, holdings, trades }, verificationStatus] = await Promise.all([
-    getProfileTradingData(user.id),
+    getProfileTradingData(actor.id, account.cashBalance),
     getTwitterVerificationStatusForUser(user.id).catch(() => {
       console.warn('Failed to load Twitter verification status for profile page', { userId: user.id })
       return null
@@ -353,7 +355,7 @@ export default async function ProfilePage() {
                 </div>
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Open Positions</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Open Positions Value</p>
                 <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</p>
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
@@ -368,10 +370,10 @@ export default async function ProfilePage() {
                   Email: <span className="font-medium text-[#1a1a1a]">{secondaryIdentity || 'No email on file'}</span>
                 </p>
                 <p>
-                  <XInlineMark className="mr-1" /> connected: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.connected ? 'Yes' : 'No'}</span>
+                  X post verification: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.verified ? 'Verified' : 'Not verified'}</span>
                 </p>
                 <p>
-                  Tweet verification: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.verified ? 'Verified' : 'Not verified'}</span>
+                  <XInlineMark className="mr-1" /> connected: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.connected ? 'Yes' : 'No'}</span>
                 </p>
                 <p>
                   Verified at:{' '}
@@ -453,10 +455,10 @@ export default async function ProfilePage() {
                   <p className="text-sm text-[#8a8075]">No transactions yet.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[860px] table-fixed border-collapse text-sm">
+                    <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
                     <colgroup>
                       <col className="w-[9rem]" />
-                      <col className="w-[15rem]" />
+                      <col className="w-[24rem]" />
                       <col className="w-[4.5rem]" />
                       <col className="w-[5.5rem]" />
                       <col className="w-[5.5rem]" />
@@ -465,13 +467,13 @@ export default async function ProfilePage() {
                     </colgroup>
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
-                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Date</th>
-                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
-                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Ticker</th>
-                        <th className="px-2 py-1 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
-                        <th className="px-2 py-1 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
-                        <th className="px-2 py-1 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
-                        <th className="px-2 py-1 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Date</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Ticker</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -481,26 +483,26 @@ export default async function ProfilePage() {
 
                         return (
                           <tr key={trade.id} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
-                            <td className="px-2 py-1.5 align-middle whitespace-nowrap leading-[1.2] text-[#8a8075]">
+                            <td className="px-2 py-2 align-middle whitespace-nowrap text-[#8a8075]">
                               <LocalDateTime value={trade.timestamp.toISOString()} />
                             </td>
-                            <td className="px-2 py-1.5 align-middle leading-[1.2] text-[#8a8075]">
+                            <td className="px-2 py-2 align-middle whitespace-nowrap text-[#8a8075]">
                               {trade.marketHref ? (
                                 <Link
                                   href={trade.marketHref}
-                                  className="leading-[1.2] transition-colors hover:text-[#6d645a]"
+                                  className="transition-colors hover:text-[#6d645a]"
                                 >
                                   {trade.drugName}
                                 </Link>
                               ) : (
-                                <span className="leading-[1.2]">{trade.drugName}</span>
+                                <span>{trade.drugName}</span>
                               )}
                             </td>
-                            <td className="px-2 py-1.5 align-middle whitespace-nowrap leading-[1.2] text-[#8a8075]">{trade.ticker}</td>
-                            <td className={`px-2 py-1.5 align-middle whitespace-nowrap leading-[1.2] ${actionTone}`}>{actionLabel}</td>
-                            <td className="px-2 py-1.5 align-middle text-right tabular-nums leading-[1.2] text-[#8a8075]">{formatUsd(trade.usdAmount)}</td>
-                            <td className="px-2 py-1.5 align-middle text-right tabular-nums leading-[1.2] text-[#8a8075]">{formatShares(trade.shares)}</td>
-                            <td className="px-2 py-1.5 align-middle text-right tabular-nums leading-[1.2] text-[#8a8075]">{formatPricePercent(trade.priceAfter)}</td>
+                            <td className="px-2 py-2 align-middle whitespace-nowrap text-[#8a8075]">{trade.ticker}</td>
+                            <td className={`px-2 py-2 align-middle whitespace-nowrap ${actionTone}`}>{actionLabel}</td>
+                            <td className="px-2 py-2 align-middle text-right tabular-nums text-[#8a8075]">{formatUsd(trade.usdAmount)}</td>
+                            <td className="px-2 py-2 align-middle text-right tabular-nums text-[#8a8075]">{formatShares(trade.shares)}</td>
+                            <td className="px-2 py-2 align-middle text-right tabular-nums text-[#8a8075]">{formatPricePercent(trade.priceAfter)}</td>
                           </tr>
                         )
                       })}

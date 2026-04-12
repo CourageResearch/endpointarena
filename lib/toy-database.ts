@@ -392,8 +392,6 @@ function getAdminUserValues(user: SourceAdminIdentity['user']): typeof users.$in
     tweetVerifiedAt: user.tweetVerifiedAt,
     tweetVerifiedTweetId: user.tweetVerifiedTweetId,
     tweetMustStayUntil: user.tweetMustStayUntil,
-    pointsBalance: user.pointsBalance,
-    lastPointsRefillAt: user.lastPointsRefillAt,
   }
 }
 
@@ -415,8 +413,6 @@ function getAdminUserUpdateValues(user: SourceAdminIdentity['user']): Partial<ty
     tweetVerifiedAt: user.tweetVerifiedAt,
     tweetVerifiedTweetId: user.tweetVerifiedTweetId,
     tweetMustStayUntil: user.tweetMustStayUntil,
-    pointsBalance: user.pointsBalance,
-    lastPointsRefillAt: user.lastPointsRefillAt,
   }
 }
 

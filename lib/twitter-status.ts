@@ -1,11 +1,10 @@
 import { and, eq } from 'drizzle-orm'
 import { db, accounts, users } from '@/lib/db'
-import { getVerifiedHumansRank } from '@/lib/humans'
 import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
-import { fetchTweetById, isXConnectionExpiredError } from '@/lib/twitter-verification'
+import { fetchVerificationPostById, isXConnectionExpiredError } from '@/lib/twitter-verification'
 import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
 import { userColumns } from '@/lib/users/query-shapes'
-import { STARTER_POINTS } from '@/lib/constants'
+import { ensureHumanTradingAccount, getCanonicalHumanStartingCash, getVerifiedHumanCashProfile } from '@/lib/human-cash'
 
 type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
 
@@ -24,7 +23,7 @@ type TwitterVerificationStatus = {
   mustStayUntil: string | null
   verifiedAt: string | null
   profile: {
-    pointsBalance: number
+    cashBalance: number
     rank: number
   } | null
 }
@@ -86,7 +85,7 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
     mustStayUntil &&
     mustStayUntil.getTime() > Date.now()
   ) {
-    const canCheckLiveTweet = Boolean(
+    const canCheckLivePost = Boolean(
       tokenResolution.accessToken &&
       resolvedXUserId &&
       user.tweetVerifiedTweetId
@@ -94,27 +93,27 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
 
     let keepVerified = true
 
-    if (canCheckLiveTweet && tokenResolution.accessToken && user.tweetVerifiedTweetId && resolvedXUserId) {
+    if (canCheckLivePost && tokenResolution.accessToken && user.tweetVerifiedTweetId && resolvedXUserId) {
       try {
-        const tweet = await fetchTweetById(tokenResolution.accessToken, user.tweetVerifiedTweetId)
-        keepVerified = Boolean(tweet && tweet.authorId === resolvedXUserId)
+        const post = await fetchVerificationPostById(tokenResolution.accessToken, user.tweetVerifiedTweetId)
+        keepVerified = Boolean(post && post.authorId === resolvedXUserId)
       } catch (error) {
         if (isXConnectionExpiredError(error)) {
           requiresReconnect = true
           xCheckState = 'requires_reconnect'
-          console.warn('X token expired while checking verification tweet', { userId: user.id })
+          console.warn('X token expired while checking verification post', { userId: user.id })
         } else {
           xCheckState = 'temporarily_unavailable'
-          console.warn('Skipping live tweet check because X API is temporarily unavailable', { userId: user.id })
+          console.warn('Skipping live verification post check because X API is temporarily unavailable', { userId: user.id })
         }
       }
     } else if (tokenResolution.requiresReconnect) {
       requiresReconnect = true
       xCheckState = 'requires_reconnect'
-      console.warn('Skipping live tweet check because X reconnect is required', { userId: user.id })
+      console.warn('Skipping live verification post check because X reconnect is required', { userId: user.id })
     } else if (!resolvedXUserId || !user.tweetVerifiedTweetId) {
       xCheckState = 'temporarily_unavailable'
-      console.warn('Skipping live tweet check because verification metadata is incomplete', { userId: user.id })
+      console.warn('Skipping live verification post check because verification metadata is incomplete', { userId: user.id })
     }
 
     if (!keepVerified) {
@@ -135,16 +134,16 @@ export async function getTwitterVerificationStatusForUser(userId: string): Promi
   }
 
   let profile: {
-    pointsBalance: number
+    cashBalance: number
     rank: number
   } | null = null
   if (verified) {
-    const pointsBalance = user.pointsBalance ?? STARTER_POINTS
-    const rank = await getVerifiedHumansRank(pointsBalance)
-    profile = {
-      pointsBalance,
-      rank,
-    }
+    await ensureHumanTradingAccount({
+      userId: user.id,
+      displayName: user.name,
+      startingCash: getCanonicalHumanStartingCash(true),
+    })
+    profile = await getVerifiedHumanCashProfile(user.id)
   }
 
   return {

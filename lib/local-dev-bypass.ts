@@ -1,4 +1,5 @@
-import { ADMIN_EMAIL, STARTER_POINTS } from '@/lib/constants'
+import { ADMIN_EMAIL } from '@/lib/constants'
+import { getCanonicalHumanStartingCash } from '@/lib/human-cash'
 import { getLocalDevXBypassEmailsRaw, isLocalDevXBypassEnabled } from '@/lib/x-env'
 
 function normalizeEmail(value: string | null | undefined): string | null {
@@ -60,7 +61,7 @@ export function buildLocalDevVerificationStatus(email?: string | null) {
     mustStayUntil: null,
     verifiedAt: now.toISOString(),
     profile: {
-      pointsBalance: STARTER_POINTS,
+      cashBalance: getCanonicalHumanStartingCash(true),
       rank: 1,
     },
   }
