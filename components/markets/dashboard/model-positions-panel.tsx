@@ -106,9 +106,9 @@ export function MarketModelPositionsPanel({
   const compact = variant === 'compact'
 
   return (
-    <section className={cn(className)}>
+    <section className={cn('space-y-4', className)}>
       {showHeader ? (
-        <div className="mb-2 px-1">
+        <div className="px-1">
           <div className="flex items-center gap-3">
             <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Positions</div>
             <HeaderDots />
