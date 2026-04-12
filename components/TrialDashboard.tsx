@@ -800,11 +800,11 @@ export function TrialDashboard({
     }
   }
 
-  const detailTabs: Array<{ id: TrialDetailTab; label: string }> = [
-    { id: 'details', label: 'Details' },
-    { id: 'positions', label: 'Model Positions' },
-    { id: 'snapshots', label: 'Model Snapshots' },
-    { id: 'oracles', label: 'Oracle' },
+  const detailTabs: Array<{ id: TrialDetailTab; label: string; accentClass: string }> = [
+    { id: 'details', label: 'Details', accentClass: 'after:bg-[#EF6F67]' },
+    { id: 'positions', label: 'Model Positions', accentClass: 'after:bg-[#D39D2E]' },
+    { id: 'snapshots', label: 'Model Snapshots', accentClass: 'after:bg-[#5DBB63]' },
+    { id: 'oracles', label: 'Oracle', accentClass: 'after:bg-[#5BA5ED]' },
   ]
 
   const tabContent = isTabbedView ? (() => {
@@ -1177,7 +1177,10 @@ export function TrialDashboard({
                         className={cn(
                           'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
                           activeTab === tab.id
-                            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:[background:linear-gradient(90deg,_#EF6F67,_#5DBB63,_#D39D2E,_#5BA5ED)]'
+                            ? cn(
+                                'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full',
+                                tab.accentClass,
+                              )
                             : 'text-[#9d9184] hover:text-[#3a342d]',
                         )}
                         aria-current={activeTab === tab.id ? 'page' : undefined}

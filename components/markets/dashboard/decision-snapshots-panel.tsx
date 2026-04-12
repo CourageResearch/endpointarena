@@ -111,7 +111,7 @@ export function MarketDecisionSnapshotsPanel({
                 className={cn('mx-1', DETAILS_CARD_SHELL_CLASS)}
               >
                 <div className="rounded-none border border-transparent px-4 py-4 sm:px-5" style={DETAILS_CARD_BORDER_STYLE}>
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-col gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-[14px] font-medium text-[#1a1a1a]" title={model.fullName}>
                         {model.fullName}
@@ -127,25 +127,24 @@ export function MarketDecisionSnapshotsPanel({
                           : 'Waiting for the first decision snapshot'}
                       </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-2 lg:max-w-[34rem] lg:justify-end">
-                      <span className={cn('inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none', latestCall.badgeClass)}>
-                        {latestCall.label}
-                      </span>
-                      {latestProbability != null ? (
-                        <span className={METRIC_PILL_CLASS}>Prob {Math.round(latestProbability * 100)}%</span>
-                      ) : null}
-                      {latestDecision?.forecast.confidence != null ? (
-                        <span className={METRIC_PILL_CLASS}>Conf {Math.round(latestDecision.forecast.confidence)}%</span>
-                      ) : null}
-                    </div>
                   </div>
 
                   {hasSnapshotContent ? (
                     <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
                       <section className={cn(CONTENT_PANEL_CLASS, 'sm:px-5 sm:py-4')}>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <span className={DETAILS_TOP_LABEL_CLASS}>Latest Thesis</span>
+                          <div className="flex flex-wrap gap-2 sm:justify-end">
+                            <span className={cn('inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none', latestCall.badgeClass)}>
+                              {latestCall.label}
+                            </span>
+                            {latestProbability != null ? (
+                              <span className={METRIC_PILL_CLASS}>Prob {Math.round(latestProbability * 100)}%</span>
+                            ) : null}
+                            {latestDecision?.forecast.confidence != null ? (
+                              <span className={METRIC_PILL_CLASS}>Conf {Math.round(latestDecision.forecast.confidence)}%</span>
+                            ) : null}
+                          </div>
                         </div>
                         <div className={cn('mt-3 whitespace-pre-wrap text-[#4d453c]', DETAILS_BODY_TEXT_CLASS, 'leading-[1.7]')}>
                           {latestReasoning || 'No thesis provided'}

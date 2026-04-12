@@ -44,6 +44,9 @@ type LegacyTableCounts = {
   event_outcome_candidate_evidence: number
 }
 
+type LegacyTableName = keyof LegacyTableCounts
+type LegacyTablePresence = Record<LegacyTableName, boolean>
+
 type TargetMarketRow = {
   id: string
   fda_event_id: string | null
@@ -168,6 +171,7 @@ type CleanupData = {
   accounts: MarketAccountRow[]
   dailySnapshots: MarketDailySnapshotRow[]
   legacyTableCounts: LegacyTableCounts
+  legacyTablePresence: LegacyTablePresence
 }
 
 type PreflightSummary = {
@@ -202,6 +206,7 @@ type PreflightSummary = {
     currentMarkedValue: number
   }>
   legacyTableCounts: LegacyTableCounts
+  legacyTablePresence: LegacyTablePresence
 }
 
 type PositionState = {
@@ -257,6 +262,93 @@ const DEFAULT_BASELINE: ExpectedBaseline = {
     event_outcome_candidates: 1,
     event_outcome_candidate_evidence: 2,
   },
+}
+
+const LEGACY_TABLE_NAMES: LegacyTableName[] = [
+  'fda_calendar_events',
+  'fda_event_external_ids',
+  'fda_event_sources',
+  'fda_event_contexts',
+  'fda_event_analyses',
+  'event_monitor_configs',
+  'event_monitor_runs',
+  'event_outcome_candidates',
+  'event_outcome_candidate_evidence',
+]
+
+function createLegacyTableCounts(): LegacyTableCounts {
+  return {
+    fda_calendar_events: 0,
+    fda_event_external_ids: 0,
+    fda_event_sources: 0,
+    fda_event_contexts: 0,
+    fda_event_analyses: 0,
+    event_monitor_configs: 0,
+    event_monitor_runs: 0,
+    event_outcome_candidates: 0,
+    event_outcome_candidate_evidence: 0,
+  }
+}
+
+function createLegacyTablePresence(defaultValue = false): LegacyTablePresence {
+  return {
+    fda_calendar_events: defaultValue,
+    fda_event_external_ids: defaultValue,
+    fda_event_sources: defaultValue,
+    fda_event_contexts: defaultValue,
+    fda_event_analyses: defaultValue,
+    event_monitor_configs: defaultValue,
+    event_monitor_runs: defaultValue,
+    event_outcome_candidates: defaultValue,
+    event_outcome_candidate_evidence: defaultValue,
+  }
+}
+
+async function getLegacyTablePresence(client: postgres.Sql): Promise<LegacyTablePresence> {
+  const presence = createLegacyTablePresence(false)
+  const rows = await client<Array<{ table_name: LegacyTableName, exists: boolean }>>`
+    select
+      candidate.table_name,
+      to_regclass('public.' || candidate.table_name) is not null as exists
+    from (
+      values
+        ('fda_calendar_events'::text),
+        ('fda_event_external_ids'),
+        ('fda_event_sources'),
+        ('fda_event_contexts'),
+        ('fda_event_analyses'),
+        ('event_monitor_configs'),
+        ('event_monitor_runs'),
+        ('event_outcome_candidates'),
+        ('event_outcome_candidate_evidence')
+    ) as candidate(table_name)
+  `
+
+  for (const row of rows) {
+    presence[row.table_name] = row.exists
+  }
+
+  return presence
+}
+
+async function loadLegacyTableCounts(
+  client: postgres.Sql,
+  presence: LegacyTablePresence,
+): Promise<LegacyTableCounts> {
+  const counts = createLegacyTableCounts()
+
+  await Promise.all(
+    LEGACY_TABLE_NAMES.map(async (tableName) => {
+      if (!presence[tableName]) return
+
+      const rows = await client.unsafe<Array<{ row_count: string }>>(
+        `select count(*)::text as row_count from ${tableName}`,
+      )
+      counts[tableName] = Number(rows[0]?.row_count ?? '0')
+    }),
+  )
+
+  return counts
 }
 
 function getFlagValue(argv: string[], name: string): string | null {
@@ -556,6 +648,7 @@ function buildPreflightSummary(
       }))
       .sort((a, b) => b.currentMarkedValue - a.currentMarkedValue || a.actorId.localeCompare(b.actorId)),
     legacyTableCounts: data.legacyTableCounts,
+    legacyTablePresence: data.legacyTablePresence,
   }
 }
 
@@ -587,9 +680,11 @@ function assertPreflightMatches(summary: PreflightSummary, expected: ExpectedBas
   }
 
   for (const [tableName, expectedCount] of Object.entries(expected.legacyTableCounts)) {
-    const actualCount = summary.legacyTableCounts[tableName as keyof LegacyTableCounts]
-    if (Math.abs(actualCount - expectedCount) > MONEY_EPSILON) {
-      mismatches.push(`${tableName}: expected ${expectedCount} but found ${actualCount}`)
+    const key = tableName as LegacyTableName
+    const actualCount = summary.legacyTableCounts[key]
+    const expectedValue = summary.legacyTablePresence[key] ? expectedCount : 0
+    if (Math.abs(actualCount - expectedValue) > MONEY_EPSILON) {
+      mismatches.push(`${tableName}: expected ${expectedValue} but found ${actualCount}`)
     }
   }
 
@@ -762,20 +857,36 @@ function buildLegacyValueRemovalsBySnapshotRow(
 }
 
 async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
-  const markets = await client<TargetMarketRow[]>`
-    select
-      pm.*,
-      fe.company_name,
-      fe.symbols,
-      fe.drug_name,
-      fe.application_type,
-      fe.decision_date,
-      fe.event_description
-    from prediction_markets pm
-    left join fda_calendar_events fe on fe.id = pm.fda_event_id
-    where pm.trial_question_id is null
-    order by pm.opened_at asc, pm.id asc
-  `
+  const legacyTablePresence = await getLegacyTablePresence(client)
+  const legacyTableCounts = await loadLegacyTableCounts(client, legacyTablePresence)
+  const markets = legacyTablePresence.fda_calendar_events
+    ? await client<TargetMarketRow[]>`
+        select
+          pm.*,
+          fe.company_name,
+          fe.symbols,
+          fe.drug_name,
+          fe.application_type,
+          fe.decision_date,
+          fe.event_description
+        from prediction_markets pm
+        left join fda_calendar_events fe on fe.id = pm.fda_event_id
+        where pm.trial_question_id is null
+        order by pm.opened_at asc, pm.id asc
+      `
+    : await client<TargetMarketRow[]>`
+        select
+          pm.*,
+          null::text as company_name,
+          null::text as symbols,
+          null::text as drug_name,
+          null::text as application_type,
+          null::timestamptz as decision_date,
+          null::text as event_description
+        from prediction_markets pm
+        where pm.trial_question_id is null
+        order by pm.opened_at asc, pm.id asc
+      `
 
   const marketIds = markets.map((market) => market.id)
   const openMarketIds = markets.filter((market) => market.status === 'OPEN').map((market) => market.id)
@@ -794,21 +905,12 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
       cashRestoreRows: [],
       accounts: [],
       dailySnapshots: [],
-      legacyTableCounts: {
-        fda_calendar_events: 0,
-        fda_event_external_ids: 0,
-        fda_event_sources: 0,
-        fda_event_contexts: 0,
-        fda_event_analyses: 0,
-        event_monitor_configs: 0,
-        event_monitor_runs: 0,
-        event_outcome_candidates: 0,
-        event_outcome_candidate_evidence: 0,
-      },
+      legacyTableCounts,
+      legacyTablePresence,
     }
   }
 
-  const [positions, actions, priceSnapshots, decisionSnapshots, runLogs, affectedActorRows, cashRestoreRows, legacyTableCountRows] = await Promise.all([
+  const [positions, actions, priceSnapshots, decisionSnapshots, runLogs, affectedActorRows, cashRestoreRows] = await Promise.all([
     client<MarketPositionRow[]>`
       select *
       from market_positions
@@ -886,21 +988,6 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
       group by actor_id
       order by actor_id asc
     `,
-    client<Array<{ table_name: keyof LegacyTableCounts, row_count: string }>>`
-      select table_name, count(*)::text as row_count
-      from (
-        select 'fda_calendar_events'::text as table_name from fda_calendar_events
-        union all select 'fda_event_external_ids' from fda_event_external_ids
-        union all select 'fda_event_sources' from fda_event_sources
-        union all select 'fda_event_contexts' from fda_event_contexts
-        union all select 'fda_event_analyses' from fda_event_analyses
-        union all select 'event_monitor_configs' from event_monitor_configs
-        union all select 'event_monitor_runs' from event_monitor_runs
-        union all select 'event_outcome_candidates' from event_outcome_candidates
-        union all select 'event_outcome_candidate_evidence' from event_outcome_candidate_evidence
-      ) rows
-      group by table_name
-    `,
   ])
 
   const affectedActorIds = affectedActorRows.map((row) => row.actor_id)
@@ -921,21 +1008,6 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
       `,
     ]) as [MarketAccountRow[], MarketDailySnapshotRow[]]
 
-  const legacyTableCounts: LegacyTableCounts = {
-    fda_calendar_events: 0,
-    fda_event_external_ids: 0,
-    fda_event_sources: 0,
-    fda_event_contexts: 0,
-    fda_event_analyses: 0,
-    event_monitor_configs: 0,
-    event_monitor_runs: 0,
-    event_outcome_candidates: 0,
-    event_outcome_candidate_evidence: 0,
-  }
-  for (const row of legacyTableCountRows) {
-    legacyTableCounts[row.table_name] = Number(row.row_count)
-  }
-
   return {
     markets,
     openMarketIds,
@@ -950,6 +1022,7 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
     accounts,
     dailySnapshots,
     legacyTableCounts,
+    legacyTablePresence,
   }
 }
 
@@ -1078,6 +1151,8 @@ async function refreshCurrentSnapshots(client: postgres.Sql): Promise<CurrentSna
 }
 
 async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: string[], affectedActorIds: string[], snapshotDate: string) {
+  const legacyTablePresence = await getLegacyTablePresence(client)
+  const legacyTableCounts = await loadLegacyTableCounts(client, legacyTablePresence)
   const [
     remainingLegacyMarketRow,
     remainingPositionRow,
@@ -1087,7 +1162,6 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
     remainingRunLogRow,
     negativeAccountRow,
     refreshedSnapshotRow,
-    legacyTableCountRows,
   ] = await Promise.all([
     client<{ count: string }[]>`
       select count(*)::text as count
@@ -1130,37 +1204,7 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
       where snapshot_date::date = ${snapshotDate}::date
         and actor_id in ${client(affectedActorIds)}
     `,
-    client<Array<{ table_name: keyof LegacyTableCounts, row_count: string }>>`
-      select table_name, count(*)::text as row_count
-      from (
-        select 'fda_calendar_events'::text as table_name from fda_calendar_events
-        union all select 'fda_event_external_ids' from fda_event_external_ids
-        union all select 'fda_event_sources' from fda_event_sources
-        union all select 'fda_event_contexts' from fda_event_contexts
-        union all select 'fda_event_analyses' from fda_event_analyses
-        union all select 'event_monitor_configs' from event_monitor_configs
-        union all select 'event_monitor_runs' from event_monitor_runs
-        union all select 'event_outcome_candidates' from event_outcome_candidates
-        union all select 'event_outcome_candidate_evidence' from event_outcome_candidate_evidence
-      ) rows
-      group by table_name
-    `,
   ])
-
-  const legacyTableCounts: LegacyTableCounts = {
-    fda_calendar_events: 0,
-    fda_event_external_ids: 0,
-    fda_event_sources: 0,
-    fda_event_contexts: 0,
-    fda_event_analyses: 0,
-    event_monitor_configs: 0,
-    event_monitor_runs: 0,
-    event_outcome_candidates: 0,
-    event_outcome_candidate_evidence: 0,
-  }
-  for (const row of legacyTableCountRows) {
-    legacyTableCounts[row.table_name] = Number(row.row_count)
-  }
 
   return {
     remainingLegacyMarkets: Number(remainingLegacyMarketRow[0]?.count ?? '0'),
@@ -1320,9 +1364,15 @@ async function main(): Promise<void> {
         throw new Error(`Deleted ${deletedMarkets.length} markets, expected ${data.markets.length}`)
       }
 
-      await tx`delete from event_monitor_runs`
-      await tx`delete from event_monitor_configs`
-      await tx`delete from fda_calendar_events`
+      if (data.legacyTablePresence.event_monitor_runs) {
+        await tx`delete from event_monitor_runs`
+      }
+      if (data.legacyTablePresence.event_monitor_configs) {
+        await tx`delete from event_monitor_configs`
+      }
+      if (data.legacyTablePresence.fda_calendar_events) {
+        await tx`delete from fda_calendar_events`
+      }
 
       const refreshSummary = await refreshCurrentSnapshots(tx)
 

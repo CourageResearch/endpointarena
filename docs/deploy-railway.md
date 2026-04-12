@@ -2,9 +2,11 @@
 
 This repo deploys from GitHub to Railway. GitHub is the source of truth for code, and Railway is the source of truth for runtime state.
 
-## Active production cutover
+## Active production state
 
-The current production rollout is a maintenance-window cutover for the trial schema rename, legacy market cleanup, season reset, and curated trial import.
+Production is already on the trial-era schema and data model. The historical maintenance-window cutover below remains available only as a recovery or one-time legacy cleanup runbook.
+
+Before using the destructive cutover steps, always run the legacy purge preflight first. If it reports `0` legacy markets, skip the purge/reset/import sequence and treat the release as an app-only deploy.
 
 Use a clean release branch such as `codex/prod-cutover-2026-04-11` for the candidate commit. Do not release directly from a dirty `master` worktree.
 
@@ -96,7 +98,7 @@ node --import tsx --test tests\model-id-rename.test.ts tests\market-engine.test.
 
 Push the release branch and wait for green GitHub `CI` before touching `master`.
 
-## Maintenance window cutover
+## Legacy maintenance window cutover
 
 1. Prepare the curated import file at `output/prod-cutover/2026-04-11/trials.csv`.
 2. Freeze public traffic:

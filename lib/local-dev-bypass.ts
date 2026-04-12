@@ -6,6 +6,20 @@ function normalizeEmail(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function parseEmailList(value: string | null | undefined): Set<string> {
+  const emails = new Set<string>()
+  if (typeof value !== 'string') return emails
+
+  for (const entry of value.split(',')) {
+    const normalized = normalizeEmail(entry)
+    if (normalized) {
+      emails.add(normalized)
+    }
+  }
+
+  return emails
+}
+
 function isLocalDevBypassEnabled(): boolean {
   return process.env.LOCAL_DEV_ADMIN_BYPASS === '1'
 }
@@ -20,7 +34,19 @@ export function isLocalDevBypassEmail(email: string | null | undefined): boolean
 }
 
 export function canUseLocalDevVerificationBypass(email: string | null | undefined): boolean {
-  return isLocalDevBypassEmail(email) || (isLocalDevTwitterBypassEnabled() && Boolean(normalizeEmail(email)))
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) return false
+
+  if (isLocalDevBypassEmail(normalizedEmail)) {
+    return true
+  }
+
+  if (!isLocalDevTwitterBypassEnabled()) {
+    return false
+  }
+
+  const allowedEmails = parseEmailList(process.env.LOCAL_DEV_TWITTER_BYPASS_EMAILS)
+  return allowedEmails.has(normalizedEmail)
 }
 
 export function buildLocalDevVerificationStatus(email?: string | null) {
