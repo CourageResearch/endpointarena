@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { BrandLink, BrandMark, BrandWordmark } from '@/components/site/Brand'
+import type { ReactNode } from 'react'
+import { BrandMark, BrandWordmark } from '@/components/site/Brand'
 import {
   BRAND_GRADIENT,
   BRAND_GRADIENT_HORIZONTAL,
@@ -199,6 +200,55 @@ function TokenRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+function BrandDownloadButton({
+  href,
+  label,
+}: {
+  href: string
+  label: string
+}) {
+  return (
+    <a
+      href={href}
+      download
+      className="inline-flex rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+    >
+      {label}
+    </a>
+  )
+}
+
+function BrandAssetCard({
+  label,
+  title,
+  description,
+  asset,
+  preview,
+}: {
+  label: string
+  title: string
+  description: string
+  asset: 'logo' | 'mark'
+  preview: ReactNode
+}) {
+  return (
+    <div className="rounded-lg border border-[#e8ddd0] bg-white p-4">
+      <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">
+        {label}
+      </div>
+      <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">{title}</h3>
+      <p className="mt-1 text-sm leading-relaxed text-[#8a8075]">{description}</p>
+      <div className="mt-4 flex min-h-[132px] items-center justify-center rounded-lg border border-[#e8ddd0] bg-[#F5F2ED]/65 px-4 py-5">
+        {preview}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <BrandDownloadButton href={`/brand/download/${asset}?format=svg`} label="Download SVG" />
+        <BrandDownloadButton href={`/brand/download/${asset}?format=png`} label="Download PNG" />
+      </div>
+    </div>
+  )
+}
+
 export default function BrandPage() {
   return (
     <PageFrame>
@@ -216,25 +266,29 @@ export default function BrandPage() {
           <SectionHeader
             label="Current"
             title="Active Navbar Logo"
-            description="Wordmark uses text-[15px], font-medium, muted text color, and the four-square mark."
+            description="Download the live logo lockup or the standalone four-square brand mark as SVG or PNG."
           />
           <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-4 sm:p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-[#e8ddd0] bg-white px-4 py-3">
-                <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">
-                  Live Lockup
-                </div>
-                <BrandLink />
-              </div>
-              <div className="rounded-lg border border-[#e8ddd0] bg-[#F5F2ED]/65 px-4 py-3">
-                <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-[#b5aa9e]">
-                  Parts
-                </div>
-                <div className="flex items-center gap-3">
-                  <BrandMark className="h-[26px] w-[26px]" />
-                  <BrandWordmark className="text-[15px]" />
-                </div>
-              </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <BrandAssetCard
+                label="Logo"
+                title="Navbar lockup"
+                description="The full Endpoint Arena logo used in the header, with the four-square mark and muted wordmark."
+                asset="logo"
+                preview={(
+                  <div className="flex items-center gap-3">
+                    <BrandMark className="h-[38px] w-[48px]" />
+                    <BrandWordmark className="text-[28px]" />
+                  </div>
+                )}
+              />
+              <BrandAssetCard
+                label="Mark"
+                title="Standalone brand mark"
+                description="The symbol-only asset for icons, favicons, badges, and tight layouts."
+                asset="mark"
+                preview={<BrandMark className="h-[72px] w-[90px]" />}
+              />
             </div>
           </GradientBorder>
         </section>
