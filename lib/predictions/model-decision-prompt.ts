@@ -62,6 +62,7 @@ export interface ModelDecisionResult {
 }
 
 const DEFAULT_EXPLANATION_MAX_CHARS = 220
+const DEFAULT_REASONING_MAX_CHARS = 400
 
 type ModelDecisionParseErrorInput = {
   rawResponse: string
@@ -268,7 +269,7 @@ Stage 1: Intrinsic forecast
   - yesProbability: a number from 0 to 1
   - binaryCall: yes if yesProbability >= 0.5, otherwise no
   - confidence: integer from 50 to 100
-  - reasoning: 120 to 220 words, specific and decision-useful
+  - reasoning: specific and decision-useful, at least 20 characters and at most ${DEFAULT_REASONING_MAX_CHARS} characters
 
 Stage 2: Market action
 - After forming the intrinsic forecast, compare it to the market price.
@@ -289,6 +290,7 @@ General rules
 - No extra keys.
 - Do not restate the input.
 - Keep forecast.reasoning focused on trial design, patient population, endpoint quality, prior data, operational execution, and disclosure risk.
+- Keep forecast.reasoning at or under ${DEFAULT_REASONING_MAX_CHARS} characters.
 - Keep action.explanation focused on valuation and trade logic.
 
 Input JSON:
@@ -343,6 +345,7 @@ export function buildModelDecisionJsonSchema(
           reasoning: {
             type: 'string',
             minLength: 20,
+            maxLength: DEFAULT_REASONING_MAX_CHARS,
           },
         },
       },

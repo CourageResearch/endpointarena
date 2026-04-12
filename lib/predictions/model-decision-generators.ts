@@ -337,6 +337,11 @@ async function generateGeminiDecision(
     contents: prompt,
     config: {
       maxOutputTokens: 16000,
+      responseMimeType: 'application/json',
+      responseJsonSchema: buildModelDecisionJsonSchema(
+        input.constraints.allowedActions,
+        input.constraints.explanationMaxChars,
+      ),
       thinkingConfig: {
         thinkingBudget: -1,
       },
