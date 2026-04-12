@@ -9,17 +9,26 @@ type ProfileHandleCardProps = {
   updateAction: (formData: FormData) => Promise<void>
 }
 
-function SaveButton() {
+function EditActions({ onCancel }: { onCancel: () => void }) {
   const { pending } = useFormStatus()
 
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex h-8 items-center rounded-sm border border-[#d9cdbf] bg-white px-3 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:bg-[#f5f2ed] disabled:text-[#8a8075]"
-    >
-      {pending ? 'Saving...' : 'Save'}
-    </button>
+    <div className="flex items-center gap-2">
+      <button
+        type="submit"
+        disabled={pending}
+        className="inline-flex h-8 items-center rounded-sm border border-[#d9cdbf] bg-white px-3 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:bg-[#f5f2ed] disabled:text-[#8a8075]"
+      >
+        {pending ? 'Saving...' : 'Save'}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="inline-flex h-8 items-center rounded-sm border border-[#e8ddd0] bg-[#fffdfa] px-3 text-xs font-medium text-[#8a8075] transition-colors hover:bg-[#f5eee5] hover:text-[#1a1a1a]"
+      >
+        Cancel
+      </button>
+    </div>
   )
 }
 
@@ -83,7 +92,12 @@ export function ProfileHandleCard({ handle, maxLength, updateAction }: ProfileHa
               className="mt-2 h-10 w-full rounded-sm border border-[#e8ddd0] bg-white px-2.5 text-lg font-semibold text-[#1a1a1a] placeholder:text-[#b5aa9e] focus:border-[#d4c6b7] focus:outline-none"
             />
             <div className="mt-3">
-              <SaveButton />
+              <EditActions
+                onCancel={() => {
+                  setDraftHandle(handle)
+                  setIsEditing(false)
+                }}
+              />
             </div>
           </form>
         ) : (

@@ -1251,7 +1251,7 @@ export function TrialsBrowseHomepage({
         className={cn(
           'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
           selectedTab === 'upcoming'
-            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:[background:linear-gradient(90deg,_#EF6F67,_#5DBB63,_#D39D2E,_#5BA5ED)]'
+            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:bg-[#5DBB63]'
             : 'text-[#9d9184] hover:text-[#3a342d]',
         )}
         >
@@ -1265,7 +1265,7 @@ export function TrialsBrowseHomepage({
         className={cn(
           'relative -mb-px inline-flex items-center pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
           selectedTab === 'resolved'
-            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:[background:linear-gradient(90deg,_#EF6F67,_#5DBB63,_#D39D2E,_#5BA5ED)]'
+            ? 'text-[#1a1a1a] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:rounded-full after:bg-[#EF6F67]'
             : 'text-[#9d9184] hover:text-[#3a342d]',
         )}
       >
