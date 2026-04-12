@@ -337,26 +337,26 @@ export default async function ProfilePage() {
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <ProfileHandleCard
-                handle={editableIdentity}
-                maxLength={DISPLAY_NAME_MAX_LENGTH}
-                updateAction={updateProfileName}
-              />
               <div className="relative min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash</p>
-                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
+                <p className="mt-3 text-lg font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(tradingCashBalance)}</p>
                 <div className="mt-2 inline-flex items-center rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-[#8a8075]">
                   Paper Trading
                 </div>
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Open Positions Value</p>
-                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</p>
+                <p className="mt-3 text-lg font-semibold tabular-nums text-[#1a1a1a]">{formatUsd(positionsValue)}</p>
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Humans Rank</p>
-                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '-'}</p>
+                <p className="mt-3 text-lg font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '-'}</p>
               </div>
+              <ProfileHandleCard
+                handle={editableIdentity}
+                maxLength={DISPLAY_NAME_MAX_LENGTH}
+                updateAction={updateProfileName}
+              />
             </div>
 
             <div className="mt-6 rounded-sm border border-[#e8ddd0] bg-white/80 p-4 sm:p-5">
@@ -505,11 +505,12 @@ export default async function ProfilePage() {
               </section>
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-2">
-              <LogoutButton />
-            </div>
           </section>
         </GradientBorder>
+
+        <div className="mt-4 flex flex-wrap justify-start gap-2">
+          <LogoutButton />
+        </div>
       </main>
 
       <div className="mx-auto max-w-5xl px-4 pb-8 sm:px-6 sm:pb-12">
