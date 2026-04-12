@@ -13,6 +13,7 @@ export const userColumns = {
   xUserId: true,
   xUsername: true,
   xConnectedAt: true,
+  xChallengeToken: true,
   xChallengeTokenHash: true,
   xChallengeExpiresAt: true,
   xVerifiedAt: true,

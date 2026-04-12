@@ -1,18 +1,30 @@
 export const LEGACY_MODEL_ID_RENAMES = {
   'gpt-5.2': 'gpt-5.4',
-  'grok-4': 'grok-4.1',
+  'grok-4': 'grok-4.20',
+  'grok-4.1': 'grok-4.20',
   'llama-4': 'llama-4-scout',
 } as const
 
 export const LEGACY_VERIFIER_MODEL_KEY_RENAMES = {
   'gpt-5.2': 'gpt-5.4',
-  'grok-4': 'grok-4.1',
+  'grok-4': 'grok-4.20',
+  'grok-4.1': 'grok-4.20',
 } as const
+
+const LEGACY_FREEFORM_STRING_RENAMES = [
+  ['Grok 4.1', 'Grok 4.20'],
+  ['grok-4.1', 'grok-4.20'],
+  ['grok-4', 'grok-4.20'],
+] as const
 
 type JsonRecord = Record<string, unknown>
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export function renameLegacyModelId(value: string): string {
@@ -83,8 +95,29 @@ function renamePortfolioEntry(entry: unknown): unknown {
   }
 }
 
+function renameLegacyStringsInValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return LEGACY_FREEFORM_STRING_RENAMES.reduce((nextValue, [legacyValue, canonicalValue]) => {
+      const pattern = new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(legacyValue)}(?![A-Za-z0-9]|\\.\\d)`, 'g')
+      return nextValue.replace(pattern, canonicalValue)
+    }, value)
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => renameLegacyStringsInValue(entry))
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, renameLegacyStringsInValue(entry)]),
+    )
+  }
+
+  return value
+}
+
 export function renameLegacyAiBatchState(state: JsonRecord): JsonRecord {
-  return {
+  const renamedState = {
     ...state,
     enabledModelIds: renameModelIdArray(state.enabledModelIds),
     clearOrder: renameModelIdArray(state.clearOrder),
@@ -92,4 +125,6 @@ export function renameLegacyAiBatchState(state: JsonRecord): JsonRecord {
     fills: Array.isArray(state.fills) ? state.fills.map(renameTaskLikeEntry) : state.fills,
     portfolioStates: Array.isArray(state.portfolioStates) ? state.portfolioStates.map(renamePortfolioEntry) : state.portfolioStates,
   }
+
+  return renameLegacyStringsInValue(renamedState) as JsonRecord
 }

@@ -36,6 +36,18 @@ type VerifiedPost = {
   createdAt: string | null
 }
 
+type StoredXChallenge = {
+  xChallengeToken: string | null
+  xChallengeTokenHash: string | null
+  xChallengeExpiresAt: Date | null
+}
+
+export type ActiveXChallenge = {
+  challengeToken: string
+  expiresAt: string
+  postTemplate: string
+}
+
 export function generateChallengeToken(): string {
   return `EA-${randomBytes(6).toString('hex').toUpperCase()}`
 }
@@ -54,6 +66,35 @@ export function getVerificationPostMustStayUntil(now: Date = new Date()): Date {
 
 export function buildDefaultVerificationPost(token: string): string {
   return `Prediction markets for clinical trial outcomes.\nVerifying my account on https://endpointarena.com\n\nCode: ${token}`
+}
+
+export function extractVerificationChallengeToken(input: string): string | null {
+  const match = input.match(/\bEA-[A-F0-9]{12}\b/)
+  return match?.[0] ?? null
+}
+
+export function getActiveXChallenge(
+  challenge: StoredXChallenge,
+  now: Date = new Date(),
+): ActiveXChallenge | null {
+  const challengeToken = challenge.xChallengeToken?.trim() ?? null
+  if (!challengeToken || !challenge.xChallengeTokenHash || !challenge.xChallengeExpiresAt) {
+    return null
+  }
+
+  if (challenge.xChallengeExpiresAt.getTime() <= now.getTime()) {
+    return null
+  }
+
+  if (hashChallengeToken(challengeToken) !== challenge.xChallengeTokenHash) {
+    return null
+  }
+
+  return {
+    challengeToken,
+    expiresAt: challenge.xChallengeExpiresAt.toISOString(),
+    postTemplate: buildDefaultVerificationPost(challengeToken),
+  }
 }
 
 export function parseVerificationPostId(input: string): string {

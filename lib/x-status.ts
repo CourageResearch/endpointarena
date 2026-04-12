@@ -1,7 +1,12 @@
 import { and, eq } from 'drizzle-orm'
 import { db, accounts, users } from '@/lib/db'
 import { getUsableXAccessToken } from '@/lib/x-auth'
-import { fetchVerificationPostById, isXConnectionExpiredError } from '@/lib/x-verification'
+import {
+  fetchVerificationPostById,
+  getActiveXChallenge,
+  isXConnectionExpiredError,
+  type ActiveXChallenge,
+} from '@/lib/x-verification'
 import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
 import { userColumns } from '@/lib/users/query-shapes'
 import { ensureHumanTradingAccount, getCanonicalHumanStartingCash, getVerifiedHumanCashProfile } from '@/lib/human-cash'
@@ -22,6 +27,7 @@ type XVerificationStatus = {
   username: string | null
   mustStayUntil: string | null
   verifiedAt: string | null
+  challenge: ActiveXChallenge | null
   profile: {
     cashBalance: number
     rank: number
@@ -137,6 +143,7 @@ export async function getXVerificationStatusForUser(userId: string): Promise<XVe
     cashBalance: number
     rank: number
   } | null = null
+  const challenge = (!verified && connected) ? getActiveXChallenge(user) : null
   if (verified) {
     await ensureHumanTradingAccount({
       userId: user.id,
@@ -154,6 +161,7 @@ export async function getXVerificationStatusForUser(userId: string): Promise<XVe
     username: user.xUsername ?? null,
     mustStayUntil: mustStayUntil?.toISOString() ?? null,
     verifiedAt: verifiedAt?.toISOString() ?? null,
+    challenge,
     profile,
   }
 }

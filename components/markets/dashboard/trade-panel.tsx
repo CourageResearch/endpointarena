@@ -106,7 +106,7 @@ export function MarketTradePanel({
       ? {
           href: `/signup?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`,
           label: 'Create account to trade',
-          body: 'Create your account to place paper trades and track your cash.',
+          body: null,
         }
       : showVerificationPrompt
         ? {

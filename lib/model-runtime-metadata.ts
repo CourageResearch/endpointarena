@@ -38,14 +38,14 @@ const MODEL_RUNTIME_METADATA: Record<ModelId, ModelRuntimeMetadata> = {
       maxTokens: '16,000 output',
     },
   },
-  'grok-4.1': {
-    providerModelId: 'grok-4-1-fast-reasoning',
+  'grok-4.20': {
+    providerModelId: 'grok-4.20-reasoning',
     method: {
-      version: 'grok-4-1-fast-reasoning',
+      version: 'grok-4.20-reasoning',
       internet: true,
-      internetDetail: 'search_mode: auto',
-      reasoning: 'Fast Reasoning',
-      reasoningDetail: 'Native fast reasoning mode',
+      internetDetail: 'Responses API web_search tool',
+      reasoning: 'Reasoning',
+      reasoningDetail: 'Responses API with native reasoning + web_search',
       maxTokens: '16,000 output',
     },
   },

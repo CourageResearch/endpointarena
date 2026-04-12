@@ -60,6 +60,7 @@ export function buildLocalDevVerificationStatus(email?: string | null) {
     username,
     mustStayUntil: null,
     verifiedAt: now.toISOString(),
+    challenge: null,
     profile: {
       cashBalance: getCanonicalHumanStartingCash(true),
       rank: 1,

@@ -72,7 +72,7 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
     cachedInputUsdPer1MTokens: 0.25,
     webSearchUsdPerRequest: GPT_WEB_SEARCH_MEDIUM_CONTEXT_USD_PER_REQUEST,
   },
-  'grok-4.1': {
+  'grok-4.20': {
     inputUsdPer1MTokens: 0.2,
     outputUsdPer1MTokens: 0.5,
     longContextInputTokenThreshold: GROK_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
@@ -148,7 +148,7 @@ export function getCostEstimationProfileForModel(modelId: ModelId): AICostEstima
   if (modelId === 'gpt-5.4') {
     return 'gpt-deep-research'
   }
-  if (modelId === 'grok-4.1') {
+  if (modelId === 'grok-4.20') {
     return 'grok-deep-research'
   }
   if (modelId === 'gemini-3-pro') {
@@ -269,7 +269,7 @@ export function estimateTextGenerationCost(args: {
     webSearchRequests = CLAUDE_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'gpt-deep-research' && args.modelId === 'gpt-5.4') {
     webSearchRequests = GPT_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
-  } else if (args.profile === 'grok-deep-research' && args.modelId === 'grok-4.1') {
+  } else if (args.profile === 'grok-deep-research' && args.modelId === 'grok-4.20') {
     webSearchRequests = GROK_DEEP_RESEARCH_ESTIMATED_SEARCH_REQUESTS
   } else if (args.profile === 'gemini3-deep-research' && args.modelId === 'gemini-3-pro') {
     webSearchRequests = GEMINI3_DEEP_RESEARCH_ESTIMATED_GROUNDED_PROMPTS

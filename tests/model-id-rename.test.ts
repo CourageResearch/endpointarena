@@ -22,7 +22,7 @@ test('canonical model ids use renamed keys and exclude legacy ids', () => {
   assert.deepEqual([...MODEL_IDS], [
     'claude-opus',
     'gpt-5.4',
-    'grok-4.1',
+    'grok-4.20',
     'gemini-3-pro',
     'deepseek-v3.2',
     'glm-5',
@@ -55,40 +55,46 @@ test('subscription and automation lanes point at gpt-5.4', () => {
 
 test('trial monitor verifier keys no longer accept steady-state legacy aliases', () => {
   assert.equal(normalizeTrialMonitorVerifierModelKey('gpt-5.4'), 'gpt-5.4')
-  assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4.1'), 'grok-4.1')
+  assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4.20'), 'grok-4.20')
   assert.equal(normalizeTrialMonitorVerifierModelKey('gpt-5.2'), null)
+  assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4.1'), null)
   assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4'), null)
 })
 
 test('legacy rename helpers normalize ids and task keys', () => {
   assert.deepEqual(LEGACY_MODEL_ID_RENAMES, {
     'gpt-5.2': 'gpt-5.4',
-    'grok-4': 'grok-4.1',
+    'grok-4': 'grok-4.20',
+    'grok-4.1': 'grok-4.20',
     'llama-4': 'llama-4-scout',
   })
   assert.deepEqual(LEGACY_VERIFIER_MODEL_KEY_RENAMES, {
     'gpt-5.2': 'gpt-5.4',
-    'grok-4': 'grok-4.1',
+    'grok-4': 'grok-4.20',
+    'grok-4.1': 'grok-4.20',
   })
   assert.equal(renameLegacyModelId('gpt-5.2'), 'gpt-5.4')
-  assert.equal(renameLegacyModelId('grok-4'), 'grok-4.1')
+  assert.equal(renameLegacyModelId('grok-4'), 'grok-4.20')
+  assert.equal(renameLegacyModelId('grok-4.1'), 'grok-4.20')
   assert.equal(renameLegacyModelId('llama-4'), 'llama-4-scout')
   assert.equal(renameLegacyModelId('claude-opus'), 'claude-opus')
   assert.equal(renameLegacyVerifierModelKey('gpt-5.2'), 'gpt-5.4')
-  assert.equal(renameLegacyVerifierModelKey('grok-4'), 'grok-4.1')
+  assert.equal(renameLegacyVerifierModelKey('grok-4'), 'grok-4.20')
+  assert.equal(renameLegacyVerifierModelKey('grok-4.1'), 'grok-4.20')
   assert.equal(renameLegacyVerifierModelKey('claude-opus'), 'claude-opus')
   assert.equal(renameLegacyAiTaskKey('batch-1:market-2:gpt-5.2'), 'batch-1:market-2:gpt-5.4')
-  assert.equal(renameLegacyAiTaskKey('batch-1:market-2:grok-4'), 'batch-1:market-2:grok-4.1')
+  assert.equal(renameLegacyAiTaskKey('batch-1:market-2:grok-4'), 'batch-1:market-2:grok-4.20')
+  assert.equal(renameLegacyAiTaskKey('batch-1:market-2:grok-4.1'), 'batch-1:market-2:grok-4.20')
   assert.equal(renameLegacyAiTaskKey('batch-1:market-2:llama-4'), 'batch-1:market-2:llama-4-scout')
 })
 
 test('legacy ai batch state rename rewrites persisted state and is idempotent', () => {
   const initialState = {
-    enabledModelIds: ['gpt-5.2', 'claude-opus', 'grok-4', 'llama-4'],
+    enabledModelIds: ['gpt-5.2', 'claude-opus', 'grok-4.1', 'llama-4'],
     clearOrder: ['llama-4', 'gpt-5.2'],
     tasks: [
       { modelId: 'gpt-5.2', taskKey: 'batch-a:market-a:gpt-5.2', status: 'waiting-import' },
-      { modelId: 'grok-4', taskKey: 'batch-a:market-a:grok-4', status: 'queued' },
+      { modelId: 'grok-4.1', taskKey: 'batch-a:market-a:grok-4.1', status: 'queued' },
     ],
     fills: [
       { modelId: 'llama-4', taskKey: 'batch-a:market-a:llama-4', status: 'ok' },
@@ -102,11 +108,11 @@ test('legacy ai batch state rename rewrites persisted state and is idempotent', 
 
   const renamedState = renameLegacyAiBatchState(initialState)
   assert.deepEqual(renamedState, {
-    enabledModelIds: ['gpt-5.4', 'claude-opus', 'grok-4.1', 'llama-4-scout'],
+    enabledModelIds: ['gpt-5.4', 'claude-opus', 'grok-4.20', 'llama-4-scout'],
     clearOrder: ['llama-4-scout', 'gpt-5.4'],
     tasks: [
       { modelId: 'gpt-5.4', taskKey: 'batch-a:market-a:gpt-5.4', status: 'waiting-import' },
-      { modelId: 'grok-4.1', taskKey: 'batch-a:market-a:grok-4.1', status: 'queued' },
+      { modelId: 'grok-4.20', taskKey: 'batch-a:market-a:grok-4.20', status: 'queued' },
     ],
     fills: [
       { modelId: 'llama-4-scout', taskKey: 'batch-a:market-a:llama-4-scout', status: 'ok' },

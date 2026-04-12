@@ -203,7 +203,7 @@ export default function LoginPage() {
                 <p className="text-sm text-[#7f7469]">
                   New to Endpoint Arena?{' '}
                   <a href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-[#1a1a1a] underline">
-                    Create an account
+                    Sign up
                   </a>
                 </p>
 

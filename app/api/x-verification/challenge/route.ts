@@ -9,6 +9,7 @@ import { userColumns } from '@/lib/users/query-shapes'
 import {
   buildDefaultVerificationPost,
   generateChallengeToken,
+  getActiveXChallenge,
   getChallengeExpiry,
   hashChallengeToken,
 } from '@/lib/x-verification'
@@ -74,11 +75,21 @@ export async function POST() {
       })
     }
 
+    const activeChallenge = getActiveXChallenge(user)
+    if (activeChallenge) {
+      return successResponse(activeChallenge, {
+        headers: {
+          'X-Request-Id': requestId,
+        },
+      })
+    }
+
     const token = generateChallengeToken()
     const expiresAt = getChallengeExpiry()
 
     await db.update(users)
       .set({
+        xChallengeToken: token,
         xChallengeTokenHash: hashChallengeToken(token),
         xChallengeExpiresAt: expiresAt,
       })

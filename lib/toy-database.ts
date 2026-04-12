@@ -384,14 +384,15 @@ function getAdminUserValues(user: SourceAdminIdentity['user']): typeof users.$in
     emailVerified: user.emailVerified,
     image: user.image,
     createdAt: user.createdAt,
-    xUserId: user.xUserId,
-    xUsername: user.xUsername,
-    xConnectedAt: user.xConnectedAt,
-    xChallengeTokenHash: user.xChallengeTokenHash,
-    xChallengeExpiresAt: user.xChallengeExpiresAt,
-    xVerifiedAt: user.xVerifiedAt,
-    xVerifiedPostId: user.xVerifiedPostId,
-    xMustStayUntil: user.xMustStayUntil,
+    xUserId: null,
+    xUsername: null,
+    xConnectedAt: null,
+    xChallengeToken: null,
+    xChallengeTokenHash: null,
+    xChallengeExpiresAt: null,
+    xVerifiedAt: null,
+    xVerifiedPostId: null,
+    xMustStayUntil: null,
   }
 }
 
@@ -405,14 +406,15 @@ function getAdminUserUpdateValues(user: SourceAdminIdentity['user']): Partial<ty
     emailVerified: user.emailVerified,
     image: user.image,
     createdAt: user.createdAt,
-    xUserId: user.xUserId,
-    xUsername: user.xUsername,
-    xConnectedAt: user.xConnectedAt,
-    xChallengeTokenHash: user.xChallengeTokenHash,
-    xChallengeExpiresAt: user.xChallengeExpiresAt,
-    xVerifiedAt: user.xVerifiedAt,
-    xVerifiedPostId: user.xVerifiedPostId,
-    xMustStayUntil: user.xMustStayUntil,
+    xUserId: null,
+    xUsername: null,
+    xConnectedAt: null,
+    xChallengeToken: null,
+    xChallengeTokenHash: null,
+    xChallengeExpiresAt: null,
+    xVerifiedAt: null,
+    xVerifiedPostId: null,
+    xMustStayUntil: null,
   }
 }
 
@@ -426,6 +428,7 @@ async function syncToyAdminIdentity(
   const { user: adminUser, accounts: adminAccounts } = adminIdentity
   const adminUserValues = getAdminUserValues(adminUser)
   const adminUserUpdateValues = getAdminUserUpdateValues(adminUser)
+  const adminNonXAccounts = adminAccounts.filter((account) => account.provider !== 'twitter')
 
   await dbClient.transaction(async (tx) => {
     if (options.resetNonAdminUsers) {
@@ -450,8 +453,8 @@ async function syncToyAdminIdentity(
 
     await tx.delete(accounts).where(eq(accounts.userId, adminUser.id))
 
-    if (adminAccounts.length > 0) {
-      await tx.insert(accounts).values(adminAccounts)
+    if (adminNonXAccounts.length > 0) {
+      await tx.insert(accounts).values(adminNonXAccounts)
     }
   })
 }

@@ -19,6 +19,7 @@ export async function GET() {
         username: null,
         mustStayUntil: null,
         verifiedAt: null,
+        challenge: null,
         profile: null,
       }, {
         headers: {
@@ -38,6 +39,7 @@ export async function GET() {
         username: null,
         mustStayUntil: null,
         verifiedAt: null,
+        challenge: null,
         profile: null,
       }, {
         headers: {
@@ -55,6 +57,7 @@ export async function GET() {
       username: status.username,
       mustStayUntil: status.mustStayUntil,
       verifiedAt: status.verifiedAt,
+      challenge: status.challenge,
       profile: status.profile,
     }, {
       headers: {

@@ -16,7 +16,7 @@ export const VERIFICATION_BONUS_CASH = 5
 export const ALL_MODEL_IDS = [
   'claude-opus',
   'gpt-5.4',
-  'grok-4.1',
+  'grok-4.20',
   'gemini-3-pro',
   'deepseek-v3.2',
   'glm-5',
@@ -82,12 +82,12 @@ export const MODEL_INFO: Record<ModelId, {
     provider: 'OpenAI',
     features: ['Web Search', 'Reasoning'],
   },
-  'grok-4.1': {
+  'grok-4.20': {
     name: 'Grok',
-    fullName: 'Grok 4.1',
+    fullName: 'Grok 4.20',
     color: '#2D7CF6',
     provider: 'xAI',
-    features: ['Fast Reasoning', 'Web Search'],
+    features: ['Reasoning', 'Web Search'],
   },
   'gemini-3-pro': {
     name: 'Gemini 3',
@@ -163,7 +163,7 @@ export function getDaysUntil(date: Date | string): number {
 export const MODEL_NAMES: Record<ModelId, string> = {
   'claude-opus': 'Claude Opus 4.6',
   'gpt-5.4': 'GPT-5.4',
-  'grok-4.1': 'Grok 4.1',
+  'grok-4.20': 'Grok 4.20',
   'gemini-3-pro': 'Gemini 3 Pro',
   'deepseek-v3.2': 'DeepSeek V3.2',
   'glm-5': 'GLM 5',

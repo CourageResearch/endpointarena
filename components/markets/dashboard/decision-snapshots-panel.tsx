@@ -177,7 +177,7 @@ export function MarketDecisionSnapshotsPanel({
               <article
                 key={`${selectedMarketId}-decision-${state.modelId}`}
                 id={`decision-snapshot-${selectedMarketId}-${state.modelId}`}
-                className={cn('mx-1 scroll-mt-24', DETAILS_CARD_SHELL_CLASS)}
+                className={cn('mx-1 scroll-mt-32', DETAILS_CARD_SHELL_CLASS)}
               >
                 <div
                   className={cn(

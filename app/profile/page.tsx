@@ -408,9 +408,9 @@ export default async function ProfilePage() {
                       <tr className="border-b border-[#e8ddd0]">
                         <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
                         <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Ticker</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Mark Value</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">YES Shares</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NO Shares</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Mark Value</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -432,9 +432,9 @@ export default async function ProfilePage() {
                             </div>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-[#8a8075]">{holding.ticker}</td>
-                          <td className="px-2 py-2 text-right tabular-nums text-[#8a8075]">{formatShares(holding.yesShares)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums text-[#8a8075]">{formatShares(holding.noShares)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums text-[#8a8075]">{formatUsd(holding.markValueUsd)}</td>
+                          <td className="px-2 py-2 text-center tabular-nums text-[#8a8075]">{formatShares(holding.yesShares)}</td>
+                          <td className="px-2 py-2 text-center tabular-nums text-[#8a8075]">{formatShares(holding.noShares)}</td>
+                          <td className="px-2 py-2 text-center tabular-nums text-[#8a8075]">{formatUsd(holding.markValueUsd)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -455,15 +455,15 @@ export default async function ProfilePage() {
                   <p className="text-sm text-[#8a8075]">No transactions yet.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
+                    <table className="w-full min-w-[860px] table-fixed border-collapse text-sm">
                     <colgroup>
                       <col className="w-[9rem]" />
-                      <col className="w-[24rem]" />
+                      <col className="w-[16rem]" />
+                      <col className="w-[4rem]" />
+                      <col className="w-[4.75rem]" />
+                      <col className="w-[4.75rem]" />
                       <col className="w-[4.5rem]" />
-                      <col className="w-[5.5rem]" />
-                      <col className="w-[5.5rem]" />
-                      <col className="w-[5rem]" />
-                      <col className="w-[5rem]" />
+                      <col className="w-[4.5rem]" />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
@@ -471,9 +471,9 @@ export default async function ProfilePage() {
                         <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Market</th>
                         <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Ticker</th>
                         <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -486,23 +486,23 @@ export default async function ProfilePage() {
                             <td className="px-2 py-2 align-middle whitespace-nowrap text-[#8a8075]">
                               <LocalDateTime value={trade.timestamp.toISOString()} />
                             </td>
-                            <td className="px-2 py-2 align-middle whitespace-nowrap text-[#8a8075]">
+                            <td className="px-2 py-2 align-middle text-[#8a8075]">
                               {trade.marketHref ? (
                                 <Link
                                   href={trade.marketHref}
-                                  className="transition-colors hover:text-[#6d645a]"
+                                  className="line-clamp-2 block leading-[1.35] transition-colors hover:text-[#6d645a]"
                                 >
                                   {trade.drugName}
                                 </Link>
                               ) : (
-                                <span>{trade.drugName}</span>
+                                <span className="line-clamp-2 block leading-[1.35]">{trade.drugName}</span>
                               )}
                             </td>
                             <td className="px-2 py-2 align-middle whitespace-nowrap text-[#8a8075]">{trade.ticker}</td>
                             <td className={`px-2 py-2 align-middle whitespace-nowrap ${actionTone}`}>{actionLabel}</td>
-                            <td className="px-2 py-2 align-middle text-right tabular-nums text-[#8a8075]">{formatUsd(trade.usdAmount)}</td>
-                            <td className="px-2 py-2 align-middle text-right tabular-nums text-[#8a8075]">{formatShares(trade.shares)}</td>
-                            <td className="px-2 py-2 align-middle text-right tabular-nums text-[#8a8075]">{formatPricePercent(trade.priceAfter)}</td>
+                            <td className="px-2 py-2 align-middle text-center tabular-nums text-[#8a8075]">{formatUsd(trade.usdAmount)}</td>
+                            <td className="px-2 py-2 align-middle text-center tabular-nums text-[#8a8075]">{formatShares(trade.shares)}</td>
+                            <td className="px-2 py-2 align-middle text-center tabular-nums text-[#8a8075]">{formatPricePercent(trade.priceAfter)}</td>
                           </tr>
                         )
                       })}

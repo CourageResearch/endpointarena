@@ -2,7 +2,6 @@ import { ConfigurationError, ValidationError } from '@/lib/errors'
 
 export type TrialMonitorVerifierModelKey =
   | 'gpt-5.4'
-  | 'grok-4.1'
   | 'grok-4.20'
   | 'gemini-3-pro'
   | 'claude-opus'
@@ -35,23 +34,13 @@ const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMo
     envKey: 'OPENAI_API_KEY',
     model: 'gpt-5.4',
   },
-  'grok-4.1': {
-    key: 'grok-4.1',
-    label: 'Grok 4.1 (xAI)',
-    provider: 'xai',
-    providerLabel: 'xAI',
-    envKey: 'XAI_API_KEY',
-    model: 'grok-4-1-fast-reasoning',
-    selectable: false,
-  },
   'grok-4.20': {
     key: 'grok-4.20',
     label: 'Grok 4.20 (xAI)',
     provider: 'xai',
     providerLabel: 'xAI',
     envKey: 'XAI_API_KEY',
-    // xAI structured outputs with built-in web search currently work on the Grok 4 fast family.
-    model: 'grok-4-1-fast-non-reasoning',
+    model: 'grok-4.20-reasoning',
   },
   'gemini-3-pro': {
     key: 'gemini-3-pro',

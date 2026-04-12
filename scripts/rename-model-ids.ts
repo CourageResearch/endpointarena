@@ -20,7 +20,7 @@ type ParsedArgs = {
 type AiBatchRow = {
   id: string
   status: string
-  state: Record<string, unknown>
+  state: unknown
   error: string | null
 }
 
@@ -29,7 +29,7 @@ type PlannedAiBatchUpdate = {
   fromStatus: string
   toStatus: string
   stateChanged: boolean
-  nextState: Record<string, unknown>
+  nextState: unknown
 }
 
 type ArchivedFile = {
@@ -113,8 +113,40 @@ function buildMaintenanceLog(nowIso: string) {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseAiBatchStateValue(value: unknown): unknown {
+  let nextValue = value
+
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (typeof nextValue !== 'string') {
+      return nextValue
+    }
+
+    const trimmed = nextValue.trim()
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return nextValue
+    }
+
+    try {
+      nextValue = JSON.parse(trimmed)
+    } catch {
+      return nextValue
+    }
+  }
+
+  return nextValue
+}
+
 function planAiBatchUpdate(row: AiBatchRow, nowIso: string): PlannedAiBatchUpdate | null {
-  const renamedState = renameLegacyAiBatchState(row.state)
+  const parsedState = parseAiBatchStateValue(row.state)
+  if (!isRecord(parsedState)) {
+    return null
+  }
+
+  const renamedState = renameLegacyAiBatchState(parsedState)
   const nextStatus = NON_TERMINAL_BATCH_STATUSES.has(row.status) ? 'reset' : row.status
   const nextLogs = Array.isArray(renamedState.logs)
     ? [...renamedState.logs, buildMaintenanceLog(nowIso)]
@@ -129,7 +161,7 @@ function planAiBatchUpdate(row: AiBatchRow, nowIso: string): PlannedAiBatchUpdat
       }
     : renamedState
 
-  const stateChanged = !isDeepStrictEqual(row.state, nextState)
+  const stateChanged = !isDeepStrictEqual(parsedState, nextState)
   if (!stateChanged && row.status === nextStatus) {
     return null
   }
@@ -156,15 +188,22 @@ async function countRowsByModelKey(sql: postgres.Sql, modelKey: string): Promise
 
 async function listConflictingTargetModelKeys(sql: postgres.Sql): Promise<string[]> {
   const conflicts: string[] = []
+  const legacyKeysByCanonicalKey = new Map<string, string[]>()
 
   for (const [legacyKey, canonicalKey] of Object.entries(LEGACY_MODEL_ID_RENAMES)) {
-    const [legacyCount, canonicalCount] = await Promise.all([
-      countRowsByModelKey(sql, legacyKey),
+    const existing = legacyKeysByCanonicalKey.get(canonicalKey) ?? []
+    existing.push(legacyKey)
+    legacyKeysByCanonicalKey.set(canonicalKey, existing)
+  }
+
+  for (const [canonicalKey, legacyKeys] of legacyKeysByCanonicalKey.entries()) {
+    const [canonicalCount, ...legacyCounts] = await Promise.all([
       countRowsByModelKey(sql, canonicalKey),
+      ...legacyKeys.map((legacyKey) => countRowsByModelKey(sql, legacyKey)),
     ])
 
-    if (legacyCount > 0 && canonicalCount > 0) {
-      conflicts.push(`${legacyKey} -> ${canonicalKey}`)
+    if (canonicalCount > 0 && legacyCounts.some((count) => count > 0)) {
+      conflicts.push(`${legacyKeys.join(', ')} -> ${canonicalKey}`)
     }
   }
 

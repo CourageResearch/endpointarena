@@ -86,7 +86,6 @@ declare global {
 const ACTIVE_BATCH_STATUSES: AiBatchStatus[] = ['collecting', 'waiting', 'ready', 'clearing']
 const LEGACY_AI_MODEL_ID_RENAMES: Record<string, ModelId> = {
   'gpt-5.2': 'gpt-5.4',
-  'grok-4': 'grok-4.1',
   'llama-4': 'llama-4-scout',
 }
 

@@ -96,8 +96,8 @@ const METRIC_PILL_CLASS = 'inline-flex items-center rounded-sm border border-[#d
 const INFO_CHIP_CLASS = 'inline-flex items-center rounded-sm border border-[#ddd2c5] bg-white/80 px-2 py-1 text-[10px] font-medium leading-none text-[#6d645a]'
 const CONTENT_PANEL_CLASS = 'rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-4 py-3'
 const SECTION_COPY_CLASS = 'max-w-3xl text-[12px] leading-[1.6] text-[#7c7267]'
-const CARD_VALUE_CLASS = 'text-[0.98rem] font-medium leading-[1.45] text-[#4d453c]'
-const BODY_COPY_CLASS = 'whitespace-pre-wrap break-words leading-[1.7] text-[#4d453c]'
+const CARD_VALUE_CLASS = 'text-[0.9rem] font-medium leading-[1.4] text-[#4d453c]'
+const BODY_COPY_CLASS = 'text-[0.92rem] whitespace-pre-wrap break-words leading-[1.6] text-[#4d453c]'
 
 function getOutcomeBadge(outcome: OracleOutcomeValue): {
   label: string
@@ -233,13 +233,9 @@ function OracleSourceCard({
         {evidence.title}
       </div>
 
-      <p className={cn('mt-3 text-[#5f564d]', DETAILS_BODY_TEXT_CLASS)}>
+      <p className={cn('mt-3 text-[#5f564d]', DETAILS_BODY_TEXT_CLASS, BODY_COPY_CLASS)}>
         {evidence.excerpt}
       </p>
-
-      <div className="mt-4 text-[10px] font-medium uppercase tracking-[0.18em] text-[#aa9d8d]">
-        View source
-      </div>
     </a>
   )
 }
@@ -261,7 +257,6 @@ export function TrialOracleRunsPanel({
   const nctNumber = selectedMarket.event?.nctId ?? null
   const marketHref = `/trials/${encodeURIComponent(selectedMarket.marketId)}`
   const latestRun = runHistory[0] ?? null
-  const acceptedFindingsCount = allFindings.filter((finding) => finding.status === 'accepted').length
   const latestRunStatus = latestRun ? getRunStatusBadge(latestRun.status) : null
 
   return (
@@ -391,24 +386,12 @@ export function TrialOracleRunsPanel({
       <section className="space-y-4">
         <div className="px-1">
           <div className="flex items-center gap-3">
-            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Stats</div>
+            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Latest Run</div>
             <HeaderDots />
           </div>
         </div>
 
         <div className="grid gap-3 px-1 sm:grid-cols-2 xl:grid-cols-4">
-          <OracleStatCard
-            label="Stored Findings"
-            value={allFindings.length.toLocaleString('en-US')}
-          />
-          <OracleStatCard
-            label="Accepted"
-            value={acceptedFindingsCount.toLocaleString('en-US')}
-          />
-          <OracleStatCard
-            label="Outcome Changes"
-            value={historyEntries.length.toLocaleString('en-US')}
-          />
           <OracleStatCard
             label="Latest Run"
             value={(
@@ -418,23 +401,27 @@ export function TrialOracleRunsPanel({
                 className={CARD_VALUE_CLASS}
               />
             )}
-            meta={latestRun ? (
-              <>
-                {latestRunStatus ? (
-                  <span className={cn(BADGE_BASE_CLASS, latestRunStatus.className)}>
-                    {latestRunStatus.label}
-                  </span>
-                ) : null}
-                <span className={INFO_CHIP_CLASS}>{latestRun.verifierModelLabel}</span>
-                <span className={INFO_CHIP_CLASS}>
-                  {runHistory.length.toLocaleString('en-US')} run{runHistory.length === 1 ? '' : 's'}
-                </span>
-              </>
-            ) : (
+            meta={!latestRun ? (
               <span className={cn('text-[12px] text-[#8a8075]', DASHBOARD_META_TEXT_CLASS)}>
                 Waiting for the first oracle run
               </span>
-            )}
+            ) : undefined}
+          />
+          <OracleStatCard
+            label="Status"
+            value={latestRunStatus ? (
+              <span className={cn(BADGE_BASE_CLASS, latestRunStatus.className)}>
+                {latestRunStatus.label}
+              </span>
+            ) : 'No runs yet'}
+          />
+          <OracleStatCard
+            label="Model"
+            value={latestRun?.verifierModelLabel ?? 'No runs yet'}
+          />
+          <OracleStatCard
+            label="Runs"
+            value={`${runHistory.length.toLocaleString('en-US')} run${runHistory.length === 1 ? '' : 's'}`}
           />
         </div>
       </section>

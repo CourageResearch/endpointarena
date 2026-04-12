@@ -809,9 +809,9 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
             </div>
           </div>
           <div className={`flex flex-col gap-3 ${toyBacktestEnabled ? 'xl:flex-row xl:items-start' : ''}`}>
-            <div className="shrink-0 self-start border border-[#d8ccb9] bg-[#fcfaf7] px-5 py-3">
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-3 text-sm text-[#5f564c]">
+            <div className="shrink-0 self-start border border-[#d8ccb9] bg-[#fcfaf7] px-5 py-4">
+              <div className="flex flex-col gap-3">
+                <label className="flex flex-col items-start gap-3 text-sm text-[#5f564c]">
                   <span className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Concurrent tasks</span>
                   <select
                     value={displayedApiConcurrency}

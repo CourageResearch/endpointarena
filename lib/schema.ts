@@ -29,6 +29,7 @@ export const users = pgTable('users', {
   xUserId: text('x_user_id'),
   xUsername: text('x_username'),
   xConnectedAt: utcTimestamp('x_connected_at'),
+  xChallengeToken: text('x_challenge_token'),
   xChallengeTokenHash: text('x_challenge_token_hash'),
   xChallengeExpiresAt: utcTimestamp('x_challenge_expires_at'),
   xVerifiedAt: utcTimestamp('x_verified_at'),

@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ModelIcon } from '@/components/ModelIcon'
 import { HeaderDots } from '@/components/site/chrome'
 import type { ModelId } from '@/lib/constants'
@@ -58,7 +58,7 @@ function SortablePositionHeader({
   sortKey: PositionSortKey
   sortState: PositionSortState | null
   onSort: (key: PositionSortKey) => void
-  align?: 'left' | 'right'
+  align?: 'left' | 'center' | 'right'
   className?: string
 }) {
   const isActive = sortState?.key === sortKey
@@ -67,13 +67,20 @@ function SortablePositionHeader({
   const icon = direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '↕'
 
   return (
-    <th aria-sort={ariaSort} className={cn('py-3 font-medium whitespace-nowrap', className, align === 'right' ? 'text-right' : 'text-left')}>
+    <th
+      aria-sort={ariaSort}
+      className={cn(
+        'py-3 font-medium whitespace-nowrap',
+        className,
+        align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
+      )}
+    >
       <button
         type="button"
         onClick={() => onSort(sortKey)}
         className={cn(
           'inline-flex w-full cursor-pointer items-center text-inherit hover:text-[#3a342d] focus-visible:outline-none',
-          align === 'right' ? 'justify-end' : 'justify-start',
+          align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start',
         )}
         title={`Sort by ${label}`}
       >
@@ -105,6 +112,7 @@ export function MarketModelPositionsPanel({
   variant?: 'default' | 'compact'
   showHeader?: boolean
 }) {
+  const router = useRouter()
   const compact = variant === 'compact'
 
   return (
@@ -121,15 +129,7 @@ export function MarketModelPositionsPanel({
       <div className="mx-1 rounded-none">
         <div className="overflow-hidden rounded-none border border-transparent" style={DETAILS_CARD_BORDER_STYLE}>
           <div className="hide-scrollbar overflow-x-auto overscroll-x-contain px-1 [&_tr]:border-[#e8ddd0] [&_td]:text-[#82786d]">
-            <table className={cn('w-full table-fixed', compact ? 'min-w-[420px]' : 'min-w-[560px] sm:min-w-[620px] xl:min-w-0')}>
-              <colgroup>
-                <col style={{ width: compact ? '82px' : '140px' }} />
-                <col style={{ width: compact ? '68px' : '92px' }} />
-                <col style={{ width: compact ? '58px' : '70px' }} />
-                <col style={{ width: compact ? '58px' : '70px' }} />
-                <col style={{ width: compact ? '58px' : '82px' }} />
-                <col style={{ width: compact ? '74px' : '82px' }} />
-              </colgroup>
+            <table className={cn('w-full table-auto', compact ? 'min-w-[420px]' : 'min-w-[560px] sm:min-w-[620px] xl:min-w-0')}>
               <thead>
                 <tr
                   className={cn(
@@ -142,59 +142,76 @@ export function MarketModelPositionsPanel({
                     sortKey="model"
                     sortState={sortState}
                     onSort={onSort}
-                    className={compact ? 'px-1.5' : 'pl-[2.625rem] pr-5'}
+                    className={compact ? 'px-1.5' : 'pl-6 pr-3'}
                   />
                   <SortablePositionHeader
                     label="View"
                     sortKey="view"
                     sortState={sortState}
                     onSort={onSort}
-                    className={compact ? 'px-1' : 'px-1.5'}
+                    className={compact ? 'px-1' : 'px-3'}
                   />
                   <SortablePositionHeader
                     label="Yes"
                     sortKey="yesShares"
                     sortState={sortState}
                     onSort={onSort}
-                    align="right"
-                    className={compact ? 'px-1' : 'px-1.5'}
+                    align="center"
+                    className={compact ? 'px-1' : 'px-3'}
                   />
                   <SortablePositionHeader
                     label="No"
                     sortKey="noShares"
                     sortState={sortState}
                     onSort={onSort}
-                    align="right"
-                    className={compact ? 'px-1' : 'px-1.5'}
+                    align="center"
+                    className={compact ? 'px-1' : 'px-3'}
                   />
                   <SortablePositionHeader
-                    label="Pos"
+                    label="Position"
                     sortKey="position"
                     sortState={sortState}
                     onSort={onSort}
-                    align="right"
-                    className={compact ? 'px-1' : 'px-1.5'}
+                    align="center"
+                    className={compact ? 'px-1' : 'px-3'}
                   />
                   <SortablePositionHeader
                     label="P/L"
                     sortKey="pnl"
                     sortState={sortState}
                     onSort={onSort}
-                    align="right"
-                    className={compact ? 'px-1.5' : 'px-5'}
+                    align="center"
+                    className={compact ? 'px-1.5' : 'pl-3 pr-6'}
                   />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={`${marketId}-${row.modelId}`} className="border-b border-[#e8ddd0] last:border-b-0">
-                    <td className={cn('align-top', compact ? 'px-1.5 py-3' : 'px-5 py-4')}>
-                      {getModelHref ? (
-                        <Link
-                          href={getModelHref(row.modelId)}
-                          scroll={false}
-                          className="group flex items-center gap-1.5 rounded-sm transition-colors focus-visible:outline-none"
-                        >
+                {rows.map((row) => {
+                  const modelHref = getModelHref?.(row.modelId) ?? null
+
+                  return (
+                    <tr
+                      key={`${marketId}-${row.modelId}`}
+                      className={cn(
+                        'border-b border-[#e8ddd0] transition-colors last:border-b-0',
+                        modelHref
+                          ? 'cursor-pointer hover:bg-[#faf7f2] focus:bg-[#faf7f2] focus-visible:bg-[#faf7f2] focus-visible:outline-none'
+                          : 'hover:bg-[#faf7f2]',
+                      )}
+                      onClick={modelHref ? () => router.push(modelHref) : undefined}
+                      onKeyDown={modelHref ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          router.push(modelHref)
+                        }
+                      } : undefined}
+                      tabIndex={modelHref ? 0 : undefined}
+                      role={modelHref ? 'link' : undefined}
+                      aria-label={modelHref ? `Open ${row.fullName}` : undefined}
+                    >
+                    <td className={cn('align-top', compact ? 'px-1.5 py-3' : 'pl-6 pr-3 py-4')}>
+                      {modelHref ? (
+                        <div className="group flex items-center gap-1.5 rounded-sm transition-colors">
                           {!compact ? (
                             <span
                               className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a8075]"
@@ -203,10 +220,10 @@ export function MarketModelPositionsPanel({
                               <ModelIcon id={row.modelId} className="h-4 w-4 grayscale" />
                             </span>
                           ) : null}
-                          <span className="truncate text-[13px] font-medium text-[#1a1a1a] transition-colors group-hover:text-[#3a342d] group-focus-visible:text-[#3a342d]" title={row.fullName}>
+                          <span className="truncate text-[13px] font-medium text-[#1a1a1a] transition-colors group-hover:text-[#3a342d]" title={row.fullName}>
                             {compact ? row.compactLabel : row.displayLabel}
                           </span>
-                        </Link>
+                        </div>
                       ) : (
                         <div className="flex items-center gap-1.5">
                           {!compact ? (
@@ -223,25 +240,26 @@ export function MarketModelPositionsPanel({
                         </div>
                       )}
                     </td>
-                    <td className={cn('align-top', compact ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                    <td className={cn('align-top whitespace-nowrap', compact ? 'px-1 py-3' : 'px-3 py-4')}>
                       <div className="flex items-center gap-1.5">
                         <span className={cn('text-xs font-medium tracking-[0.02em]', row.viewTextClass)}>{row.viewDisplayLabel}</span>
                       </div>
                     </td>
-                    <td className={cn('text-right align-top text-xs tabular-nums', compact ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                    <td className={cn('text-center align-top text-xs tabular-nums whitespace-nowrap', compact ? 'px-1 py-3' : 'px-3 py-4')}>
                       {formatShares(row.yesShares)}
                     </td>
-                    <td className={cn('text-right align-top text-xs tabular-nums', compact ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                    <td className={cn('text-center align-top text-xs tabular-nums whitespace-nowrap', compact ? 'px-1 py-3' : 'px-3 py-4')}>
                       {formatShares(row.noShares)}
                     </td>
-                    <td className={cn('text-right align-top text-xs tabular-nums', compact ? 'px-1 py-3' : 'px-1.5 py-4')}>
+                    <td className={cn('text-center align-top text-xs tabular-nums whitespace-nowrap', compact ? 'px-1 py-3' : 'px-3 py-4')}>
                       {formatCompactMoney(row.positionValueUsd)}
                     </td>
-                    <td className={cn('text-right align-top text-xs font-medium tabular-nums', compact ? 'px-1.5 py-3' : 'px-5 py-4', getSignedMoneyClass(row.pnlUsd))}>
+                    <td className={cn('text-center align-top text-xs font-medium tabular-nums whitespace-nowrap', compact ? 'px-1.5 py-3' : 'pl-3 pr-6 py-4', getSignedMoneyClass(row.pnlUsd))}>
                       {formatSignedCompactMoney(row.pnlUsd)}
                     </td>
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

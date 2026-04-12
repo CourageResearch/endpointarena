@@ -9,6 +9,7 @@ import { getUsableXAccessToken } from '@/lib/x-auth'
 import { userColumns } from '@/lib/users/query-shapes'
 import { VERIFICATION_BONUS_CASH } from '@/lib/constants'
 import {
+  extractVerificationChallengeToken,
   fetchVerificationPostById,
   getVerificationPostMustStayUntil,
   hashChallengeToken,
@@ -31,10 +32,6 @@ export async function POST(request: Request) {
     }
 
     const body = await parseJsonBody<VerifyBody>(request)
-    const challengeToken = body.challengeToken?.trim()
-    if (!challengeToken) {
-      throw new ValidationError('Challenge token is required')
-    }
 
     const [user, xAccount] = await Promise.all([
       db.query.users.findFirst({
@@ -97,18 +94,6 @@ export async function POST(request: Request) {
       throw new ValidationError('Connect your X account before verification')
     }
 
-    if (!user.xChallengeTokenHash || !user.xChallengeExpiresAt) {
-      throw new ValidationError('Create a new challenge token first')
-    }
-
-    if (user.xChallengeExpiresAt.getTime() <= Date.now()) {
-      throw new ValidationError('Challenge token expired. Generate a new one.')
-    }
-
-    if (hashChallengeToken(challengeToken) !== user.xChallengeTokenHash) {
-      throw new ValidationError('Challenge token does not match the active challenge')
-    }
-
     const source = (body.postId || body.postUrl || '').trim()
     const postId = parseVerificationPostId(source)
     const post = await fetchVerificationPostById(tokenResolution.accessToken, postId)
@@ -121,7 +106,33 @@ export async function POST(request: Request) {
       throw new ValidationError('X post author does not match your connected X account')
     }
 
-    if (!post.text.includes(challengeToken)) {
+    const challengeTokenFromPost = extractVerificationChallengeToken(post.text)
+    const submittedChallengeToken = challengeTokenFromPost ?? body.challengeToken?.trim() ?? null
+
+    if (!submittedChallengeToken) {
+      throw new ValidationError('X post does not contain a verification code. Generate a new verification post and publish it as written.')
+    }
+
+    if (!user.xChallengeTokenHash || !user.xChallengeExpiresAt) {
+      throw new ValidationError('Create a new challenge token first')
+    }
+
+    if (user.xChallengeExpiresAt.getTime() <= Date.now()) {
+      await db.update(users)
+        .set({
+          xChallengeToken: null,
+          xChallengeTokenHash: null,
+          xChallengeExpiresAt: null,
+        })
+        .where(eq(users.id, user.id))
+      throw new ValidationError('Challenge token expired. Generate a new one.')
+    }
+
+    if (hashChallengeToken(submittedChallengeToken) !== user.xChallengeTokenHash) {
+      throw new ValidationError('X post does not match your current verification code. Generate a new verification post and use that new post URL.')
+    }
+
+    if (!post.text.includes(submittedChallengeToken)) {
       throw new ValidationError('X post does not contain the required verification tag')
     }
 
@@ -135,6 +146,7 @@ export async function POST(request: Request) {
           xVerifiedAt: now,
           xVerifiedPostId: post.id,
           xMustStayUntil: mustStayUntil,
+          xChallengeToken: null,
           xChallengeTokenHash: null,
           xChallengeExpiresAt: null,
         })

@@ -63,7 +63,7 @@ const CURRENT_MODEL_PRICING: Record<ModelId, ModelPricing> = {
     assumedSearchContentInputTokens: 1200,
     outputReasoningMultiplier: 2.4,
   },
-  'grok-4.1': {
+  'grok-4.20': {
     inputUsdPer1MTokens: 0.2,
     outputUsdPer1MTokens: 0.5,
     searchUsdPerRequest: 0.005,

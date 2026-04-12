@@ -18,7 +18,7 @@ export type MarketOutcome = (typeof MARKET_OUTCOMES)[number]
 const MARKET_MODELS = [
   'claude-opus',
   'gpt-5.4',
-  'grok-4.1',
+  'grok-4.20',
   'gemini-3-pro',
   'deepseek-v3.2',
   'glm-5',

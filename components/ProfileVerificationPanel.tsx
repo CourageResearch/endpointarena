@@ -15,6 +15,7 @@ type VerificationStatus = {
   username: string | null
   mustStayUntil: string | null
   verifiedAt: string | null
+  challenge: ChallengePayload | null
   profile: {
     cashBalance: number
     rank: number
@@ -104,7 +105,12 @@ export function ProfileVerificationPanel() {
       if (!response.ok) {
         throw new Error(getApiErrorMessage(payload, 'Failed to load verification status'))
       }
-      setStatusData(payload as VerificationStatus)
+      const nextStatus = payload as VerificationStatus
+      setStatusData(nextStatus)
+      setChallenge(nextStatus.challenge ?? null)
+      if (!nextStatus.challenge) {
+        setPostInput('')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load verification status')
     } finally {
@@ -115,6 +121,25 @@ export function ProfileVerificationPanel() {
   useEffect(() => {
     loadStatus()
   }, [])
+
+  useEffect(() => {
+    if (statusData?.connected) return
+    setChallenge(null)
+    setPostInput('')
+  }, [statusData?.connected])
+
+  useEffect(() => {
+    if (!statusData?.connected || challenge) return
+    if (
+      error === 'Create a challenge token first'
+      || error === 'Create a new challenge token first'
+      || error === 'Challenge token expired. Generate a new one.'
+      || error === 'Challenge token does not match the active challenge'
+      || error === 'X post does not match your current verification code. Generate a new verification post and use that new post URL.'
+    ) {
+      setError('')
+    }
+  }, [challenge, error, statusData?.connected])
 
   const intentHref = useMemo(() => {
     if (!challenge?.postTemplate) return '#'
@@ -234,7 +259,29 @@ export function ProfileVerificationPanel() {
       setPostInput('')
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to verify X post')
+      const message = err instanceof Error ? err.message : 'Failed to verify X post'
+      let resetMessage: string | null = null
+
+      if (message.includes('Create a new challenge token first')) {
+        resetMessage = 'Your previous verification code is no longer active. Generate a new X verification post and use the new post URL.'
+      } else if (message.includes('Challenge token expired')) {
+        resetMessage = 'Your verification code expired. Generate a new X verification post, publish it, then paste that new post URL.'
+      } else if (
+        message.includes('Challenge token does not match')
+        || message.includes('X post does not match your current verification code')
+      ) {
+        resetMessage = 'That X post matches an older verification code. Generate a new X verification post, publish it, then paste the new post URL.'
+      }
+
+      if (resetMessage) {
+        setChallenge(null)
+        setPostInput('')
+        await loadStatus()
+        setError(resetMessage)
+        return
+      }
+
+      setError(message)
     } finally {
       setIsVerifying(false)
     }
@@ -268,7 +315,7 @@ export function ProfileVerificationPanel() {
   }
 
   return (
-    <div className="space-y-5 rounded-sm border border-[#ef6f67] bg-[#fffdfa] p-5 sm:p-6">
+    <div className="space-y-5 rounded-sm border border-[#5DBB63] bg-[#fffdfa] p-5 sm:p-6">
       <div>
         <p className="text-sm font-medium text-[#1a1a1a]">Verify your account</p>
         <p className="mt-1 text-sm text-[#6d645a]">Connect <XInlineMark className="mx-0.5" /> to claim your $5 cash bonus and start trading.</p>
@@ -328,10 +375,9 @@ export function ProfileVerificationPanel() {
           {!challenge ? (
             <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
               <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 2</p>
-              <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Generate your ready-to-post X verification post</h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
-                We will create the exact post text with your unique verification tag. Post it publicly without editing or removing that tag.
-              </p>
+              <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">
+                Generate your ready-to-post <XInlineMark className="mx-0.5" /> verification post
+              </h3>
               {statusData.username ? (
                 <p className="mt-2 text-xs text-[#8a8075]">
                   Connected as <span className="font-medium text-[#1a1a1a]">@{statusData.username}</span>
@@ -343,7 +389,11 @@ export function ProfileVerificationPanel() {
                 disabled={isGenerating}
                 className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isGenerating ? 'Generating...' : 'Generate X verification post'}
+                {isGenerating ? 'Generating...' : (
+                  <>
+                    Generate <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> verification post
+                  </>
+                )}
               </button>
             </div>
           ) : null}
@@ -369,7 +419,9 @@ export function ProfileVerificationPanel() {
 
               <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 3</p>
-                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Paste the live X post URL to unlock trading</h3>
+                <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">
+                  Paste the live <XInlineMark className="mx-0.5" /> post URL to unlock trading
+                </h3>
                 <p className="mt-2 text-sm leading-6 text-[#6d645a]">
                   After the post is published, copy its public link and paste it below. Example: https://x.com/username/status/...
                 </p>
@@ -386,7 +438,11 @@ export function ProfileVerificationPanel() {
                   disabled={isVerifying}
                   className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isVerifying ? 'Verifying...' : 'Verify X post and unlock'}
+                  {isVerifying ? 'Verifying...' : (
+                    <>
+                      Verify <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> post and unlock
+                    </>
+                  )}
                 </button>
               </div>
             </div>

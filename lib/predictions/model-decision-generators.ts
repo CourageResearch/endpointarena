@@ -95,6 +95,14 @@ function extractResponseText(response: any): string {
   return parts.join('\n').trim()
 }
 
+function countResponseToolCalls(response: any): number {
+  if (!Array.isArray(response?.output)) {
+    return 0
+  }
+
+  return response.output.filter((item: any) => item?.type === 'web_search_call').length
+}
+
 function extractChatCompletionText(completion: any): string {
   const content = completion?.choices?.[0]?.message?.content
   if (typeof content === 'string') {
@@ -287,22 +295,34 @@ async function generateGrokDecision(
   })
 
   const prompt = buildModelDecisionPrompt(input)
-  const completion = await client.chat.completions.create(
+  const response = await client.responses.create(
     {
-      model: MODEL_PROVIDER_MODEL_IDS['grok-4.1'],
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 4000,
-      search_mode: 'auto',
+      model: MODEL_PROVIDER_MODEL_IDS['grok-4.20'],
+      input: prompt,
+      max_output_tokens: 4000,
+      tools: [{ type: 'web_search' }],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'trial_market_decision',
+          strict: true,
+          schema: buildModelDecisionJsonSchema(
+            input.constraints.allowedActions,
+            input.constraints.explanationMaxChars,
+          ),
+        },
+      },
+      include: ['web_search_call.action.sources'],
     } as any,
     options?.signal ? { signal: options.signal } : undefined,
   )
 
-  const content = extractChatCompletionText(completion)
+  const content = extractResponseText(response)
   if (!content) {
-    throw new Error('No content in Grok 4.1 response')
+    throw new Error('No content in Grok 4.20 response')
   }
 
-  return buildOutput(content, input)
+  return buildOutput(content, input, parseUsageFromOpenAIResponse(response, countResponseToolCalls(response)))
 }
 
 async function generateGeminiDecision(
@@ -552,7 +572,7 @@ export const MODEL_DECISION_GENERATORS: Record<ModelId, ModelDecisionGeneratorCo
     generator: generateGptDecision,
     enabled: () => !!process.env.OPENAI_API_KEY,
   },
-  'grok-4.1': {
+  'grok-4.20': {
     generator: generateGrokDecision,
     enabled: () => !!process.env.XAI_API_KEY,
   },

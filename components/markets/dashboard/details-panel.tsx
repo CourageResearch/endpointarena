@@ -178,10 +178,6 @@ export function MarketResolutionPanel({
                     <p className={cn('mt-3', DETAILS_BODY_TEXT_CLASS, DETAIL_BODY_VALUE_CLASS, 'text-[#5f564d]')}>
                       {evidence.excerpt}
                     </p>
-
-                    <div className="mt-4 cursor-pointer text-[10px] font-medium uppercase tracking-[0.18em] text-[#aa9d8d]">
-                      View source
-                    </div>
                   </a>
                 ))}
               </div>
