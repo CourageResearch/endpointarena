@@ -293,66 +293,9 @@ export function TrialOracleRunsPanel({
       <section className="space-y-4">
         <div className="px-1">
           <div className="flex items-center gap-3">
-            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Overview</div>
-            <HeaderDots />
-          </div>
-          <p className={cn('mt-2', SECTION_COPY_CLASS, DASHBOARD_META_TEXT_CLASS)}>
-            A quick summary of stored findings, accepted oracle decisions, and the most recent monitor activity for this trial.
-          </p>
-        </div>
-
-        <div className="grid gap-3 px-1 sm:grid-cols-2 xl:grid-cols-4">
-          <OracleStatCard
-            label="Stored Findings"
-            value={allFindings.length.toLocaleString('en-US')}
-          />
-          <OracleStatCard
-            label="Accepted"
-            value={acceptedFindingsCount.toLocaleString('en-US')}
-          />
-          <OracleStatCard
-            label="Outcome Changes"
-            value={historyEntries.length.toLocaleString('en-US')}
-          />
-          <OracleStatCard
-            label="Latest Run"
-            value={(
-              <LocalDateTime
-                value={latestRun?.startedAt ?? null}
-                emptyLabel="No runs yet"
-                className={CARD_VALUE_CLASS}
-              />
-            )}
-            meta={latestRun ? (
-              <>
-                {latestRunStatus ? (
-                  <span className={cn(BADGE_BASE_CLASS, latestRunStatus.className)}>
-                    {latestRunStatus.label}
-                  </span>
-                ) : null}
-                <span className={INFO_CHIP_CLASS}>{latestRun.verifierModelLabel}</span>
-                <span className={INFO_CHIP_CLASS}>
-                  {runHistory.length.toLocaleString('en-US')} run{runHistory.length === 1 ? '' : 's'}
-                </span>
-              </>
-            ) : (
-              <span className={cn('text-[12px] text-[#8a8075]', DASHBOARD_META_TEXT_CLASS)}>
-                Waiting for the first oracle run
-              </span>
-            )}
-          />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="px-1">
-          <div className="flex items-center gap-3">
             <div className={DASHBOARD_SECTION_LABEL_CLASS}>Oracle Findings</div>
             <HeaderDots />
           </div>
-          <p className={cn('mt-2', SECTION_COPY_CLASS, DASHBOARD_META_TEXT_CLASS)}>
-            Every stored oracle finding for this trial, including pending, dismissed, rejected, superseded, and accepted items.
-          </p>
         </div>
 
         {allFindings.length === 0 ? (
@@ -443,6 +386,57 @@ export function TrialOracleRunsPanel({
             })}
           </div>
         )}
+      </section>
+
+      <section className="space-y-4">
+        <div className="px-1">
+          <div className="flex items-center gap-3">
+            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Stats</div>
+            <HeaderDots />
+          </div>
+        </div>
+
+        <div className="grid gap-3 px-1 sm:grid-cols-2 xl:grid-cols-4">
+          <OracleStatCard
+            label="Stored Findings"
+            value={allFindings.length.toLocaleString('en-US')}
+          />
+          <OracleStatCard
+            label="Accepted"
+            value={acceptedFindingsCount.toLocaleString('en-US')}
+          />
+          <OracleStatCard
+            label="Outcome Changes"
+            value={historyEntries.length.toLocaleString('en-US')}
+          />
+          <OracleStatCard
+            label="Latest Run"
+            value={(
+              <LocalDateTime
+                value={latestRun?.startedAt ?? null}
+                emptyLabel="No runs yet"
+                className={CARD_VALUE_CLASS}
+              />
+            )}
+            meta={latestRun ? (
+              <>
+                {latestRunStatus ? (
+                  <span className={cn(BADGE_BASE_CLASS, latestRunStatus.className)}>
+                    {latestRunStatus.label}
+                  </span>
+                ) : null}
+                <span className={INFO_CHIP_CLASS}>{latestRun.verifierModelLabel}</span>
+                <span className={INFO_CHIP_CLASS}>
+                  {runHistory.length.toLocaleString('en-US')} run{runHistory.length === 1 ? '' : 's'}
+                </span>
+              </>
+            ) : (
+              <span className={cn('text-[12px] text-[#8a8075]', DASHBOARD_META_TEXT_CLASS)}>
+                Waiting for the first oracle run
+              </span>
+            )}
+          />
+        </div>
       </section>
 
       {historyEntries.length > 0 ? (

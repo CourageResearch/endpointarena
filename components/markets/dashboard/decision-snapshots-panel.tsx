@@ -146,7 +146,7 @@ export function MarketDecisionSnapshotsPanel({
                             ) : null}
                           </div>
                         </div>
-                        <div className={cn('mt-3 whitespace-pre-wrap text-[#4d453c]', DETAILS_BODY_TEXT_CLASS, 'leading-[1.7]')}>
+                        <div className={cn('mt-3 whitespace-pre-wrap text-[0.88rem] text-[#4d453c] sm:text-[0.91rem]', DETAILS_BODY_TEXT_CLASS, 'leading-[1.7]')}>
                           {latestReasoning || 'No thesis provided'}
                         </div>
                       </section>

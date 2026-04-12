@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { getSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
-import { ModelIcon } from '@/components/ModelIcon'
 
 type VerificationStatus = {
   authenticated: boolean
@@ -25,6 +24,23 @@ type ChallengePayload = {
   challengeToken: string
   expiresAt: string
   tweetTemplate: string
+}
+
+function XLogoMark({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+function XInlineMark({ className = '', logoClassName = 'h-[0.95em] w-[0.95em]' }: { className?: string; logoClassName?: string }) {
+  return (
+    <span className={`inline-flex items-center align-[-0.14em] ${className}`}>
+      <span className="sr-only">X</span>
+      <XLogoMark className={logoClassName} />
+    </span>
+  )
 }
 
 function normalizeCallbackUrl(raw: string | null): string {
@@ -107,7 +123,7 @@ export function ProfileVerificationPanel() {
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(challenge.tweetTemplate)}`
   }, [challenge?.tweetTemplate])
 
-  const handleConnectX = async () => {
+  const startXConnection = async () => {
     if (twitterAvailable === false) {
       setError('X login is not configured yet. Add TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET.')
       return
@@ -123,6 +139,37 @@ export function ProfileVerificationPanel() {
     await signIn('twitter', {
       callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
     })
+  }
+
+  useEffect(() => {
+    if (twitterAvailable === null || window.location.hostname === 'localhost') return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connectX') !== '1') return
+
+    params.delete('connectX')
+    const nextQuery = params.toString()
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
+    window.history.replaceState(null, '', nextUrl)
+
+    void startXConnection()
+  }, [twitterAvailable, callbackUrl, router])
+
+  const handleConnectX = async () => {
+    if (twitterAvailable === false) {
+      setError('X login is not configured yet. Add TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET.')
+      return
+    }
+
+    if (window.location.hostname === 'localhost') {
+      const normalizedUrl = new URL(window.location.href)
+      normalizedUrl.hostname = '127.0.0.1'
+      normalizedUrl.searchParams.set('connectX', '1')
+      window.location.assign(normalizedUrl.toString())
+      return
+    }
+
+    await startXConnection()
   }
 
   const handleGenerateChallenge = async () => {
@@ -221,8 +268,8 @@ export function ProfileVerificationPanel() {
   return (
     <div className="space-y-5 rounded-sm border border-[#ef6f67] bg-[#fffdfa] p-5 sm:p-6">
       <div>
-        <p className="text-sm font-medium text-[#1a1a1a]">Unlock trading</p>
-        <p className="mt-1 text-sm text-[#6d645a]">Complete one X verification tweet to unlock Humans vs AI gameplay and earn points.</p>
+        <p className="text-sm font-medium text-[#1a1a1a]">Verify your account</p>
+        <p className="mt-1 text-sm text-[#6d645a]">Connect X and post one confirmation tweet to start trading.</p>
       </div>
 
       {error ? (
@@ -246,9 +293,11 @@ export function ProfileVerificationPanel() {
       {!statusData?.connected ? (
         <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
           <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Step 1</p>
-          <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Connect the X account you want to verify</h3>
+          <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">
+            Connect your <XInlineMark className="mx-0.5" /> account
+          </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6d645a]">
-            Use the same X account that will post the verification tweet. We only use this connection to confirm the tweet belongs to you.
+            Use the profile you'll post from. We'll only use this connection to confirm the tweet came from you.
           </p>
           <button
             type="button"
@@ -257,9 +306,13 @@ export function ProfileVerificationPanel() {
             className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span aria-hidden="true" className="mr-2 inline-flex h-4 w-4 items-center justify-center">
-              <ModelIcon id="grok" className="h-4 w-4" />
+              <XLogoMark className="h-4 w-4" />
             </span>
-            {twitterAvailable === false ? 'Login unavailable' : 'Connect X to begin'}
+            {twitterAvailable === false ? (
+              'Login unavailable'
+            ) : (
+              'Connect account'
+            )}
           </button>
         </div>
       ) : null}
