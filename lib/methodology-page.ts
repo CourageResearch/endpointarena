@@ -56,7 +56,7 @@ export const METHOD_PAGE_SCHEMA = buildModelDecisionJsonSchema(
 
 export const METHOD_PAGE_SCHEMA_TEXT = JSON.stringify(METHOD_PAGE_SCHEMA, null, 2)
 
-export const METHOD_PAGE_EXAMPLE_RESPONSE = {
+const METHOD_PAGE_EXAMPLE_RESPONSE = {
   forecast: {
     yesProbability: 0.61,
     binaryCall: 'yes',

@@ -267,7 +267,7 @@ export function formatPriceMovePoints(
   return `${safeDelta > 0 ? '+' : '-'}${absolutePoints} pts`
 }
 
-export function formatSignedPercent(delta: number, digits = 1): string {
+function formatSignedPercent(delta: number, digits = 1): string {
   return formatPriceMovePoints(delta, digits)
 }
 

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useTrialsOverview } from '@/components/trials/useTrialsOverview'
 import { MODEL_IDS, abbreviateType } from '@/lib/constants'
+import { sendAnalyticsEvents } from '@/lib/analytics-events'
 import {
   daysUntilUtc,
   formatCompactMoney,
@@ -592,6 +593,107 @@ function MarketCard({
   )
 }
 
+function MarketTableMobileCard({
+  row,
+  tab,
+  detailBasePath,
+}: {
+  row: MarketTableRow
+  tab: MarketBrowseTab
+  detailBasePath: string
+}) {
+  const { entry, drugName, companyName, consensus, isAwaitingFirstRun } = row
+  const marketHref = `${detailBasePath}/${encodeURIComponent(entry.market.marketId)}`
+  const daysBadge = getDaysBadge(entry.daysUntil, entry.market.event?.decisionDateKind)
+  const resolvedOutcome = getResolvedOutcomeLabel(entry)
+  const outcomeClassName = resolvedOutcome === 'YES'
+    ? 'text-[#3a8a2e]'
+    : resolvedOutcome === 'NO'
+      ? 'text-[#c43a2b]'
+      : 'text-[#8a8075]'
+
+  return (
+    <Link
+      href={marketHref}
+      className="block rounded-sm border border-[#e8ddd0] bg-white/95 p-4 transition-colors hover:bg-[#fffdfa] focus-visible:bg-[#fffdfa] focus-visible:outline-none"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="truncate text-base font-medium text-[#1a1a1a]">{drugName}</h4>
+          <div className="mt-1 text-sm text-[#5b5148]">{companyName}</div>
+        </div>
+
+        {tab === 'resolved' ? (
+          <span className={cn('shrink-0 text-sm font-semibold tabular-nums', outcomeClassName)}>
+            {resolvedOutcome}
+          </span>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#3f5f86]">
+            <span>{daysBadge.label}</span>
+            {entry.market.event?.decisionDateKind === 'soft' ? <ExpectedDateInfoButton /> : null}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-3 text-xs leading-relaxed text-[#8a8075]">{entry.description}</p>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">
+            {tab === 'resolved' ? 'Resolved' : 'Date'}
+          </div>
+          <div className="mt-1 text-sm font-medium text-[#1a1a1a]">
+            {tab === 'resolved'
+              ? formatShortDateUtc(entry.market.resolution?.resolvedAt)
+              : formatShortDateUtc(entry.market.event?.decisionDate)}
+          </div>
+        </div>
+
+        {tab === 'resolved' ? (
+          <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Outcome</div>
+            <div className={cn('mt-1 text-sm font-medium', outcomeClassName)}>{resolvedOutcome}</div>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Yes</div>
+              <div className="mt-1 text-sm font-medium text-[#3a8a2e]">{formatPercent(entry.yesPrice, 0)}</div>
+            </div>
+            <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">No</div>
+              <div className="mt-1 text-sm font-medium text-[#c43a2b]">{formatPercent(entry.noPrice, 0)}</div>
+            </div>
+          </>
+        )}
+
+        <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">Volume</div>
+          <div className="mt-1 text-sm font-medium text-[#1a1a1a]">{formatCompactMoney(entry.volumeUsd)}</div>
+        </div>
+
+        <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">AI Yes</div>
+          <div className={cn('mt-1 text-sm font-medium', isAwaitingFirstRun ? 'text-[#8a8075]' : 'text-[#2f7b40]')}>
+            {isAwaitingFirstRun ? '—' : consensus.approveCount}
+          </div>
+        </div>
+
+        <div className="rounded-none border border-[#e8ddd0] bg-white px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#aa9d8d]">AI No</div>
+          <div className={cn('mt-1 text-sm font-medium', isAwaitingFirstRun ? 'text-[#8a8075]' : 'text-[#9b3028]')}>
+            {isAwaitingFirstRun ? '—' : consensus.rejectCount}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 text-[11px] leading-relaxed text-[#6f665b]">
+        {consensus.summary}
+      </div>
+    </Link>
+  )
+}
+
 function MarketTable({
   entries,
   tab,
@@ -607,6 +709,7 @@ function MarketTable({
   headerTabs,
   sortResetKey,
   showRowCount = true,
+  mobileCardLayout = false,
 }: {
   entries: MarketCardEntry[]
   tab: MarketBrowseTab
@@ -622,6 +725,7 @@ function MarketTable({
   headerTabs?: ReactNode
   sortResetKey?: string | number
   showRowCount?: boolean
+  mobileCardLayout?: boolean
 }) {
   const router = useRouter()
   const [sortState, setSortState] = useState<MarketTableSortState>(null)
@@ -753,8 +857,22 @@ function MarketTable({
             {emptyMessage || `No ${tab === 'resolved' ? 'resolved' : 'upcoming'} trials match the current filters.`}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-[900px] w-full table-fixed border-collapse">
+          <>
+            {mobileCardLayout ? (
+              <div className="space-y-3 p-3 sm:hidden">
+                {visibleRows.map((row) => (
+                  <MarketTableMobileCard
+                    key={`market-mobile-${row.entry.market.marketId}`}
+                    row={row}
+                    tab={tab}
+                    detailBasePath={detailBasePath}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            <div className={cn('overflow-x-auto', mobileCardLayout ? 'hidden sm:block' : undefined)}>
+              <table className="min-w-[900px] w-full table-fixed border-collapse">
                 {tab === 'resolved' ? (
                   <colgroup>
                     <col className="w-[48%]" />
@@ -931,8 +1049,9 @@ function MarketTable({
                     )
                   })}
                 </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -1143,27 +1262,14 @@ export function TrialsBrowseHomepage({
     }
 
     const timer = window.setTimeout(() => {
-      const payload = JSON.stringify({
-        events: [{
-          type: 'trial_search',
-          url: pathname,
-          referrer: typeof document !== 'undefined' ? document.referrer : undefined,
-          elementId: variant === 'table' ? 'trials-home-table-search' : 'trials-home-search',
-          searchQuery: normalizedSearchQuery,
-          resultCount: visibleEntries.length,
-        }],
-      })
-
-      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-        navigator.sendBeacon('/api/analytics', payload)
-      } else {
-        fetch('/api/analytics', {
-          method: 'POST',
-          body: payload,
-          headers: { 'Content-Type': 'application/json' },
-          keepalive: true,
-        }).catch(() => {})
-      }
+      sendAnalyticsEvents([{
+        type: 'trial_search',
+        url: pathname,
+        referrer: typeof document !== 'undefined' ? document.referrer : undefined,
+        elementId: variant === 'table' ? 'trials-home-table-search' : 'trials-home-search',
+        searchQuery: normalizedSearchQuery,
+        resultCount: visibleEntries.length,
+      }])
 
       try {
         window.sessionStorage.setItem(storageKey, '1')
@@ -1286,6 +1392,7 @@ export function TrialsBrowseHomepage({
           entries={visibleEntries}
           tab={selectedTab}
           detailBasePath={detailBasePath}
+          mobileCardLayout
           headerLinkHref={headerLinkHref}
           headerLinkLabel={headerLinkLabel}
           headerLinkPlacement={headerLinkPlacement}

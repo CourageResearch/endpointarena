@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
 import { extractClientIp, isPrivateIp } from '@/lib/geo-country'
-import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
+import {
+  getAnalyticsSessionHash,
+  normalizeAnalyticsEventType,
+  type AnalyticsBatchPayload,
+  type AnalyticsEventPayload,
+} from '@/lib/analytics-events'
 
 const BOT_PATTERN = /bot|crawler|spider|headless|phantom|selenium/i
 
@@ -18,14 +23,6 @@ function normalizeResultCount(value: unknown): number | null {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return null
   return Math.max(0, Math.min(100000, Math.round(parsed)))
-}
-
-async function computeSessionHash(userAgent: string): Promise<string> {
-  const date = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-  const data = new TextEncoder().encode(userAgent + date)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }
 
 async function geolocateIp(ip: string): Promise<{ country: string; city: string } | null> {
@@ -58,9 +55,7 @@ async function geolocateIp(ip: string): Promise<{ country: string; city: string 
 
 export async function POST(request: Request) {
   try {
-    await ensureAnalyticsEventsSchema()
-
-    const body = await request.json()
+    const body = await request.json() as AnalyticsBatchPayload
     const events: unknown[] = body?.events
 
     if (!Array.isArray(events) || events.length === 0) {
@@ -74,57 +69,54 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const sessionHash = await computeSessionHash(userAgent)
+    const sessionHash = await getAnalyticsSessionHash(body?.anonymousId)
 
     // Extract IP and geolocate once per batch
     const clientIp = extractClientIp(request.headers)
     const geo = clientIp ? await geolocateIp(clientIp) : null
 
-    // Cap at 50 events and normalize legacy search event names during the compatibility window.
-    const validTypes = new Set(['pageview', 'click', 'market_search', 'trial_search'])
-    const rows = events
+    const rows: Array<{
+      type: 'pageview' | 'click' | 'trial_search'
+      url: string
+      referrer: string | null
+      userAgent: string
+      sessionHash: string | null
+      elementId: string | null
+      ipAddress: string | null
+      country: string | null
+      city: string | null
+      searchQuery: string | null
+      resultCount: number | null
+    }> = events
       .slice(0, 50)
-      .map((event: any) => {
-        const rawType = String(event?.type || '')
-        if (!validTypes.has(rawType)) return null
+      .flatMap((event) => {
+        const typedEvent = event as AnalyticsEventPayload
+        const type = normalizeAnalyticsEventType(typedEvent?.type)
+        if (!type) return []
 
-        const type = rawType === 'market_search' ? 'trial_search' : rawType
         const isSearchEvent = type === 'trial_search'
-        const url = String(event.url || '').slice(0, 500)
+        const url = String(typedEvent.url || '').slice(0, 500)
         const searchQuery = isSearchEvent
-          ? normalizeSearchQuery(event.searchQuery)
+          ? normalizeSearchQuery(typedEvent.searchQuery)
           : null
 
-        if (!url) return null
-        if (isSearchEvent && !searchQuery) return null
+        if (!url) return []
+        if (isSearchEvent && !searchQuery) return []
 
-        return {
+        return [{
           type,
           url,
-          referrer: event.referrer ? String(event.referrer).slice(0, 500) : null,
+          referrer: typedEvent.referrer ? String(typedEvent.referrer).slice(0, 500) : null,
           userAgent,
           sessionHash,
-          elementId: event.elementId ? String(event.elementId).slice(0, 200) : null,
+          elementId: typedEvent.elementId ? String(typedEvent.elementId).slice(0, 200) : null,
           ipAddress: clientIp,
           country: geo?.country ?? null,
           city: geo?.city ?? null,
           searchQuery,
-          resultCount: isSearchEvent ? normalizeResultCount(event.resultCount) : null,
-        }
+          resultCount: isSearchEvent ? normalizeResultCount(typedEvent.resultCount) : null,
+        }]
       })
-      .filter((row): row is {
-        type: string
-        url: string
-        referrer: string | null
-        userAgent: string
-        sessionHash: string
-        elementId: string | null
-        ipAddress: string | null
-        country: string | null
-        city: string | null
-        searchQuery: string | null
-        resultCount: number | null
-      } => row !== null)
 
     if (rows.length > 0) {
       await db.insert(analyticsEvents).values(rows)

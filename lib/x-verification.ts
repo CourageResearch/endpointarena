@@ -60,7 +60,7 @@ export function getChallengeExpiry(now: Date = new Date()): Date {
   return new Date(now.getTime() + X_CHALLENGE_TTL_MINUTES * 60 * 1000)
 }
 
-export function getVerificationPostMustStayUntil(now: Date = new Date()): Date {
+function getVerificationPostMustStayUntil(now: Date = new Date()): Date {
   return new Date(now.getTime() + VERIFICATION_POST_MUST_STAY_LIVE_HOURS * 60 * 60 * 1000)
 }
 
@@ -125,7 +125,7 @@ function hasReason(error: unknown, reason: string): boolean {
   return error.details?.reason === reason
 }
 
-export function isXConnectionExpiredError(error: unknown): boolean {
+function isXConnectionExpiredError(error: unknown): boolean {
   if (hasReason(error, X_CONNECTION_EXPIRED_REASON)) return true
   return error instanceof ValidationError
     && error.message === 'Your X connection expired. Reconnect your X account and retry.'

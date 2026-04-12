@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
+import { sendAnalyticsEvents } from '@/lib/analytics-events'
 
 type AnalyticsEvent = {
   type: 'pageview'
@@ -33,18 +34,7 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
     if (events.length === 0) return
     queueRef.current = []
 
-    const payload = JSON.stringify({ events })
-
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      navigator.sendBeacon('/api/analytics', payload)
-    } else {
-      fetch('/api/analytics', {
-        method: 'POST',
-        body: payload,
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-      }).catch(() => {})
-    }
+    sendAnalyticsEvents(events)
   }, [])
 
   const enqueue = useCallback(

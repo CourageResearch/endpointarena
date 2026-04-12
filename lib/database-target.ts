@@ -1,26 +1,52 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
 import { ValidationError } from '@/lib/errors'
 
 const DATABASE_TARGETS = ['main', 'toy'] as const
 const DEFAULT_DATABASE_TARGET = 'main'
-const DATABASE_TARGET_STATE_FILE = path.join(process.cwd(), 'tmp', 'runtime-database-target.json')
+const DATABASE_TARGET_ENV_KEY = 'DATABASE_TARGET'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
 export type DatabaseTarget = (typeof DATABASE_TARGETS)[number]
-
-type PersistedDatabaseTargetState = {
-  target?: unknown
-}
+export type DatabaseTargetRuntimeSource = 'local' | 'env' | 'default'
 
 type GlobalDatabaseTargetState = typeof globalThis & {
   __endpointArenaActiveDatabaseTarget?: DatabaseTarget
+}
+
+export type DatabaseTargetRuntimeState = {
+  activeTarget: DatabaseTarget
+  source: DatabaseTargetRuntimeSource
+  switchingAllowed: boolean
+  isRailwayRuntime: boolean
+  sourceDescription: string
 }
 
 function normalizeDatabaseTarget(value: unknown): DatabaseTarget | null {
   return typeof value === 'string' && DATABASE_TARGETS.includes(value as DatabaseTarget)
     ? value as DatabaseTarget
     : null
+}
+
+function getConfiguredDatabaseTarget(): DatabaseTarget | null {
+  const rawValue = process.env[DATABASE_TARGET_ENV_KEY]?.trim()
+  if (!rawValue) {
+    return null
+  }
+
+  const normalized = normalizeDatabaseTarget(rawValue)
+  if (!normalized) {
+    throw new ValidationError(`${DATABASE_TARGET_ENV_KEY} must be one of: ${DATABASE_TARGETS.join(', ')}`)
+  }
+
+  return normalized
+}
+
+function isRailwayRuntime(): boolean {
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT_ID?.trim()
+    || process.env.RAILWAY_PROJECT_ID?.trim()
+    || process.env.RAILWAY_SERVICE_ID?.trim()
+    || process.env.RAILWAY_DEPLOYMENT_ID?.trim()
+  )
 }
 
 function parseDatabaseName(connectionString: string): string | null {
@@ -70,26 +96,69 @@ function getConfiguredToyDatabaseUrl(): string | null {
   return deriveToyDatabaseUrl(getConfiguredMainDatabaseUrl())
 }
 
-function readPersistedDatabaseTarget(): DatabaseTarget | null {
-  if (!existsSync(DATABASE_TARGET_STATE_FILE)) {
-    return null
+function getLocalActiveDatabaseTarget(): DatabaseTarget {
+  const globalState = globalThis as GlobalDatabaseTargetState
+  const currentGlobalTarget = normalizeDatabaseTarget(globalState.__endpointArenaActiveDatabaseTarget)
+  if (currentGlobalTarget) {
+    try {
+      getDatabaseUrlForTarget(currentGlobalTarget)
+      return currentGlobalTarget
+    } catch {
+      // Fall through to default selection.
+    }
   }
 
-  try {
-    const parsed = JSON.parse(readFileSync(DATABASE_TARGET_STATE_FILE, 'utf8')) as PersistedDatabaseTargetState
-    return normalizeDatabaseTarget(parsed.target)
-  } catch {
-    return null
-  }
+  globalState.__endpointArenaActiveDatabaseTarget = DEFAULT_DATABASE_TARGET
+  return DEFAULT_DATABASE_TARGET
 }
 
-function persistDatabaseTarget(target: DatabaseTarget): void {
-  mkdirSync(path.dirname(DATABASE_TARGET_STATE_FILE), { recursive: true })
-  writeFileSync(
-    DATABASE_TARGET_STATE_FILE,
-    JSON.stringify({ target }, null, 2),
-    'utf8',
-  )
+export function isRuntimeDatabaseTargetSwitchingAllowed(): boolean {
+  if (getConfiguredDatabaseTarget()) {
+    return false
+  }
+
+  if (isRailwayRuntime()) {
+    return false
+  }
+
+  return process.env.NODE_ENV !== 'production'
+}
+
+export function getDatabaseTargetRuntimeState(): DatabaseTargetRuntimeState {
+  const configuredTarget = getConfiguredDatabaseTarget()
+  const railwayRuntime = isRailwayRuntime()
+
+  if (configuredTarget) {
+    return {
+      activeTarget: configuredTarget,
+      source: 'env',
+      switchingAllowed: false,
+      isRailwayRuntime: railwayRuntime,
+      sourceDescription: railwayRuntime
+        ? 'This Railway deployment is pinned by DATABASE_TARGET. Update the Railway environment and redeploy to switch databases.'
+        : 'This runtime is pinned by DATABASE_TARGET. Clear that variable to re-enable local switching.',
+    }
+  }
+
+  if (isRuntimeDatabaseTargetSwitchingAllowed()) {
+    return {
+      activeTarget: getLocalActiveDatabaseTarget(),
+      source: 'local',
+      switchingAllowed: true,
+      isRailwayRuntime: false,
+      sourceDescription: 'Local development runtime switching is enabled for this dev server process.',
+    }
+  }
+
+  return {
+    activeTarget: DEFAULT_DATABASE_TARGET,
+    source: 'default',
+    switchingAllowed: false,
+    isRailwayRuntime: railwayRuntime,
+    sourceDescription: railwayRuntime
+      ? 'This Railway deployment defaults to Main DB. Set DATABASE_TARGET in Railway and redeploy to switch databases.'
+      : 'This runtime defaults to Main DB.',
+  }
 }
 
 export function listDatabaseTargets(): Array<{
@@ -134,38 +203,30 @@ export function getDatabaseUrlForTarget(target: DatabaseTarget): string {
 }
 
 export function getActiveDatabaseTarget(): DatabaseTarget {
-  const globalState = globalThis as GlobalDatabaseTargetState
-  const persistedTarget = readPersistedDatabaseTarget()
-  if (persistedTarget) {
-    try {
-      getDatabaseUrlForTarget(persistedTarget)
-      globalState.__endpointArenaActiveDatabaseTarget = persistedTarget
-      return persistedTarget
-    } catch {
-      // Fall through to global/default selection.
-    }
-  }
-
-  const currentGlobalTarget = normalizeDatabaseTarget(globalState.__endpointArenaActiveDatabaseTarget)
-  if (currentGlobalTarget) {
-    try {
-      getDatabaseUrlForTarget(currentGlobalTarget)
-      return currentGlobalTarget
-    } catch {
-      // Fall through to default selection.
-    }
-  }
-
-  globalState.__endpointArenaActiveDatabaseTarget = DEFAULT_DATABASE_TARGET
-  return DEFAULT_DATABASE_TARGET
+  return getDatabaseTargetRuntimeState().activeTarget
 }
 
 export function setActiveDatabaseTarget(target: DatabaseTarget): DatabaseTarget {
+  if (!isRuntimeDatabaseTargetSwitchingAllowed()) {
+    if (getConfiguredDatabaseTarget()) {
+      throw new ValidationError(
+        `Runtime database switching is disabled while ${DATABASE_TARGET_ENV_KEY} is set. Update that variable and restart the app to change targets.`
+      )
+    }
+
+    if (isRailwayRuntime()) {
+      throw new ValidationError(
+        'Runtime database switching is disabled for Railway deployments. Set DATABASE_TARGET in Railway and redeploy to change targets.'
+      )
+    }
+
+    throw new ValidationError('Runtime database switching is disabled in this environment.')
+  }
+
   getDatabaseUrlForTarget(target)
 
   const globalState = globalThis as GlobalDatabaseTargetState
   globalState.__endpointArenaActiveDatabaseTarget = target
-  persistDatabaseTarget(target)
   return target
 }
 

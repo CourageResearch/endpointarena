@@ -21,7 +21,7 @@ async function getHealthState() {
       status: 200,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown database error'
+    console.error('Health check database probe failed:', error)
 
     return {
       body: {
@@ -29,7 +29,7 @@ async function getHealthState() {
         service: 'endpoint-arena',
         database: 'error' as const,
         error: 'database_unavailable',
-        message,
+        message: 'Database connectivity unavailable',
         timestamp,
       },
       status: 503,

@@ -7,10 +7,10 @@ import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminDatabaseTargetManager, type AdminDatabaseTargetOptionDto } from '@/components/AdminDatabaseTargetManager'
 import { AdminTrialConstantsManager, type TrialRuntimeConfigDto } from '@/components/AdminTrialConstantsManager'
 import { AdminModelStartingBankroll } from '@/components/AdminModelStartingBankroll'
-import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
+import { getDatabaseTargetRuntimeState, listDatabaseTargets } from '@/lib/database-target'
 import { ensureToyAdminUser } from '@/lib/toy-database'
 import { getTrialRuntimeConfig } from '@/lib/trial-runtime-config'
-import { db, getDbForTarget, trials, users } from '@/lib/db'
+import { getDbForTarget, trials, users } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +72,7 @@ export default async function AdminSettingsPage() {
     getTrialRuntimeConfig(),
     buildDatabaseTargetOptions(),
   ])
-  const activeDatabaseTarget = getActiveDatabaseTarget()
+  const runtimeState = getDatabaseTargetRuntimeState()
 
   return (
     <AdminConsoleLayout
@@ -85,7 +85,8 @@ export default async function AdminSettingsPage() {
 
       <div className="space-y-4">
         <AdminDatabaseTargetManager
-          activeTarget={activeDatabaseTarget}
+          activeTarget={runtimeState.activeTarget}
+          runtimeState={runtimeState}
           options={databaseTargetOptions}
           toyTrialCount={config.toyTrialCount}
         />

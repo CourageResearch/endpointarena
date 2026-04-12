@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
+import { countApproxUniqueVisitors } from '@/lib/analytics-events'
 import {
   ADMIN_ACTIVITY_DAY_FILTERS,
   buildAdminDayFilterHref,
@@ -17,8 +17,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 async function getAnalyticsData(days: number) {
-  await ensureAnalyticsEventsSchema()
-
   const today = new Date()
   const todayUtcMidnight = new Date(Date.UTC(
     today.getUTCFullYear(),
@@ -39,7 +37,7 @@ async function getAnalyticsData(days: number) {
   const clicks = allEvents.filter(e => e.type === 'click')
 
   // Unique visitors (distinct sessionHash)
-  const uniqueVisitors = new Set(pageviews.map(e => e.sessionHash).filter(Boolean)).size
+  const uniqueVisitors = countApproxUniqueVisitors(pageviews)
 
   // Unique pages
   const uniquePages = new Set(pageviews.map(e => e.url)).size
@@ -174,7 +172,7 @@ export default async function AnalyticsPage({
             </div>
             <div className="bg-white/80 border border-[#5BA5ED]/30 rounded-none p-3">
               <div className="text-2xl font-bold text-[#5BA5ED]">{data.uniqueVisitors.toLocaleString()}</div>
-              <div className="text-[#5BA5ED]/60 text-xs">Unique Visitors (approx)</div>
+              <div className="text-[#5BA5ED]/60 text-xs">Unique Visitors (anon browsers, approx)</div>
             </div>
             <div className="bg-white/80 border border-[#3a8a2e]/30 rounded-none p-3">
               <div className="text-2xl font-bold text-[#3a8a2e]">{data.totalClicks.toLocaleString()}</div>

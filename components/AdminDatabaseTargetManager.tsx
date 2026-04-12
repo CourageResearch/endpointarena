@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
+import type { DatabaseTargetRuntimeState } from '@/lib/database-target'
 
 export type AdminDatabaseTargetOptionDto = {
   target: 'main' | 'toy'
@@ -21,6 +22,7 @@ type TrialRuntimeConfigUpdatedEventDetail = {
 
 type Props = {
   activeTarget: 'main' | 'toy'
+  runtimeState: DatabaseTargetRuntimeState
   options: AdminDatabaseTargetOptionDto[]
   toyTrialCount: number
 }
@@ -29,13 +31,14 @@ function formatCount(value: number | null): string {
   return value == null ? '-' : value.toLocaleString('en-US')
 }
 
-export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCount }: Props) {
+export function AdminDatabaseTargetManager({ activeTarget, runtimeState, options, toyTrialCount }: Props) {
   const router = useRouter()
   const [pendingTarget, setPendingTarget] = useState<'main' | 'toy' | null>(null)
   const [isResettingToy, setIsResettingToy] = useState(false)
   const [currentToyTrialCount, setCurrentToyTrialCount] = useState(toyTrialCount)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const allowRuntimeSwitching = runtimeState.switchingAllowed
 
   useEffect(() => {
     setCurrentToyTrialCount(toyTrialCount)
@@ -56,7 +59,7 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
   }, [])
 
   const switchTarget = async (target: 'main' | 'toy') => {
-    if (target === activeTarget || pendingTarget || isResettingToy) {
+    if (!allowRuntimeSwitching || target === activeTarget || pendingTarget || isResettingToy) {
       return
     }
 
@@ -88,7 +91,7 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
   }
 
   const resetToyDatabase = async () => {
-    if (isResettingToy || pendingTarget) {
+    if (!allowRuntimeSwitching || isResettingToy || pendingTarget) {
       return
     }
 
@@ -130,6 +133,12 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
         <h3 className="text-sm font-semibold text-[#1a1a1a]">Site Database</h3>
       </div>
 
+      {!allowRuntimeSwitching ? (
+        <div className="mt-4 rounded-none border border-[#5BA5ED]/25 bg-[#5BA5ED]/10 px-3 py-2 text-sm text-[#3f5f86]">
+          {runtimeState.sourceDescription}
+        </div>
+      ) : null}
+
       {error ? (
         <div className="mt-4 rounded-none border border-[#c43a2b]/40 bg-[#c43a2b]/10 px-3 py-2 text-sm text-[#8d2c22]">
           {error}
@@ -147,8 +156,8 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
           const isActive = option.target === activeTarget
           const isPending = pendingTarget === option.target
           const isBusy = pendingTarget != null || isResettingToy
-          const disabled = !option.configured || isPending || isBusy || isActive
-          const canResetToy = option.target === 'toy' && option.configured
+          const disabled = !allowRuntimeSwitching || !option.configured || isPending || isBusy || isActive
+          const canResetToy = allowRuntimeSwitching && option.target === 'toy' && option.configured
           const showToyResetTarget = option.target === 'toy'
 
           return (
@@ -167,11 +176,13 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
                 <span className={`rounded-none px-2 py-1 text-xs font-medium ${
                   isActive
                     ? 'bg-[#3a8a2e]/10 text-[#2f6f24]'
-                    : option.configured
+                    : !allowRuntimeSwitching
+                      ? 'bg-[#5BA5ED]/10 text-[#3f5f86]'
+                      : option.configured
                       ? 'bg-[#F5F2ED] text-[#6f665b]'
                       : 'bg-[#EF6F67]/10 text-[#8d2c22]'
                 }`}>
-                  {isActive ? 'Active' : option.configured ? 'Available' : 'Unavailable'}
+                  {isActive ? 'Active' : !allowRuntimeSwitching ? (option.configured ? 'Read only' : 'Unavailable') : option.configured ? 'Available' : 'Unavailable'}
                 </span>
               </div>
 
@@ -228,7 +239,13 @@ export function AdminDatabaseTargetManager({ activeTarget, options, toyTrialCoun
                   disabled={disabled}
                   className="w-full rounded-none border border-[#d9cdbf] bg-white px-3 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isActive ? 'Currently Active' : isPending ? 'Switching...' : `Switch to ${option.label}`}
+                  {isActive
+                    ? 'Currently Active'
+                    : !allowRuntimeSwitching
+                      ? 'Switching Disabled'
+                      : isPending
+                        ? 'Switching...'
+                        : `Switch to ${option.label}`}
                 </button>
               </div>
             </article>

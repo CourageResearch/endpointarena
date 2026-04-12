@@ -2,8 +2,9 @@ import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { ensureAdmin } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
+import { ValidationError } from '@/lib/errors'
 import {
-  getActiveDatabaseTarget,
+  getDatabaseTargetRuntimeState,
   listDatabaseTargets,
   parseDatabaseTarget,
   setActiveDatabaseTarget,
@@ -20,9 +21,12 @@ export async function GET() {
   try {
     await ensureAdmin()
 
+    const runtimeState = getDatabaseTargetRuntimeState()
+
     return successResponse({
-      target: getActiveDatabaseTarget(),
+      target: runtimeState.activeTarget,
       targets: listDatabaseTargets(),
+      runtimeState,
     }, {
       headers: {
         'X-Request-Id': requestId,
@@ -41,6 +45,11 @@ export async function PATCH(request: NextRequest) {
 
     const body = await parseJsonBody<RequestBody>(request)
     const target = parseDatabaseTarget(body.target)
+    const runtimeState = getDatabaseTargetRuntimeState()
+    if (!runtimeState.switchingAllowed) {
+      throw new ValidationError(runtimeState.sourceDescription)
+    }
+
     if (target === 'toy') {
       await ensureToyDatabaseSchema()
     }
@@ -52,6 +61,7 @@ export async function PATCH(request: NextRequest) {
     return successResponse({
       target: activeTarget,
       targets: listDatabaseTargets(),
+      runtimeState: getDatabaseTargetRuntimeState(),
     }, {
       headers: {
         'X-Request-Id': requestId,

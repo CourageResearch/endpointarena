@@ -6,7 +6,6 @@ import { authOptions } from '@/lib/auth'
 import { ADMIN_EMAIL } from '@/lib/constants'
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
-import { ensureAnalyticsEventsSchema } from '@/lib/analytics-events'
 import {
   ADMIN_ACTIVITY_DAY_FILTERS,
   buildAdminDayFilterHref,
@@ -27,8 +26,6 @@ type SearchRollup = {
 }
 
 async function getSearchAnalytics(days: number) {
-  await ensureAnalyticsEventsSchema()
-
   const today = new Date()
   const todayUtcMidnight = new Date(Date.UTC(
     today.getUTCFullYear(),

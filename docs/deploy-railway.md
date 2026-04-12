@@ -74,6 +74,7 @@ node scripts/run-railway.js variable list --service endpoint-arena-app --environ
 Verify these app variables exist before cutting the release:
 
 - `DATABASE_URL`
+- `DATABASE_TARGET` when you need a Railway deployment pinned to `main` or `toy`. Railway env is the source of truth for the active target; the deployed admin switcher is read-only.
 - `NEXTAUTH_SECRET`
 - `NEXTAUTH_URL`
 - `NEXT_PUBLIC_SITE_URL`
@@ -91,12 +92,14 @@ From the exact candidate commit, run:
 
 ```powershell
 npm run typecheck
+npm test
 npm run build
 npm run knip
-node --import tsx --test tests\model-id-rename.test.ts tests\market-engine.test.ts tests\fireworks-model-decision.test.ts
 ```
 
 Push the release branch and wait for green GitHub `CI` before touching `master`.
+
+As of April 12, 2026, `npm audit --omit=dev` should be clear except for the inherited `nodemailer` advisory that comes through `next-auth` and does not yet have an upstream fix.
 
 ## Legacy maintenance window cutover
 
