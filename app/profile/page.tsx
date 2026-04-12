@@ -82,11 +82,6 @@ function formatShares(value: number): string {
   return safe.toFixed(4).replace(/\.?0+$/, '') || '0'
 }
 
-function formatPricePercent(value: number): string {
-  const safe = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
-  return `${(safe * 100).toFixed(1).replace(/\.0$/, '')}%`
-}
-
 function toTradeActionLabel(action: ProfileTradeAction): 'Buy Yes' | 'Buy No' | 'Sell Yes' | 'Sell No' {
   switch (action) {
     case 'BUY_YES':
@@ -463,7 +458,6 @@ export default async function ProfilePage() {
                       <col className="w-[4.75rem]" />
                       <col className="w-[4.75rem]" />
                       <col className="w-[4.5rem]" />
-                      <col className="w-[4.5rem]" />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-[#e8ddd0]">
@@ -473,7 +467,6 @@ export default async function ProfilePage() {
                         <th className="px-2 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Action</th>
                         <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Amount</th>
                         <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Shares</th>
-                        <th className="px-2 py-2 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Fill Price</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -502,7 +495,6 @@ export default async function ProfilePage() {
                             <td className={`px-2 py-2 align-middle whitespace-nowrap ${actionTone}`}>{actionLabel}</td>
                             <td className="px-2 py-2 align-middle text-center tabular-nums text-[#8a8075]">{formatUsd(trade.usdAmount)}</td>
                             <td className="px-2 py-2 align-middle text-center tabular-nums text-[#8a8075]">{formatShares(trade.shares)}</td>
-                            <td className="px-2 py-2 align-middle text-center tabular-nums text-[#8a8075]">{formatPricePercent(trade.priceAfter)}</td>
                           </tr>
                         )
                       })}
