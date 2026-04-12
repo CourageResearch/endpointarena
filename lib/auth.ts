@@ -4,7 +4,7 @@ import type { Adapter, AdapterUser } from 'next-auth/adapters'
 import { getServerSession } from 'next-auth'
 import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import TwitterProvider from 'next-auth/providers/twitter'
+import XProvider from 'next-auth/providers/twitter'
 import { accounts, db, getActiveDb, sessions, users, verificationTokens } from '@/lib/db'
 import { and, eq } from 'drizzle-orm'
 import { ADMIN_EMAIL, STARTER_CASH } from '@/lib/constants'
@@ -52,7 +52,7 @@ function verifyPassword(password: string, encoded: string | null | undefined): b
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
-function extractTwitterUsername(profile: unknown): string | null {
+function extractXUsername(profile: unknown): string | null {
   if (!profile || typeof profile !== 'object') return null
   const record = profile as { data?: { username?: string }; username?: string; screen_name?: string }
   const username = record.data?.username || record.username || record.screen_name
@@ -303,7 +303,7 @@ function getProviders() {
 
   if (xClientId && xClientSecret) {
     providers.push(
-      TwitterProvider({
+      XProvider({
         clientId: xClientId,
         clientSecret: xClientSecret,
         version: '2.0',
@@ -436,7 +436,7 @@ export const authOptions: NextAuthOptions = {
 
       const xUserId = account.providerAccountId
       if (!xUserId) {
-        return '/login?error=TwitterConnectionFailed'
+          return '/login?error=XConnectionFailed'
       }
 
       const existingRows = await db
@@ -454,14 +454,14 @@ export const authOptions: NextAuthOptions = {
           .limit(1)
         const linkedElsewhere = linkedRows[0] ?? null
         if (linkedElsewhere && linkedElsewhere.id !== user.id) {
-          return '/login?error=TwitterAccountAlreadyLinked'
+          return '/login?error=XAccountAlreadyLinked'
         }
       }
 
       await db.update(users)
         .set({
           xUserId,
-          xUsername: extractTwitterUsername(profile),
+          xUsername: extractXUsername(profile),
           xConnectedAt: new Date(),
         })
         .where(eq(users.id, user.id))
@@ -501,8 +501,8 @@ export const authOptions: NextAuthOptions = {
           .select({
             xUserId: users.xUserId,
             xUsername: users.xUsername,
-            tweetVerifiedAt: users.tweetVerifiedAt,
-            tweetMustStayUntil: users.tweetMustStayUntil,
+            xVerifiedAt: users.xVerifiedAt,
+            xMustStayUntil: users.xMustStayUntil,
           })
           .from(users)
           .where(eq(users.id, token.sub))
@@ -510,8 +510,8 @@ export const authOptions: NextAuthOptions = {
         const currentUser = userRows[0] ?? null
         session.user.xConnected = Boolean(currentUser?.xUserId)
         session.user.xUsername = currentUser?.xUsername ?? null
-        session.user.xVerified = Boolean(currentUser?.tweetVerifiedAt)
-        session.user.xVerificationMustStayUntil = currentUser?.tweetMustStayUntil?.toISOString() ?? null
+        session.user.xVerified = Boolean(currentUser?.xVerifiedAt)
+        session.user.xVerificationMustStayUntil = currentUser?.xMustStayUntil?.toISOString() ?? null
       }
       return session
     },

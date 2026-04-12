@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
-import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
+import { getXVerificationStatusForUser } from '@/lib/x-status'
 
 export async function GET() {
   const requestId = createRequestId()
@@ -27,7 +27,7 @@ export async function GET() {
       })
     }
 
-    const status = await getTwitterVerificationStatusForUser(session.user.id)
+    const status = await getXVerificationStatusForUser(session.user.id)
     if (!status) {
       return successResponse({
         authenticated: false,

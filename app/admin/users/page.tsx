@@ -190,7 +190,7 @@ async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
   }
 }
 
-async function fetchTwitterUsername(accessToken: string): Promise<string | null> {
+async function fetchXUsername(accessToken: string): Promise<string | null> {
   try {
     const response = await fetch('https://api.twitter.com/2/users/me?user.fields=username', {
       headers: {
@@ -217,13 +217,13 @@ async function backfillMissingXUsernames(userRows: Array<typeof users.$inferSele
   const userIds = userRows.map((user) => user.id)
   if (userIds.length === 0) return
 
-  const twitterAccounts = await db.query.accounts.findMany({
+  const xAccounts = await db.query.accounts.findMany({
     where: and(
       eq(accounts.provider, 'twitter'),
       inArray(accounts.userId, userIds),
     ),
   })
-  const accountByUserId = new Map(twitterAccounts.map((account) => [account.userId, account]))
+  const accountByUserId = new Map(xAccounts.map((account) => [account.userId, account]))
 
   const candidates = userRows
     .filter((user) => {
@@ -239,7 +239,7 @@ async function backfillMissingXUsernames(userRows: Array<typeof users.$inferSele
     const accessToken = account?.access_token?.trim()
     if (!accessToken) return
 
-    const username = await fetchTwitterUsername(accessToken)
+    const username = await fetchXUsername(accessToken)
     if (!username) return
 
     await db.update(users)

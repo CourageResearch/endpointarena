@@ -16,7 +16,7 @@ import { db, marketActions, marketActors, marketPositions, predictionMarkets, tr
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
-import { getTwitterVerificationStatusForUser } from '@/lib/twitter-status'
+import { getXVerificationStatusForUser } from '@/lib/x-status'
 import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
 import { userColumns } from '@/lib/users/query-shapes'
 import { buildNoIndexMetadata } from '@/lib/seo'
@@ -60,7 +60,7 @@ type ProfileTradeRow = {
 }
 
 function formatShortDate(value: Date | null | undefined): string {
-  if (!value) return '—'
+  if (!value) return '-'
   return value.toLocaleDateString('en-US', {
     month: 'numeric',
     day: 'numeric',
@@ -101,9 +101,9 @@ function toTradeActionLabel(action: ProfileTradeAction): 'Buy Yes' | 'Buy No' | 
 }
 
 function toTicker(symbols: string | null | undefined): string {
-  if (!symbols) return '—'
+  if (!symbols) return '-'
   const first = symbols.split(',')[0]?.trim()
-  return first || '—'
+  return first || '-'
 }
 
 async function getProfileTradingData(actorId: string, tradingCashBalance: number): Promise<{
@@ -171,8 +171,8 @@ async function getProfileTradingData(actorId: string, tradingCashBalance: number
     return {
         marketHref: market.trialQuestionId && supportedQuestionIds.has(market.trialQuestionId) ? `/trials/${market.id}` : null,
         drugName: question?.trial.shortTitle?.trim() || 'Unknown trial',
-        companyName: question?.trial.sponsorName?.trim() || '—',
-        ticker: question?.trial.sponsorTicker?.trim() || '—',
+        companyName: question?.trial.sponsorName?.trim() || '-',
+        ticker: question?.trial.sponsorTicker?.trim() || '-',
         decisionDate: question?.trial.estPrimaryCompletionDate ?? null,
       }
 
@@ -214,8 +214,8 @@ async function getProfileTradingData(actorId: string, tradingCashBalance: number
       const display = market ? getMarketDisplay(market) : {
         marketHref: null,
         drugName: 'Unknown market',
-        companyName: '—',
-        ticker: '—',
+        companyName: '-',
+        ticker: '-',
         decisionDate: null,
       }
       const timestamp = action.createdAt ?? action.runDate
@@ -296,13 +296,13 @@ export default async function ProfilePage() {
   const { actor, account } = await ensureHumanTradingAccount({
     userId: user.id,
     displayName: user.name,
-    startingCash: getCanonicalHumanStartingCash(Boolean(user.tweetVerifiedAt)),
+    startingCash: getCanonicalHumanStartingCash(Boolean(user.xVerifiedAt)),
   })
 
   const [{ tradingCashBalance, positionsValue, totalEquity, holdings, trades }, verificationStatus] = await Promise.all([
     getProfileTradingData(actor.id, account.cashBalance),
-    getTwitterVerificationStatusForUser(user.id).catch(() => {
-      console.warn('Failed to load Twitter verification status for profile page', { userId: user.id })
+    getXVerificationStatusForUser(user.id).catch(() => {
+      console.warn('Failed to load X verification status for profile page', { userId: user.id })
       return null
     }),
   ])
@@ -360,7 +360,7 @@ export default async function ProfilePage() {
               </div>
               <div className="min-w-0 rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4 md:col-span-2 xl:col-span-1">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Humans Rank</p>
-                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '—'}</p>
+                <p className="mt-3 text-3xl font-semibold tabular-nums text-[#1a1a1a]">{rank ? `#${rank}` : '-'}</p>
               </div>
             </div>
 
@@ -428,7 +428,7 @@ export default async function ProfilePage() {
                               <span>{holding.drugName}</span>
                             )}
                             <div className="hidden">
-                              {holding.ticker !== '—' ? ` (${holding.ticker})` : ''}
+                              {holding.ticker !== '-' ? ` (${holding.ticker})` : ''}
                             </div>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-[#8a8075]">{holding.ticker}</td>

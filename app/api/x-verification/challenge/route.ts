@@ -4,14 +4,14 @@ import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { db, accounts, users } from '@/lib/db'
 import { UnauthorizedError, ValidationError } from '@/lib/errors'
-import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
+import { getUsableXAccessToken } from '@/lib/x-auth'
 import { userColumns } from '@/lib/users/query-shapes'
 import {
   buildDefaultVerificationPost,
   generateChallengeToken,
   getChallengeExpiry,
   hashChallengeToken,
-} from '@/lib/twitter-verification'
+} from '@/lib/x-verification'
 
 export async function POST() {
   const requestId = createRequestId()
@@ -22,7 +22,7 @@ export async function POST() {
       throw new UnauthorizedError('Please sign in first')
     }
 
-    const [user, twitterAccount] = await Promise.all([
+    const [user, xAccount] = await Promise.all([
       db.query.users.findFirst({
         columns: userColumns,
         where: eq(users.id, session.user.id),
@@ -39,9 +39,9 @@ export async function POST() {
       throw new UnauthorizedError('User account not found')
     }
 
-    const resolvedXUserId = user.xUserId ?? twitterAccount?.providerAccountId ?? null
+    const resolvedXUserId = user.xUserId ?? xAccount?.providerAccountId ?? null
 
-    if (!resolvedXUserId || !twitterAccount) {
+    if (!resolvedXUserId || !xAccount) {
       throw new ValidationError('Connect your X account before creating a challenge')
     }
 
@@ -54,7 +54,7 @@ export async function POST() {
         .where(eq(users.id, user.id))
     }
 
-    const tokenResolution = await getUsableTwitterAccessToken(session.user.id, twitterAccount)
+    const tokenResolution = await getUsableXAccessToken(session.user.id, xAccount)
     if (!tokenResolution.accessToken) {
       if (tokenResolution.requiresReconnect) {
         throw new ValidationError('Your X connection expired. Reconnect your X account and retry.')
@@ -62,11 +62,11 @@ export async function POST() {
       throw new ValidationError('Connect your X account before creating a challenge')
     }
 
-    if (user.tweetVerifiedAt) {
+    if (user.xVerifiedAt) {
       return successResponse({
         alreadyVerified: true,
-        verifiedAt: user.tweetVerifiedAt.toISOString(),
-        mustStayUntil: user.tweetMustStayUntil?.toISOString() ?? null,
+        verifiedAt: user.xVerifiedAt.toISOString(),
+        mustStayUntil: user.xMustStayUntil?.toISOString() ?? null,
       }, {
         headers: {
           'X-Request-Id': requestId,
@@ -79,8 +79,8 @@ export async function POST() {
 
     await db.update(users)
       .set({
-        tweetChallengeTokenHash: hashChallengeToken(token),
-        tweetChallengeExpiresAt: expiresAt,
+        xChallengeTokenHash: hashChallengeToken(token),
+        xChallengeExpiresAt: expiresAt,
       })
       .where(eq(users.id, user.id))
 

@@ -1,12 +1,12 @@
 import { createHash, randomBytes } from 'crypto'
 import { ExternalServiceError, ValidationError, isAppError } from '@/lib/errors'
 
-const TWITTER_CHALLENGE_TTL_MINUTES = 10
+const X_CHALLENGE_TTL_MINUTES = 10
 const VERIFICATION_POST_MUST_STAY_LIVE_HOURS = 12
 const X_CONNECTION_EXPIRED_REASON = 'x_connection_expired'
 const X_CREDITS_DEPLETED_REASON = 'x_credits_depleted'
 
-type TwitterUserMeResponse = {
+type XUserMeResponse = {
   data?: {
     id?: string
     username?: string
@@ -14,7 +14,7 @@ type TwitterUserMeResponse = {
   }
 }
 
-type TwitterPostResponse = {
+type XPostResponse = {
   data?: {
     id?: string
     text?: string
@@ -23,7 +23,7 @@ type TwitterPostResponse = {
   }
 }
 
-type TwitterProblemResponse = {
+type XProblemResponse = {
   title?: string
   detail?: string
   type?: string
@@ -45,7 +45,7 @@ export function hashChallengeToken(token: string): string {
 }
 
 export function getChallengeExpiry(now: Date = new Date()): Date {
-  return new Date(now.getTime() + TWITTER_CHALLENGE_TTL_MINUTES * 60 * 1000)
+  return new Date(now.getTime() + X_CHALLENGE_TTL_MINUTES * 60 * 1000)
 }
 
 export function getVerificationPostMustStayUntil(now: Date = new Date()): Date {
@@ -96,7 +96,7 @@ function isXCreditsDepletedError(error: unknown): boolean {
     && error.message === 'X API credits are depleted. Add credits in X Developer Console, then try again.'
 }
 
-async function fetchFromTwitter<T>(
+async function fetchFromXApi<T>(
   url: string,
   accessToken: string,
 ): Promise<T> {
@@ -110,9 +110,9 @@ async function fetchFromTwitter<T>(
 
   if (!response.ok) {
     const payload = await response.text().catch(() => '')
-    let parsed: TwitterProblemResponse | null = null
+    let parsed: XProblemResponse | null = null
     try {
-      parsed = JSON.parse(payload) as TwitterProblemResponse
+      parsed = JSON.parse(payload) as XProblemResponse
     } catch {
       parsed = null
     }
@@ -146,8 +146,8 @@ async function fetchFromTwitter<T>(
   return await response.json() as T
 }
 
-async function fetchTwitterMe(accessToken: string): Promise<{ id: string; username: string | null; name: string | null }> {
-  const payload = await fetchFromTwitter<TwitterUserMeResponse>(
+async function fetchXProfile(accessToken: string): Promise<{ id: string; username: string | null; name: string | null }> {
+  const payload = await fetchFromXApi<XUserMeResponse>(
     'https://api.twitter.com/2/users/me?user.fields=username',
     accessToken,
   )
@@ -182,9 +182,9 @@ export async function fetchVerificationPostById(accessToken: string, postId: str
 
   if (!response.ok) {
     const payload = await response.text().catch(() => '')
-    let parsed: TwitterProblemResponse | null = null
+    let parsed: XProblemResponse | null = null
     try {
-      parsed = JSON.parse(payload) as TwitterProblemResponse
+      parsed = JSON.parse(payload) as XProblemResponse
     } catch {
       parsed = null
     }
@@ -215,7 +215,7 @@ export async function fetchVerificationPostById(accessToken: string, postId: str
     })
   }
 
-  const payload = await response.json() as TwitterPostResponse
+  const payload = await response.json() as XPostResponse
   const post = payload.data
   if (!post?.id || !post?.author_id || !post?.text) {
     return null

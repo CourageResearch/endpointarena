@@ -387,11 +387,11 @@ function getAdminUserValues(user: SourceAdminIdentity['user']): typeof users.$in
     xUserId: user.xUserId,
     xUsername: user.xUsername,
     xConnectedAt: user.xConnectedAt,
-    tweetChallengeTokenHash: user.tweetChallengeTokenHash,
-    tweetChallengeExpiresAt: user.tweetChallengeExpiresAt,
-    tweetVerifiedAt: user.tweetVerifiedAt,
-    tweetVerifiedTweetId: user.tweetVerifiedTweetId,
-    tweetMustStayUntil: user.tweetMustStayUntil,
+    xChallengeTokenHash: user.xChallengeTokenHash,
+    xChallengeExpiresAt: user.xChallengeExpiresAt,
+    xVerifiedAt: user.xVerifiedAt,
+    xVerifiedPostId: user.xVerifiedPostId,
+    xMustStayUntil: user.xMustStayUntil,
   }
 }
 
@@ -408,11 +408,11 @@ function getAdminUserUpdateValues(user: SourceAdminIdentity['user']): Partial<ty
     xUserId: user.xUserId,
     xUsername: user.xUsername,
     xConnectedAt: user.xConnectedAt,
-    tweetChallengeTokenHash: user.tweetChallengeTokenHash,
-    tweetChallengeExpiresAt: user.tweetChallengeExpiresAt,
-    tweetVerifiedAt: user.tweetVerifiedAt,
-    tweetVerifiedTweetId: user.tweetVerifiedTweetId,
-    tweetMustStayUntil: user.tweetMustStayUntil,
+    xChallengeTokenHash: user.xChallengeTokenHash,
+    xChallengeExpiresAt: user.xChallengeExpiresAt,
+    xVerifiedAt: user.xVerifiedAt,
+    xVerifiedPostId: user.xVerifiedPostId,
+    xMustStayUntil: user.xMustStayUntil,
   }
 }
 

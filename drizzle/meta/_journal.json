@@ -127,6 +127,13 @@
       "when": 1776033600000,
       "tag": "0017_cash_canonicalization",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1776036000000,
+      "tag": "0018_rename_tweet_verification_to_x",
+      "breakpoints": true
     }
   ]
 }

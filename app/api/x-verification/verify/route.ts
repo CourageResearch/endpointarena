@@ -5,7 +5,7 @@ import { createRequestId, errorResponse, parseJsonBody, successResponse } from '
 import { db, accounts, marketAccounts, users } from '@/lib/db'
 import { UnauthorizedError, ValidationError } from '@/lib/errors'
 import { ensureHumanTradingAccount, getCanonicalHumanStartingCash, getVerificationCashAward } from '@/lib/human-cash'
-import { getUsableTwitterAccessToken } from '@/lib/twitter-auth'
+import { getUsableXAccessToken } from '@/lib/x-auth'
 import { userColumns } from '@/lib/users/query-shapes'
 import { VERIFICATION_BONUS_CASH } from '@/lib/constants'
 import {
@@ -13,7 +13,7 @@ import {
   getVerificationPostMustStayUntil,
   hashChallengeToken,
   parseVerificationPostId,
-} from '@/lib/twitter-verification'
+} from '@/lib/x-verification'
 
 type VerifyBody = {
   postUrl?: string
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       throw new ValidationError('Challenge token is required')
     }
 
-    const [user, twitterAccount] = await Promise.all([
+    const [user, xAccount] = await Promise.all([
       db.query.users.findFirst({
         columns: userColumns,
         where: eq(users.id, session.user.id),
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       throw new UnauthorizedError('User account not found')
     }
 
-    if (user.tweetVerifiedAt) {
+    if (user.xVerifiedAt) {
       const { account } = await ensureHumanTradingAccount({
         userId: user.id,
         displayName: user.name,
@@ -64,9 +64,9 @@ export async function POST(request: Request) {
         verified: true,
         cashAwarded: getVerificationCashAward(true),
         cashBalance: account.cashBalance,
-        verifiedAt: user.tweetVerifiedAt.toISOString(),
-        mustStayUntil: user.tweetMustStayUntil?.toISOString() ?? null,
-        postId: user.tweetVerifiedTweetId,
+        verifiedAt: user.xVerifiedAt.toISOString(),
+        mustStayUntil: user.xMustStayUntil?.toISOString() ?? null,
+        postId: user.xVerifiedPostId,
       }, {
         headers: {
           'X-Request-Id': requestId,
@@ -74,9 +74,9 @@ export async function POST(request: Request) {
       })
     }
 
-    const resolvedXUserId = user.xUserId ?? twitterAccount?.providerAccountId ?? null
+    const resolvedXUserId = user.xUserId ?? xAccount?.providerAccountId ?? null
 
-    if (!resolvedXUserId || !twitterAccount) {
+    if (!resolvedXUserId || !xAccount) {
       throw new ValidationError('Connect your X account before verification')
     }
 
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         .where(eq(users.id, user.id))
     }
 
-    const tokenResolution = await getUsableTwitterAccessToken(session.user.id, twitterAccount)
+    const tokenResolution = await getUsableXAccessToken(session.user.id, xAccount)
     if (!tokenResolution.accessToken) {
       if (tokenResolution.requiresReconnect) {
         throw new ValidationError('Your X connection expired. Reconnect your X account and retry.')
@@ -97,15 +97,15 @@ export async function POST(request: Request) {
       throw new ValidationError('Connect your X account before verification')
     }
 
-    if (!user.tweetChallengeTokenHash || !user.tweetChallengeExpiresAt) {
+    if (!user.xChallengeTokenHash || !user.xChallengeExpiresAt) {
       throw new ValidationError('Create a new challenge token first')
     }
 
-    if (user.tweetChallengeExpiresAt.getTime() <= Date.now()) {
+    if (user.xChallengeExpiresAt.getTime() <= Date.now()) {
       throw new ValidationError('Challenge token expired. Generate a new one.')
     }
 
-    if (hashChallengeToken(challengeToken) !== user.tweetChallengeTokenHash) {
+    if (hashChallengeToken(challengeToken) !== user.xChallengeTokenHash) {
       throw new ValidationError('Challenge token does not match the active challenge')
     }
 
@@ -132,15 +132,15 @@ export async function POST(request: Request) {
     const verificationResult = await db.transaction(async (tx) => {
       const [updatedUser] = await tx.update(users)
         .set({
-          tweetVerifiedAt: now,
-          tweetVerifiedTweetId: post.id,
-          tweetMustStayUntil: mustStayUntil,
-          tweetChallengeTokenHash: null,
-          tweetChallengeExpiresAt: null,
+          xVerifiedAt: now,
+          xVerifiedPostId: post.id,
+          xMustStayUntil: mustStayUntil,
+          xChallengeTokenHash: null,
+          xChallengeExpiresAt: null,
         })
         .where(and(
           eq(users.id, user.id),
-          isNull(users.tweetVerifiedAt),
+          isNull(users.xVerifiedAt),
         ))
         .returning({
           id: users.id,
@@ -148,9 +148,9 @@ export async function POST(request: Request) {
 
       if (!updatedUser) {
         const [verifiedUser] = await tx.select({
-          verifiedAt: users.tweetVerifiedAt,
-          mustStayUntil: users.tweetMustStayUntil,
-          postId: users.tweetVerifiedTweetId,
+          verifiedAt: users.xVerifiedAt,
+          mustStayUntil: users.xMustStayUntil,
+          postId: users.xVerifiedPostId,
         })
           .from(users)
           .where(eq(users.id, user.id))
