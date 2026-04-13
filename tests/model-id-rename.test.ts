@@ -4,7 +4,7 @@ import { AI_SUBSCRIPTION_MODEL_IDS } from '../lib/admin-ai-shared'
 import { MODEL_IDS, MODEL_INFO } from '../lib/constants'
 import { getDailyRunAutomationModelId } from '../lib/markets/automation-handoff-shared'
 import { MODEL_METHOD_BINDINGS, MODEL_PROVIDER_MODEL_IDS } from '../lib/model-runtime-metadata'
-import { normalizeTrialMonitorVerifierModelKey } from '../lib/trial-monitor-verifier-models'
+import { getTrialMonitorVerifierSpec, normalizeTrialMonitorVerifierModelKey } from '../lib/trial-monitor-verifier-models'
 import {
   LEGACY_MODEL_ID_RENAMES,
   LEGACY_VERIFIER_MODEL_KEY_RENAMES,
@@ -42,8 +42,10 @@ test('shared registries stay aligned with canonical model ids', () => {
   assert.deepEqual(sortedKeys(MODEL_METHOD_BINDINGS), expectedKeys)
   assert.deepEqual(sortedKeys(MODEL_PROVIDER_MODEL_IDS), expectedKeys)
   assert.equal(MODEL_PROVIDER_MODEL_IDS['gpt-5.4'], 'gpt-5.4')
+  assert.equal(MODEL_PROVIDER_MODEL_IDS['gemini-3-pro'], 'gemini-3.1-pro-preview')
   assert.equal(MODEL_PROVIDER_MODEL_IDS['deepseek-v3.2'], 'accounts/fireworks/models/deepseek-v3p2')
   assert.equal(MODEL_PROVIDER_MODEL_IDS['llama-4-scout'], 'accounts/fireworks/models/llama-v3p3-70b-instruct')
+  assert.equal(MODEL_INFO['gemini-3-pro'].fullName, 'Gemini 3.1 Pro')
   assert.equal(MODEL_INFO['llama-4-scout'].fullName, 'Llama 3.3 70B')
 })
 
@@ -56,6 +58,8 @@ test('subscription and automation lanes point at gpt-5.4', () => {
 test('trial monitor verifier keys no longer accept steady-state legacy aliases', () => {
   assert.equal(normalizeTrialMonitorVerifierModelKey('gpt-5.4'), 'gpt-5.4')
   assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4.20'), 'grok-4.20')
+  assert.equal(getTrialMonitorVerifierSpec('gemini-3-pro').label, 'Gemini 3.1 Pro (Google)')
+  assert.equal(getTrialMonitorVerifierSpec('gemini-3-pro').model, 'gemini-3.1-pro-preview')
   assert.equal(normalizeTrialMonitorVerifierModelKey('gpt-5.2'), null)
   assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4.1'), null)
   assert.equal(normalizeTrialMonitorVerifierModelKey('grok-4'), null)

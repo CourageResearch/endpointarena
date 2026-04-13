@@ -44,11 +44,11 @@ const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMo
   },
   'gemini-3-pro': {
     key: 'gemini-3-pro',
-    label: 'Gemini 3 Pro (Google)',
+    label: 'Gemini 3.1 Pro (Google)',
     provider: 'google',
     providerLabel: 'Google',
     envKey: 'GOOGLE_API_KEY',
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3.1-pro-preview',
   },
   'claude-opus': {
     key: 'claude-opus',

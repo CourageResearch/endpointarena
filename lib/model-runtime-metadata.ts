@@ -50,9 +50,9 @@ const MODEL_RUNTIME_METADATA: Record<ModelId, ModelRuntimeMetadata> = {
     },
   },
   'gemini-3-pro': {
-    providerModelId: 'gemini-3-pro-preview',
+    providerModelId: 'gemini-3.1-pro-preview',
     method: {
-      version: 'gemini-3-pro-preview',
+      version: 'gemini-3.1-pro-preview',
       internet: true,
       internetDetail: 'Google Search grounding',
       reasoning: 'Thinking',

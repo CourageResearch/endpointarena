@@ -36,7 +36,7 @@ const GPT_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD = 272_000
 const CLAUDE_WEB_SEARCH_USD_PER_REQUEST = 0.01
 const GPT_WEB_SEARCH_MEDIUM_CONTEXT_USD_PER_REQUEST = 0.025
 const GROK_WEB_SEARCH_USD_PER_REQUEST = 0.005
-const GEMINI_GROUNDING_WEB_SEARCH_USD_PER_REQUEST = 0.035
+const GEMINI_GROUNDING_WEB_SEARCH_USD_PER_REQUEST = 0.014
 
 // Fallback profile for historical rows that predate provider usage capture.
 // This mirrors our Claude run settings: deep thinking budget + multi-search workflow.
@@ -83,9 +83,9 @@ const MODEL_PRICING_ESTIMATES_USD_PER_1M_TOKENS: Record<ModelId, ModelPricingEst
   },
   'gemini-3-pro': {
     inputUsdPer1MTokens: 2,
-    outputUsdPer1MTokens: 15,
+    outputUsdPer1MTokens: 12,
     longContextInputTokenThreshold: GEMINI_LONG_CONTEXT_INPUT_TOKEN_THRESHOLD,
-    longContextInputUsdPer1MTokens: 3,
+    longContextInputUsdPer1MTokens: 4,
     longContextOutputUsdPer1MTokens: 18,
     webSearchUsdPerRequest: GEMINI_GROUNDING_WEB_SEARCH_USD_PER_REQUEST,
   },

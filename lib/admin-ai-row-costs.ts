@@ -70,7 +70,7 @@ const CURRENT_MODEL_PRICING: Record<ModelId, ModelPricing> = {
     assumedSearchContentInputTokens: 900,
     outputReasoningMultiplier: 1.4,
   },
-  // Our legacy `gemini-3-pro` slot currently uses the Gemini 3.1 Pro Preview price tier.
+  // This slot is billed using Gemini 3.1 Pro Preview list pricing.
   'gemini-3-pro': {
     inputUsdPer1MTokens: 2,
     outputUsdPer1MTokens: 12,
