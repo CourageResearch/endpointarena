@@ -1,5 +1,5 @@
 import { getDaysUntilUtc } from './date'
-import { glossaryTermAnchor } from './glossary'
+import { glossaryLookupAnchor } from './glossary'
 
 // =============================================================================
 // CENTRALIZED CONSTANTS
@@ -8,9 +8,8 @@ import { glossaryTermAnchor } from './glossary'
 // Admin email for access control
 export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
 
-// Human trading cash defaults.
+// Human trading cash default.
 export const STARTER_CASH = 5
-export const VERIFICATION_BONUS_CASH = 5
 
 // All known model IDs supported by the application.
 export const ALL_MODEL_IDS = [
@@ -186,5 +185,5 @@ const APP_TYPE_ABBREV: Record<string, string> = {
 // Abbreviate application type for display
 export function abbreviateType(type: string): { display: string; anchor: string } {
   const abbrev = APP_TYPE_ABBREV[type] || type
-  return { display: abbrev, anchor: glossaryTermAnchor(abbrev) }
+  return { display: abbrev, anchor: glossaryLookupAnchor(abbrev) }
 }

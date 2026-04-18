@@ -25,7 +25,7 @@ Endpoint Arena is a Next.js 16 app for clinical trial prediction markets. The pr
 - `/api/admin/markets/run-state` and `/api/admin/markets/cancel-run` legacy compatibility aliases
 - `/api/model-decisions/stream` manual one-off decision snapshot streaming for admin
 - `/api/trial-questions/[id]/outcome` trial outcome updates
-- `/api/analytics`, `/api/contact`, `/api/waitlist`, `/api/twitter-verification/*`
+- `/api/analytics`, `/api/contact`, `/api/waitlist`, `/api/x-connection/status`
 
 ## Active Prediction Pipeline
 

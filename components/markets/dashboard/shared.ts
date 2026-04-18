@@ -18,17 +18,6 @@ export const DETAILS_TOP_VALUE_CLASS = 'text-[1rem] font-normal leading-[1.4] te
 export const DETAILS_BODY_TEXT_CLASS = 'text-[0.97rem] font-normal leading-[1.55] text-[#675d52] sm:text-[1rem]'
 export const DASHBOARD_META_TEXT_CLASS = 'text-[12px] font-normal leading-[1.4] text-[#7c7267]'
 
-export type XVerificationStatus = {
-  authenticated: boolean
-  connected: boolean
-  verified: boolean
-  username: string | null
-  profile: {
-    cashBalance: number
-    rank: number
-  } | null
-}
-
 export type TraderSnapshot = {
   cashBalance: number
   yesShares: number

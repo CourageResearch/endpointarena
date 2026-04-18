@@ -10,7 +10,7 @@ import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { XInlineMark } from '@/components/XMark'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
-import { userColumns } from '@/lib/users/query-shapes'
+import { userColumns, type UserColumnsRow } from '@/lib/users/query-shapes'
 
 export const dynamic = 'force-dynamic'
 
@@ -132,7 +132,7 @@ async function getUsersData() {
   }
 }
 
-async function getUserTradingStats(userRows: Array<typeof users.$inferSelect>) {
+async function getUserTradingStats(userRows: UserColumnsRow[]) {
   const userIds = userRows.map((user) => user.id)
   if (userIds.length === 0) {
     return {
@@ -213,7 +213,7 @@ async function fetchXUsername(accessToken: string): Promise<string | null> {
   }
 }
 
-async function backfillMissingXUsernames(userRows: Array<typeof users.$inferSelect>) {
+async function backfillMissingXUsernames(userRows: UserColumnsRow[]) {
   const userIds = userRows.map((user) => user.id)
   if (userIds.length === 0) return
 

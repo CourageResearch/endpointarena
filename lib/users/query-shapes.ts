@@ -13,10 +13,6 @@ export const userColumns = {
   xUserId: true,
   xUsername: true,
   xConnectedAt: true,
-  xChallengeToken: true,
-  xChallengeTokenHash: true,
-  xChallengeExpiresAt: true,
-  xVerifiedAt: true,
-  xVerifiedPostId: true,
-  xMustStayUntil: true,
-} as const satisfies Record<keyof typeof users.$inferSelect, true>
+} as const satisfies Partial<Record<keyof typeof users.$inferSelect, true>>
+
+export type UserColumnsRow = Pick<typeof users.$inferSelect, keyof typeof userColumns>

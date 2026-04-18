@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation'
 import { buildNoIndexMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildNoIndexMetadata({
-  title: 'Verify X Account',
-  description: 'Private verification flow for linking an X account to Endpoint Arena.',
+  title: 'X Connection Redirect',
+  description: 'Compatibility redirect for legacy X connection links.',
   path: '/verify-x',
 })
 

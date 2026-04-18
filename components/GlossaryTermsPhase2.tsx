@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { glossaryTermAnchor } from '@/lib/glossary'
+import { glossaryLookupAnchor, glossaryTermAnchor } from '@/lib/glossary'
 import { BRAND_GRADIENT, HeaderDots, SquareDivider } from '@/components/site/chrome'
 
 type GlossaryTerm = {
@@ -150,7 +150,7 @@ const PHASE_2_GLOSSARY_SECTIONS: GlossarySection[] = [
 function findGlossaryTermByHash(hash: string) {
   if (!hash.startsWith('#term-')) return null
 
-  const targetAnchor = glossaryTermAnchor(decodeURIComponent(hash.replace('#term-', '')))
+  const targetAnchor = glossaryLookupAnchor(decodeURIComponent(hash.replace('#term-', '')))
   for (const section of PHASE_2_GLOSSARY_SECTIONS) {
     for (const term of section.terms) {
       if (glossaryTermAnchor(term.term) === targetAnchor) {

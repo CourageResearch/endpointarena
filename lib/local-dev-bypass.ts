@@ -1,5 +1,4 @@
 import { ADMIN_EMAIL } from '@/lib/constants'
-import { getCanonicalHumanStartingCash } from '@/lib/human-cash'
 import { getLocalDevXBypassEmailsRaw, isLocalDevXBypassEnabled } from '@/lib/x-env'
 
 function normalizeEmail(value: string | null | undefined): string | null {
@@ -31,7 +30,7 @@ export function isLocalDevBypassEmail(email: string | null | undefined): boolean
   return normalizeEmail(email) === normalizeEmail(ADMIN_EMAIL)
 }
 
-export function canUseLocalDevVerificationBypass(email: string | null | undefined): boolean {
+export function canUseLocalDevXConnectionBypass(email: string | null | undefined): boolean {
   const normalizedEmail = normalizeEmail(email)
   if (!normalizedEmail) return false
 
@@ -47,22 +46,14 @@ export function canUseLocalDevVerificationBypass(email: string | null | undefine
   return allowedEmails.has(normalizedEmail)
 }
 
-export function buildLocalDevVerificationStatus(email?: string | null) {
-  const now = new Date()
+export function buildLocalDevXConnectionStatus(email?: string | null) {
   const normalizedEmail = normalizeEmail(email)
   const username = normalizedEmail?.split('@')[0] || 'local-user'
 
   return {
     connected: true,
-    verified: true,
     requiresReconnect: false,
     xCheckState: 'ok' as const,
     username,
-    verifiedAt: now.toISOString(),
-    challenge: null,
-    profile: {
-      cashBalance: getCanonicalHumanStartingCash(true),
-      rank: 1,
-    },
   }
 }

@@ -310,7 +310,7 @@ function getProviders() {
         authorization: {
           url: 'https://x.com/i/oauth2/authorize',
           params: {
-            scope: 'users.read tweet.read offline.access',
+            scope: 'users.read offline.access',
           },
         },
       })
@@ -501,7 +501,6 @@ export const authOptions: NextAuthOptions = {
           .select({
             xUserId: users.xUserId,
             xUsername: users.xUsername,
-            xVerifiedAt: users.xVerifiedAt,
           })
           .from(users)
           .where(eq(users.id, token.sub))
@@ -509,7 +508,6 @@ export const authOptions: NextAuthOptions = {
         const currentUser = userRows[0] ?? null
         session.user.xConnected = Boolean(currentUser?.xUserId)
         session.user.xUsername = currentUser?.xUsername ?? null
-        session.user.xVerified = Boolean(currentUser?.xVerifiedAt)
       }
       return session
     },

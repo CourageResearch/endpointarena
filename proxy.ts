@@ -7,7 +7,7 @@ const ALLOWED_API_PREFIXES = [AUTH_API_PREFIX, ADMIN_API_PREFIX]
 const ALLOWED_PAGE_PREFIXES = ['/admin', '/login', '/maintenance']
 const ALLOWED_PAGE_PATHS = new Set(['/icon', '/apple-icon', '/brand'])
 const ASSET_FILE_PATTERN = /\.[a-z0-9]+$/i
-const NOINDEX_PREFIXES = ['/admin', '/login', '/signup', '/profile', '/verify-x']
+const NOINDEX_PREFIXES = ['/admin', '/login', '/signup', '/profile']
 const NOINDEX_EXACT_PATHS = new Set(['/contact/thanks', '/maintenance', '/glossary2', '/glossary3'])
 
 const adminAuthProxy = withAuth({

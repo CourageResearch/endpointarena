@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 import { glossaryTermAnchor } from '@/lib/glossary'
 import type { OpenMarketRow, PublicOutcomeEvidenceRow } from '@/lib/markets/overview-shared'
 import { formatCompactMoney, isMarketClosedToTrading } from '@/lib/markets/overview-shared'
@@ -134,9 +135,10 @@ export function MarketResolutionPanel({
               </DetailValue>
 
               <DetailValue label="Settlement Date" className="sm:min-w-[10rem] sm:flex-[0_1_10rem] lg:min-w-[9.75rem] lg:flex-[0_1_9.75rem]">
-                <span className={cn('tabular-nums whitespace-nowrap', DETAILS_TOP_VALUE_CLASS, DETAIL_TOP_VALUE_CLASS)}>
-                  {formatDateUtcCompact(resolution.resolvedAt)} UTC
-                </span>
+                <LocalDateTime
+                  value={resolution.resolvedAt}
+                  className={cn(DETAILS_TOP_VALUE_CLASS, DETAIL_TOP_VALUE_CLASS)}
+                />
               </DetailValue>
 
               <DetailValue label="Executive Summary" className="basis-full min-w-0">
@@ -266,14 +268,9 @@ export function MarketDetailsPanel({
 
           <DetailValue label="Ticker" className="sm:min-w-[7.5rem] sm:flex-[0_1_7.5rem] lg:min-w-[8rem] lg:flex-[0_1_8rem]">
             {primaryTicker ? (
-              <a
-                href={`https://finance.yahoo.com/quote/${encodeURIComponent(primaryTicker)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, DETAIL_LINK_CLASS)}
-              >
+              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS)}>
                 {primaryTicker}
-              </a>
+              </span>
             ) : (
               <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, 'text-[#9c9287]')}>Unavailable</span>
             )}

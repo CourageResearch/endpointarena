@@ -10,14 +10,12 @@ import {
 import { db, marketAccounts, marketPositions, predictionMarkets } from '@/lib/db'
 import {
   ConflictError,
-  ForbiddenError,
   NotFoundError,
   UnauthorizedError,
   ValidationError,
 } from '@/lib/errors'
 import { runBuyAction, runSellAction } from '@/lib/markets/engine'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
-import { getXVerificationStatusForUser } from '@/lib/x-status'
 import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
 
 type TradeSide = 'BUY_YES' | 'BUY_NO' | 'SELL_YES' | 'SELL_NO'
@@ -59,13 +57,6 @@ async function requireAuthenticatedUserId(): Promise<string> {
     throw new UnauthorizedError('Please sign in first')
   }
   return userId
-}
-
-async function requireVerifiedTrader(userId: string): Promise<void> {
-  const status = await getXVerificationStatusForUser(userId)
-  if (!status?.verified) {
-    throw new ForbiddenError('Complete X verification before trading')
-  }
 }
 
 async function ensureHumanTraderState(actorId: string, marketId: string): Promise<void> {
@@ -117,7 +108,6 @@ export async function GET(request: Request) {
 
   try {
     const userId = await requireAuthenticatedUserId()
-    await requireVerifiedTrader(userId)
 
     const marketId = parseMarketId(new URL(request.url).searchParams.get('marketId'))
     if (!marketId) {
@@ -146,7 +136,7 @@ export async function GET(request: Request) {
 
     const { actor } = await ensureHumanTradingAccount({
       userId,
-      startingCash: getCanonicalHumanStartingCash(true),
+      startingCash: getCanonicalHumanStartingCash(),
     })
     const actorId = actor.id
     await ensureHumanTraderState(actorId, market.id)
@@ -173,7 +163,6 @@ export async function POST(request: Request) {
 
   try {
     const userId = await requireAuthenticatedUserId()
-    await requireVerifiedTrader(userId)
 
     const body = await parseOptionalJsonBody<TradeRequest>(request, {})
     const marketId = parseMarketId(body.marketId)
@@ -221,7 +210,7 @@ export async function POST(request: Request) {
 
     const { actor } = await ensureHumanTradingAccount({
       userId,
-      startingCash: getCanonicalHumanStartingCash(true),
+      startingCash: getCanonicalHumanStartingCash(),
     })
     const actorId = actor.id
     await ensureHumanTraderState(actorId, market.id)

@@ -1,19 +1,15 @@
 import { eq, sql } from 'drizzle-orm'
 import { db, marketAccounts, marketActors } from '@/lib/db'
 import { ensureHumanMarketActor } from '@/lib/market-actors'
-import { STARTER_CASH, VERIFICATION_BONUS_CASH } from '@/lib/constants'
+import { STARTER_CASH } from '@/lib/constants'
 
 type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 type HumanActorRow = typeof marketActors.$inferSelect
 type MarketAccountRow = typeof marketAccounts.$inferSelect
 
-export function getCanonicalHumanStartingCash(isVerified: boolean): number {
-  return STARTER_CASH + (isVerified ? VERIFICATION_BONUS_CASH : 0)
-}
-
-export function getVerificationCashAward(alreadyVerified: boolean): number {
-  return alreadyVerified ? 0 : VERIFICATION_BONUS_CASH
+export function getCanonicalHumanStartingCash(): number {
+  return STARTER_CASH
 }
 
 export function shouldNormalizeHumanCashAccount(args: {
@@ -74,14 +70,14 @@ export async function ensureHumanTradingAccount(args: {
   }
 }
 
-type VerifiedHumanCashProfileRow = {
+type HumanCashProfileRow = {
   cashBalance: number
   rank: number
 }
 
-export async function getVerifiedHumanCashProfile(userId: string): Promise<VerifiedHumanCashProfileRow | null> {
-  const rows = await db.execute(sql<VerifiedHumanCashProfileRow>`
-    with verified_portfolios as (
+export async function getHumanCashProfile(userId: string): Promise<HumanCashProfileRow | null> {
+  const rows = await db.execute(sql<HumanCashProfileRow>`
+    with human_portfolios as (
       select
         u.id as user_id,
         lower(coalesce(nullif(btrim(actor.display_name), ''), nullif(btrim(u.name), ''), nullif(btrim(u.email), ''), u.id)) as sort_name,
@@ -104,7 +100,6 @@ export async function getVerifiedHumanCashProfile(userId: string): Promise<Verif
         on position.actor_id = actor.id
       left join prediction_markets market
         on market.id = position.market_id
-      where u.x_verified_at is not null
       group by u.id, actor.display_name, u.name, u.email, account.cash_balance
     )
     select
@@ -112,20 +107,20 @@ export async function getVerifiedHumanCashProfile(userId: string): Promise<Verif
       ranked.rank::int as rank
     from (
       select
-        verified_portfolios.user_id,
-        verified_portfolios.cash_balance,
+        human_portfolios.user_id,
+        human_portfolios.cash_balance,
         row_number() over (
           order by
-            verified_portfolios.total_equity desc,
-            verified_portfolios.cash_balance desc,
-            verified_portfolios.sort_name asc,
-            verified_portfolios.user_id asc
+            human_portfolios.total_equity desc,
+            human_portfolios.cash_balance desc,
+            human_portfolios.sort_name asc,
+            human_portfolios.user_id asc
         ) as rank
-      from verified_portfolios
+      from human_portfolios
     ) ranked
     where ranked.user_id = ${userId}
     limit 1
   `)
 
-  return (rows[0] as VerifiedHumanCashProfileRow | undefined) ?? null
+  return (rows[0] as HumanCashProfileRow | undefined) ?? null
 }

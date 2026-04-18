@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { glossaryTermAnchor } from '@/lib/glossary'
+import { glossaryLookupAnchor, glossaryTermAnchor } from '@/lib/glossary'
 import { HeaderDots, SquareDivider } from '@/components/site/chrome'
 
 interface GlossaryTerm {
@@ -422,7 +422,7 @@ export function GlossaryTerms({ rootId }: { rootId?: string }) {
       const hash = window.location.hash
       if (!hash || !hash.startsWith('#term-')) return
 
-      const targetAnchor = glossaryTermAnchor(decodeURIComponent(hash.replace('#term-', '')))
+      const targetAnchor = glossaryLookupAnchor(decodeURIComponent(hash.replace('#term-', '')))
       const matchedTerm = [...GUIDED_GLOSSARY_TERMS, ...GLOSSARY_TERMS].find(
         (term) => glossaryTermAnchor(term.term) === targetAnchor,
       )

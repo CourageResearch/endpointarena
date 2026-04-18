@@ -42,7 +42,7 @@ interface ModelStats {
 }
 
 export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
-  const [rawAllQuestions, openMarketState, rawRecentResolvedQuestions, verifiedUsers] = await Promise.all([
+  const [rawAllQuestions, openMarketState, rawRecentResolvedQuestions, humanUsers] = await Promise.all([
     db.query.trialQuestions.findMany({
       with: {
         trial: true,
@@ -58,7 +58,6 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
       limit: 10,
     }),
     db.query.users.findMany({
-      where: isNotNull(users.xVerifiedAt),
       columns: {
         id: true,
         name: true,
@@ -149,7 +148,7 @@ export async function getLeaderboardData(mode: LeaderboardPredictionMode) {
     return b.correct - a.correct
   })
 
-  const humanLeaderboard: HumanLeaderboardEntry[] = verifiedUsers
+  const humanLeaderboard: HumanLeaderboardEntry[] = humanUsers
     .flatMap((user) => {
       const account = openMarketState.accountMaps.byUserId.get(user.id)
       if (!account) {

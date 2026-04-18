@@ -3,6 +3,7 @@
 import type { FormEvent, ReactNode } from 'react'
 import Link from 'next/link'
 import { HeaderDots } from '@/components/site/chrome'
+import { LocalDateTime } from '@/components/ui/local-date-time'
 import {
   type MarketResolutionRow,
 } from '@/lib/markets/overview-shared'
@@ -18,7 +19,6 @@ import {
   type HumanTradeDirection,
   type HumanTradeOutcome,
   type TraderSnapshot,
-  type XVerificationStatus,
 } from '@/components/markets/dashboard/shared'
 
 const TRADE_DIRECTION_TAB_CLASS = 'relative inline-flex h-7 items-end px-0 pb-[6px] !font-sans !text-[11px] !font-medium uppercase tracking-[0.18em] !leading-none transition-colors after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:scale-x-0 after:rounded-full after:bg-current after:transition-transform focus-visible:outline-none disabled:cursor-not-allowed'
@@ -47,9 +47,8 @@ export function MarketTradePanel({
   marketQuestion,
   resolution,
   sessionStatus,
-  verificationStatus,
   safeCallbackUrl,
-  isTradeVerified,
+  canTrade,
   tradeDirection,
   tradeOutcome,
   yesPriceCents,
@@ -70,9 +69,8 @@ export function MarketTradePanel({
   marketQuestion: string
   resolution?: MarketResolutionRow | null
   sessionStatus: 'authenticated' | 'unauthenticated' | 'loading'
-  verificationStatus: XVerificationStatus | null
   safeCallbackUrl: string
-  isTradeVerified: boolean
+  canTrade: boolean
   tradeDirection: HumanTradeDirection
   tradeOutcome: HumanTradeOutcome
   yesPriceCents: number
@@ -95,9 +93,6 @@ export function MarketTradePanel({
   const outcomeTone = getOutcomeTone(resolution?.outcome)
   const resolvedYesCents = resolution?.outcome === 'YES' ? 100 : resolution?.outcome === 'NO' ? 0 : yesPriceCents
   const resolvedNoCents = resolution?.outcome === 'NO' ? 100 : resolution?.outcome === 'YES' ? 0 : noPriceCents
-  const showVerificationPrompt = Boolean(
-    !isResolvedMarket && sessionStatus === 'authenticated' && verificationStatus && !verificationStatus.verified,
-  )
 
   const gatedTradeAction = isResolvedMarket
     ? null
@@ -107,13 +102,7 @@ export function MarketTradePanel({
           label: 'Create account to trade',
           body: null,
         }
-      : showVerificationPrompt
-        ? {
-            href: `/profile?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`,
-            label: 'Complete verification',
-            body: null,
-          }
-        : null
+      : null
 
   return (
     <section className={cn('space-y-3', className)}>
@@ -144,15 +133,15 @@ export function MarketTradePanel({
                 <>
                   <button
                     type="button"
-                    disabled={!isTradeVerified}
+                    disabled={!canTrade}
                     onClick={() => onTradeDirectionChange('buy')}
                     className={cn(
                       TRADE_DIRECTION_TAB_CLASS,
                       tradeDirection === 'buy'
-                        ? isTradeVerified
+                        ? canTrade
                           ? 'text-[#61584e] after:scale-x-100'
                           : 'text-[#b8aa99] after:scale-x-100'
-                        : isTradeVerified
+                        : canTrade
                           ? 'text-[#978a7b] hover:text-[#7f7468]'
                           : 'text-[#b8aa99]',
                     )}
@@ -161,16 +150,16 @@ export function MarketTradePanel({
                   </button>
                   <button
                     type="button"
-                    disabled={!isTradeVerified}
+                    disabled={!canTrade}
                     onClick={() => onTradeDirectionChange('sell')}
                     className={cn(
                       'ml-3',
                       TRADE_DIRECTION_TAB_CLASS,
                       tradeDirection === 'sell'
-                        ? isTradeVerified
+                        ? canTrade
                           ? 'text-[#61584e] after:scale-x-100'
                           : 'text-[#b8aa99] after:scale-x-100'
-                        : isTradeVerified
+                        : canTrade
                           ? 'text-[#978a7b] hover:text-[#7f7468]'
                           : 'text-[#b8aa99]',
                     )}
@@ -213,10 +202,11 @@ export function MarketTradePanel({
 
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2.5">
-                  <div className={DETAILS_TOP_LABEL_CLASS}>Settlement</div>
-                  <div className="mt-1 text-sm font-medium text-[#3b342c]">
-                    {formatDateUtcCompact(resolution?.resolvedAt)} UTC
-                  </div>
+                  <div className={DETAILS_TOP_LABEL_CLASS}>Settled</div>
+                  <LocalDateTime
+                    value={resolution?.resolvedAt ?? null}
+                    className="mt-1 block text-sm font-medium text-[#3b342c]"
+                  />
                 </div>
                 <div className="rounded-sm border border-[#e8ddd0] bg-[#faf7f2] px-3 py-2.5">
                   <div className={DETAILS_TOP_LABEL_CLASS}>{leadEvidence ? 'Lead Source' : 'Reviewed'}</div>
@@ -238,7 +228,7 @@ export function MarketTradePanel({
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  disabled={!isTradeVerified}
+                  disabled={!canTrade}
                   onClick={() => onTradeOutcomeChange('yes')}
                   className={cn(
                     'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-65',
@@ -253,7 +243,7 @@ export function MarketTradePanel({
                 </button>
                 <button
                   type="button"
-                  disabled={!isTradeVerified}
+                  disabled={!canTrade}
                   onClick={() => onTradeOutcomeChange('no')}
                   className={cn(
                     'rounded-sm border px-3 py-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-65',
@@ -270,7 +260,7 @@ export function MarketTradePanel({
                 <label className="block">
                   <span className={cn(
                     'mb-1 block text-[10px] font-medium uppercase tracking-[0.16em]',
-                    isTradeVerified ? 'text-[#8a8075]' : 'text-[#b5aa9e]',
+                    canTrade ? 'text-[#8a8075]' : 'text-[#b5aa9e]',
                   )}>
                     Amount (USD)
                   </span>
@@ -278,7 +268,7 @@ export function MarketTradePanel({
                     value={tradeAmountUsd}
                     onChange={(event) => onTradeAmountChange(event.target.value)}
                     inputMode="decimal"
-                    disabled={!isTradeVerified}
+                    disabled={!canTrade}
                     className="h-10 w-full rounded-sm border border-[#e8ddd0] bg-white px-3 text-sm text-[#1a1a1a] placeholder:text-[#b5aa9e] outline-none transition focus:border-[#d3b891] disabled:cursor-not-allowed disabled:border-[#e4dbd0] disabled:bg-[#f4eee6] disabled:text-[#b5aa9e] disabled:placeholder:text-[#cfc4b7]"
                     placeholder="1"
                   />
@@ -329,7 +319,7 @@ export function MarketTradePanel({
         </div>
       </div>
 
-      {isTradeVerified && !isResolvedMarket ? (
+      {canTrade && !isResolvedMarket ? (
         <>
           <dl className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 px-1', DASHBOARD_META_TEXT_CLASS)}>
             <div className="inline-flex items-baseline gap-1.5">

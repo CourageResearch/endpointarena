@@ -15,8 +15,7 @@ import { authOptions } from '@/lib/auth'
 import { db, marketActions, marketActors, marketPositions, predictionMarkets, trialQuestions, users } from '@/lib/db'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
-import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
-import { getXVerificationStatusForUser } from '@/lib/x-status'
+import { ensureHumanTradingAccount, getCanonicalHumanStartingCash, getHumanCashProfile } from '@/lib/human-cash'
 import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
 import { userColumns } from '@/lib/users/query-shapes'
 import { buildNoIndexMetadata } from '@/lib/seo'
@@ -291,38 +290,32 @@ export default async function ProfilePage() {
   const { actor, account } = await ensureHumanTradingAccount({
     userId: user.id,
     displayName: user.name,
-    startingCash: getCanonicalHumanStartingCash(Boolean(user.xVerifiedAt)),
+    startingCash: getCanonicalHumanStartingCash(),
   })
 
-  const [{ tradingCashBalance, positionsValue, totalEquity, holdings, trades }, verificationStatus] = await Promise.all([
+  const [{ tradingCashBalance, positionsValue, totalEquity, holdings, trades }, humanCashProfile] = await Promise.all([
     getProfileTradingData(actor.id, account.cashBalance),
-    getXVerificationStatusForUser(user.id).catch(() => {
-      console.warn('Failed to load X verification status for profile page', { userId: user.id })
-      return null
-    }),
+    getHumanCashProfile(user.id),
   ])
-  const isVerified = Boolean(verificationStatus?.verified)
-  const rank = isVerified ? (verificationStatus?.profile?.rank ?? null) : null
+  const rank = humanCashProfile?.rank ?? null
   const nameLabel = user.name
   const generatedIdentity = getGeneratedDisplayName(user.email || user.id)
-  const identity = nameLabel || generatedIdentity
   const secondaryIdentity = user.email?.trim() || null
   const editableIdentity = nameLabel || generatedIdentity
-  const statusTone = isVerified
+  const isXConnected = Boolean(user.xUserId)
+  const statusTone = isXConnected
     ? 'border-[#b8d9b8] bg-[#eef8ee] text-[#2b6a2f]'
     : 'border-[#eadcc9] bg-[#fbf6ef] text-[#816c4e]'
-  const statusText = isVerified ? 'Verified Human Trader' : 'Verification Pending'
+  const statusText = isXConnected ? 'Human Trader + X Connected' : 'Human Trader'
 
   return (
     <PageFrame>
       <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16">
-        {!isVerified || verificationStatus?.requiresReconnect ? (
-          <div className="mb-6">
-            <ProfileVerificationPanel />
-          </div>
-        ) : null}
+        <div className="mb-6">
+          <ProfileVerificationPanel />
+        </div>
 
         <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-6 sm:p-9">
           <section>
@@ -365,17 +358,10 @@ export default async function ProfilePage() {
                   Email: <span className="font-medium text-[#1a1a1a]">{secondaryIdentity || 'No email on file'}</span>
                 </p>
                 <p>
-                  X post verification: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.verified ? 'Verified' : 'Not verified'}</span>
+                  <XInlineMark className="mr-1" /> linked: <span className="font-medium text-[#1a1a1a]">{isXConnected ? 'Yes' : 'No'}</span>
                 </p>
                 <p>
-                  <XInlineMark className="mr-1" /> connected: <span className="font-medium text-[#1a1a1a]">{verificationStatus?.connected ? 'Yes' : 'No'}</span>
-                </p>
-                <p>
-                  Verified at:{' '}
-                  <LocalDateTime
-                    value={verificationStatus?.verifiedAt ?? null}
-                    className="font-medium text-[#1a1a1a]"
-                  />
+                  <XInlineMark className="mr-1" /> handle: <span className="font-medium text-[#1a1a1a]">{user.xUsername ? `@${user.xUsername}` : '-'}</span>
                 </p>
               </div>
             </div>

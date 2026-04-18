@@ -1,34 +1,19 @@
 import { and, eq } from 'drizzle-orm'
 import { db, accounts, users } from '@/lib/db'
 import { getUsableXAccessToken } from '@/lib/x-auth'
-import { getActiveXChallenge, type ActiveXChallenge } from '@/lib/x-verification'
-import { buildLocalDevVerificationStatus, canUseLocalDevVerificationBypass } from '@/lib/local-dev-bypass'
+import { buildLocalDevXConnectionStatus, canUseLocalDevXConnectionBypass } from '@/lib/local-dev-bypass'
 import { userColumns } from '@/lib/users/query-shapes'
-import { ensureHumanTradingAccount, getCanonicalHumanStartingCash, getVerifiedHumanCashProfile } from '@/lib/human-cash'
 
-type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
+export type XCheckState = 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
 
-function trimOrNull(value: string | null | undefined): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-type XVerificationStatus = {
+export type XConnectionStatus = {
   connected: boolean
-  verified: boolean
   requiresReconnect: boolean
   xCheckState: XCheckState
   username: string | null
-  verifiedAt: string | null
-  challenge: ActiveXChallenge | null
-  profile: {
-    cashBalance: number
-    rank: number
-  } | null
 }
 
-export async function getXVerificationStatusForUser(userId: string): Promise<XVerificationStatus | null> {
+export async function getXConnectionStatusForUser(userId: string): Promise<XConnectionStatus | null> {
   const [user, xAccount] = await Promise.all([
     db.query.users.findFirst({
       columns: userColumns,
@@ -46,8 +31,8 @@ export async function getXVerificationStatusForUser(userId: string): Promise<XVe
     return null
   }
 
-  if (canUseLocalDevVerificationBypass(user.email)) {
-    return buildLocalDevVerificationStatus(user.email)
+  if (canUseLocalDevXConnectionBypass(user.email)) {
+    return buildLocalDevXConnectionStatus(user.email)
   }
 
   const resolvedXUserId = user.xUserId ?? xAccount?.providerAccountId ?? null
@@ -60,47 +45,33 @@ export async function getXVerificationStatusForUser(userId: string): Promise<XVe
       .where(eq(users.id, user.id))
   }
 
-  let tokenResolution = {
-    account: xAccount ?? null,
-    accessToken: trimOrNull(xAccount?.access_token),
-    requiresReconnect: false,
+  if (!resolvedXUserId || !xAccount) {
+    return {
+      connected: false,
+      requiresReconnect: false,
+      xCheckState: 'ok',
+      username: user.xUsername ?? null,
+    }
   }
+
+  let requiresReconnect = false
   let xCheckState: XCheckState = 'ok'
 
   try {
-    tokenResolution = await getUsableXAccessToken(user.id, xAccount)
+    const tokenResolution = await getUsableXAccessToken(user.id, xAccount)
+    requiresReconnect = tokenResolution.requiresReconnect
+    if (requiresReconnect) {
+      xCheckState = 'requires_reconnect'
+    }
   } catch (error) {
     xCheckState = 'temporarily_unavailable'
-    console.warn('Failed to resolve X access token while building verification status', { userId: user.id })
-  }
-
-  const connected = Boolean(resolvedXUserId && tokenResolution.account)
-  let verified = Boolean(user.xVerifiedAt)
-  let verifiedAt = user.xVerifiedAt
-  let requiresReconnect = tokenResolution.requiresReconnect
-
-  let profile: {
-    cashBalance: number
-    rank: number
-  } | null = null
-  const challenge = (!verified && connected) ? getActiveXChallenge(user) : null
-  if (verified) {
-    await ensureHumanTradingAccount({
-      userId: user.id,
-      displayName: user.name,
-      startingCash: getCanonicalHumanStartingCash(true),
-    })
-    profile = await getVerifiedHumanCashProfile(user.id)
+    console.warn('Failed to resolve X access token while building connection status', { userId: user.id })
   }
 
   return {
-    connected,
-    verified,
+    connected: true,
     requiresReconnect,
     xCheckState,
     username: user.xUsername ?? null,
-    verifiedAt: verifiedAt?.toISOString() ?? null,
-    challenge,
-    profile,
   }
 }

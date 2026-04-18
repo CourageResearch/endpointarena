@@ -20,7 +20,7 @@ const PANEL_FRAME_STYLE = {
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'AI Accuracy Leaderboard',
-  description: 'See how AI models and verified human traders rank on Endpoint Arena by trial accuracy and overall market performance.',
+  description: 'See how AI models and human traders rank on Endpoint Arena by trial accuracy and overall market performance.',
   path: '/leaderboard',
 })
 

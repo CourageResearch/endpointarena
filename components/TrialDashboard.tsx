@@ -8,7 +8,6 @@ import { TrialOracleRunsPanel } from '@/components/TrialOracleRunsPanel'
 import { MarketActivityFeed } from '@/components/markets/dashboard/activity-feed'
 import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
 import { MarketDescriptionCard, MarketDetailsPanel, MarketResolutionPanel } from '@/components/markets/dashboard/details-panel'
-import { XInlineMark } from '@/components/XMark'
 import {
   MarketModelPositionsPanel,
   type MarketPositionRow,
@@ -22,7 +21,6 @@ import {
   type HumanTradeOutcome,
   type MarketDashboardDecisionRow,
   type TraderSnapshot,
-  type XVerificationStatus,
 } from '@/components/markets/dashboard/shared'
 import { MarketTradePanel } from '@/components/markets/dashboard/trade-panel'
 import { MarketDetailChart, TinyPriceSparkline } from '@/components/markets/marketOverviewCharts'
@@ -270,8 +268,6 @@ export function TrialDashboard({
   const [chartScrubSnapshotDate, setChartScrubSnapshotDate] = useState<string | null>(null)
   const [positionSort, setPositionSort] = useState<PositionSortState | null>(null)
   const [showAllActivity, setShowAllActivity] = useState(false)
-  const [verificationStatus, setVerificationStatus] = useState<XVerificationStatus | null>(null)
-  const [verificationError, setVerificationError] = useState<string | null>(null)
   const [tradeDirection, setTradeDirection] = useState<HumanTradeDirection>('buy')
   const [tradeOutcome, setTradeOutcome] = useState<HumanTradeOutcome>('yes')
   const [tradeAmountUsd, setTradeAmountUsd] = useState('1')
@@ -283,39 +279,6 @@ export function TrialDashboard({
 
   const deferredMarketSearch = useDeferredValue(marketSearch.trim().toLowerCase())
   const safeCallbackUrl = pathname || '/trials'
-
-  useEffect(() => {
-    if (sessionStatus !== 'authenticated') {
-      setVerificationStatus(null)
-      setVerificationError(null)
-      return
-    }
-
-    let cancelled = false
-
-    async function loadVerificationStatus() {
-      try {
-        const response = await fetch('/api/x-verification/status', { cache: 'no-store' })
-        const payload = await response.json().catch(() => ({}))
-        if (!response.ok) {
-          throw new Error(getApiErrorMessage(payload, 'Failed to load verification status'))
-        }
-        if (!cancelled) {
-          setVerificationStatus(payload as XVerificationStatus)
-          setVerificationError(null)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setVerificationError(err instanceof Error ? err.message : 'Failed to load verification status')
-        }
-      }
-    }
-
-    loadVerificationStatus()
-    return () => {
-      cancelled = true
-    }
-  }, [sessionStatus])
 
   const marketEntries = useMemo(() => {
     return buildMarketEntries(
@@ -391,7 +354,6 @@ export function TrialDashboard({
     const marketId = selectedMarketForTrader?.marketId ?? null
     if (
       sessionStatus !== 'authenticated'
-      || !verificationStatus?.verified
       || !marketId
       || isMarketClosedToTrading(selectedMarketForTrader)
     ) {
@@ -441,7 +403,6 @@ export function TrialDashboard({
     selectedEntry?.market.status,
     selectedEntry?.market.event?.outcome,
     sessionStatus,
-    verificationStatus?.verified,
   ])
 
   const selectedMarketActions = useMemo(() => {
@@ -552,7 +513,7 @@ export function TrialDashboard({
   const useMarkets2Layout = !showMarketList && detailLayout === 'reason-under-graph'
   const useStackedLayout = !showMarketList && detailLayout === 'stacked'
   const isTabbedView = viewMode === 'tabbed'
-  const isTradeVerified = Boolean(verificationStatus?.verified)
+  const canTrade = sessionStatus === 'authenticated'
   const isResolvedMarket = isMarketClosedToTrading(selectedMarket)
   const showDetailSidebar = useStackedLayout
   const MarketTitleTag = showMarketList ? 'h3' : 'h1'
@@ -599,7 +560,7 @@ export function TrialDashboard({
     : Math.max(0, estimatedSellCapacityUsd)
   const parsedTradeAmount = Number.parseFloat(tradeAmountUsd)
   const tradeAmountValue = Number.isFinite(parsedTradeAmount) ? Math.max(0, parsedTradeAmount) : 0
-  const canSubmitTrade = isTradeVerified
+  const canSubmitTrade = canTrade
     && !isResolvedMarket
     && !tradeSubmitting
     && tradeAmountValue > 0
@@ -766,12 +727,8 @@ export function TrialDashboard({
       return
     }
 
-    if (!verificationStatus?.verified) {
-      setTradeError(
-        <>
-          Complete <XInlineMark className="mx-0.5" /> verification before trading
-        </>,
-      )
+    if (sessionStatus !== 'authenticated') {
+      setTradeError('Sign in to trade')
       return
     }
 
@@ -941,19 +898,13 @@ export function TrialDashboard({
       {sessionStatus === 'unauthenticated' && !useStackedLayout && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
           <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
-          <p className="mt-1">Browsing is open, but trading and your personal cash balance unlock after one-time <XInlineMark className="mx-0.5" /> verification.</p>
+          <p className="mt-1">Browsing is open, but trading and your personal cash balance unlock after signing in.</p>
           <Link
             href={`/login?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
             className="mt-3 inline-flex rounded-sm border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] hover:bg-[#f5eee5]"
           >
             Sign in
           </Link>
-        </div>
-      ) : null}
-
-      {sessionStatus === 'authenticated' && verificationError && !isResolvedMarket ? (
-        <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 p-4 text-sm text-[#b94e47]">
-          {verificationError}
         </div>
       ) : null}
 
@@ -1121,9 +1072,8 @@ export function TrialDashboard({
                                 marketQuestion={selectedEntry.question}
                                 resolution={selectedMarket.resolution ?? null}
                                 sessionStatus={sessionStatus}
-                                verificationStatus={verificationStatus}
                                 safeCallbackUrl={safeCallbackUrl}
-                                isTradeVerified={isTradeVerified}
+                                canTrade={canTrade}
                                 tradeDirection={tradeDirection}
                                 tradeOutcome={tradeOutcome}
                                 yesPriceCents={yesPriceCents}

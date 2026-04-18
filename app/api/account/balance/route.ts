@@ -19,7 +19,6 @@ export async function GET() {
       columns: {
         id: true,
         name: true,
-        xVerifiedAt: true,
       },
       where: eq(users.id, session.user.id),
     })
@@ -31,7 +30,7 @@ export async function GET() {
     const { account } = await ensureHumanTradingAccount({
       userId: user.id,
       displayName: user.name,
-      startingCash: getCanonicalHumanStartingCash(Boolean(user.xVerifiedAt)),
+      startingCash: getCanonicalHumanStartingCash(),
     })
 
     return successResponse({

@@ -46,6 +46,7 @@ export async function POST(request: Request, context: RouteContext) {
       },
     })
   } catch (error) {
+    console.error('AI subscription import failed', requestId, error)
     return errorResponse(error, requestId, 'Failed to import AI subscription packet')
   }
 }

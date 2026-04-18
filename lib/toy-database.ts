@@ -25,7 +25,7 @@ import { openMarketForTrialQuestion } from '@/lib/markets/engine'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { filterSupportedTrialQuestions, TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
-import { userColumns } from '@/lib/users/query-shapes'
+import { userColumns, type UserColumnsRow } from '@/lib/users/query-shapes'
 
 type DatabaseClient = typeof db
 
@@ -35,7 +35,7 @@ type SourceTrial = {
 }
 
 type SourceAdminIdentity = {
-  user: typeof users.$inferSelect
+  user: UserColumnsRow
   accounts: Array<typeof accounts.$inferSelect>
 }
 

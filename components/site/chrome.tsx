@@ -34,7 +34,6 @@ const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
     { href: '/contact', label: 'contact' },
   ],
   [
-    { href: '/pdf', label: 'one pager' },
     { href: '/glossary', label: 'glossary' },
     { href: '/brand', label: 'brand kit' },
   ],

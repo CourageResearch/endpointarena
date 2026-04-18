@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ADMIN_EMAIL } from '../lib/constants'
 import {
-  canUseLocalDevVerificationBypass,
+  canUseLocalDevXConnectionBypass,
   isLocalDevBypassEmail,
 } from '../lib/local-dev-bypass'
 
@@ -35,24 +35,24 @@ test.afterEach(() => {
   restoreEnv()
 })
 
-test('twitter dev bypass does not apply to every signed-in email', () => {
+test('X connection dev bypass does not apply to every signed-in email', () => {
   setEnvValue('NODE_ENV', 'development')
   setEnvValue('LOCAL_DEV_ADMIN_BYPASS', '0')
   setEnvValue('LOCAL_DEV_X_BYPASS', '1')
   delete process.env.LOCAL_DEV_X_BYPASS_EMAILS
 
-  assert.equal(canUseLocalDevVerificationBypass('mfischer1000+2@gmail.com'), false)
+  assert.equal(canUseLocalDevXConnectionBypass('mfischer1000+2@gmail.com'), false)
 })
 
-test('twitter dev bypass only applies to explicitly allowlisted emails', () => {
+test('X connection dev bypass only applies to explicitly allowlisted emails', () => {
   setEnvValue('NODE_ENV', 'development')
   setEnvValue('LOCAL_DEV_ADMIN_BYPASS', '0')
   setEnvValue('LOCAL_DEV_X_BYPASS', '1')
   setEnvValue('LOCAL_DEV_X_BYPASS_EMAILS', 'TraderOne@example.com, trader.two@example.com ')
 
-  assert.equal(canUseLocalDevVerificationBypass('traderone@example.com'), true)
-  assert.equal(canUseLocalDevVerificationBypass('TRADER.TWO@example.com'), true)
-  assert.equal(canUseLocalDevVerificationBypass('someoneelse@example.com'), false)
+  assert.equal(canUseLocalDevXConnectionBypass('traderone@example.com'), true)
+  assert.equal(canUseLocalDevXConnectionBypass('TRADER.TWO@example.com'), true)
+  assert.equal(canUseLocalDevXConnectionBypass('someoneelse@example.com'), false)
 })
 
 test('admin bypass still recognizes the configured admin email', () => {
@@ -61,5 +61,5 @@ test('admin bypass still recognizes the configured admin email', () => {
   delete process.env.LOCAL_DEV_X_BYPASS_EMAILS
 
   assert.equal(isLocalDevBypassEmail(ADMIN_EMAIL), true)
-  assert.equal(canUseLocalDevVerificationBypass(ADMIN_EMAIL), true)
+  assert.equal(canUseLocalDevXConnectionBypass(ADMIN_EMAIL), true)
 })

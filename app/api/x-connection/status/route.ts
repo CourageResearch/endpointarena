@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
-import { getXVerificationStatusForUser } from '@/lib/x-status'
+import { getXConnectionStatusForUser } from '@/lib/x-status'
 
 export async function GET() {
   const requestId = createRequestId()
@@ -13,13 +13,9 @@ export async function GET() {
       return successResponse({
         authenticated: false,
         connected: false,
-        verified: false,
         requiresReconnect: false,
         xCheckState: 'ok' as const,
         username: null,
-        verifiedAt: null,
-        challenge: null,
-        profile: null,
       }, {
         headers: {
           'X-Request-Id': requestId,
@@ -27,18 +23,14 @@ export async function GET() {
       })
     }
 
-    const status = await getXVerificationStatusForUser(session.user.id)
+    const status = await getXConnectionStatusForUser(session.user.id)
     if (!status) {
       return successResponse({
         authenticated: false,
         connected: false,
-        verified: false,
         requiresReconnect: false,
         xCheckState: 'ok' as const,
         username: null,
-        verifiedAt: null,
-        challenge: null,
-        profile: null,
       }, {
         headers: {
           'X-Request-Id': requestId,
@@ -49,19 +41,15 @@ export async function GET() {
     return successResponse({
       authenticated: true,
       connected: status.connected,
-      verified: status.verified,
       requiresReconnect: status.requiresReconnect,
       xCheckState: status.xCheckState,
       username: status.username,
-      verifiedAt: status.verifiedAt,
-      challenge: status.challenge,
-      profile: status.profile,
     }, {
       headers: {
         'X-Request-Id': requestId,
       },
     })
   } catch (error) {
-    return errorResponse(error, requestId, 'Failed to load verification status')
+    return errorResponse(error, requestId, 'Failed to load X connection status')
   }
 }
