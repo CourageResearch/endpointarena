@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
-import { getTrialsOverviewData } from '@/lib/trial-overview'
-import { createBrowseTrialsOverviewPayload } from '@/lib/trial-overview-payload'
 import { HomePageContent } from '@/components/HomePageContent'
 import { buildPageMetadata } from '@/lib/seo'
+import { getTrialsOverviewData } from '@/lib/trial-overview'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,23 +26,21 @@ export default async function Page({
   searchParams?: Promise<PageSearchParams>
 }) {
   const resolvedSearchParams = (await searchParams) ?? {}
-  const initialStatusTab = firstSearchParam(resolvedSearchParams.tab)
-  const initialTrialOverview = createBrowseTrialsOverviewPayload(
-    await getTrialsOverviewData({
-      includeResolved: true,
-      includeAccounts: false,
-      includeEquityHistory: false,
-      includeRecentRuns: false,
-    }),
-  )
-  if (!initialTrialOverview) {
-    throw new Error('Homepage trials overview payload was unexpectedly empty.')
-  }
+  const selectedTab = firstSearchParam(resolvedSearchParams.tab) === 'resolved'
+    ? 'resolved'
+    : null
+  const initialTrialOverview = await getTrialsOverviewData({
+    includeResolved: true,
+    includeAccounts: false,
+    includeEquityHistory: false,
+    includeRecentRuns: false,
+  })
 
   return (
     <HomePageContent
-      initialStatusTab={initialStatusTab}
       initialTrialOverview={initialTrialOverview}
+      initialStatusTab={selectedTab}
+      heroBadgeLabel="Season 4"
     />
   )
 }

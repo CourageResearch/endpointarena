@@ -1,12 +1,12 @@
-import { getServerSession } from 'next-auth'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { db, predictionMarkets, trialQuestions } from '@/lib/db'
-import { authOptions, ensureAdmin } from '@/lib/auth'
-import { reopenMarketForTrialQuestion, resolveMarketForTrialQuestion } from '@/lib/markets/engine'
+import { db, onchainMarkets, trialQuestions } from '@/lib/db'
+import { requireAdminSession } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
+import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
+import { resolveSeason4Market } from '@/lib/season4-ops'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 
 type PatchBody = {
@@ -22,9 +22,8 @@ export async function PATCH(
   const requestId = createRequestId()
 
   try {
-    await ensureAdmin()
-    const session = await getServerSession(authOptions)
-    const changedByUserId = session?.user?.id ?? null
+    const session = await requireAdminSession()
+    const changedByUserId = session.user.id ?? null
 
     const { id } = await params
     const body = await parseJsonBody<PatchBody>(request)
@@ -41,11 +40,13 @@ export async function PATCH(
     const question = await db.query.trialQuestions.findFirst({
       where: eq(trialQuestions.id, id),
     })
-    const market = await db.query.predictionMarkets.findFirst({
-      where: eq(predictionMarkets.trialQuestionId, id),
+    const linkedSeason4Markets = await db.query.onchainMarkets.findMany({
       columns: {
-        id: true,
+        marketSlug: true,
+        status: true,
+        resolvedOutcome: true,
       },
+      where: eq(onchainMarkets.trialQuestionId, id),
     })
 
     if (!question) {
@@ -60,6 +61,28 @@ export async function PATCH(
         ? previousOutcomeDate ?? new Date()
         : new Date()
 
+    const resolvedSeason4Markets = linkedSeason4Markets.filter((entry) => entry.status === 'resolved')
+    if (resolvedSeason4Markets.length > 0) {
+      if (outcome === 'Pending') {
+        throw new ValidationError('Season 4 markets cannot be reopened to Pending after onchain resolution.')
+      }
+
+      const conflicting = resolvedSeason4Markets.find((entry) => entry.resolvedOutcome && entry.resolvedOutcome !== outcome)
+      if (conflicting) {
+        throw new ValidationError(`Season 4 market ${conflicting.marketSlug} is already resolved ${conflicting.resolvedOutcome}.`)
+      }
+    }
+
+    if (outcome !== 'Pending') {
+      for (const season4Market of linkedSeason4Markets) {
+        if (season4Market.status === 'resolved') continue
+        await resolveSeason4Market({
+          identifier: season4Market.marketSlug,
+          outcome,
+        })
+      }
+    }
+
     const updated = await db.transaction(async (tx) => {
       const [nextQuestion] = await tx.update(trialQuestions)
         .set({
@@ -69,12 +92,6 @@ export async function PATCH(
         })
         .where(eq(trialQuestions.id, id))
         .returning()
-
-      if (outcome === 'Pending') {
-        await reopenMarketForTrialQuestion(id, tx)
-      } else {
-        await resolveMarketForTrialQuestion(id, outcome, tx)
-      }
 
       await recordTrialQuestionOutcomeHistory({
         dbClient: tx,
@@ -96,12 +113,13 @@ export async function PATCH(
     revalidatePath('/admin')
     revalidatePath('/admin/ai')
     revalidatePath('/admin/trials')
-    revalidatePath('/admin/markets')
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/base')
+    revalidatePath('/admin/oracle')
     revalidatePath('/admin/predictions')
+    revalidateSeason4Routes()
 
-    if (market?.id) {
-      revalidatePath(`/trials/${market.id}`)
+    for (const season4Market of linkedSeason4Markets) {
+      revalidateSeason4Routes({ marketSlug: season4Market.marketSlug })
     }
 
     return successResponse(

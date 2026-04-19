@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { sql } from 'drizzle-orm'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import {
   FooterGradientRule,
   GradientBorder,
@@ -12,9 +12,9 @@ import {
 } from '@/components/site/chrome'
 import { db, modelDecisionSnapshots, trialQuestions } from '@/lib/db'
 import { MODEL_IDS } from '@/lib/constants'
-import { getLeaderboardData } from '@/lib/leaderboard-data'
 import { formatShortDateUtc, type OpenMarketRow } from '@/lib/markets/overview-shared'
 import { buildNoIndexMetadata } from '@/lib/seo'
+import { getSeason4LeaderboardData } from '@/lib/season4-leaderboard-data'
 import { getTrialsOverviewData } from '@/lib/trial-overview'
 import { PrintDeckButton } from './PrintDeckButton'
 
@@ -220,7 +220,7 @@ export default async function InvestorTeaserPage() {
       includeEquityHistory: false,
       includeRecentRuns: false,
     }),
-    getLeaderboardData('first'),
+    getSeason4LeaderboardData({ sync: true }),
     db.select({ count: sql<number>`count(*)` }).from(trialQuestions),
     db.select({ count: sql<number>`count(*)` }).from(modelDecisionSnapshots),
   ])
@@ -297,7 +297,7 @@ export default async function InvestorTeaserPage() {
         }
       `}</style>
 
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="investor-deck-shell mx-auto max-w-6xl px-4 pb-12 pt-8 sm:px-6 sm:pb-16 sm:pt-10">
         <section

@@ -30,6 +30,10 @@ const DETAIL_LINK_CLASS = 'break-words underline decoration-dotted decoration-[#
 const DETAIL_LABEL_LINK_CLASS = 'inline-flex max-w-full underline decoration-dotted decoration-[#e1d7cb] decoration-[1px] underline-offset-[0.25em] transition-colors hover:text-[#8e8377] hover:decoration-[#b5aa9e]'
 const DETAIL_COMPACT_CARD_INNER_CLASS = 'px-4 py-3 sm:px-5 sm:py-3.5'
 
+function tickerQuoteUrl(ticker: string): string {
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`
+}
+
 function getOutcomeTone(outcome: 'YES' | 'NO' | null | undefined) {
   if (outcome === 'YES') {
     return {
@@ -88,7 +92,7 @@ export function MarketDescriptionCard({
   return (
     <div className={cn('h-full', DETAILS_CARD_SHELL_CLASS)}>
       <div className={cn('flex flex-col justify-between', DETAILS_CARD_INNER_CLASS, DETAIL_COMPACT_CARD_INNER_CLASS)} style={DETAILS_CARD_BORDER_STYLE}>
-        <dt className={cn(DETAILS_TOP_LABEL_CLASS, DETAIL_TOP_LABEL_CLASS)}>Drug Description</dt>
+        <dt className={cn(DETAILS_TOP_LABEL_CLASS, DETAIL_TOP_LABEL_CLASS)}>Trial Description</dt>
         <dd className={cn('mt-3', DETAILS_BODY_TEXT_CLASS, DETAIL_BODY_VALUE_CLASS)}>
           {drugDescriptionText}
         </dd>
@@ -198,6 +202,7 @@ export function MarketDetailsPanel({
   applicationTypeMeta,
   primaryTicker,
   showDescription = true,
+  showHeader = true,
 }: {
   className?: string
   selectedMarket: OpenMarketRow
@@ -205,6 +210,7 @@ export function MarketDetailsPanel({
   applicationTypeMeta: { display: string; anchor: string } | null
   primaryTicker: string
   showDescription?: boolean
+  showHeader?: boolean
 }) {
   const nctId = selectedMarket.event?.nctId?.trim() ?? ''
   const companyName = selectedMarket.event?.companyName?.trim() ?? ''
@@ -237,12 +243,14 @@ export function MarketDetailsPanel({
 
   return (
     <section className={cn('space-y-4', className)}>
-      <div className="px-1">
-        <div className="flex items-center gap-3">
-          <div className={DASHBOARD_SECTION_LABEL_CLASS}>Details</div>
-          <HeaderDots />
+      {showHeader ? (
+        <div className="px-1">
+          <div className="flex items-center gap-3">
+            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Details</div>
+            <HeaderDots />
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="space-y-3">
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -260,20 +268,20 @@ export function MarketDetailsPanel({
             </DetailValue>
           ) : null}
 
-          <DetailValue label="Company" className="sm:min-w-[13rem] sm:flex-[1.4_1_15rem] lg:min-w-[11.5rem] lg:flex-[1.2_1_11.5rem]">
+          <DetailValue label="Sponsor" className="sm:min-w-[13rem] sm:flex-[1.4_1_15rem] lg:min-w-[11.5rem] lg:flex-[1.2_1_11.5rem]">
             <div className={cn(DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS)}>
               {companyName || '-'}
             </div>
-          </DetailValue>
-
-          <DetailValue label="Ticker" className="sm:min-w-[7.5rem] sm:flex-[0_1_7.5rem] lg:min-w-[8rem] lg:flex-[0_1_8rem]">
             {primaryTicker ? (
-              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS)}>
-                {primaryTicker}
-              </span>
-            ) : (
-              <span className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, DETAIL_TOP_VALUE_CLASS, 'text-[#9c9287]')}>Unavailable</span>
-            )}
+              <a
+                href={tickerQuoteUrl(primaryTicker)}
+                target="_blank"
+                rel="noreferrer"
+                className={cn('whitespace-nowrap', DASHBOARD_META_TEXT_CLASS, 'text-[0.95rem] text-[#8f8478]', DETAIL_LINK_CLASS)}
+              >
+                ${primaryTicker}
+              </a>
+            ) : null}
           </DetailValue>
 
           <DetailValue label="Type" className="sm:min-w-[8.5rem] sm:flex-[0_1_9rem] lg:min-w-[7.75rem] lg:flex-[0_1_7.75rem]">

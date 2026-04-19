@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { WaitlistForm } from '@/components/WaitlistForm'
 import { BRAND_GRADIENT, FooterGradientRule, HeaderDots, PageFrame, SquareDivider } from '@/components/site/chrome'
 import { buildPageMetadata } from '@/lib/seo'
@@ -31,7 +31,7 @@ const BENEFITS = [
 export default function WaitlistPage() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16">
         <section className="rounded-none p-[1px]" style={{ background: BRAND_GRADIENT }}>

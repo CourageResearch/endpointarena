@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { GlossaryTerms } from '@/components/GlossaryTerms'
 import { FooterGradientRule, PageFrame } from '@/components/site/chrome'
 import { buildNoIndexMetadata } from '@/lib/seo'
@@ -13,7 +13,7 @@ export const metadata: Metadata = buildNoIndexMetadata({
 export default function Glossary3Page() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-16">
         <div className="mb-6 rounded-sm border border-[#e8ddd0] bg-white/80 px-4 py-3 text-sm text-[#6d6358]">

@@ -1,13 +1,7 @@
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { getAiDeskState } from '@/lib/admin-ai'
-import { isAiDataset } from '@/lib/admin-ai-shared'
-import { getActiveDatabaseTarget } from '@/lib/database-target'
-import { ValidationError } from '@/lib/errors'
-
-function getDefaultAiDatasetForCurrentDatabase(): 'toy' | 'live' {
-  return getActiveDatabaseTarget() === 'toy' ? 'toy' : 'live'
-}
+import { assertAiBatchMatchesActiveDatabase, validateRequestedAiDatasetForActiveDatabase } from '@/lib/admin-ai-active-dataset'
 
 export async function GET(request: Request) {
   const requestId = createRequestId()
@@ -16,13 +10,14 @@ export async function GET(request: Request) {
     await ensureAdmin()
 
     const { searchParams } = new URL(request.url)
-    const datasetRaw = searchParams.get('dataset') ?? getDefaultAiDatasetForCurrentDatabase()
+    const dataset = validateRequestedAiDatasetForActiveDatabase(searchParams.get('dataset'))
     const batchId = searchParams.get('batchId')
-    if (!isAiDataset(datasetRaw)) {
-      throw new ValidationError('dataset must be toy or live')
+
+    const state = await getAiDeskState(dataset, batchId)
+    if (state.batch) {
+      assertAiBatchMatchesActiveDatabase(state.batch)
     }
 
-    const state = await getAiDeskState(datasetRaw, batchId)
     return successResponse(state, {
       headers: {
         'X-Request-Id': requestId,

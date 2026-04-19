@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
 import { buildNoIndexMetadata } from '@/lib/seo'
@@ -14,7 +14,7 @@ export const metadata: Metadata = buildNoIndexMetadata({
 export default function MaintenancePage() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/85" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className={`${SITE_CONTAINER_CLASS} flex min-h-[calc(100vh-56px)] items-center py-12 sm:py-16`}>
         <div className="w-full">

@@ -256,7 +256,7 @@ const ENDPOINT_TERMS: GlossaryTerm[] = [
   {
     term: 'Primary Endpoint',
     definition:
-      'The primary endpoint is the main prespecified outcome the study is designed to evaluate. It remains a key clue on Endpoint Arena, but markets resolve on whether the overall public readout is positive or negative.',
+      'The primary endpoint is the main prespecified outcome the study is designed to evaluate. On Endpoint Arena, the core market question is whether the trial meets that primary endpoint.',
   },
   {
     term: 'Secondary Endpoint',

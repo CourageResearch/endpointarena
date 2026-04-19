@@ -6,11 +6,9 @@ import {
   type DailyRunAutomationSource,
 } from '../lib/markets/automation-handoff-shared'
 import {
-  archiveDailyRunAutomationImport,
   getDailyRunAutomationPaths,
   previewDailyRunAutomationImport,
 } from '../lib/markets/automation-handoff'
-import { executeDailyRun } from '../lib/markets/daily-run'
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
@@ -64,30 +62,11 @@ async function main() {
     filename: path.basename(inputFile),
   })
 
-  let payload: Awaited<ReturnType<typeof executeDailyRun>> | null = null
+  let payload: null = null
   let archivePath: string | null = null
 
   if (args.apply) {
-    if (preview.preview.invalidCount > 0) {
-      throw new Error('Fix invalid imported decisions before apply')
-    }
-
-    payload = await executeDailyRun(preview.normalizedRunDate, {
-      marketIds: preview.marketIds,
-      modelIds: [preview.modelId],
-      importedDecisions: new Map(
-        Array.from(preview.readyDecisionMap.entries()).map(([taskKey, item]) => [taskKey, {
-          source: preview.preview.source,
-          decision: item.decision,
-        }]),
-      ),
-      importedDecisionSource: preview.preview.source,
-    })
-
-    archivePath = await archiveDailyRunAutomationImport({
-      contents,
-      filename: path.basename(inputFile),
-    })
+    throw new Error('Legacy Season 3 automation imports are retired in Season 4. Use the Season 4 admin AI live batch import flow instead.')
   }
 
   console.log(JSON.stringify({

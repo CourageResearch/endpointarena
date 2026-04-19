@@ -69,6 +69,17 @@ export function getActiveDb(): DrizzleDb {
   return getDbForTarget(getActiveDatabaseTarget())
 }
 
+export async function closeDbConnections(): Promise<void> {
+  const clients = getClientCache()
+  const databases = getDatabaseCache()
+
+  await Promise.all(
+    Array.from(clients.values()).map((client) => client.end({ timeout: 5 })),
+  )
+  clients.clear()
+  databases.clear()
+}
+
 function getPathValue(root: unknown, path: PropertyKey[]): unknown {
   let current = root
 

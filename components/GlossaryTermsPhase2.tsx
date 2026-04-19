@@ -116,7 +116,7 @@ const PHASE_2_GLOSSARY_SECTIONS: GlossarySection[] = [
       {
         term: 'Primary Endpoint',
         subtitle: 'The main test of success',
-        definition: 'The primary endpoint is the main prespecified outcome the study is designed to evaluate. It remains a key clue on Endpoint Arena, but markets resolve on whether the overall public readout is positive or negative.',
+        definition: 'The primary endpoint is the main prespecified outcome the study is designed to evaluate. On Endpoint Arena, the core market question is whether the trial meets that primary endpoint.',
       },
       {
         term: 'Secondary Endpoint',

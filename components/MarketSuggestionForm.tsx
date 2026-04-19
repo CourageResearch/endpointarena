@@ -22,6 +22,9 @@ const MAX_CONTACT_MESSAGE_LENGTH = 5000
 type FormStatus = 'idle' | 'submitting' | 'success' | 'error'
 
 type ContactResponse = {
+  adminEmailSent?: boolean
+  requestId?: string
+  warningCode?: 'operator_notification_failed'
   error?: {
     message?: string
   }
@@ -106,6 +109,12 @@ export function MarketSuggestionForm() {
       if (!response.ok) {
         setStatus('error')
         setFeedback(body?.error?.message ?? 'Unable to submit your suggestion right now.')
+        return
+      }
+
+      if (body?.adminEmailSent === false) {
+        setStatus('success')
+        setFeedback(`Saved, but operator notification failed. Reference ID: ${body.requestId ?? 'unavailable'}.`)
         return
       }
 

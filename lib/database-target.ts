@@ -1,9 +1,10 @@
-import { ValidationError } from '@/lib/errors'
+import { ConfigurationError, ValidationError } from '@/lib/errors'
 
 const DATABASE_TARGETS = ['main', 'toy'] as const
 const DEFAULT_DATABASE_TARGET = 'main'
 const DATABASE_TARGET_ENV_KEY = 'DATABASE_TARGET'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
+const ALLOW_RAILWAY_TOY_DATABASE_TARGET_ENV_KEY = 'ALLOW_RAILWAY_TOY_DATABASE_TARGET'
 
 export type DatabaseTarget = (typeof DATABASE_TARGETS)[number]
 export type DatabaseTargetRuntimeSource = 'local' | 'env' | 'default'
@@ -129,6 +130,16 @@ export function getDatabaseTargetRuntimeState(): DatabaseTargetRuntimeState {
   const railwayRuntime = isRailwayRuntime()
 
   if (configuredTarget) {
+    if (
+      configuredTarget === 'toy' &&
+      railwayRuntime &&
+      process.env[ALLOW_RAILWAY_TOY_DATABASE_TARGET_ENV_KEY] !== '1'
+    ) {
+      throw new ConfigurationError(
+        'DATABASE_TARGET=toy is blocked in Railway Season 4 services. Set ALLOW_RAILWAY_TOY_DATABASE_TARGET=1 only for an explicitly isolated legacy toy service.'
+      )
+    }
+
     return {
       activeTarget: configuredTarget,
       source: 'env',
@@ -138,6 +149,12 @@ export function getDatabaseTargetRuntimeState(): DatabaseTargetRuntimeState {
         ? 'This Railway deployment is pinned by DATABASE_TARGET. Update the Railway environment and redeploy to switch databases.'
         : 'This runtime is pinned by DATABASE_TARGET. Clear that variable to re-enable local switching.',
     }
+  }
+
+  if (railwayRuntime) {
+    throw new ConfigurationError(
+      'DATABASE_TARGET is required in Railway. Pin this service to `main` or `toy` in Railway and redeploy.'
+    )
   }
 
   if (isRuntimeDatabaseTargetSwitchingAllowed()) {
@@ -154,10 +171,8 @@ export function getDatabaseTargetRuntimeState(): DatabaseTargetRuntimeState {
     activeTarget: DEFAULT_DATABASE_TARGET,
     source: 'default',
     switchingAllowed: false,
-    isRailwayRuntime: railwayRuntime,
-    sourceDescription: railwayRuntime
-      ? 'This Railway deployment defaults to Main DB. Set DATABASE_TARGET in Railway and redeploy to switch databases.'
-      : 'This runtime defaults to Main DB.',
+    isRailwayRuntime: false,
+    sourceDescription: 'This runtime defaults to Main DB.',
   }
 }
 
@@ -175,14 +190,14 @@ export function listDatabaseTargets(): Array<{
     {
       target: 'main',
       label: 'Main DB',
-      description: 'Primary application dataset.',
+      description: 'Primary Season 4 application dataset.',
       configured: true,
       databaseName: parseDatabaseName(mainDatabaseUrl),
     },
     {
       target: 'toy',
       label: 'Toy DB',
-      description: 'Sandbox dataset for testing flows without touching main data.',
+      description: 'Sandbox dataset for testing Season 4 flows without touching main DB state.',
       configured: toyDatabaseUrl != null,
       databaseName: toyDatabaseUrl ? parseDatabaseName(toyDatabaseUrl) : null,
     },

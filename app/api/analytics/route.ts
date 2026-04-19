@@ -4,6 +4,7 @@ import { analyticsEvents } from '@/lib/schema'
 import { extractClientIp, isPrivateIp } from '@/lib/geo-country'
 import {
   getAnalyticsSessionHash,
+  normalizeAnalyticsPathname,
   normalizeAnalyticsEventType,
   type AnalyticsBatchPayload,
   type AnalyticsEventPayload,
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     const geo = clientIp ? await geolocateIp(clientIp) : null
 
     const rows: Array<{
-      type: 'pageview' | 'click' | 'trial_search'
+      type: 'pageview' | 'click' | 'trial_search' | 'not_found'
       url: string
       referrer: string | null
       userAgent: string
@@ -95,7 +96,9 @@ export async function POST(request: Request) {
         if (!type) return []
 
         const isSearchEvent = type === 'trial_search'
-        const url = String(typedEvent.url || '').slice(0, 500)
+        const url = type === 'not_found'
+          ? normalizeAnalyticsPathname(typedEvent.url)
+          : String(typedEvent.url || '').slice(0, 500)
         const searchQuery = isSearchEvent
           ? normalizeSearchQuery(typedEvent.searchQuery)
           : null

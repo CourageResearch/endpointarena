@@ -44,7 +44,14 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 }
 
+function assertLegacySeason3AutomationAllowed(): void {
+  if (process.env.ALLOW_LEGACY_SEASON3_AUTOMATION !== '1') {
+    throw new Error('Legacy Season 3 automation packet export is retired in Season 4. Use the Season 4 admin AI live batch export flow instead.')
+  }
+}
+
 async function main() {
+  assertLegacySeason3AutomationAllowed()
   const args = parseArgs(process.argv.slice(2))
   const result = await exportDailyRunAutomationPacket({
     source: args.source,

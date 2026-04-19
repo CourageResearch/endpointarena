@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     })
 
     revalidatePath('/trials')
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/oracle')
 
     return successResponse({ result }, {
       headers: {

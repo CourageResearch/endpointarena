@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getLeaderboardData } from '@/lib/leaderboard-data'
+import { getSeason4LeaderboardData } from '@/lib/season4-leaderboard-data'
 import type { LeaderboardPredictionMode } from '@/lib/model-decision-snapshots'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ function parseMode(value: string | null): LeaderboardPredictionMode {
 
 export async function GET(request: NextRequest) {
   const mode = parseMode(new URL(request.url).searchParams.get('mode'))
-  const { leaderboard } = await getLeaderboardData(mode)
+  const { leaderboard } = await getSeason4LeaderboardData({ sync: true })
 
   const entries = leaderboard
     .map((entry) => ({

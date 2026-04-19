@@ -38,11 +38,11 @@ export const MARKET_RUN_STALE_TIMEOUT_MINUTES = parseStaleTimeoutMinutes(
 export const MARKET_RUN_STALE_TIMEOUT_SECONDS = MARKET_RUN_STALE_TIMEOUT_MINUTES * 60
 const MARKET_RUN_STALE_TIMEOUT_MS = MARKET_RUN_STALE_TIMEOUT_MINUTES * 60 * 1000
 
-const MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS = parseModelResponseTimeoutSeconds(
-  process.env.MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS
+const MODEL_DECISION_RESPONSE_TIMEOUT_SECONDS = parseModelResponseTimeoutSeconds(
+  process.env.MODEL_DECISION_RESPONSE_TIMEOUT_SECONDS
 )
 
-const MARKET_MODEL_RESPONSE_TIMEOUT_MS = MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS * 1000
+const MODEL_DECISION_RESPONSE_TIMEOUT_MS = MODEL_DECISION_RESPONSE_TIMEOUT_SECONDS * 1000
 
 function toModelTimeoutEnvSuffix(modelId: ModelId): string {
   return modelId
@@ -52,15 +52,15 @@ function toModelTimeoutEnvSuffix(modelId: ModelId): string {
 }
 
 export function getMarketModelResponseTimeoutMs(modelId?: ModelId | null): number {
-  if (!modelId) return MARKET_MODEL_RESPONSE_TIMEOUT_MS
+  if (!modelId) return MODEL_DECISION_RESPONSE_TIMEOUT_MS
 
   const specificTimeoutSeconds = parseOptionalModelResponseTimeoutSeconds(
-    process.env[`MARKET_MODEL_RESPONSE_TIMEOUT_SECONDS_${toModelTimeoutEnvSuffix(modelId)}`],
+    process.env[`MODEL_DECISION_RESPONSE_TIMEOUT_SECONDS_${toModelTimeoutEnvSuffix(modelId)}`],
   )
 
   if (specificTimeoutSeconds != null) {
     return specificTimeoutSeconds * 1000
   }
 
-  return MARKET_MODEL_RESPONSE_TIMEOUT_MS
+  return MODEL_DECISION_RESPONSE_TIMEOUT_MS
 }

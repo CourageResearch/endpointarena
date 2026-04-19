@@ -1,26 +1,74 @@
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
 import { sql } from 'drizzle-orm'
-import { authOptions } from '@/lib/auth'
-import { ADMIN_EMAIL } from '@/lib/constants'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { AdminDatabaseTargetManager, type AdminDatabaseTargetOptionDto } from '@/components/AdminDatabaseTargetManager'
-import { AdminTrialConstantsManager, type TrialRuntimeConfigDto } from '@/components/AdminTrialConstantsManager'
-import { AdminModelStartingBankroll } from '@/components/AdminModelStartingBankroll'
+import {
+  AdminDatabaseTargetManager,
+  type AdminDatabaseTargetOptionDto,
+  type RuntimeSettingsConfigDto,
+  type RuntimeSettingsTargetDto,
+} from '@/components/AdminDatabaseTargetManager'
+import { redirectIfNotAdmin } from '@/lib/admin-auth'
 import { getDatabaseTargetRuntimeState, listDatabaseTargets } from '@/lib/database-target'
-import { ensureToyAdminUser } from '@/lib/toy-database'
-import { getTrialRuntimeConfig } from '@/lib/trial-runtime-config'
+import { ensureToyAdminUser, ensureToyDatabaseSchema } from '@/lib/toy-database'
+import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { getDbForTarget, trials, users } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-function toDto(config: Awaited<ReturnType<typeof getTrialRuntimeConfig>>): TrialRuntimeConfigDto {
+function toRuntimeConfigDto(config: Awaited<ReturnType<typeof getMarketRuntimeConfig>>): RuntimeSettingsConfigDto {
   return {
-    openingLmsrB: config.openingLmsrB,
     toyTrialCount: config.toyTrialCount,
+    season4MarketLiquidityBDisplay: config.season4MarketLiquidityBDisplay,
+    season4HumanStartingBankrollDisplay: config.season4HumanStartingBankrollDisplay,
+    season4StartingBankrollDisplay: config.season4StartingBankrollDisplay,
     createdAt: config.createdAt.toISOString(),
     updatedAt: config.updatedAt.toISOString(),
   }
+}
+
+async function buildRuntimeSettingsTargets(
+  options: AdminDatabaseTargetOptionDto[],
+  activeTarget: ReturnType<typeof getDatabaseTargetRuntimeState>['activeTarget'],
+): Promise<RuntimeSettingsTargetDto[]> {
+  return Promise.all(options.map(async (option) => {
+    if (!option.configured) {
+      return {
+        target: option.target,
+        label: option.label,
+        databaseName: option.databaseName,
+        configured: false,
+        isActive: option.target === activeTarget,
+        config: null,
+        errorMessage: 'Database target is not configured.',
+      }
+    }
+
+    try {
+      if (option.target === 'toy') {
+        await ensureToyDatabaseSchema()
+      }
+
+      const config = await getMarketRuntimeConfig(getDbForTarget(option.target))
+      return {
+        target: option.target,
+        label: option.label,
+        databaseName: option.databaseName,
+        configured: true,
+        isActive: option.target === activeTarget,
+        config: toRuntimeConfigDto(config),
+        errorMessage: null,
+      }
+    } catch (error) {
+      return {
+        target: option.target,
+        label: option.label,
+        databaseName: option.databaseName,
+        configured: option.configured,
+        isActive: option.target === activeTarget,
+        config: null,
+        errorMessage: error instanceof Error ? error.message : 'Unable to load runtime settings.',
+      }
+    }
+  }))
 }
 
 async function buildDatabaseTargetOptions(): Promise<AdminDatabaseTargetOptionDto[]> {
@@ -63,16 +111,12 @@ async function buildDatabaseTargetOptions(): Promise<AdminDatabaseTargetOptionDt
 }
 
 export default async function AdminSettingsPage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
+  await redirectIfNotAdmin('/admin/settings')
 
-  const [config, databaseTargetOptions] = await Promise.all([
-    getTrialRuntimeConfig(),
-    buildDatabaseTargetOptions(),
-  ])
   const runtimeState = getDatabaseTargetRuntimeState()
+  const databaseTargetOptions = await buildDatabaseTargetOptions()
+  const runtimeSettingsTargets = await buildRuntimeSettingsTargets(databaseTargetOptions, runtimeState.activeTarget)
+  const toyRuntimeConfig = runtimeSettingsTargets.find((target) => target.target === 'toy')?.config
 
   return (
     <AdminConsoleLayout
@@ -88,10 +132,9 @@ export default async function AdminSettingsPage() {
           activeTarget={runtimeState.activeTarget}
           runtimeState={runtimeState}
           options={databaseTargetOptions}
-          toyTrialCount={config.toyTrialCount}
+          toyTrialCount={toyRuntimeConfig?.toyTrialCount ?? 0}
+          runtimeSettingsTargets={runtimeSettingsTargets}
         />
-        <AdminTrialConstantsManager initialConfig={toDto(config)} />
-        <AdminModelStartingBankroll />
       </div>
     </AdminConsoleLayout>
   )

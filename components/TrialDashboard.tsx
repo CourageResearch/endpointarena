@@ -3,7 +3,6 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import { TrialOracleRunsPanel } from '@/components/TrialOracleRunsPanel'
 import { MarketActivityFeed } from '@/components/markets/dashboard/activity-feed'
 import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
@@ -41,7 +40,9 @@ import {
   type RecentMarketActionRow,
 } from '@/lib/markets/overview-shared'
 import { getApiErrorMessage } from '@/lib/client-api'
-import { MODEL_IDS, MODEL_INFO, abbreviateType, type ModelId } from '@/lib/constants'
+import { MODEL_IDS, abbreviateType, type ModelId } from '@/lib/constants'
+import { useAuth } from '@/lib/auth/use-auth'
+import { getSeason4ModelFullName, getSeason4ModelInfo, getSeason4PositionModelLabel } from '@/lib/season4-model-labels'
 import { type TrialDetailTab } from '@/lib/trial-detail-tabs'
 import { type TrialOracleTabData } from '@/lib/trial-oracle-types'
 import { cn } from '@/lib/utils'
@@ -184,15 +185,6 @@ function formatSignedCompactMoney(value: number): string {
   return value > 0 ? `+${absFormatted}` : `-${absFormatted}`
 }
 
-function getPositionModelLabel(modelId: ModelId, fullName: string): string {
-  switch (modelId) {
-    case 'claude-opus':
-      return 'Claude 4.6'
-    default:
-      return fullName
-  }
-}
-
 function buildMarketEntries(openMarkets: OpenMarketRow[], recentActions: RecentMarketActionRow[]): MarketEntry[] {
   const actionsByMarket = new Map<string, RecentMarketActionRow[]>()
   for (const action of recentActions) {
@@ -255,7 +247,7 @@ export function TrialDashboard({
 }: TrialDashboardProps = {}) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { status: sessionStatus } = useSession()
+  const { status: sessionStatus, fetchWithAuth } = useAuth()
   const { data, error, loading, reload } = useTrialsOverview(initialData, initialMarketId, {
     includeAccounts: false,
     includeEquityHistory: false,
@@ -462,9 +454,7 @@ export function TrialDashboard({
   const activityFilterModelIds = useMemo(
     () =>
       Array.from(MODEL_IDS).sort((left, right) => {
-        const leftModel = MODEL_INFO[left]
-        const rightModel = MODEL_INFO[right]
-        return leftModel.fullName.localeCompare(rightModel.fullName)
+        return getSeason4ModelFullName(left).localeCompare(getSeason4ModelFullName(right))
       }),
     [],
   )
@@ -472,7 +462,7 @@ export function TrialDashboard({
   const activityFilterOptions: ActivityFilterOption[] = useMemo(
     () => activityFilterModelIds.map((modelId) => ({
       id: modelId,
-      label: MODEL_INFO[modelId].fullName,
+      label: getSeason4ModelFullName(modelId),
       active: commentModelFilter !== 'all' && commentModelFilter.includes(modelId),
     })),
     [activityFilterModelIds, commentModelFilter],
@@ -566,7 +556,7 @@ export function TrialDashboard({
     && tradeAmountValue > 0
     && (tradeDirection === 'buy' ? availableTradeUsd > 0.0001 : heldSharesForSelectedOutcome > 0.0001)
   const positionRows = selectedMarket.modelStates.map((state, index) => {
-    const model = MODEL_INFO[state.modelId]
+    const model = getSeason4ModelInfo(state.modelId)
     const yesShares = Math.max(0, state.yesShares)
     const noShares = Math.max(0, state.noShares)
     const positionValueUsd = (yesShares * selectedMarket.priceYes) + (noShares * (1 - selectedMarket.priceYes))
@@ -595,7 +585,7 @@ export function TrialDashboard({
       index,
       fullName: model.fullName,
       modelId: state.modelId,
-      displayLabel: getPositionModelLabel(state.modelId, model.fullName),
+      displayLabel: getSeason4PositionModelLabel(state.modelId),
       compactLabel: model.provider === 'OpenAI' ? 'GPT' : model.name,
       yesShares,
       noShares,
@@ -649,7 +639,7 @@ export function TrialDashboard({
   }))
 
   const decisionRows: MarketDashboardDecisionRow[] = selectedMarket.modelStates.map((state) => {
-    const model = MODEL_INFO[state.modelId]
+    const model = getSeason4ModelInfo(state.modelId)
     const latestDecision = state.latestDecision
     const history = state.decisionHistory
     const binaryCall = latestDecision?.forecast.binaryCall ?? null
@@ -742,7 +732,7 @@ export function TrialDashboard({
     setTradeNotice(null)
 
     try {
-      const response = await fetch('/api/trials/trade', {
+      const response = await fetchWithAuth('/api/trials/trade', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -787,7 +777,7 @@ export function TrialDashboard({
     },
     {
       id: 'snapshots',
-      label: 'Model Snapshots',
+      label: 'Model Reasoning',
       borderClass: 'border-[#5DBB63]',
       hoverClass: 'hover:border-[#5DBB63]/55 hover:text-[#45934a]',
     },
@@ -810,6 +800,7 @@ export function TrialDashboard({
             sortState={positionSort}
             onSort={handlePositionSort}
             getModelHref={(modelId) => buildDetailTabHref('snapshots', { model: modelId })}
+            showHeader={false}
           />
         )
       case 'snapshots':
@@ -818,6 +809,7 @@ export function TrialDashboard({
             className="px-1"
             selectedMarketId={selectedMarket.marketId}
             decisionRows={decisionRows}
+            showHeader={false}
           />
         )
       case 'oracles':
@@ -851,6 +843,7 @@ export function TrialDashboard({
               totalVolumeUsd={selectedStats.totalVolumeUsd}
               applicationTypeMeta={applicationTypeMeta}
               primaryTicker={primaryTicker}
+              showHeader={false}
             />
             {isResolvedMarket ? (
               <MarketResolutionPanel selectedMarket={selectedMarket} />
@@ -867,7 +860,7 @@ export function TrialDashboard({
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-3">
-                <div className={DASHBOARD_SECTION_LABEL_CLASS}>Decision Snapshots</div>
+                <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Reasoning</div>
                 <HeaderDots />
               </div>
               <h1 className="mt-3 text-[1.35rem] leading-tight font-normal text-[#2b2b2b] sm:text-[1.5rem]">
@@ -895,6 +888,11 @@ export function TrialDashboard({
 
   return (
     <div className="space-y-5">
+      <div className="rounded-sm border border-[#c43a2b]/35 bg-[#fff5f4] p-4 text-sm text-[#8d2c22]">
+        <p className="font-medium">Legacy Season 3 dashboard</p>
+        <p className="mt-1">This offchain paper-trading surface is retired for Season 4. Live trading runs through the Season 4 onchain market pages.</p>
+      </div>
+
       {sessionStatus === 'unauthenticated' && !useStackedLayout && !isResolvedMarket ? (
         <div className="rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] p-4 text-sm text-[#6f665b]">
           <p className="font-medium text-[#1a1a1a]">Sign in to join Humans vs AI.</p>
@@ -1197,7 +1195,7 @@ export function TrialDashboard({
                         href={decisionSnapshotsHref}
                         className="inline-flex rounded-sm border border-[#d9ccbc] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#3b342c] transition-colors hover:border-[#cdbfae] hover:bg-[#f3ebe0]"
                       >
-                        Model Snapshots
+                        Model Reasoning
                       </Link>
                       {oracleRunHref ? (
                         <Link

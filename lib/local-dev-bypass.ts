@@ -1,4 +1,4 @@
-import { ADMIN_EMAIL } from '@/lib/constants'
+import { ADMIN_EMAIL, isConfiguredAdminEmail } from '@/lib/constants'
 import { getLocalDevXBypassEmailsRaw, isLocalDevXBypassEnabled } from '@/lib/x-env'
 
 function normalizeEmail(value: string | null | undefined): string | null {
@@ -27,7 +27,8 @@ function isLocalDevBypassEnabled(): boolean {
 
 export function isLocalDevBypassEmail(email: string | null | undefined): boolean {
   if (!isLocalDevBypassEnabled()) return false
-  return normalizeEmail(email) === normalizeEmail(ADMIN_EMAIL)
+  const normalized = normalizeEmail(email)
+  return isConfiguredAdminEmail(normalized) || normalized === normalizeEmail(ADMIN_EMAIL)
 }
 
 export function canUseLocalDevXConnectionBypass(email: string | null | undefined): boolean {

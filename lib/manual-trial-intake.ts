@@ -1,9 +1,8 @@
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import OpenAI from 'openai'
-import { getServerSession } from 'next-auth'
 import { eq } from 'drizzle-orm'
-import { authOptions } from '@/lib/auth'
+import { requireAdminSession } from '@/lib/admin-auth'
 import { createRequestId } from '@/lib/api-response'
 import {
   fetchClinicalTrialsStudies,
@@ -20,15 +19,12 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '@/lib/errors'
-import { ADMIN_EMAIL } from '@/lib/constants'
-import { isLocalDevBypassEmail } from '@/lib/local-dev-bypass'
-import { openMarketForTrialQuestion } from '@/lib/markets/engine'
+import { createSeason4Market } from '@/lib/season4-ops'
 import {
   DEFAULT_BINARY_MARKET_BASELINE,
   OPENING_PROBABILITY_CEIL,
   OPENING_PROBABILITY_FLOOR,
 } from '@/lib/markets/constants'
-import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { MODEL_PROVIDER_MODEL_IDS } from '@/lib/model-runtime-metadata'
 import { TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
 import type { NormalizedTrialInput } from '@/lib/trial-ingestion'
@@ -153,7 +149,6 @@ export type ManualTrialPreview = {
     errorMessage: string | null
     effectiveProbability: number
     overrideProbability: number | null
-    openingLmsrB: number
     overrideApplied: boolean
   }
 }
@@ -355,6 +350,19 @@ function formatDateInput(value: Date | null): string {
   }
 
   return value.toISOString().slice(0, 10)
+}
+
+function toSeason4MarketSlug(nctNumber: string, _questionSlug: string): string {
+  return nctNumber.trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getSeason4CloseTime(estPrimaryCompletionDate: Date): string {
+  const minimumCloseTime = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000))
+  return (estPrimaryCompletionDate.getTime() > minimumCloseTime.getTime()
+    ? estPrimaryCompletionDate
+    : minimumCloseTime).toISOString()
 }
 
 function nonEmptyOrFallback(value: unknown, fallback: string): string {
@@ -778,7 +786,6 @@ async function previewManualTrialIntakeInternal(
     throw new ValidationError('No supported trial question definition is configured')
   }
 
-  const runtimeConfig = await getMarketRuntimeConfig()
   const suggestedOpeningLine = getSuggestedOpeningLine({
     suggestedProbability: options.suggestedProbability,
     suggestedSource: options.suggestedSource,
@@ -802,24 +809,14 @@ async function previewManualTrialIntakeInternal(
       errorMessage: suggestedOpeningLine.errorMessage,
       effectiveProbability,
       overrideProbability: openingProbabilityOverride,
-      openingLmsrB: runtimeConfig.openingLmsrB,
       overrideApplied: openingProbabilityOverride != null,
     },
   }
 }
 
 export async function requireAdminUserId(): Promise<string> {
-  const session = await getServerSession(authOptions)
-  const userId = session?.user?.id?.trim()
-  const email = session?.user?.email?.trim().toLowerCase()
-
-  if (!email) {
-    throw new UnauthorizedError('Unauthorized - not logged in')
-  }
-
-  if (email !== ADMIN_EMAIL.toLowerCase() && !isLocalDevBypassEmail(email)) {
-    throw new ForbiddenError('Forbidden - admin access required')
-  }
+  const session = await requireAdminSession()
+  const userId = session.user.id?.trim()
 
   if (!userId) {
     throw new UnauthorizedError('Unauthorized - missing user id')
@@ -903,17 +900,17 @@ export async function publishManualTrialIntake(
     throw new ValidationError('No supported trial question definition is configured')
   }
 
-  return db.transaction(async (tx) => {
-    const [trial] = await tx.insert(trials)
-      .values({
-        ...preview.normalizedTrial,
-        source: 'manual_admin',
-        briefSummary: preview.normalizedTrial.briefSummary,
-        updatedAt: new Date(),
-      })
-      .returning()
+  const [trial] = await db.insert(trials)
+    .values({
+      ...preview.normalizedTrial,
+      source: 'manual_admin',
+      briefSummary: preview.normalizedTrial.briefSummary,
+      updatedAt: new Date(),
+    })
+    .returning()
 
-    const [question] = await tx.insert(trialQuestions)
+  try {
+    const [question] = await db.insert(trialQuestions)
       .values({
         trialId: trial.id,
         slug: definition.slug,
@@ -926,18 +923,27 @@ export async function publishManualTrialIntake(
       })
       .returning()
 
-    const market = await openMarketForTrialQuestion({
-      trialQuestionId: question.id,
-      houseOpeningProbability: preview.openingLine.suggestedProbability,
-      openingProbabilityOverride: preview.openingLine.overrideProbability,
-      openedByUserId,
-    }, tx)
+    try {
+      const market = await createSeason4Market({
+        marketSlug: toSeason4MarketSlug(preview.normalizedTrial.nctNumber, definition.slug),
+        title: preview.normalizedTrial.shortTitle,
+        closeTime: getSeason4CloseTime(preview.normalizedTrial.estPrimaryCompletionDate),
+        trialQuestionId: question.id,
+        openingProbability: preview.openingLine.effectiveProbability,
+      })
 
-    return {
-      trial,
-      question,
-      market,
-      preview,
+      return {
+        trial,
+        question,
+        market,
+        preview,
+      }
+    } catch (error) {
+      await db.delete(trialQuestions).where(eq(trialQuestions.id, question.id))
+      throw error
     }
-  })
+  } catch (error) {
+    await db.delete(trials).where(eq(trials.id, trial.id))
+    throw error
+  }
 }

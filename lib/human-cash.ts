@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { db, marketAccounts, marketActors } from '@/lib/db'
 import { ensureHumanMarketActor } from '@/lib/market-actors'
-import { STARTER_CASH } from '@/lib/constants'
+import { LEGACY_SEASON3_STARTER_CASH } from '@/lib/legacy-season3/constants'
 
 type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -9,7 +9,7 @@ type HumanActorRow = typeof marketActors.$inferSelect
 type MarketAccountRow = typeof marketAccounts.$inferSelect
 
 export function getCanonicalHumanStartingCash(): number {
-  return STARTER_CASH
+  return LEGACY_SEASON3_STARTER_CASH
 }
 
 export function shouldNormalizeHumanCashAccount(args: {
@@ -45,7 +45,7 @@ export async function ensureHumanTradingAccount(args: {
 
   const startingCash = typeof args.startingCash === 'number' && Number.isFinite(args.startingCash)
     ? Math.max(0, args.startingCash)
-    : STARTER_CASH
+    : LEGACY_SEASON3_STARTER_CASH
 
   await dbClient.insert(marketAccounts)
     .values({

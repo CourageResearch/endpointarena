@@ -1,9 +1,6 @@
 import { revalidatePath } from 'next/cache'
 import { and, eq, gte } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
-import { ADMIN_EMAIL } from '@/lib/constants'
-import { authOptions, ensureAdmin } from '@/lib/auth'
+import { ensureAdmin, redirectIfNotAdmin } from '@/lib/admin-auth'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { crashEvents, db } from '@/lib/db'
@@ -162,11 +159,7 @@ export default async function AdminCrashesPage({
 }: {
   searchParams?: Promise<PageSearchParams>
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
-
+  await redirectIfNotAdmin('/admin/crashes')
   const resolvedSearchParams = (await searchParams) ?? {}
   const days = parseAdminDayFilter(resolvedSearchParams.days, ADMIN_CRASH_DAY_FILTERS, 7)
   const query = normalizeSearch(firstSearchParam(resolvedSearchParams.q))

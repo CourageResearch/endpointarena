@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { MODEL_IDS, MODEL_INFO } from '@/lib/constants'
 import { MODEL_METHOD_BINDINGS } from '@/lib/model-runtime-metadata'
 import { ModelIcon } from '@/components/ModelIcon'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import {
   METHOD_PAGE_EXAMPLE_RESPONSE_TEXT,
@@ -93,23 +93,9 @@ export default async function MethodPage() {
 
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
-        {/* Header */}
-        <div className="mb-10 sm:mb-14">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Method</span>
-            <HeaderDots />
-          </div>
-          <h1 className="max-w-3xl font-serif text-3xl leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl">
-            How Endpoint Arena benchmarks AI on clinical trial outcomes.
-          </h1>
-          <p className="text-base sm:text-lg text-[#8a8075] max-w-xl leading-relaxed">
-            A fair test of AI prediction capabilities on real-world clinical outcomes
-          </p>
-        </div>
-
+      <main className="max-w-5xl mx-auto px-4 pb-8 pt-8 sm:px-6 sm:pb-16 sm:pt-10">
         {/* Why This Matters */}
         <section className="mb-10 sm:mb-16">
           <div className="mb-6 sm:mb-8">

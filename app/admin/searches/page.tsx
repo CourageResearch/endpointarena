@@ -1,9 +1,6 @@
 import { and, desc, gte, inArray } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { authOptions } from '@/lib/auth'
-import { ADMIN_EMAIL } from '@/lib/constants'
+import { redirectIfNotAdmin } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
 import {
@@ -132,11 +129,7 @@ export default async function AdminSearchesPage({
 }: {
   searchParams?: Promise<PageSearchParams>
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
-
+  await redirectIfNotAdmin('/admin/searches')
   const resolvedSearchParams = (await searchParams) ?? {}
   const days = parseAdminDayFilter(resolvedSearchParams.days, ADMIN_ACTIVITY_DAY_FILTERS, 7)
   const data = await getSearchAnalytics(days)

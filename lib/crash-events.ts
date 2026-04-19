@@ -51,7 +51,9 @@ type CrashAlertEmailPayload = {
 
 const CRASH_ALERT_FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'Endpoint Arena <noreply@endpointarena.com>'
 const CRASH_ALERT_TO_EMAIL = process.env.CONTACT_ADMIN_EMAIL?.trim() || ''
-const CRASH_ALERT_BASE_URL = process.env.NEXTAUTH_URL?.trim() || 'https://endpointarena.com'
+const CRASH_ALERT_BASE_URL = process.env.SITE_URL?.trim()
+  || process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  || 'https://endpointarena.com'
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null

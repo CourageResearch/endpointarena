@@ -1,5 +1,5 @@
 import { revalidatePath } from 'next/cache'
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { resetToyDatabase } from '@/lib/toy-database'
 

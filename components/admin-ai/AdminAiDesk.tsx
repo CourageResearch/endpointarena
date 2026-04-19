@@ -6,6 +6,7 @@ import {
   AI_API_CONCURRENCY_DEFAULT,
   AI_API_CONCURRENCY_MAX,
   AI_API_CONCURRENCY_MIN,
+  AI_SUBSCRIPTION_IMPORT_WORKFLOW,
   AI_SUBSCRIPTION_MODEL_IDS,
   deriveAiBatchProgress,
   type AiAvailableModel,
@@ -180,26 +181,38 @@ function getDeskStatusDetail(batch: AiBatchState | null, progress: AiBatchProgre
 
   if (status === 'collecting' || status === 'waiting') {
     if (pendingSubscriptionImports > 0 && apiLaneReady) {
-      return `The API lane is done. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before the batch can clear.`
+      return batch.dataset === 'live'
+        ? `The API lane is done. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before the decision board is complete.`
+        : `The API lane is done. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} before the batch can clear.`
     }
 
     if (pendingSubscriptionImports > 0) {
-      return `The API lane has started. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect. The AMM has not executed yet.`
+      return batch.dataset === 'live'
+        ? `The API lane has started. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect. Onchain execution has not started yet.`
+        : `The API lane has started. Import ${pendingSubscriptionImports} remaining subscription task${pendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect. The AMM has not executed yet.`
     }
 
-    return 'Model decisions are still coming in. The AMM has not executed yet.'
+    return batch.dataset === 'live'
+      ? 'Model decisions are still coming in. Onchain execution has not started yet.'
+      : 'Model decisions are still coming in. The AMM has not executed yet.'
   }
 
   if (status === 'ready') {
-    return 'All model decisions are in. The batch is ready to clear.'
+    return batch.dataset === 'live'
+      ? 'All model decisions are in. The season 4 model cycle will run automatically.'
+      : 'All model decisions are in. The batch is ready to clear.'
   }
 
   if (status === 'clearing') {
-    return 'The batch is executing against the shared AMM now.'
+    return batch.dataset === 'live'
+      ? 'The season 4 model cycle is executing onchain now.'
+      : 'The batch is executing against the shared AMM now.'
   }
 
   if (status === 'cleared') {
-    return 'All model decisions are in, the AMM trades were executed, and this batch is final.'
+    return batch.dataset === 'live'
+      ? 'All model decisions are in, the season 4 model cycle ran, and this batch is final.'
+      : 'All model decisions are in, the AMM trades were executed, and this batch is final.'
   }
 
   if (status === 'failed') {
@@ -284,9 +297,89 @@ type Props = {
   activeDatabaseTarget: 'main' | 'toy'
 }
 
+type ImportFeedback = {
+  tone: 'success' | 'error'
+  message: string
+}
+
+function isImportPacketLike(value: unknown): value is {
+  workflow: string
+  batchId: string
+  modelId: string
+  decisions: unknown[]
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+
+  const record = value as Record<string, unknown>
+  return typeof record.workflow === 'string'
+    && typeof record.batchId === 'string'
+    && typeof record.modelId === 'string'
+    && Array.isArray(record.decisions)
+}
+
+function buildImportRequestBody(args: {
+  batchId: string
+  modelId: AiSubscriptionModelId
+  text: string
+}): unknown {
+  try {
+    const parsed = JSON.parse(args.text) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        batchId: args.batchId,
+        modelId: args.modelId,
+        rawText: args.text,
+      }
+    }
+
+    const record = parsed as Record<string, unknown>
+    if (isImportPacketLike(record)) {
+      if (record.batchId !== args.batchId) {
+        throw new Error('This JSON belongs to a different batch. Export the current lane packet again, then paste the matching response.')
+      }
+      if (record.modelId !== args.modelId) {
+        throw new Error(`This JSON is for ${record.modelId}, but this lane is ${args.modelId}. Paste it into the matching subscription lane.`)
+      }
+      return record
+    }
+
+    if (Array.isArray(record.decisions)) {
+      const recordBatchId = typeof record.batchId === 'string' ? record.batchId : args.batchId
+      const recordModelId = typeof record.modelId === 'string' ? record.modelId : args.modelId
+      if (recordBatchId !== args.batchId) {
+        throw new Error('This JSON belongs to a different batch. Export the current lane packet again, then paste the matching response.')
+      }
+      if (recordModelId !== args.modelId) {
+        throw new Error(`This JSON is for ${recordModelId}, but this lane is ${args.modelId}. Paste it into the matching subscription lane.`)
+      }
+      return {
+        ...record,
+        workflow: typeof record.workflow === 'string' ? record.workflow : AI_SUBSCRIPTION_IMPORT_WORKFLOW,
+        batchId: recordBatchId,
+        modelId: recordModelId,
+      }
+    }
+
+    if (record.responseTemplate && isImportPacketLike(record.responseTemplate)) {
+      throw new Error('This looks like the export packet/template, not the filled model response. Paste the completed response JSON for this subscription lane.')
+    }
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      throw error
+    }
+    // Fall through to raw-text normalization below.
+  }
+
+  return {
+    batchId: args.batchId,
+    modelId: args.modelId,
+    rawText: args.text,
+  }
+}
+
 export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarget }: Props) {
   const [deskState, setDeskState] = useState(initialState)
-  const [dataset, setDataset] = useState<AiDataset>(initialState.batch?.dataset ?? initialState.dataset)
+  const dataset: AiDataset = initialState.batch?.dataset ?? initialState.dataset
   const [selectedModels, setSelectedModels] = useState<AiAvailableModel['modelId'][]>(
     initialState.batch?.enabledModelIds ?? getDefaultEnabledModels(initialState.availableModels),
   )
@@ -298,6 +391,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
   const [uiError, setUiError] = useState<string | null>(null)
   const [exportPackets, setExportPackets] = useState<Record<string, string>>({})
   const [importTexts, setImportTexts] = useState<Record<string, string>>({})
+  const [importFeedback, setImportFeedback] = useState<Record<string, ImportFeedback>>({})
   const [copiedPacketModelId, setCopiedPacketModelId] = useState<AiSubscriptionModelId | null>(null)
   const [toyRunDate, setToyRunDate] = useState<string>(() => {
     const seed = initialState.batch?.dataset === 'toy' && initialState.batch.createdAt
@@ -354,7 +448,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
 
     snapshotRefreshInFlightRef.current = true
     try {
-      const response = await fetchJson<AiDeskState>(`/api/admin/ai/state?dataset=${encodeURIComponent(dataset)}&batchId=${encodeURIComponent(batchId)}`)
+      const response = await fetchJson<AiDeskState>(`/api/admin/ai/state?batchId=${encodeURIComponent(batchId)}`)
       applyBatchSnapshot(batchId, response.batch)
     } catch (error) {
       if (!options?.silent) {
@@ -531,6 +625,14 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
   const fullRefreshIntervalSeconds = Math.round(ACTIVE_BATCH_FULL_REFRESH_INTERVAL_MS / 1000)
   const toyBacktestEnabled = activeDatabaseTarget === 'toy' && dataset === 'toy'
   const toyRunDatePresets = [0, 1, 2, 3, 4, 5]
+  const selectedDatasetSummary = deskState.datasets.find((entry) => entry.key === dataset) ?? null
+  const selectedDatasetLabel = activeDatabaseTarget === 'toy' && dataset === 'live'
+    ? 'Toy DB'
+    : selectedDatasetSummary?.label
+  const noEligibleCandidates = !batch && (selectedDatasetSummary?.candidateCount ?? 0) === 0
+  const noEligibleCandidateMessage = selectedDatasetSummary
+    ? `${selectedDatasetLabel} has no eligible Season 4 onchain markets for this desk right now.`
+    : 'No eligible markets are available for this desk yet.'
   const laneCards = useMemo(() => {
     return [
       {
@@ -563,14 +665,14 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
     }
   }, [batch?.createdAt, batch?.dataset, batch?.id])
 
-  async function refreshState(nextDataset: AiDataset) {
-    const response = await fetchJson<AiDeskState>(`/api/admin/ai/state?dataset=${encodeURIComponent(nextDataset)}`)
+  async function refreshState() {
+    const response = await fetchJson<AiDeskState>('/api/admin/ai/state')
     startTransition(() => {
       setDeskState(response)
-      setDataset(nextDataset)
       setSelectedModels(response.batch?.enabledModelIds ?? getDefaultEnabledModels(response.availableModels))
       setExportPackets({})
       setImportTexts({})
+      setImportFeedback({})
       setProgress(deriveAiBatchProgress(response.batch))
     })
   }
@@ -585,7 +687,6 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          dataset,
           enabledModelIds: selectedModels,
           apiConcurrency: selectedApiConcurrency,
           runDate: toyBacktestEnabled ? toyRunDate : undefined,
@@ -595,6 +696,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
       startTransition(() => {
         setExportPackets({})
         setImportTexts({})
+        setImportFeedback({})
       })
     } catch (error) {
       setUiError(error instanceof Error ? error.message : 'Failed to open batch')
@@ -640,11 +742,12 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
       if (!response.ok) {
         throw new Error(await parseErrorMessage(response, 'Failed to reset batch'))
       }
-      await refreshState(dataset)
+      await refreshState()
       startTransition(() => {
         setDeskState((current) => ({ ...current, batch: null }))
         setExportPackets({})
         setImportTexts({})
+        setImportFeedback({})
         setProgress(null)
       })
     } catch (error) {
@@ -659,23 +762,29 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
     const text = importTexts[modelId]?.trim()
     if (!text) {
       setUiError('Paste a decision JSON payload before importing.')
+      setImportFeedback((current) => ({
+        ...current,
+        [modelId]: {
+          tone: 'error',
+          message: 'Paste a decision JSON payload before importing.',
+        },
+      }))
       return
     }
 
     setBusyKey(`import:${modelId}`)
     setUiError(null)
+    setImportFeedback((current) => {
+      const next = { ...current }
+      delete next[modelId]
+      return next
+    })
     try {
-      let requestBody: unknown
-
-      try {
-        requestBody = JSON.parse(text)
-      } catch {
-        requestBody = {
-          batchId: batch.id,
-          modelId,
-          rawText: text,
-        }
-      }
+      const requestBody = buildImportRequestBody({
+        batchId: batch.id,
+        modelId,
+        text,
+      })
 
       const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/subscription/import`, {
         method: 'POST',
@@ -684,9 +793,28 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
         },
         body: JSON.stringify(requestBody),
       })
+      const importedLaneTasks = payload.batch.tasks.filter((task) => task.modelId === modelId)
+      if (importedLaneTasks.some((task) => task.status === 'waiting-import')) {
+        throw new Error(`Import did not update ${modelId}. Check that the pasted JSON is for this subscription lane and the current batch.`)
+      }
       replaceBatch(payload.batch)
+      setImportFeedback((current) => ({
+        ...current,
+        [modelId]: {
+          tone: 'success',
+          message: 'Imported successfully.',
+        },
+      }))
     } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed to import packet')
+      const message = error instanceof Error ? error.message : 'Failed to import packet'
+      setUiError(message)
+      setImportFeedback((current) => ({
+        ...current,
+        [modelId]: {
+          tone: 'error',
+          message,
+        },
+      }))
     } finally {
       setBusyKey(null)
     }
@@ -769,18 +897,6 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
 
       <section className="border border-[#e8ddd0] bg-white/85 p-5">
         <div className="flex flex-col gap-5">
-          <div className="hidden">
-            {deskState.datasets.map((entry) => (
-              <button
-                key={entry.key}
-                type="button"
-                onClick={() => void refreshState(entry.key)}
-                className={`border px-4 py-2 text-sm ${dataset === entry.key ? 'border-[#c9b59a] bg-[#efe5d7] text-[#5b4d3f]' : 'border-[#d8ccb9] bg-[#f8f4ee] text-[#6f665b]'}`}
-              >
-                {entry.label} · {entry.candidateCount}
-              </button>
-            ))}
-          </div>
           <div>
             <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Enabled Models</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -872,7 +988,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
             <button
               type="button"
               onClick={() => void openBatch()}
-              disabled={busyKey != null || (batch != null && !isTerminal(batch.status))}
+              disabled={busyKey != null || (batch != null && !isTerminal(batch.status)) || noEligibleCandidates}
               className="border border-[#c1ab8e] bg-[#eadfce] px-5 py-3 text-sm font-medium text-[#5b4d3f] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busyKey === 'open' ? 'Staging...' : 'Stage Batch'}
@@ -901,6 +1017,11 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
             <p className="mt-2 text-sm font-medium text-[#1a1a1a]">{getDeskStatusLabel(batch, liveProgress)}</p>
             <p className="mt-2 text-xs leading-5 text-[#6f665b]">{getDeskStatusDetail(batch, liveProgress)}</p>
           </div>
+          {noEligibleCandidates ? (
+            <div className="border border-[#c9982b]/30 bg-[#fff7e5] px-3 py-2 text-sm text-[#8a6418]">
+              {noEligibleCandidateMessage}
+            </div>
+          ) : null}
           {batch && !batch.runStartedAt ? (
             <div className="border border-[#d8ccb9] bg-[#f8f4ee] px-3 py-2 text-sm text-[#6f665b]">
               {livePendingSubscriptionImports > 0
@@ -916,9 +1037,13 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
             <div className="border border-[#5BA5ED]/30 bg-[#5BA5ED]/10 px-3 py-2 text-sm text-[#265f8f]">
               {livePendingSubscriptionImports > 0
                 ? liveApiLaneReadyForClear
-                  ? `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the shared AMM can clear.`
+                  ? batch.dataset === 'live'
+                    ? `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the decision board is complete.`
+                    : `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the shared AMM can clear.`
                   : `The API lane is live. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect.`
-                : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix now refreshes automatically as tasks finish.`}
+                : batch.status === 'ready' && batch.dataset === 'live'
+                  ? 'All model decisions are in. Starting the season 4 model cycle automatically.'
+                  : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix now refreshes automatically as tasks finish.`}
             </div>
           ) : null}
           {batch?.status === 'failed' && successfulFillCount === 0 ? (
@@ -933,7 +1058,9 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
           ) : null}
           {batch?.status === 'cleared' ? (
             <div className="border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-3 py-2 text-sm text-[#2f6f24]">
-              Batch complete. All selected models have finished, and the AMM clearing tape is final.
+              {batch.dataset === 'live'
+                ? 'Batch complete. All selected models have finished, and the season 4 model cycle is final.'
+                : 'Batch complete. All selected models have finished, and the AMM clearing tape is final.'}
             </div>
           ) : null}
           {uiError ? (
@@ -1068,7 +1195,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
               )
             }) : (
               <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
-                Stage a batch to freeze the trial research snapshot and publish the clearing order.
+                Stage a batch to freeze the trial research snapshot and collect model decisions.
               </div>
             )}
           </div>
@@ -1086,6 +1213,10 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
               const laneEnabledModelIds = (batch?.enabledModelIds ?? selectedModels).filter((modelId) => lane.modelIds.includes(modelId))
               const failedLaneTasks = laneTasks.filter((task) => task.status === 'error')
               const firstFailedLaneTask = failedLaneTasks[0] ?? null
+              const subscriptionLaneImported = lane.id === 'claude-opus' || lane.id === 'gpt-5.4'
+                ? laneTasks.length > 0 && laneTasks.every((task) => task.status !== 'waiting-import')
+                : false
+              const laneImportFeedback = importFeedback[lane.id]
 
               return (
               <div key={lane.id} className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
@@ -1127,16 +1258,6 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 ) : null}
                 {lane.id === 'claude-opus' || lane.id === 'gpt-5.4' ? (
                   <div className="mt-4 space-y-3">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={!batch || !laneActive || busyKey != null || !importTexts[lane.id]?.trim()}
-                        onClick={() => void importPacket(lane.id as AiSubscriptionModelId)}
-                        className="border border-[#c1ab8e] bg-[#eadfce] px-3 py-2 text-xs font-medium text-[#5b4d3f] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busyKey === `import:${lane.id}` ? 'Importing...' : 'Import JSON'}
-                      </button>
-                    </div>
                     <div className="relative">
                       <button
                         type="button"
@@ -1173,11 +1294,45 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                     </div>
                     <textarea
                       value={importTexts[lane.id] ?? ''}
-                      onChange={(event) => setImportTexts((current) => ({ ...current, [lane.id]: event.target.value }))}
+                      onChange={(event) => {
+                        setImportTexts((current) => ({ ...current, [lane.id]: event.target.value }))
+                        setImportFeedback((current) => {
+                          const next = { ...current }
+                          delete next[lane.id]
+                          return next
+                        })
+                      }}
                       placeholder={laneActive ? 'Paste the import JSON or the raw Claude/ChatGPT response here.' : 'Enable this model when opening the batch to use this lane.'}
                       className="min-h-[110px] w-full border border-[#e8ddd0] bg-white px-3 py-2 text-xs text-[#5f564c] placeholder-[#b5aa9e] focus:outline-none"
                       disabled={!laneActive}
                     />
+                    <div className="flex justify-start">
+                      <button
+                        type="button"
+                        disabled={subscriptionLaneImported || !batch || !laneActive || busyKey != null || !importTexts[lane.id]?.trim()}
+                        onClick={() => void importPacket(lane.id as AiSubscriptionModelId)}
+                        className={`border px-3 py-2 text-xs font-medium disabled:cursor-not-allowed ${
+                          subscriptionLaneImported
+                            ? 'border-[#d8ccb9] bg-[#f1eee9] text-[#9b9187] opacity-70'
+                            : 'border-[#c1ab8e] bg-[#eadfce] text-[#5b4d3f] disabled:opacity-50'
+                        }`}
+                      >
+                        {subscriptionLaneImported
+                          ? 'Imported'
+                          : busyKey === `import:${lane.id}`
+                            ? 'Importing...'
+                            : 'Import JSON'}
+                      </button>
+                    </div>
+                    {laneImportFeedback ? (
+                      <div className={`border px-3 py-2 text-xs leading-5 ${
+                        laneImportFeedback.tone === 'success'
+                          ? 'border-[#3a8a2e]/30 bg-[#3a8a2e]/10 text-[#2f6f24]'
+                          : 'border-[#c43a2b]/30 bg-[#fff3f1] text-[#8d2c22]'
+                      }`}>
+                        {laneImportFeedback.message}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mt-4 rounded border border-[#e8ddd0] bg-white px-3 py-3 text-xs text-[#6f665b]">
@@ -1627,7 +1782,9 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                   </div>
                 )) : (
                   <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
-                    Fills will appear here as the shared AMM clears each task.
+                    {dataset === 'live'
+                      ? 'Fills will appear here as the Season 4 model cycle executes.'
+                      : 'Fills will appear here as the shared AMM clears each task.'}
                   </div>
                 )}
               </div>

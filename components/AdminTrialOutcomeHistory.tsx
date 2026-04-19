@@ -7,7 +7,7 @@ import { formatLocalDateTime } from '@/lib/date'
 export type AdminTrialOutcomeHistoryEntry = {
   id: string
   trialQuestionId: string
-  marketId: string | null
+  marketSlug: string | null
   questionPrompt: string
   previousOutcome: 'Pending' | 'YES' | 'NO' | null
   previousOutcomeDate: string | null
@@ -151,9 +151,9 @@ export function AdminTrialOutcomeHistory({ entries }: Props) {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    {entry.marketId ? (
+                    {entry.marketSlug ? (
                       <Link
-                        href={`/trials/${encodeURIComponent(entry.marketId)}`}
+                        href={`/trials/${encodeURIComponent(entry.marketSlug)}`}
                         className="text-sm font-semibold text-[#1a1a1a] transition-colors hover:text-[#5b5148] hover:underline"
                       >
                         {entry.trial.shortTitle}

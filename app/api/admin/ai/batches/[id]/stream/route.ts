@@ -1,7 +1,8 @@
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse } from '@/lib/api-response'
 import { deriveAiBatchProgress } from '@/lib/admin-ai-shared'
 import { getAiBatchState } from '@/lib/admin-ai'
+import { assertAiBatchMatchesActiveDatabase } from '@/lib/admin-ai-active-dataset'
 import { NotFoundError } from '@/lib/errors'
 
 type RouteContext = {
@@ -21,6 +22,7 @@ export async function GET(_: Request, context: RouteContext) {
     if (!initial) {
       throw new NotFoundError('Batch not found')
     }
+    assertAiBatchMatchesActiveDatabase(initial)
 
     const encoder = new TextEncoder()
     let interval: NodeJS.Timeout | null = null
@@ -36,6 +38,7 @@ export async function GET(_: Request, context: RouteContext) {
             closed = true
             return
           }
+          assertAiBatchMatchesActiveDatabase(batch)
 
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'progress', progress: deriveAiBatchProgress(batch) })}\n\n`))
           if (batch.status === 'cleared' || batch.status === 'failed' || batch.status === 'reset') {

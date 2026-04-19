@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
 import {
   db,
+  onchainMarkets,
   trials,
   predictionMarkets,
   trialMonitorRuns,
@@ -12,7 +13,7 @@ import {
   trialQuestions,
 } from '@/lib/db'
 import { ConfigurationError, ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '@/lib/errors'
-import { resolveMarketForTrialQuestion } from '@/lib/markets/engine'
+import { resolveSeason4Market } from '@/lib/season4-ops'
 import { buildTrialOutcomeEvidenceHash } from '@/lib/trial-outcome-candidate-hash'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
 import { getTrialMonitorConfig, type TrialMonitorConfig } from '@/lib/trial-monitor-config'
@@ -118,15 +119,15 @@ async function listMonitorableTrialOutcomeQuestionsInternal(): Promise<TrialQues
 }
 
 async function listAllOpenTrialOutcomeQuestionsInternal(): Promise<TrialQuestionWithTrial[]> {
-  const openMarkets = await db.query.predictionMarkets.findMany({
+  const openMarkets = await db.query.onchainMarkets.findMany({
     where: and(
-      eq(predictionMarkets.status, 'OPEN'),
-      isNotNull(predictionMarkets.trialQuestionId),
+      inArray(onchainMarkets.status, ['deployed', 'closed']),
+      isNotNull(onchainMarkets.trialQuestionId),
     ),
     columns: {
       trialQuestionId: true,
     },
-    orderBy: [asc(predictionMarkets.openedAt), asc(predictionMarkets.id)],
+    orderBy: [asc(onchainMarkets.createdAt), asc(onchainMarkets.id)],
   })
 
   const questionIds = Array.from(new Set(
@@ -2102,6 +2103,34 @@ export async function reviewTrialOutcomeCandidate(input: {
     }
 
     const nextOutcomeDate = candidate.proposedOutcomeDate ?? now
+    const linkedSeason4Markets = await db.query.onchainMarkets.findMany({
+      columns: {
+        marketSlug: true,
+        status: true,
+        resolvedOutcome: true,
+      },
+      where: eq(onchainMarkets.trialQuestionId, candidate.trialQuestionId),
+    })
+
+    const resolvedSeason4Markets = linkedSeason4Markets.filter((entry) => entry.status === 'resolved')
+    const conflictingSeason4Market = resolvedSeason4Markets.find((entry) => (
+      entry.resolvedOutcome && entry.resolvedOutcome !== candidate.proposedOutcome
+    ))
+    if (conflictingSeason4Market) {
+      throw new ConflictError(
+        `Season 4 market ${conflictingSeason4Market.marketSlug} is already resolved ${conflictingSeason4Market.resolvedOutcome}.`,
+      )
+    }
+
+    if (linkedSeason4Markets.length > 0) {
+      for (const season4Market of linkedSeason4Markets) {
+        if (season4Market.status === 'resolved') continue
+        await resolveSeason4Market({
+          identifier: season4Market.marketSlug,
+          outcome: candidate.proposedOutcome as 'YES' | 'NO',
+        })
+      }
+    }
 
     await db.transaction(async (tx) => {
       await tx.update(trialQuestions)
@@ -2150,7 +2179,6 @@ export async function reviewTrialOutcomeCandidate(input: {
           ne(trialOutcomeCandidates.id, candidate.id),
         ))
 
-      await resolveMarketForTrialQuestion(candidate.trialQuestionId, candidate.proposedOutcome as 'YES' | 'NO', tx)
     })
     return
   }

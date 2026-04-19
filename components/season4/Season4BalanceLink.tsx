@@ -4,9 +4,10 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from '@/lib/account-balance-events'
+import { useAuth } from '@/lib/auth/use-auth'
 import { cn } from '@/lib/utils'
 
-type LiveProfileBalanceLinkProps = {
+type Season4BalanceLinkProps = {
   className: string
   profileLabel?: string | null
   onClick?: () => void
@@ -30,19 +31,20 @@ function formatNavbarBalance(value: number | null | undefined): string | null {
   }).format(safeValue)
 }
 
-export function LiveProfileBalanceLink({
+export function Season4BalanceLink({
   className,
   profileLabel = null,
   onClick,
-}: LiveProfileBalanceLinkProps) {
+}: Season4BalanceLinkProps) {
   const pathname = usePathname()
+  const { fetchWithAuth } = useAuth()
   const [cashBalance, setCashBalance] = useState<number | null>(null)
   const [hasLoadedBalance, setHasLoadedBalance] = useState(false)
   const mountedRef = useRef(true)
 
   const refreshBalance = useEffectEvent(async () => {
     try {
-      const response = await fetch('/api/account/balance', {
+      const response = await fetchWithAuth('/api/account/balance', {
         cache: 'no-store',
       })
 
@@ -65,7 +67,6 @@ export function LiveProfileBalanceLink({
       if (mountedRef.current) {
         setHasLoadedBalance(true)
       }
-      // Keep the last known balance if the lightweight navbar refresh fails.
     }
   })
 

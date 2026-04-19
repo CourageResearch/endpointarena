@@ -18,6 +18,7 @@ import {
 } from '@/lib/markets/engine'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { ConflictError } from '@/lib/errors'
+import { getActiveDatabaseTarget } from '@/lib/database-target'
 import type { DailyRunHooks, DailyRunPayload, DailyRunPlannedMarket, DailyRunResult, DailyRunSummary } from '@/lib/markets/types'
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { getMarketModelResponseTimeoutMs, MARKET_RUN_STALE_TIMEOUT_MINUTES, MARKET_RUN_STALE_TIMEOUT_SECONDS } from '@/lib/markets/run-health'
@@ -240,6 +241,10 @@ export async function executeDailyRun(
   runDate: Date,
   options: DailyRunExecutionOptions = {},
 ): Promise<DailyRunPayload> {
+  if (getActiveDatabaseTarget() !== 'toy') {
+    throw new ConflictError('Legacy daily run is toy-only on season 4. Use /api/admin/season4/model-cycle/run for live season 4 execution.')
+  }
+
   const {
     hooks,
     nctNumber,
@@ -588,8 +593,11 @@ export async function executeDailyRun(
                 trialQuestionId: marketQuestion.id,
                 questionPrompt: normalizeTrialQuestionPrompt(marketQuestion.prompt),
                 market: latestMarket,
-                account,
-                position,
+                portfolio: {
+                  cashAvailable: account.cashBalance,
+                  yesSharesHeld: position.yesShares,
+                  noSharesHeld: position.noShares,
+                },
                 runtimeConfig,
                 decision: importedDecision.decision,
               })
@@ -631,8 +639,11 @@ export async function executeDailyRun(
                     trialQuestionId: marketQuestion.id,
                     questionPrompt: normalizeTrialQuestionPrompt(marketQuestion.prompt),
                     market: latestMarket,
-                    account,
-                    position,
+                    portfolio: {
+                      cashAvailable: account.cashBalance,
+                      yesSharesHeld: position.yesShares,
+                      noSharesHeld: position.noShares,
+                    },
                     runtimeConfig,
                   }),
                   getMarketModelResponseTimeoutMs(modelId),

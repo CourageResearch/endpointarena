@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { buildPageMetadata } from '@/lib/seo'
 
@@ -12,7 +12,7 @@ export const metadata: Metadata = buildPageMetadata({
 export default function PrivacyPage() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16">
         <section className="rounded-none border border-[#e8ddd0] bg-white/95 p-6 sm:p-10">

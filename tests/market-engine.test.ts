@@ -4,6 +4,7 @@ import {
   buildHouseOpeningDecisionInput,
   calculateExecutableTradeCaps,
   calculateHouseOpeningProbability,
+  previewTradeTransition,
 } from '../lib/markets/engine'
 import { DEFAULT_BINARY_MARKET_BASELINE } from '../lib/markets/constants'
 import { MODEL_DECISION_GENERATORS } from '../lib/predictions/model-decision-generators'
@@ -91,12 +92,67 @@ test('trade caps expose sell proceeds only for held shares', () => {
   assert.ok(withHoldings.maxSellNoUsd > 0)
 })
 
+test('trade preview supports a buy-then-partial-sell sequence without negative values', () => {
+  const buy = previewTradeTransition({
+    state: SYMMETRIC_STATE,
+    accountCash: 25,
+    yesSharesHeld: 0,
+    noSharesHeld: 0,
+    side: 'BUY_YES',
+    requestedUsd: 10,
+  })
+
+  assert.equal(buy.executedUsd, 10)
+  assert.ok(buy.sharesDelta > 0)
+  assert.ok(buy.yesSharesAfter > 0)
+  assert.equal(buy.noSharesAfter, 0)
+  assert.ok(buy.priceAfter > buy.priceBefore)
+  assert.ok(buy.cashAfter >= 0)
+  assert.ok(buy.qYes >= SYMMETRIC_STATE.qYes)
+  assert.ok(buy.qNo >= 0)
+
+  const updatedState = {
+    qYes: buy.qYes,
+    qNo: buy.qNo,
+    b: SYMMETRIC_STATE.b,
+  }
+  const caps = calculateExecutableTradeCaps({
+    state: updatedState,
+    accountCash: buy.cashAfter,
+    yesSharesHeld: buy.yesSharesAfter,
+    noSharesHeld: buy.noSharesAfter,
+  })
+
+  assert.ok(caps.maxSellYesUsd > 0)
+
+  const requestedSellUsd = caps.maxSellYesUsd / 2
+  const sell = previewTradeTransition({
+    state: updatedState,
+    accountCash: buy.cashAfter,
+    yesSharesHeld: buy.yesSharesAfter,
+    noSharesHeld: buy.noSharesAfter,
+    side: 'SELL_YES',
+    requestedUsd: requestedSellUsd,
+  })
+
+  assert.ok(sell.executedUsd > 0)
+  assert.ok(sell.executedUsd <= caps.maxSellYesUsd + 1e-9)
+  assert.ok(sell.sharesDelta < 0)
+  assert.ok(sell.yesSharesAfter < buy.yesSharesAfter)
+  assert.equal(sell.noSharesAfter, 0)
+  assert.ok(sell.priceAfter < sell.priceBefore)
+  assert.ok(sell.cashAfter > buy.cashAfter)
+  assert.ok(sell.cashAfter >= 0)
+  assert.ok(sell.yesSharesAfter >= 0)
+  assert.ok(sell.noSharesAfter >= 0)
+})
+
 test('house opening probability uses GPT forecast and falls back to baseline on failure', async () => {
   const originalGenerator = MODEL_DECISION_GENERATORS['gpt-5.4']
   const input = buildHouseOpeningDecisionInput({
     trialQuestionId: 'question-1',
     trial: buildTrial(),
-    questionPrompt: 'Will the results be positive?',
+    questionPrompt: 'Will this trial meet its primary endpoint?',
   })
 
   try {

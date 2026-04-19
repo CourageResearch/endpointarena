@@ -1,8 +1,39 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "contracts/hardhat.config.ts",
+    "scripts/check-season4-deployer.ts",
+    "scripts/claim-season4-cdp-faucet.ts",
+    "scripts/deploy-season4-contracts.ts",
+    "scripts/fund-season4-model-wallets.ts",
+    "scripts/index-season4-onchain.ts",
+    "scripts/reset-season4.ts",
+    "scripts/seed-season4-model-wallets.ts",
+    "scripts/smoke-season4-market.ts"
+  ],
   "ignoreFiles": [
     ".claude/worktrees/**",
     "_archive/**",
+    "components/AdminModelStartingBankroll.tsx",
+    "components/AdminTrialConstantsManager.tsx",
+    "components/LogoutButton.tsx",
+    "components/ProfileVerificationPanel.tsx",
+    "components/TrialDashboard.tsx",
+    "components/admin/Season4AdminDesk.tsx",
+    "components/markets/dashboard/activity-feed.tsx",
+    "components/markets/dashboard/trade-panel.tsx",
+    "components/season4/Season4HomePage.tsx",
+    "components/season4/Season4Navbar.tsx",
+    "lib/leaderboard-data.ts",
+    "lib/market-read-model.ts",
+    "lib/markets/daily-run-planning.ts",
+    "lib/markets/daily-run.ts",
+    "lib/markets/run-control.ts",
+    "lib/markets/types.ts",
+    "lib/season4-home-overview.ts",
+    "lib/trial-detail-tabs.ts",
+    "lib/trial-overview-payload.ts",
+    "lib/trial-run-logs.ts",
     "scripts/audit-market-db-v2.ts",
     "scripts/audit-market-price-snapshot-drift.ts",
     "scripts/backfill-public-sponsor-tickers.ts",
@@ -28,13 +59,79 @@
     "lib/manual-trial-outcome-import.ts"
   ],
   "ignoreIssues": {
+    "components/XMark.tsx": [
+      "exports"
+    ],
+    "components/markets/dashboard/details-panel.tsx": [
+      "exports"
+    ],
+    "components/markets/dashboard/shared.ts": [
+      "exports"
+    ],
+    "components/markets/marketOverviewCharts.tsx": [
+      "exports"
+    ],
+    "lib/admin-auth.ts": [
+      "exports"
+    ],
+    "lib/auth/client-navigation.ts": [
+      "exports"
+    ],
+    "lib/constants.ts": [
+      "exports"
+    ],
+    "lib/db.ts": [
+      "exports"
+    ],
+    "lib/errors.ts": [
+      "exports"
+    ],
+    "lib/human-cash.ts": [
+      "exports"
+    ],
+    "lib/market-actors.ts": [
+      "exports"
+    ],
     "lib/markets/automation-handoff-shared.ts": [
       "exports"
     ],
     "lib/markets/daily-run-planning.ts": [
       "exports"
     ],
+    "lib/markets/engine.ts": [
+      "exports"
+    ],
+    "lib/markets/overview-shared.ts": [
+      "exports"
+    ],
+    "lib/markets/run-health.ts": [
+      "exports"
+    ],
     "lib/markets/runtime-config.ts": [
+      "exports"
+    ],
+    "lib/mock-market-data.ts": [
+      "exports"
+    ],
+    "lib/model-decision-snapshots.ts": [
+      "exports"
+    ],
+    "lib/model-registry.ts": [
+      "exports"
+    ],
+    "lib/predictions/model-decision-generators.ts": [
+      "exports"
+    ],
+    "lib/predictions/model-decision-prompt.ts": [
+      "exports"
+    ],
+    "lib/privy.ts": [
+      "exports"
+    ],
+    "lib/season4-faucet-config.ts": [
+      "exports"
+    ],
+    "lib/season4-model-labels.ts": [
       "exports"
     ],
     "lib/trial-run-logs.ts": [

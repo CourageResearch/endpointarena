@@ -1,6 +1,7 @@
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
-import { retryAiTask } from '@/lib/admin-ai'
+import { getAiBatchState, retryAiTask } from '@/lib/admin-ai'
+import { assertAiBatchMatchesActiveDatabase } from '@/lib/admin-ai-active-dataset'
 import { ValidationError } from '@/lib/errors'
 
 type RetryBody = {
@@ -24,6 +25,11 @@ export async function POST(request: Request, context: RouteContext) {
     const taskKey = typeof body.taskKey === 'string' ? body.taskKey.trim() : ''
     if (!taskKey) {
       throw new ValidationError('taskKey is required')
+    }
+
+    const existingBatch = await getAiBatchState(id)
+    if (existingBatch) {
+      assertAiBatchMatchesActiveDatabase(existingBatch)
     }
 
     const batch = await retryAiTask(id, taskKey)

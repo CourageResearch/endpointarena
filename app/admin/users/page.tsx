@@ -1,20 +1,18 @@
 import { revalidatePath } from 'next/cache'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { authOptions, ensureAdmin } from '@/lib/auth'
-import { ADMIN_EMAIL } from '@/lib/constants'
-import { accounts, db, marketAccounts, marketActions, marketActors, marketPositions, predictionMarkets, users } from '@/lib/db'
+import { ensureAdmin, redirectIfNotAdmin, requireAdminSession } from '@/lib/admin-auth'
+import { isConfiguredAdminEmail } from '@/lib/constants'
+import { accounts, db, onchainBalances, onchainEvents, onchainUserWallets, users } from '@/lib/db'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { LocalDateTime } from '@/components/ui/local-date-time'
 import { XInlineMark } from '@/components/XMark'
 import { formatStoredCountry, formatStoredRegion } from '@/lib/geo-country'
+import { getSeason4MarketSummaries } from '@/lib/season4-market-data'
 import { userColumns, type UserColumnsRow } from '@/lib/users/query-shapes'
 
 export const dynamic = 'force-dynamic'
 
-const TRADE_ACTIONS = ['BUY_YES', 'BUY_NO', 'SELL_YES', 'SELL_NO'] as const
 const SORT_KEYS = ['created', 'money', 'tx', 'country', 'region'] as const
 const SORT_DIRECTIONS = ['asc', 'desc'] as const
 
@@ -87,13 +85,42 @@ function normalizeUnknownToDash(value: string | null | undefined): string {
   return trimmed
 }
 
+function extractOnchainMarketId(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.startsWith('market:') ? trimmed.slice('market:'.length) : trimmed
+}
+
+function getSeason4PricePair(market: {
+  resolvedOutcome: 'YES' | 'NO' | null
+  priceYes: number | null
+}): {
+  priceYes: number
+  priceNo: number
+} {
+  if (market.resolvedOutcome === 'YES') {
+    return { priceYes: 1, priceNo: 0 }
+  }
+  if (market.resolvedOutcome === 'NO') {
+    return { priceYes: 0, priceNo: 1 }
+  }
+
+  const livePriceYes = typeof market.priceYes === 'number'
+    ? Math.min(1, Math.max(0, market.priceYes))
+    : 0.5
+
+  return {
+    priceYes: livePriceYes,
+    priceNo: Math.max(0, 1 - livePriceYes),
+  }
+}
+
 async function deleteUser(formData: FormData) {
   'use server'
 
-  await ensureAdmin()
-
-  const session = await getServerSession(authOptions)
-  const currentAdminEmail = session?.user?.email?.trim().toLowerCase() ?? null
+  const session = await requireAdminSession()
+  const currentAdminEmail = session.user.email?.trim().toLowerCase() ?? null
   const rawId = formData.get('userId')
   const userId = typeof rawId === 'string' ? rawId.trim() : ''
 
@@ -109,7 +136,7 @@ async function deleteUser(formData: FormData) {
   const targetEmail = user.email?.trim().toLowerCase() ?? null
 
   // Prevent removing the current session owner or the configured admin account.
-  if ((currentAdminEmail && targetEmail === currentAdminEmail) || targetEmail === ADMIN_EMAIL.toLowerCase()) {
+  if ((currentAdminEmail && targetEmail === currentAdminEmail) || isConfiguredAdminEmail(targetEmail)) {
     return
   }
 
@@ -142,51 +169,109 @@ async function getUserTradingStats(userRows: UserColumnsRow[]) {
     }
   }
 
-  const [accountRows, tradeRows] = await Promise.all([
-    db
-      .select({
-        userId: marketActors.userId,
-        cashBalance: marketAccounts.cashBalance,
-        positionsValue: sql<number>`
-          coalesce(
-            sum(
-              case
-                when ${predictionMarkets.status} = 'OPEN' then
-                  (${marketPositions.yesShares} * ${predictionMarkets.priceYes})
-                  + (${marketPositions.noShares} * (1 - ${predictionMarkets.priceYes}))
-                else 0
-              end
-            ),
-            0
-          )
-        `,
-      })
-      .from(marketAccounts)
-      .innerJoin(marketActors, eq(marketActors.id, marketAccounts.actorId))
-      .leftJoin(marketPositions, eq(marketPositions.actorId, marketAccounts.actorId))
-      .leftJoin(predictionMarkets, eq(predictionMarkets.id, marketPositions.marketId))
-      .where(inArray(marketActors.userId, userIds))
-      .groupBy(marketActors.userId, marketAccounts.cashBalance),
-    db
-      .select({
-        userId: marketActors.userId,
-        tradeCount: sql<number>`count(*)`,
-      })
-      .from(marketActions)
-      .innerJoin(marketActors, eq(marketActors.id, marketActions.actorId))
+  const walletRows = await db.select({
+    userId: onchainUserWallets.userId,
+    walletAddress: onchainUserWallets.walletAddress,
+  })
+    .from(onchainUserWallets)
+    .where(inArray(onchainUserWallets.userId, userIds))
+
+  const walletAddresses = Array.from(new Set(
+    walletRows
+      .map((row) => row.walletAddress?.trim().toLowerCase() ?? '')
+      .filter(Boolean),
+  ))
+
+  if (walletAddresses.length === 0) {
+    return {
+      cashBalanceByUserId: new Map<string, number>(),
+      positionsValueByUserId: new Map<string, number>(),
+      tradeCountByUserId: new Map<string, number>(),
+    }
+  }
+
+  const [balanceRows, tradeRows, marketSummaries] = await Promise.all([
+    db.select({
+      userId: onchainBalances.userId,
+      walletAddress: onchainBalances.walletAddress,
+      marketRef: onchainBalances.marketRef,
+      collateralDisplay: onchainBalances.collateralDisplay,
+      yesShares: onchainBalances.yesShares,
+      noShares: onchainBalances.noShares,
+    })
+      .from(onchainBalances)
+      .where(inArray(onchainBalances.walletAddress, walletAddresses)),
+    db.select({
+      walletAddress: onchainEvents.walletAddress,
+      tradeCount: sql<number>`count(*)::int`,
+    })
+      .from(onchainEvents)
       .where(and(
-        inArray(marketActors.userId, userIds),
-        eq(marketActions.actionSource, 'human'),
-        eq(marketActions.status, 'ok'),
-        inArray(marketActions.action, [...TRADE_ACTIONS]),
+        inArray(onchainEvents.walletAddress, walletAddresses),
+        eq(onchainEvents.eventName, 'TradeExecuted'),
       ))
-      .groupBy(marketActors.userId),
+      .groupBy(onchainEvents.walletAddress),
+    getSeason4MarketSummaries(),
   ])
 
+  const userIdByWallet = new Map(
+    walletRows.flatMap((row) => {
+      const walletAddress = row.walletAddress?.trim().toLowerCase() ?? ''
+      return walletAddress ? [[walletAddress, row.userId] as const] : []
+    }),
+  )
+  const marketById = new Map(
+    marketSummaries.flatMap((market) => (
+      market.onchainMarketId ? [[market.onchainMarketId, market] as const] : []
+    )),
+  )
+
+  const cashBalanceByUserId = new Map<string, number>()
+  const positionsValueByUserId = new Map<string, number>()
+  const tradeCountByUserId = new Map<string, number>()
+
+  for (const row of balanceRows) {
+    const walletAddress = row.walletAddress.trim().toLowerCase()
+    const userId = userIdByWallet.get(walletAddress) ?? row.userId ?? null
+    if (!userId) continue
+
+    if (row.marketRef === 'collateral') {
+      cashBalanceByUserId.set(
+        userId,
+        (cashBalanceByUserId.get(userId) ?? 0) + (row.collateralDisplay ?? 0),
+      )
+      continue
+    }
+
+    const marketId = extractOnchainMarketId(row.marketRef)
+    if (!marketId) continue
+    const market = marketById.get(marketId)
+    if (!market) continue
+
+    const { priceYes, priceNo } = getSeason4PricePair(market)
+    const markValue = (row.yesShares ?? 0) * priceYes + (row.noShares ?? 0) * priceNo
+
+    positionsValueByUserId.set(
+      userId,
+      (positionsValueByUserId.get(userId) ?? 0) + markValue,
+    )
+  }
+
+  for (const row of tradeRows) {
+    const walletAddress = row.walletAddress?.trim().toLowerCase() ?? ''
+    const userId = walletAddress ? userIdByWallet.get(walletAddress) ?? null : null
+    if (!userId) continue
+
+    tradeCountByUserId.set(
+      userId,
+      (tradeCountByUserId.get(userId) ?? 0) + Number(row.tradeCount ?? 0),
+    )
+  }
+
   return {
-    cashBalanceByUserId: new Map(accountRows.flatMap((row) => row.userId ? [[row.userId, row.cashBalance] as const] : [])),
-    positionsValueByUserId: new Map(accountRows.flatMap((row) => row.userId ? [[row.userId, Number(row.positionsValue ?? 0)] as const] : [])),
-    tradeCountByUserId: new Map(tradeRows.flatMap((row) => row.userId ? [[row.userId, Number(row.tradeCount)] as const] : [])),
+    cashBalanceByUserId,
+    positionsValueByUserId,
+    tradeCountByUserId,
   }
 }
 
@@ -255,10 +340,7 @@ export default async function AdminUsersPage({
 }: {
   searchParams?: Promise<PageSearchParams>
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
+  const session = await redirectIfNotAdmin('/admin/users')
 
   const resolvedSearchParams = (await searchParams) ?? {}
   const sortKey = parseSortKey(firstSearchParam(resolvedSearchParams.sort))
@@ -266,8 +348,7 @@ export default async function AdminUsersPage({
   const { users: userRows, total } = await getUsersData()
   await backfillMissingXUsernames(userRows)
   const { cashBalanceByUserId, positionsValueByUserId, tradeCountByUserId } = await getUserTradingStats(userRows)
-  const currentAdminEmail = session.user.email.trim().toLowerCase()
-  const protectedAdminEmail = ADMIN_EMAIL.toLowerCase()
+  const currentAdminEmail = session.user.email?.trim().toLowerCase() ?? null
 
   const rows = userRows.map((user) => {
     const email = user.email ?? '—'
@@ -279,7 +360,7 @@ export default async function AdminUsersPage({
     const totalEquity = cashBalance + positionsValue
     const trades = tradeCountByUserId.get(user.id) ?? 0
     const emailLower = user.email?.trim().toLowerCase() ?? null
-    const isProtectedUser = emailLower === currentAdminEmail || emailLower === protectedAdminEmail
+    const isProtectedUser = emailLower === currentAdminEmail || isConfiguredAdminEmail(emailLower)
     const createdAtMs = user.createdAt ? user.createdAt.getTime() : 0
 
     return {

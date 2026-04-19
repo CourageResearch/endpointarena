@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseOptionalJsonBody, successResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import { requestTrialMonitorStop } from '@/lib/trial-monitor'
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       throw new ValidationError('No running trial monitor was found to pause.')
     }
 
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/oracle')
 
     return successResponse({
       runId: stoppedRunId,

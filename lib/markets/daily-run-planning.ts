@@ -8,6 +8,7 @@ import {
   trialQuestions,
 } from '@/lib/db'
 import { isModelId, type ModelId } from '@/lib/constants'
+import { ValidationError } from '@/lib/errors'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import {
   ensureMarketAccounts,
@@ -18,6 +19,7 @@ import {
 import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { getModelActorIds } from '@/lib/market-actors'
 import { filterSupportedTrialQuestions } from '@/lib/trial-questions'
+import { getActiveDatabaseTarget } from '@/lib/database-target'
 
 export type OpenTrialMarket = typeof predictionMarkets.$inferSelect & {
   trialQuestionId: string
@@ -99,6 +101,10 @@ export async function prepareDailyRunContext(
   runDate: Date,
   options: DailyRunPreparationOptions = {},
 ): Promise<DailyRunPreparedContext> {
+  if (getActiveDatabaseTarget() !== 'toy') {
+    throw new ValidationError('Legacy daily run is toy-only on season 4. Use the season 4 model cycle instead.')
+  }
+
   const normalizedRunDate = normalizeRunDate(runDate)
   const runDateIso = normalizedRunDate.toISOString()
   const modelOrder = resolveDailyRunModelOrder(normalizedRunDate, options.modelIds)

@@ -1,18 +1,18 @@
 import type { Metadata } from 'next'
-import { cache } from 'react'
 import { notFound } from 'next/navigation'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
-import { TrialDashboard } from '@/components/TrialDashboard'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, PageFrame } from '@/components/site/chrome'
+import { Season4MarketPage } from '@/components/season4/Season4MarketPage'
+import { NotFoundError } from '@/lib/errors'
 import { SITE_CONTAINER_CLASS } from '@/lib/layout'
-import { getTrialsOverviewData } from '@/lib/trial-overview'
-import { createDetailTrialsOverviewPayload } from '@/lib/trial-overview-payload'
-import { getMarketQuestion } from '@/lib/markets/overview-shared'
-import { resolveTrialDetailTab } from '@/lib/trial-detail-tabs'
-import { loadTrialOracleTabData } from '@/lib/trial-oracle-data'
+import { getSession } from '@/lib/auth/session'
+import { getSeason4MarketDetail } from '@/lib/season4-market-data'
+import { loadSeason4DashboardMarket } from '@/lib/season4-trial-dashboard-data'
 import { buildNoIndexMetadata, buildPageMetadata } from '@/lib/seo'
+import { resolveSeason4TrialTab } from '@/lib/season4-trial-tabs'
+import { loadTrialOracleTabData } from '@/lib/trial-oracle-data'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
 type PageSearchParams = {
   tab?: string | string[]
@@ -23,26 +23,12 @@ function firstSearchParam(value: string | string[] | undefined): string | null {
   return value ?? null
 }
 
-const getTrialDetailPageData = cache(async (marketId: string) => {
-  const overviewData = await getTrialsOverviewData({
-    marketId,
-    includeAccounts: false,
-    includeEquityHistory: false,
-    includeRecentRuns: false,
+async function loadDetail(identifier: string) {
+  const session = await getSession()
+  return getSeason4MarketDetail(identifier, {
+    sync: true,
+    viewerUserId: session?.user.id ?? null,
   })
-  const selectedMarket = overviewData.openMarkets.find((market) => market.marketId === marketId)
-    || overviewData.resolvedMarkets.find((market) => market.marketId === marketId)
-
-  return {
-    overviewData,
-    selectedMarket: selectedMarket ?? null,
-  }
-})
-
-async function getMarketForMetadata(marketId: string) {
-  return getTrialDetailPageData(marketId)
-    .then((data) => data.selectedMarket)
-    .catch(() => null)
 }
 
 export async function generateMetadata({
@@ -52,42 +38,34 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { marketId: encodedMarketId } = await params
   const marketId = decodeURIComponent(encodedMarketId)
-  const market = await getMarketForMetadata(marketId)
 
-  if (!market?.event) {
+  try {
+    const detail = await getSeason4MarketDetail(marketId)
+    const closeTimeLabel = detail.market.closeTime
+      ? new Date(detail.market.closeTime).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        })
+      : null
+
+    return buildPageMetadata({
+      title: detail.market.title,
+      description: [
+        detail.trial?.questionPrompt ?? 'Season 4 onchain clinical trial market.',
+        closeTimeLabel ? `Closes ${closeTimeLabel}.` : null,
+        typeof detail.market.priceYes === 'number' ? `YES ${Math.round(detail.market.priceYes * 100)}%.` : null,
+      ].filter(Boolean).join(' '),
+      path: `/trials/${encodeURIComponent(detail.market.marketSlug)}`,
+    })
+  } catch {
     return buildNoIndexMetadata({
-      title: 'Trial',
-      description: 'This trial is unavailable.',
+      title: 'Season 4 Market',
+      description: 'This season 4 market is unavailable.',
       path: `/trials/${encodeURIComponent(marketId)}`,
     })
   }
-
-  const drugName = market.event.drugName || 'Clinical trial'
-  const sponsorName = market.event.sponsorName?.trim() || market.event.companyName?.trim()
-  const applicationType = market.event.applicationType?.trim()
-  const decisionDateLabel = market.event.decisionDate
-    ? new Date(market.event.decisionDate).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        timeZone: 'UTC',
-      })
-    : null
-  const question = getMarketQuestion(market)
-  const description = [
-    question,
-    sponsorName ? `Sponsor: ${sponsorName}.` : null,
-    applicationType ? `Type: ${applicationType}.` : null,
-    decisionDateLabel ? `Decision date: ${decisionDateLabel}.` : null,
-  ]
-    .filter(Boolean)
-    .join(' ')
-
-  return buildPageMetadata({
-    title: `${drugName} Trial`,
-    description,
-    path: `/trials/${encodeURIComponent(marketId)}`,
-  })
 }
 
 export default async function TrialDetailPage({
@@ -100,40 +78,39 @@ export default async function TrialDetailPage({
   const { marketId: encodedMarketId } = await params
   const marketId = decodeURIComponent(encodedMarketId)
   const resolvedSearchParams = (await searchParams) ?? {}
-  const activeTab = resolveTrialDetailTab(firstSearchParam(resolvedSearchParams.tab))
-  const detailData = await getTrialDetailPageData(marketId).catch((error) => {
-    console.error('Failed to preload market overview for trial detail page:', error)
-    return null
-  })
-  const overviewData = detailData?.overviewData ?? null
-  const selectedMarket = detailData?.selectedMarket ?? null
+  const activeTab = resolveSeason4TrialTab(firstSearchParam(resolvedSearchParams.tab))
 
-  if (!selectedMarket) {
-    notFound()
+  try {
+    const detail = await loadDetail(marketId)
+    const selectedMarket = await loadSeason4DashboardMarket(detail)
+
+    let oracleTabData = null
+
+    if (activeTab === 'oracles') {
+      oracleTabData = await loadTrialOracleTabData(selectedMarket)
+    }
+
+    return (
+      <PageFrame>
+        <PublicNavbar />
+
+        <main className={`${SITE_CONTAINER_CLASS} py-8 sm:py-12`}>
+          <Season4MarketPage
+            initialDetail={detail}
+            initialSelectedMarket={selectedMarket}
+            activeTab={activeTab}
+            oracleTabData={oracleTabData}
+          />
+
+          <FooterGradientRule className="mt-10" />
+        </main>
+      </PageFrame>
+    )
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      notFound()
+    }
+
+    throw error
   }
-
-  const initialData = createDetailTrialsOverviewPayload(overviewData)
-  const oracleTabData = activeTab === 'oracles'
-    ? await loadTrialOracleTabData(selectedMarket)
-    : null
-
-  return (
-    <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
-
-      <main className={`${SITE_CONTAINER_CLASS} py-8 sm:py-12`}>
-        <TrialDashboard
-          initialMarketId={marketId}
-          initialData={initialData}
-          showMarketList={false}
-          detailLayout="stacked"
-          viewMode="tabbed"
-          activeTab={activeTab}
-          oracleTabData={oracleTabData}
-        />
-
-        <FooterGradientRule className="mt-10" />
-      </main>
-    </PageFrame>
-  )
 }

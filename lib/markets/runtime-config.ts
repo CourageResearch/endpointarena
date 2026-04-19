@@ -6,11 +6,17 @@ const MARKET_RUNTIME_CONFIG_ID = 'default'
 const MAX_CONFIG_NUMBER = 10_000_000
 export const DEFAULT_TOY_TRIAL_COUNT = 0
 export const MIN_TOY_TRIAL_COUNT = 0
+export const DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY = 25_000
+export const DEFAULT_SEASON4_STARTING_BANKROLL_DISPLAY = 1000
+export const DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY = 1000
 type MarketRuntimeConfigDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export type MarketRuntimeConfig = {
   openingLmsrB: number
   toyTrialCount: number
+  season4MarketLiquidityBDisplay: number
+  season4HumanStartingBankrollDisplay: number
+  season4StartingBankrollDisplay: number
   createdAt: Date
   updatedAt: Date
 }
@@ -18,17 +24,26 @@ export type MarketRuntimeConfig = {
 export type MarketRuntimeConfigPatchInput = Partial<{
   openingLmsrB: unknown
   toyTrialCount: unknown
+  season4MarketLiquidityBDisplay: unknown
+  season4HumanStartingBankrollDisplay: unknown
+  season4StartingBankrollDisplay: unknown
 }>
 
 type MarketRuntimeConfigPatch = Partial<{
   openingLmsrB: number
   toyTrialCount: number
+  season4MarketLiquidityBDisplay: number
+  season4HumanStartingBankrollDisplay: number
+  season4StartingBankrollDisplay: number
 }>
 
 const marketRuntimeConfigColumns = {
   id: true,
   openingLmsrB: true,
   toyTrialCount: true,
+  season4MarketLiquidityBDisplay: true,
+  season4HumanStartingBankrollDisplay: true,
+  season4StartingBankrollDisplay: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -60,6 +75,30 @@ function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPa
     patch.toyTrialCount = parsed
   }
 
+  if (input.season4MarketLiquidityBDisplay !== undefined) {
+    const parsed = coerceNumber(input.season4MarketLiquidityBDisplay, 'season4MarketLiquidityBDisplay')
+    if (parsed <= 0 || parsed > MAX_CONFIG_NUMBER) {
+      throw new ValidationError(`season4MarketLiquidityBDisplay must be greater than 0 and no more than ${MAX_CONFIG_NUMBER}`)
+    }
+    patch.season4MarketLiquidityBDisplay = parsed
+  }
+
+  if (input.season4StartingBankrollDisplay !== undefined) {
+    const parsed = coerceNumber(input.season4StartingBankrollDisplay, 'season4StartingBankrollDisplay')
+    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
+      throw new ValidationError(`season4StartingBankrollDisplay must be between 0 and ${MAX_CONFIG_NUMBER}`)
+    }
+    patch.season4StartingBankrollDisplay = parsed
+  }
+
+  if (input.season4HumanStartingBankrollDisplay !== undefined) {
+    const parsed = coerceNumber(input.season4HumanStartingBankrollDisplay, 'season4HumanStartingBankrollDisplay')
+    if (parsed < 0 || parsed > MAX_CONFIG_NUMBER) {
+      throw new ValidationError(`season4HumanStartingBankrollDisplay must be between 0 and ${MAX_CONFIG_NUMBER}`)
+    }
+    patch.season4HumanStartingBankrollDisplay = parsed
+  }
+
   return patch
 }
 
@@ -71,6 +110,9 @@ function mapRow(row: typeof marketRuntimeConfigs.$inferSelect): MarketRuntimeCon
   return {
     openingLmsrB: row.openingLmsrB,
     toyTrialCount: row.toyTrialCount ?? DEFAULT_TOY_TRIAL_COUNT,
+    season4MarketLiquidityBDisplay: row.season4MarketLiquidityBDisplay ?? DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY,
+    season4HumanStartingBankrollDisplay: row.season4HumanStartingBankrollDisplay ?? DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY,
+    season4StartingBankrollDisplay: row.season4StartingBankrollDisplay ?? DEFAULT_SEASON4_STARTING_BANKROLL_DISPLAY,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

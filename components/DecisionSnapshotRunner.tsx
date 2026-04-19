@@ -36,6 +36,10 @@ interface StreamProgress {
 
 interface Props {
   events: TrialQuestionEvent[]
+  allowManualRuns?: boolean
+  allowOutcomeEditing?: boolean
+  statusNote?: string | null
+  subjectLabel?: string
 }
 
 function formatTimestamp(value: string | undefined): string {
@@ -79,7 +83,13 @@ function predictionToHistoryEntry(prediction: Prediction): PredictionHistoryEntr
   }
 }
 
-export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
+export function DecisionSnapshotRunner({
+  events: initialEvents,
+  allowManualRuns = true,
+  allowOutcomeEditing = true,
+  statusNote = null,
+  subjectLabel = 'open-trial questions',
+}: Props) {
   const [events, setEvents] = useState(initialEvents)
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [progress, setProgress] = useState<Record<string, StreamProgress>>({})
@@ -173,6 +183,11 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
   }
 
   const runStreamingPrediction = async (questionId: string, modelId: ModelId) => {
+    if (!allowManualRuns) {
+      setGlobalError('Manual snapshot reruns are disabled on the season 4 desk.')
+      return
+    }
+
     setGlobalError(null)
     const key = getKey(questionId, modelId)
     const existingController = controllersRef.current[key]
@@ -265,10 +280,19 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
   }
 
   const runAllPredictions = async (questionId: string) => {
+    if (!allowManualRuns) {
+      setGlobalError('Manual snapshot reruns are disabled on the season 4 desk.')
+      return
+    }
     await Promise.all(MODEL_IDS.map((modelId) => runStreamingPrediction(questionId, modelId)))
   }
 
   const updateOutcome = async (questionId: string, outcome: string) => {
+    if (!allowOutcomeEditing) {
+      setGlobalError('Outcome editing is disabled on this desk.')
+      return
+    }
+
     setGlobalError(null)
     setUpdatingOutcome((prev) => ({ ...prev, [questionId]: true }))
 
@@ -311,6 +335,11 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
           {globalError}
         </div>
       ) : null}
+      {statusNote ? (
+        <div className="rounded-none border border-[#d8ccb9] bg-white/80 px-3 py-2 text-sm text-[#6f665b]">
+          {statusNote}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 rounded-none border border-[#e8ddd0] bg-white/80 p-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative w-full sm:max-w-md">
@@ -327,7 +356,7 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
           />
         </div>
         <span className="truncate-wrap text-xs text-[#b5aa9e]">
-          {filteredEvents.length}/{events.length} open-trial questions shown
+          {filteredEvents.length}/{events.length} {subjectLabel} shown
         </span>
       </div>
 
@@ -369,38 +398,48 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
                     <div className="text-xs text-[#b5aa9e]">{formatUtcDate(event.decisionDate)}</div>
                   </div>
 
-                  <select
-                    value={event.outcome}
-                    onChange={(input) => updateOutcome(event.id, input.target.value)}
-                    disabled={updatingOutcome[event.id]}
-                    className={`max-w-full cursor-pointer border-0 px-3 py-1.5 text-sm font-medium rounded-none ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
-                  >
-                    <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
-                    <option value="YES" className="bg-white text-[#3a8a2e]">YES</option>
-                    <option value="NO" className="bg-white text-[#EF6F67]">NO</option>
-                  </select>
-
-                  <button
-                    onClick={() => runAllPredictions(event.id)}
-                    disabled={isAnyLoading}
-                    className={`whitespace-nowrap rounded-none px-4 py-1.5 text-sm font-medium transition-colors ${
-                      isAnyLoading
-                        ? 'cursor-not-allowed bg-[#e8ddd0] text-[#b5aa9e]'
-                        : hasSnapshots
-                          ? 'border border-[#e8ddd0] bg-transparent text-[#8a8075] hover:border-[#b5aa9e] hover:text-[#1a1a1a]'
-                          : 'bg-blue-600 text-white hover:bg-blue-500'
-                    }`}
-                  >
-                    {isAnyLoading ? 'Running...' : hasSnapshots ? 'Run All Again' : 'Run All'}
-                  </button>
-                  {isAnyLoading ? (
-                    <button
-                      type="button"
-                      onClick={() => pauseEventPredictions(event.id)}
-                      className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-1.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                  {allowOutcomeEditing ? (
+                    <select
+                      value={event.outcome}
+                      onChange={(input) => updateOutcome(event.id, input.target.value)}
+                      disabled={updatingOutcome[event.id]}
+                      className={`max-w-full cursor-pointer border-0 px-3 py-1.5 text-sm font-medium rounded-none ${getOutcomeStyle(event.outcome)} ${updatingOutcome[event.id] ? 'opacity-50' : ''}`}
                     >
-                      Pause
-                    </button>
+                      <option value="Pending" className="bg-white text-[#D39D2E]">Pending</option>
+                      <option value="YES" className="bg-white text-[#3a8a2e]">YES</option>
+                      <option value="NO" className="bg-white text-[#EF6F67]">NO</option>
+                    </select>
+                  ) : (
+                    <span className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-none ${getOutcomeStyle(event.outcome)}`}>
+                      {event.outcome}
+                    </span>
+                  )}
+
+                  {allowManualRuns ? (
+                    <>
+                      <button
+                        onClick={() => runAllPredictions(event.id)}
+                        disabled={isAnyLoading}
+                        className={`whitespace-nowrap rounded-none px-4 py-1.5 text-sm font-medium transition-colors ${
+                          isAnyLoading
+                            ? 'cursor-not-allowed bg-[#e8ddd0] text-[#b5aa9e]'
+                            : hasSnapshots
+                              ? 'border border-[#e8ddd0] bg-transparent text-[#8a8075] hover:border-[#b5aa9e] hover:text-[#1a1a1a]'
+                              : 'bg-blue-600 text-white hover:bg-blue-500'
+                        }`}
+                      >
+                        {isAnyLoading ? 'Running...' : hasSnapshots ? 'Run All Again' : 'Run All'}
+                      </button>
+                      {isAnyLoading ? (
+                        <button
+                          type="button"
+                          onClick={() => pauseEventPredictions(event.id)}
+                          className="whitespace-nowrap rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-1.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                        >
+                          Pause
+                        </button>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -423,12 +462,14 @@ export function DecisionSnapshotRunner({ events: initialEvents }: Props) {
                           <div className="truncate-wrap text-sm font-medium text-[#1a1a1a]">{MODEL_INFO[modelId].fullName}</div>
                           <div className="text-[11px] text-[#8a8075]">{MODEL_INFO[modelId].provider}</div>
                         </div>
-                        <button
-                          onClick={() => (loading[key] ? pausePrediction(key) : runStreamingPrediction(event.id, modelId))}
-                          className="shrink-0 rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-2.5 py-1 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
-                        >
-                          {loading[key] ? 'Pause' : prediction ? 'Run Again' : 'Run'}
-                        </button>
+                        {allowManualRuns ? (
+                          <button
+                            onClick={() => (loading[key] ? pausePrediction(key) : runStreamingPrediction(event.id, modelId))}
+                            className="shrink-0 rounded-none border border-[#d9cdbf] bg-[#fdfbf8] px-2.5 py-1 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
+                          >
+                            {loading[key] ? 'Pause' : prediction ? 'Run Again' : 'Run'}
+                          </button>
+                        ) : null}
                       </div>
 
                       {prediction ? (

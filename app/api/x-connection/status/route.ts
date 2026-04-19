@@ -1,17 +1,20 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
+import { getSession } from '@/lib/auth/session'
 import { getXConnectionStatusForUser } from '@/lib/x-status'
+import { getXClientCredentials } from '@/lib/x-env'
 
 export async function GET() {
   const requestId = createRequestId()
+  const { clientId, clientSecret } = getXClientCredentials()
+  const oauthConfigured = Boolean(clientId && clientSecret)
 
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSession()
 
     if (!session?.user?.id) {
       return successResponse({
         authenticated: false,
+        oauthConfigured,
         connected: false,
         requiresReconnect: false,
         xCheckState: 'ok' as const,
@@ -27,6 +30,7 @@ export async function GET() {
     if (!status) {
       return successResponse({
         authenticated: false,
+        oauthConfigured,
         connected: false,
         requiresReconnect: false,
         xCheckState: 'ok' as const,
@@ -40,6 +44,7 @@ export async function GET() {
 
     return successResponse({
       authenticated: true,
+      oauthConfigured,
       connected: status.connected,
       requiresReconnect: status.requiresReconnect,
       xCheckState: status.xCheckState,

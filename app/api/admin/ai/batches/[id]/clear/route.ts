@@ -1,6 +1,7 @@
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
-import { clearAiBatchNow } from '@/lib/admin-ai'
+import { clearAiBatchNow, getAiBatchState } from '@/lib/admin-ai'
+import { assertAiBatchMatchesActiveDatabase } from '@/lib/admin-ai-active-dataset'
 
 type RouteContext = {
   params: Promise<{
@@ -15,6 +16,11 @@ export async function POST(_: Request, context: RouteContext) {
     await ensureAdmin()
 
     const { id } = await context.params
+    const existingBatch = await getAiBatchState(id)
+    if (existingBatch) {
+      assertAiBatchMatchesActiveDatabase(existingBatch)
+    }
+
     const batch = await clearAiBatchNow(id)
 
     return successResponse({ batch }, {

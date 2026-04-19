@@ -1,6 +1,7 @@
-import { and, desc, eq, ne } from 'drizzle-orm'
+import { and, desc, eq, inArray, ne } from 'drizzle-orm'
 import {
   db,
+  onchainMarkets,
   trialOutcomeCandidates,
   trialQuestionOutcomeHistory,
   trialQuestions,
@@ -20,7 +21,7 @@ type NullableDate = Date | null | undefined
 export type TrialQuestionOutcomeHistoryListItem = {
   id: string
   trialQuestionId: string
-  marketId: string | null
+  marketSlug: string | null
   questionPrompt: string
   previousOutcome: TrialQuestionOutcomeValue | null
   previousOutcomeDate: string | null
@@ -133,11 +134,6 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
         question: {
           with: {
             trial: true,
-            markets: {
-              columns: {
-                id: true,
-              },
-            },
           },
         },
         changedByUser: {
@@ -169,11 +165,6 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
         question: {
           with: {
             trial: true,
-            markets: {
-              columns: {
-                id: true,
-              },
-            },
           },
         },
         reviewedByUser: {
@@ -194,11 +185,6 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
       orderBy: [desc(trialQuestions.outcomeDate), desc(trialQuestions.updatedAt)],
       with: {
         trial: true,
-        markets: {
-          columns: {
-            id: true,
-          },
-        },
       },
     }),
   ])
@@ -209,6 +195,30 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
       .filter((value): value is string => typeof value === 'string' && value.length > 0),
   )
   const storedQuestionIds = new Set(storedEntries.map((entry) => entry.trialQuestionId))
+  const questionIds = Array.from(new Set([
+    ...storedEntries.map((entry) => entry.trialQuestionId),
+    ...acceptedCandidates.map((candidate) => candidate.trialQuestionId),
+    ...resolvedQuestions.map((question) => question.id),
+  ]))
+  const season4MarketRows = questionIds.length > 0
+    ? await db.query.onchainMarkets.findMany({
+        columns: {
+          trialQuestionId: true,
+          marketSlug: true,
+          createdAt: true,
+        },
+        where: and(
+          inArray(onchainMarkets.trialQuestionId, questionIds),
+          ne(onchainMarkets.status, 'archived'),
+        ),
+        orderBy: [desc(onchainMarkets.createdAt)],
+      })
+    : []
+  const season4MarketSlugByQuestionId = new Map<string, string>()
+  for (const row of season4MarketRows) {
+    if (!row.trialQuestionId || season4MarketSlugByQuestionId.has(row.trialQuestionId)) continue
+    season4MarketSlugByQuestionId.set(row.trialQuestionId, row.marketSlug)
+  }
 
   const acceptedCandidatesByQuestionId = new Map<string, typeof acceptedCandidates>()
   for (const candidate of acceptedCandidates) {
@@ -251,7 +261,7 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
   const storedHistoryEntries: TrialQuestionOutcomeHistoryListItem[] = storedEntries.map((entry) => ({
     id: entry.id,
     trialQuestionId: entry.trialQuestionId,
-    marketId: entry.question.markets[0]?.id ?? null,
+    marketSlug: season4MarketSlugByQuestionId.get(entry.trialQuestionId) ?? null,
     questionPrompt: entry.question.prompt,
     previousOutcome: (entry.previousOutcome as TrialQuestionOutcomeValue | null) ?? null,
     previousOutcomeDate: toIsoString(entry.previousOutcomeDate),
@@ -290,7 +300,7 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
       return {
         id: `legacy-accepted-${candidate.id}`,
         trialQuestionId: candidate.trialQuestionId,
-        marketId: candidate.question.markets[0]?.id ?? null,
+        marketSlug: season4MarketSlugByQuestionId.get(candidate.trialQuestionId) ?? null,
         questionPrompt: candidate.question.prompt,
         previousOutcome: previous?.previousOutcome ?? 'Pending',
         previousOutcomeDate: toIsoString(previous?.previousOutcomeDate),
@@ -328,7 +338,7 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
       return {
         id: `legacy-snapshot-${question.id}`,
         trialQuestionId: question.id,
-        marketId: question.markets[0]?.id ?? null,
+        marketSlug: season4MarketSlugByQuestionId.get(question.id) ?? null,
         questionPrompt: question.prompt,
         previousOutcome: null,
         previousOutcomeDate: null,

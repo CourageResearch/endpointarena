@@ -1,29 +1,32 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
+import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { DecisionSnapshotRunner } from '@/components/DecisionSnapshotRunner'
-import { authOptions } from '@/lib/auth'
-import { ADMIN_EMAIL, MODEL_IDS } from '@/lib/constants'
-import { db, predictionMarkets, trialQuestions } from '@/lib/db'
-import { predictionMarketColumns } from '@/lib/markets/query-shapes'
+import { redirectIfNotAdmin } from '@/lib/admin-auth'
+import { MODEL_IDS } from '@/lib/constants'
+import { db, onchainMarkets, trialQuestions } from '@/lib/db'
 import { attachUnifiedPredictionsToQuestions } from '@/lib/model-decision-snapshots'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 export const dynamic = 'force-dynamic'
 
 async function getData() {
-  const openMarkets = await db.query.predictionMarkets.findMany({
-    columns: predictionMarketColumns,
-    where: and(
-      eq(predictionMarkets.status, 'OPEN'),
-      isNotNull(predictionMarkets.trialQuestionId),
-    ),
-    orderBy: [asc(predictionMarkets.openedAt)],
+  const linkedMarkets = await db.select({
+    marketSlug: onchainMarkets.marketSlug,
+    trialQuestionId: onchainMarkets.trialQuestionId,
+    status: onchainMarkets.status,
+    resolvedOutcome: onchainMarkets.resolvedOutcome,
+    closeTime: onchainMarkets.closeTime,
+    createdAt: onchainMarkets.createdAt,
   })
+    .from(onchainMarkets)
+    .where(and(
+      isNotNull(onchainMarkets.trialQuestionId),
+      inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']),
+    ))
+    .orderBy(desc(onchainMarkets.createdAt))
 
   const questionIds = Array.from(new Set(
-    openMarkets
+    linkedMarkets
       .map((market) => market.trialQuestionId)
       .filter((value): value is string => Boolean(value)),
   ))
@@ -44,7 +47,7 @@ async function getData() {
   const supportedQuestionIds = new Set(questions.map((question) => question.id))
 
   const marketByQuestionId = new Map(
-    openMarkets
+    linkedMarkets
       .filter((market) => market.trialQuestionId)
       .filter((market) => supportedQuestionIds.has(market.trialQuestionId as string))
       .map((market) => [market.trialQuestionId as string, market]),
@@ -64,18 +67,14 @@ async function getData() {
   return {
     questions: questionsWithPredictions.map((question) => ({
       ...question,
-      marketId: marketByQuestionId.get(question.id)?.id ?? null,
+      marketSlug: marketByQuestionId.get(question.id)?.marketSlug ?? null,
     })),
     stats,
   }
 }
 
 export default async function AdminPredictionsPage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
-
+  await redirectIfNotAdmin('/admin/predictions')
   const { questions, stats } = await getData()
   const coveragePct = stats.openMarkets > 0
     ? Math.round((stats.marketsWithSnapshots / stats.openMarkets) * 100)
@@ -83,7 +82,7 @@ export default async function AdminPredictionsPage() {
 
   const eventsForClient = questions.map((question) => ({
     id: question.id,
-    marketId: question.marketId,
+    marketId: question.marketSlug,
     shortTitle: question.trial.shortTitle,
     sponsorName: question.trial.sponsorName,
     sponsorTicker: question.trial.sponsorTicker,
@@ -103,12 +102,12 @@ export default async function AdminPredictionsPage() {
     >
       <section className="mb-6">
         <div className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
-          <h2 className="text-sm font-semibold text-[#1a1a1a]">Open-Trial Queue</h2>
-          <p className="mt-1 text-xs text-[#8a8075]">This view only includes pending trial questions with an open trial.</p>
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">Season 4 Linked Queue</h2>
+          <p className="mt-1 text-xs text-[#8a8075]">This view only includes pending trial questions linked to deployed season 4 markets.</p>
           <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="rounded-none border border-[#D39D2E]/30 bg-[#D39D2E]/5 p-3">
               <p className="text-xl font-semibold text-[#D39D2E]">{stats.openMarkets}</p>
-              <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Open Trials</p>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a8075]">Linked Markets</p>
             </div>
             <div className="rounded-none border border-[#EF6F67]/30 bg-[#EF6F67]/5 p-3">
               <p className="text-xl font-semibold text-[#EF6F67]">{stats.marketsMissingSnapshots}</p>
@@ -130,7 +129,7 @@ export default async function AdminPredictionsPage() {
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Snapshot Coverage</h2>
           <p className="text-xs text-[#8a8075]">
-            {stats.marketsWithSnapshots}/{stats.openMarkets} open trials have at least one decision snapshot
+            {stats.marketsWithSnapshots}/{stats.openMarkets} linked season 4 markets have at least one decision snapshot
           </p>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-none bg-[#e8ddd0]">
@@ -140,10 +139,15 @@ export default async function AdminPredictionsPage() {
 
       <section className="mb-4">
         <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Decision Workflow</h2>
-        <p className="mt-1 text-sm text-[#8a8075]">Manual runs create append-only snapshots only. Trade execution stays in the daily trial cycle.</p>
+        <p className="mt-1 text-sm text-[#8a8075]">Existing snapshot history is still visible here, but manual reruns stay disabled until the snapshot engine is fully migrated onto season 4 onchain market state.</p>
       </section>
 
-      <DecisionSnapshotRunner events={eventsForClient} />
+      <DecisionSnapshotRunner
+        events={eventsForClient}
+        allowManualRuns={false}
+        statusNote="Outcome edits stay enabled for linked trial questions, but manual snapshot reruns are disabled on the season 4 desk."
+        subjectLabel="season 4-linked markets"
+      />
     </AdminConsoleLayout>
   )
 }

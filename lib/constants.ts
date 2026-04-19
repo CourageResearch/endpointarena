@@ -1,29 +1,30 @@
 import { getDaysUntilUtc } from './date'
 import { glossaryLookupAnchor } from './glossary'
+import { MODEL_REGISTRY, MODEL_REGISTRY_IDS, type ModelRegistryId } from './model-registry'
 
 // =============================================================================
 // CENTRALIZED CONSTANTS
 // =============================================================================
 
-// Admin email for access control
-export const ADMIN_EMAIL = 'mfischer1000@gmail.com'
+// Admin emails for access control. The first entry remains the primary admin
+// identity used by older single-admin utilities.
+export const ADMIN_EMAILS = [
+  'mfischer1000@gmail.com',
+  'courageresearch@gmail.com',
+] as const
 
-// Human trading cash default.
-export const STARTER_CASH = 5
+export const ADMIN_EMAIL = ADMIN_EMAILS[0]
+
+export function isConfiguredAdminEmail(email: string | null | undefined): boolean {
+  const normalized = email?.trim().toLowerCase()
+  if (!normalized) return false
+
+  return ADMIN_EMAILS.some((entry) => entry.toLowerCase() === normalized)
+}
 
 // All known model IDs supported by the application.
-export const ALL_MODEL_IDS = [
-  'claude-opus',
-  'gpt-5.4',
-  'grok-4.20',
-  'gemini-3-pro',
-  'deepseek-v3.2',
-  'glm-5',
-  'llama-4-scout',
-  'kimi-k2.5',
-  'minimax-m2.5',
-] as const
-export type ModelId = (typeof ALL_MODEL_IDS)[number]
+export const ALL_MODEL_IDS = MODEL_REGISTRY_IDS
+export type ModelId = ModelRegistryId
 
 // Deprecated model IDs are intentionally excluded from MODEL_IDS so they never run.
 export const DEPRECATED_MODEL_IDS = ['kimi-k2'] as const
@@ -66,71 +67,24 @@ export const MODEL_INFO: Record<ModelId, {
   color: string
   provider: string
   features: string[]
-}> = {
-  'claude-opus': {
-    name: 'Claude',
-    fullName: 'Claude Opus 4.6',
-    color: '#D4604A',
-    provider: 'Anthropic',
-    features: ['Web Search', 'Extended Thinking'],
-  },
-  'gpt-5.4': {
-    name: 'GPT-5.4',
-    fullName: 'GPT-5.4',
-    color: '#C9A227',
-    provider: 'OpenAI',
-    features: ['Web Search', 'Reasoning'],
-  },
-  'grok-4.20': {
-    name: 'Grok',
-    fullName: 'Grok 4.20',
-    color: '#2D7CF6',
-    provider: 'xAI',
-    features: ['Reasoning', 'Web Search'],
-  },
-  'gemini-3-pro': {
-    name: 'Gemini 3.1',
-    fullName: 'Gemini 3.1 Pro',
-    color: '#6A5AE0',
-    provider: 'Google',
-    features: ['Google Search Grounding', 'Thinking'],
-  },
-  'deepseek-v3.2': {
-    name: 'DeepSeek',
-    fullName: 'DeepSeek V3.2',
-    color: '#3A86FF',
-    provider: 'Fireworks',
-    features: ['Reasoning', 'Structured Output'],
-  },
-  'glm-5': {
-    name: 'GLM',
-    fullName: 'GLM 5',
-    color: '#0B9E6F',
-    provider: 'Fireworks',
-    features: ['Reasoning', 'Long Context'],
-  },
-  'llama-4-scout': {
-    name: 'Llama',
-    fullName: 'Llama 3.3 70B',
-    color: '#2E7D32',
-    provider: 'Fireworks',
-    features: ['Reasoning', 'Long Context'],
-  },
-  'kimi-k2.5': {
-    name: 'Kimi',
-    fullName: 'Kimi K2.5',
-    color: '#F28C28',
-    provider: 'Fireworks',
-    features: ['Reasoning', 'Long Context'],
-  },
-  'minimax-m2.5': {
-    name: 'MiniMax',
-    fullName: 'MiniMax M2.5',
-    color: '#0F766E',
-    provider: 'Fireworks',
-    features: ['Reasoning', 'Large Context'],
-  },
-}
+}> = Object.fromEntries(
+  ALL_MODEL_IDS.map((modelId) => {
+    const model = MODEL_REGISTRY[modelId]
+    return [modelId, {
+      name: model.name,
+      fullName: model.fullName,
+      color: model.color,
+      provider: model.provider,
+      features: [...model.features],
+    }]
+  }),
+) as Record<ModelId, {
+  name: string
+  fullName: string
+  color: string
+  provider: string
+  features: string[]
+}>
 
 // Binary trial-question outcomes
 const QUESTION_OUTCOMES = ['Pending', 'YES', 'NO'] as const
@@ -159,17 +113,9 @@ export function getDaysUntil(date: Date | string): number {
 }
 
 // Model names by full ID
-export const MODEL_NAMES: Record<ModelId, string> = {
-  'claude-opus': 'Claude Opus 4.6',
-  'gpt-5.4': 'GPT-5.4',
-  'grok-4.20': 'Grok 4.20',
-  'gemini-3-pro': 'Gemini 3.1 Pro',
-  'deepseek-v3.2': 'DeepSeek V3.2',
-  'glm-5': 'GLM 5',
-  'llama-4-scout': 'Llama 3.3 70B',
-  'kimi-k2.5': 'Kimi K2.5',
-  'minimax-m2.5': 'MiniMax M2.5',
-}
+export const MODEL_NAMES: Record<ModelId, string> = Object.fromEntries(
+  ALL_MODEL_IDS.map((modelId) => [modelId, MODEL_REGISTRY[modelId].fullName]),
+) as Record<ModelId, string>
 
 // Application type abbreviations
 const APP_TYPE_ABBREV: Record<string, string> = {

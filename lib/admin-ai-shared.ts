@@ -362,7 +362,24 @@ export function getAiDatasetLabel(dataset: AiDataset): string {
 export function getAiDatasetDescription(dataset: AiDataset): string {
   return dataset === 'toy'
     ? 'A small-slate batch for fast testing.'
-    : 'All open trial markets currently eligible for the desk.'
+    : 'All deployed season 4-linked trial markets currently eligible for the desk.'
+}
+
+export function filterAiLiveCandidatesToSeason4TrialQuestions<T extends { question: { id: string } }>(
+  candidates: T[],
+  season4TrialQuestionIds: Iterable<string>,
+): T[] {
+  const linkedIds = new Set(
+    Array.from(season4TrialQuestionIds)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )
+
+  if (linkedIds.size === 0) {
+    return []
+  }
+
+  return candidates.filter((candidate) => linkedIds.has(candidate.question.id))
 }
 
 export function getAiModelLabel(modelId: ModelId): string {

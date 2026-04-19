@@ -77,7 +77,7 @@ const MARKET_CONTROL_SELECT_STYLE = {
 const ALL_TYPES_FILTER = '__all_types__'
 const TYPE_FILTER_PARAM = 'type'
 const TAB_FILTER_PARAM = 'tab'
-const TRIALS_HEADING = 'Clinical Trials'
+const TRIALS_HEADING = 'Trials'
 const UPCOMING_TRIALS_HEADING = 'Upcoming Trials'
 const RESOLVED_TRIALS_HEADING = 'Resolved Trials'
 const UPCOMING_SORT_OPTIONS: ReadonlyArray<{ value: UpcomingSortMode; label: string }> = [
@@ -975,7 +975,7 @@ function MarketTable({
                         onKeyDown={(event) => handleRowKeyDown(event, marketHref)}
                         onMouseEnter={() => prefetchMarket(marketHref)}
                         onFocus={() => prefetchMarket(marketHref)}
-                        className="cursor-pointer border-b border-[#e8ddd0] align-top transition-colors hover:bg-[#f7f1e8]/45 focus-visible:bg-[#f7f1e8]/45 focus-visible:outline-none"
+                        className="cursor-pointer border-b border-[#e8ddd0] align-top transition-colors last:border-b-0 hover:bg-[#f7f1e8]/45 focus-visible:bg-[#f7f1e8]/45 focus-visible:outline-none"
                       >
                         <td className="px-4 py-3.5">
                           <Link href={marketHref} onClick={(event) => event.stopPropagation()} className="block">
@@ -1352,9 +1352,9 @@ export function TrialsBrowseHomepage({
         type="button"
         onClick={() => handleTabChange('upcoming')}
         className={cn(
-          'relative -mb-px inline-flex items-center border-b-2 pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
+          'relative -mb-px inline-flex items-center border-b-2 pb-2 font-medium uppercase transition-colors focus-visible:outline-none',
           selectedTab === 'upcoming'
-            ? 'border-[#5DBB63] text-[#1a1a1a]'
+            ? 'border-[#5DBB63] text-[#45934a]'
             : 'border-transparent text-[#9d9184] hover:border-[#5DBB63]/55 hover:text-[#45934a]',
         )}
         >
@@ -1366,9 +1366,9 @@ export function TrialsBrowseHomepage({
         type="button"
         onClick={() => handleTabChange('resolved')}
         className={cn(
-          'relative -mb-px inline-flex items-center border-b-2 pb-3 font-medium uppercase transition-colors focus-visible:outline-none',
+          'relative -mb-px inline-flex items-center border-b-2 pb-2 font-medium uppercase transition-colors focus-visible:outline-none',
           selectedTab === 'resolved'
-            ? 'border-[#EF6F67] text-[#1a1a1a]'
+            ? 'border-[#EF6F67] text-[#c86a63]'
             : 'border-transparent text-[#9d9184] hover:border-[#EF6F67]/55 hover:text-[#c86a63]',
         )}
       >

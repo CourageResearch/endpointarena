@@ -1,6 +1,6 @@
 const ANALYTICS_ENDPOINT = '/api/analytics'
 const ANALYTICS_ANONYMOUS_ID_STORAGE_KEY = 'endpointarena:analytics:anonymous-id'
-const ANALYTICS_EVENT_TYPES = ['pageview', 'click', 'trial_search'] as const
+const ANALYTICS_EVENT_TYPES = ['pageview', 'click', 'trial_search', 'not_found'] as const
 const NORMALIZED_ANONYMOUS_ID_PATTERN = /^[A-Za-z0-9._-]{16,200}$/
 
 export type CanonicalAnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number]
@@ -49,6 +49,54 @@ export function normalizeAnalyticsEventType(value: unknown): CanonicalAnalyticsE
   return typeof value === 'string' && ANALYTICS_EVENT_TYPES.includes(value as CanonicalAnalyticsEventType)
     ? value as CanonicalAnalyticsEventType
     : null
+}
+
+export function isLocalhostHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
+export function normalizeAnalyticsPathname(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  try {
+    const parsed = trimmed.startsWith('/')
+      ? new URL(trimmed, 'https://endpointarena.invalid')
+      : new URL(trimmed)
+    const pathname = parsed.pathname.replace(/\/{2,}/g, '/')
+    if (!pathname.startsWith('/')) {
+      return null
+    }
+    if (pathname === '/') {
+      return pathname
+    }
+    return pathname.replace(/\/+$/g, '')
+  } catch {
+    if (!trimmed.startsWith('/')) {
+      return null
+    }
+
+    const [pathname] = trimmed.split(/[?#]/, 1)
+    if (!pathname) {
+      return null
+    }
+    return pathname === '/' ? pathname : pathname.replace(/\/+$/g, '')
+  }
+}
+
+export function shouldTrackPublicAnalyticsPath(pathname: string | null | undefined): boolean {
+  const normalizedPath = normalizeAnalyticsPathname(pathname)
+  if (!normalizedPath) {
+    return false
+  }
+
+  return !normalizedPath.startsWith('/admin')
 }
 
 function getAnalyticsAnonymousId(): string | null {

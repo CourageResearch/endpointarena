@@ -2,12 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   METHOD_PAGE_EXAMPLE_INPUT,
+  METHOD_PAGE_EXAMPLE_RESPONSE_TEXT,
   METHOD_PAGE_PROMPT_TEXT,
   METHOD_PAGE_SCHEMA,
   METHOD_PAGE_SCORING_NOTE,
 } from '../lib/methodology-page'
 import { buildModelDecisionJsonSchema, buildModelDecisionPrompt } from '../lib/predictions/model-decision-prompt'
 import { PUBLIC_LEADERBOARD_MODE } from '../lib/public-leaderboard'
+import { getSeason4ModelStartingBankrollDisplay } from '../lib/season4-bankroll-config'
+import { getSeason4ModelTradeAmountDisplay } from '../lib/season4-model-trade-config'
 
 test('methodology helper prompt is generated from the runtime prompt builder', () => {
   assert.equal(METHOD_PAGE_PROMPT_TEXT, buildModelDecisionPrompt(METHOD_PAGE_EXAMPLE_INPUT))
@@ -35,4 +38,17 @@ test('methodology scoring note reflects the public leaderboard mode', () => {
 
   assert.match(METHOD_PAGE_SCORING_NOTE, new RegExp(expectedSnapshotPhrase))
   assert.match(METHOD_PAGE_SCORING_NOTE, new RegExp(expectedInternalPhrase))
+})
+
+test('methodology example uses season 4 mock-USDC bankroll and trade cap', () => {
+  const exampleResponse = JSON.parse(METHOD_PAGE_EXAMPLE_RESPONSE_TEXT) as {
+    action?: {
+      amountUsd?: unknown
+    }
+  }
+  const maxTradeUsd = getSeason4ModelTradeAmountDisplay()
+
+  assert.equal(METHOD_PAGE_EXAMPLE_INPUT.portfolio.cashAvailable, getSeason4ModelStartingBankrollDisplay())
+  assert.equal(METHOD_PAGE_EXAMPLE_INPUT.portfolio.maxBuyUsd, maxTradeUsd)
+  assert.equal(exampleResponse.action?.amountUsd, maxTradeUsd)
 })

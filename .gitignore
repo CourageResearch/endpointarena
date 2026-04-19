@@ -55,4 +55,8 @@ tmp-*.json
 *.tsbuildinfo
 next-env.d.ts
 
+# Hardhat
+contracts/artifacts/
+contracts/cache/
+
 .vercel

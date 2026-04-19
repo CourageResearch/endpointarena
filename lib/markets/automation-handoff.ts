@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { and, eq, inArray } from 'drizzle-orm'
 import { db, marketActions, predictionMarkets, trialQuestions } from '@/lib/db'
+import { getActiveDatabaseTarget } from '@/lib/database-target'
 import { ValidationError } from '@/lib/errors'
 import { normalizeRunDate } from '@/lib/markets/engine'
 import { prepareDailyRunContext, getDailyRunPositionKey } from '@/lib/markets/daily-run-planning'
@@ -34,6 +35,12 @@ type ParsedAutomationImport = {
   runDate: Date
   filename: string | null
   decisions: DailyRunAutomationDecisionItem[]
+}
+
+function assertToyAutomationMode(): void {
+  if (getActiveDatabaseTarget() !== 'toy') {
+    throw new ValidationError('Legacy automation handoff is toy-only on season 4. Use the season 4 admin AI desk or model cycle instead.')
+  }
 }
 
 export type PreparedAutomationImportPreview = {
@@ -194,6 +201,7 @@ export async function exportDailyRunAutomationPacket(args: {
   packet: DailyRunAutomationExportPacket
   filePath: string
 }> {
+  assertToyAutomationMode()
   await ensureAutomationHandoffDirectories()
 
   const runDate = normalizeRunDate(args.runDate ?? new Date())
@@ -229,8 +237,11 @@ export async function exportDailyRunAutomationPacket(args: {
       trialQuestionId: question.id,
       questionPrompt: normalizeTrialQuestionPrompt(question.prompt),
       market,
-      account,
-      position,
+      portfolio: {
+        cashAvailable: account.cashBalance,
+        yesSharesHeld: position.yesShares,
+        noSharesHeld: position.noShares,
+      },
       runtimeConfig: prepared.runtimeConfig,
     })
 
@@ -277,6 +288,7 @@ export async function previewDailyRunAutomationImport(args: {
   source?: DailyRunAutomationSource
   filename?: string | null
 }): Promise<PreparedAutomationImportPreview> {
+  assertToyAutomationMode()
   const parsed = parseAutomationImportFile(args)
   const duplicateKeys = new Set<string>()
   const seenKeys = new Set<string>()
@@ -401,6 +413,7 @@ export async function archiveDailyRunAutomationImport(args: {
   contents: string
   filename?: string | null
 }): Promise<string> {
+  assertToyAutomationMode()
   await ensureAutomationHandoffDirectories()
   const archivePath = path.join(HANDOFF_ARCHIVE_DIR, buildArchiveFilename(args.filename ?? null))
   await writeFile(archivePath, args.contents, 'utf8')

@@ -1,11 +1,11 @@
-import { getServerSession } from 'next-auth'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { authOptions, ensureAdmin } from '@/lib/auth'
+import { requireAdminSession } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
-import { db, predictionMarkets, trialOutcomeCandidates } from '@/lib/db'
+import { db, onchainMarkets, trialOutcomeCandidates } from '@/lib/db'
 import { ValidationError } from '@/lib/errors'
+import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
 import { reviewTrialOutcomeCandidate } from '@/lib/trial-monitor'
 
 type PatchBody = {
@@ -26,9 +26,8 @@ export async function PATCH(
   const requestId = createRequestId()
 
   try {
-    await ensureAdmin()
-    const session = await getServerSession(authOptions)
-    const reviewerId = session?.user?.id ?? null
+    const session = await requireAdminSession()
+    const reviewerId = session.user.id ?? null
 
     const { id } = await params
     const body = await parseJsonBody<PatchBody>(request)
@@ -61,19 +60,19 @@ export async function PATCH(
     revalidatePath('/trials')
     revalidatePath('/admin/ai')
     revalidatePath('/admin/trials')
-    revalidatePath('/admin/markets')
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/oracle')
+    revalidateSeason4Routes()
 
     if (body.action === 'accept' && existingCandidate?.trialQuestionId) {
-      const market = await db.query.predictionMarkets.findFirst({
-        where: eq(predictionMarkets.trialQuestionId, existingCandidate.trialQuestionId),
+      const linkedSeason4Markets = await db.query.onchainMarkets.findMany({
+        where: eq(onchainMarkets.trialQuestionId, existingCandidate.trialQuestionId),
         columns: {
-          id: true,
+          marketSlug: true,
         },
       })
 
-      if (market?.id) {
-        revalidatePath(`/trials/${market.id}`)
+      for (const market of linkedSeason4Markets) {
+        revalidateSeason4Routes({ marketSlug: market.marketSlug })
       }
     }
 

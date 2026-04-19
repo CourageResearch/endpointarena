@@ -148,6 +148,48 @@
       "when": 1776211200000,
       "tag": "0020_allow_subscription_snapshot_cost_source",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1776478339558,
+      "tag": "0021_privy_auth_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1776479736418,
+      "tag": "0022_damp_bishop",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1776541418300,
+      "tag": "0023_allow_null_model_snapshot_market_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1776544278000,
+      "tag": "0024_season4_snapshot_model_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1776585600000,
+      "tag": "0025_season4_starting_bankroll_display",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1776589200000,
+      "tag": "0026_season4_market_liquidity_b",
+      "breakpoints": true
     }
   ]
 }

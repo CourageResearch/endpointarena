@@ -22,7 +22,7 @@ type TrialMonitorConfigDto = {
 
 type Candidate = {
   id: string
-  marketId: string | null
+  marketSlug: string | null
   proposedOutcome: 'YES' | 'NO' | 'NO_DECISION'
   confidence: number
   verifierModelLabel: string
@@ -735,7 +735,7 @@ export function AdminTrialOutcomeReview({
 
   const triggerScopedAutoRun = useEffectEvent(async (nctNumber: string) => {
     setScopedNctNumber(nctNumber)
-    router.replace(`/admin/outcomes?nct=${encodeURIComponent(nctNumber)}`)
+    router.replace(`/admin/oracle?nct=${encodeURIComponent(nctNumber)}`)
     await runMonitor({ questionSelection: 'specific_nct', nctNumber })
   })
 
@@ -935,7 +935,7 @@ export function AdminTrialOutcomeReview({
               <p className="mt-1">Showing oracle data for {scopedViewNctNumber} only.</p>
             </div>
             <Link
-              href="/admin/outcomes"
+              href="/admin/oracle"
               className="inline-flex rounded-none border border-[#d9cdbf] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5]"
             >
               View Full Oracle Queue
@@ -1310,9 +1310,9 @@ export function AdminTrialOutcomeReview({
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    {candidate.marketId ? (
+                    {candidate.marketSlug ? (
                       <Link
-                        href={`/trials/${encodeURIComponent(candidate.marketId)}`}
+                        href={`/trials/${encodeURIComponent(candidate.marketSlug)}`}
                         className="text-sm font-semibold text-[#1a1a1a] transition-colors hover:text-[#5b5148] hover:underline"
                       >
                         {candidate.trial.shortTitle}

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import {
   getTrialMonitorConfig,
@@ -33,7 +33,7 @@ export async function PATCH(request: NextRequest) {
     const body = await parseJsonBody<TrialMonitorConfigPatchInput>(request)
     const config = await updateTrialMonitorConfig(body)
 
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/oracle')
 
     return successResponse({ config }, {
       headers: {

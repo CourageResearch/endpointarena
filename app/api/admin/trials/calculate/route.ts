@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { calculateManualTrialIntake, type ManualTrialIntakeInput } from '@/lib/manual-trial-intake'
 

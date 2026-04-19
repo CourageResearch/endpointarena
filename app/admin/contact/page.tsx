@@ -1,9 +1,6 @@
 import { revalidatePath } from 'next/cache'
 import { desc, eq, notLike, sql } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
-import { authOptions, ensureAdmin } from '@/lib/auth'
-import { ADMIN_EMAIL } from '@/lib/constants'
+import { ensureAdmin, redirectIfNotAdmin } from '@/lib/admin-auth'
 import { db, contactMessages } from '@/lib/db'
 import { MARKET_SUGGESTION_MESSAGE_PREFIX } from '@/lib/market-suggestions'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
@@ -21,7 +18,7 @@ async function deleteContactMessage(formData: FormData) {
 
   await db.delete(contactMessages).where(eq(contactMessages.id, messageId))
   revalidatePath('/admin/contact')
-  revalidatePath('/admin/review')
+  revalidatePath('/admin/suggestions')
 }
 
 async function getContactData() {
@@ -43,11 +40,7 @@ async function getContactData() {
 }
 
 export default async function AdminContactPage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
-
+  await redirectIfNotAdmin('/admin/contact')
   const { messages, total } = await getContactData()
 
   return (

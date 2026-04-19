@@ -272,6 +272,67 @@ export function calculateExecutableTradeCaps(args: {
   }
 }
 
+export function previewTradeTransition(args: {
+  state: MarketState
+  accountCash: number
+  yesSharesHeld: number
+  noSharesHeld: number
+  side: BuyMarketAction | SellMarketAction
+  requestedUsd: number
+}): {
+  qYes: number
+  qNo: number
+  priceBefore: number
+  priceAfter: number
+  executedUsd: number
+  sharesDelta: number
+  cashAfter: number
+  yesSharesAfter: number
+  noSharesAfter: number
+} {
+  const accountCash = Math.max(0, args.accountCash)
+  const yesSharesHeld = Math.max(0, args.yesSharesHeld)
+  const noSharesHeld = Math.max(0, args.noSharesHeld)
+  const requestedUsd = Math.max(0, args.requestedUsd)
+  const priceBefore = lmsrPriceYes(args.state)
+
+  if (args.side === 'BUY_YES' || args.side === 'BUY_NO') {
+    const executedUsd = Math.max(0, Math.min(requestedUsd, accountCash))
+    const buy = executeLmsrBudgetTrade(args.state, args.side, executedUsd)
+
+    return {
+      qYes: buy.qYes,
+      qNo: buy.qNo,
+      priceBefore: buy.priceBefore,
+      priceAfter: buy.priceAfter,
+      executedUsd,
+      sharesDelta: buy.shares,
+      cashAfter: accountCash - executedUsd,
+      yesSharesAfter: args.side === 'BUY_YES' ? yesSharesHeld + buy.shares : yesSharesHeld,
+      noSharesAfter: args.side === 'BUY_NO' ? noSharesHeld + buy.shares : noSharesHeld,
+    }
+  }
+
+  const heldShares = args.side === 'SELL_YES' ? yesSharesHeld : noSharesHeld
+  const maxSale = executeLmsrShareSale(args.state, args.side, heldShares)
+  const executedUsd = Math.max(0, Math.min(requestedUsd, maxSale.proceeds))
+  const sale = solveConstrainedSaleForProceeds(args.state, args.side, heldShares, executedUsd)
+  const soldShares = Math.min(heldShares, Math.max(0, sale.shares))
+  const proceeds = Math.max(0, sale.proceeds)
+
+  return {
+    qYes: sale.qYes,
+    qNo: sale.qNo,
+    priceBefore: sale.priceBefore ?? priceBefore,
+    priceAfter: sale.priceAfter ?? priceBefore,
+    executedUsd: proceeds,
+    sharesDelta: -soldShares,
+    cashAfter: accountCash + proceeds,
+    yesSharesAfter: args.side === 'SELL_YES' ? Math.max(0, yesSharesHeld - soldShares) : yesSharesHeld,
+    noSharesAfter: args.side === 'SELL_NO' ? Math.max(0, noSharesHeld - soldShares) : noSharesHeld,
+  }
+}
+
 function executeLmsrShareSale(
   state: MarketState,
   side: SellMarketAction,

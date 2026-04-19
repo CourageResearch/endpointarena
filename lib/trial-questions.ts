@@ -6,18 +6,19 @@ export type TrialQuestionDefinition = {
   sortOrder: number
 }
 
-export const DEFAULT_TRIAL_RESULTS_QUESTION = 'Will the results be positive?'
-const LEGACY_PRIMARY_ENDPOINT_QUESTION = 'Will the primary endpoint be met?'
+export const DEFAULT_TRIAL_MARKET_QUESTION = 'Will this trial meet its primary endpoint?'
+const LEGACY_PRIMARY_ENDPOINT_PROMPT_PATTERN = /^will the primary endpoint be\s+met\?$/i
+const LEGACY_POSITIVE_RESULTS_PROMPT_PATTERN = /^will the results be\s+pos(?:itive)\?$/i
 
 export function normalizeTrialQuestionPrompt(prompt: string | null | undefined): string {
   const trimmed = typeof prompt === 'string' ? prompt.trim() : ''
-  if (!trimmed) return DEFAULT_TRIAL_RESULTS_QUESTION
+  if (!trimmed) return DEFAULT_TRIAL_MARKET_QUESTION
 
   if (
-    /^will the primary endpoint be met\?$/i.test(trimmed) ||
-    /^will the results be positive\?$/i.test(trimmed)
+    LEGACY_PRIMARY_ENDPOINT_PROMPT_PATTERN.test(trimmed) ||
+    LEGACY_POSITIVE_RESULTS_PROMPT_PATTERN.test(trimmed)
   ) {
-    return DEFAULT_TRIAL_RESULTS_QUESTION
+    return DEFAULT_TRIAL_MARKET_QUESTION
   }
 
   return trimmed
@@ -26,7 +27,7 @@ export function normalizeTrialQuestionPrompt(prompt: string | null | undefined):
 export const TRIAL_QUESTION_DEFINITIONS: TrialQuestionDefinition[] = [
   {
     slug: 'primary_endpoint_met',
-    prompt: DEFAULT_TRIAL_RESULTS_QUESTION,
+    prompt: DEFAULT_TRIAL_MARKET_QUESTION,
     status: 'live',
     isBettable: true,
     sortOrder: 0,

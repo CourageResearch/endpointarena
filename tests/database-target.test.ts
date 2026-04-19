@@ -13,6 +13,7 @@ const ORIGINAL_ENV = {
   DATABASE_URL: process.env.DATABASE_URL,
   TOY_DATABASE_URL: process.env.TOY_DATABASE_URL,
   DATABASE_TARGET: process.env.DATABASE_TARGET,
+  ALLOW_RAILWAY_TOY_DATABASE_TARGET: process.env.ALLOW_RAILWAY_TOY_DATABASE_TARGET,
   RAILWAY_ENVIRONMENT_ID: process.env.RAILWAY_ENVIRONMENT_ID,
   RAILWAY_PROJECT_ID: process.env.RAILWAY_PROJECT_ID,
   RAILWAY_SERVICE_ID: process.env.RAILWAY_SERVICE_ID,
@@ -71,7 +72,7 @@ test('DATABASE_TARGET pins the active database target and disables runtime switc
   assert.throws(() => setActiveDatabaseTarget('main'), /DATABASE_TARGET/)
 })
 
-test('Railway deployments default to Main DB when no DATABASE_TARGET is set', () => {
+test('Railway deployments require DATABASE_TARGET to be set explicitly', () => {
   setEnvValue('NODE_ENV', 'production')
   setEnvValue('DATABASE_URL', 'postgresql://user:pass@db.example.com:5432/endpointarena')
   setEnvValue('TOY_DATABASE_URL', 'postgresql://user:pass@db.example.com:5432/endpointarena_toy')
@@ -81,13 +82,26 @@ test('Railway deployments default to Main DB when no DATABASE_TARGET is set', ()
   deleteEnvValue('RAILWAY_SERVICE_ID')
   deleteEnvValue('RAILWAY_DEPLOYMENT_ID')
 
-  const runtimeState = getDatabaseTargetRuntimeState()
-
-  assert.equal(runtimeState.activeTarget, 'main')
-  assert.equal(runtimeState.source, 'default')
-  assert.equal(runtimeState.isRailwayRuntime, true)
-  assert.equal(runtimeState.switchingAllowed, false)
+  assert.throws(() => getDatabaseTargetRuntimeState(), /DATABASE_TARGET is required in Railway/)
+  assert.throws(() => getActiveDatabaseTarget(), /DATABASE_TARGET is required in Railway/)
   assert.throws(() => setActiveDatabaseTarget('toy'), /Railway/)
+})
+
+test('Railway deployments block toy database target unless explicitly isolated', () => {
+  setEnvValue('NODE_ENV', 'production')
+  setEnvValue('DATABASE_URL', 'postgresql://user:pass@db.example.com:5432/endpointarena')
+  setEnvValue('TOY_DATABASE_URL', 'postgresql://user:pass@db.example.com:5432/endpointarena_toy')
+  setEnvValue('DATABASE_TARGET', 'toy')
+  setEnvValue('RAILWAY_ENVIRONMENT_ID', 'railway-env-123')
+  deleteEnvValue('ALLOW_RAILWAY_TOY_DATABASE_TARGET')
+  deleteEnvValue('RAILWAY_PROJECT_ID')
+  deleteEnvValue('RAILWAY_SERVICE_ID')
+  deleteEnvValue('RAILWAY_DEPLOYMENT_ID')
+
+  assert.throws(() => getDatabaseTargetRuntimeState(), /DATABASE_TARGET=toy is blocked in Railway/)
+
+  setEnvValue('ALLOW_RAILWAY_TOY_DATABASE_TARGET', '1')
+  assert.equal(getDatabaseTargetRuntimeState().activeTarget, 'toy')
 })
 
 test('local runtime switching is available during local development', () => {

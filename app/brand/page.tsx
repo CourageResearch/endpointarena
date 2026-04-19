@@ -11,7 +11,7 @@ import {
   SquareDivider,
 } from '@/components/site/chrome'
 import { CopyablePromptBlock } from '@/components/site/CopyablePromptBlock'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { buildPageMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPageMetadata({
@@ -252,7 +252,7 @@ function BrandAssetCard({
 export default function BrandPage() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
         <section className="mb-10">

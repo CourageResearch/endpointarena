@@ -4,6 +4,11 @@ import {
   type ModelDecisionInput,
 } from '@/lib/predictions/model-decision-prompt'
 import { PUBLIC_LEADERBOARD_MODE } from '@/lib/public-leaderboard'
+import { getSeason4ModelStartingBankrollDisplay } from '@/lib/season4-bankroll-config'
+import { getSeason4ModelTradeAmountDisplay } from '@/lib/season4-model-trade-config'
+
+const METHOD_PAGE_CASH_AVAILABLE_DISPLAY = getSeason4ModelStartingBankrollDisplay()
+const METHOD_PAGE_MAX_TRADE_DISPLAY = getSeason4ModelTradeAmountDisplay()
 
 export const METHOD_PAGE_EXAMPLE_INPUT: ModelDecisionInput = {
   meta: {
@@ -27,17 +32,17 @@ export const METHOD_PAGE_EXAMPLE_INPUT: ModelDecisionInput = {
     currentStatus: 'Active, not recruiting',
     briefSummary: 'Randomized placebo-controlled Phase 2 study evaluating AB-101 in adults with ulcerative colitis who had inadequate response to standard therapy.',
     nctNumber: 'NCT01234567',
-    questionPrompt: 'Will Acme Bio report positive Phase 2 topline results for AB-101 in ulcerative colitis?',
+    questionPrompt: 'Will AB-101 meet its primary endpoint in ulcerative colitis?',
   },
   market: {
     yesPrice: 0.43,
     noPrice: 0.57,
   },
   portfolio: {
-    cashAvailable: 100000,
+    cashAvailable: METHOD_PAGE_CASH_AVAILABLE_DISPLAY,
     yesSharesHeld: 0,
     noSharesHeld: 0,
-    maxBuyUsd: 1000,
+    maxBuyUsd: METHOD_PAGE_MAX_TRADE_DISPLAY,
     maxSellYesUsd: 0,
     maxSellNoUsd: 0,
   },
@@ -65,7 +70,7 @@ const METHOD_PAGE_EXAMPLE_RESPONSE = {
   },
   action: {
     type: 'BUY_YES',
-    amountUsd: 450,
+    amountUsd: METHOD_PAGE_MAX_TRADE_DISPLAY,
     explanation: 'Intrinsic odds look modestly above the current YES price.',
   },
 } as const

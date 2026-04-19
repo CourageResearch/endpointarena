@@ -45,6 +45,30 @@ textarea {
   font: inherit;
 }
 
+:where(
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  input[type="button"]:not(:disabled):not([aria-disabled="true"]),
+  input[type="reset"]:not(:disabled):not([aria-disabled="true"]),
+  input[type="submit"]:not(:disabled):not([aria-disabled="true"])
+) {
+  cursor: pointer;
+}
+
+:where(
+  button:disabled,
+  button[aria-disabled="true"],
+  [role="button"][aria-disabled="true"],
+  input[type="button"]:disabled,
+  input[type="button"][aria-disabled="true"],
+  input[type="reset"]:disabled,
+  input[type="reset"][aria-disabled="true"],
+  input[type="submit"]:disabled,
+  input[type="submit"][aria-disabled="true"]
+) {
+  cursor: not-allowed;
+}
+
 ::selection {
   background: rgba(45, 124, 246, 0.16);
   color: var(--ea-text);
@@ -75,6 +99,82 @@ textarea {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+.brand-mark {
+  overflow: visible;
+}
+
+.brand-mark-rect {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.brand-wordmark-letter {
+  color: #8a8075;
+  transition: color 0.16s ease-out;
+}
+
+.brand-link:is(:hover, :focus-visible) .brand-wordmark-letter {
+  animation: brandLetterWave 240ms ease-out calc(var(--brand-letter-index) * 28ms) 1 both;
+}
+
+.brand-link:is(:hover, :focus-visible) .brand-mark-step-1 {
+  animation: brandStepBounce 240ms cubic-bezier(0.22, 1, 0.36, 1) 0ms 1 both;
+}
+
+.brand-link:is(:hover, :focus-visible) .brand-mark-step-2 {
+  animation: brandStepBounce 240ms cubic-bezier(0.22, 1, 0.36, 1) 55ms 1 both;
+}
+
+.brand-link:is(:hover, :focus-visible) .brand-mark-step-3 {
+  animation: brandStepBounce 240ms cubic-bezier(0.22, 1, 0.36, 1) 110ms 1 both;
+}
+
+.brand-link:is(:hover, :focus-visible) .brand-mark-step-4 {
+  animation: brandStepBounce 240ms cubic-bezier(0.22, 1, 0.36, 1) 165ms 1 both;
+}
+
+@keyframes brandStepBounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  42% {
+    transform: translateY(-2.5px) scale(1.08);
+  }
+  68% {
+    transform: translateY(0.5px) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes brandLetterWave {
+  0% {
+    color: #8a8075;
+  }
+  35% {
+    color: var(--brand-letter-wave-color);
+  }
+  68% {
+    color: var(--brand-letter-wave-color);
+  }
+  100% {
+    color: #8a8075;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-link:is(:hover, :focus-visible) .brand-mark-rect {
+    animation: none;
+    transform: none;
+  }
+
+  .brand-link:is(:hover, :focus-visible) .brand-wordmark-letter {
+    animation: none;
+    color: #6f665b;
   }
 }
 

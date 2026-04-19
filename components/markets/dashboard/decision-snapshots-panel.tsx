@@ -162,7 +162,7 @@ export function MarketDecisionSnapshotsPanel({
       {showHeader ? (
         <div className="px-1">
           <div className="flex items-center gap-3">
-            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Decision Snapshots</div>
+            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Model Reasoning</div>
             <HeaderDots />
           </div>
         </div>

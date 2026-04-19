@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
 
 function getBrandDotColors(muted = false) {
@@ -8,6 +9,15 @@ function getBrandDotColors(muted = false) {
     gold: muted ? '#C3A46B' : '#D39D2E',
     blue: muted ? '#8DBAE8' : '#5BA5ED',
   }
+}
+
+const BRAND_WORDMARK = ['Endpoint', 'Arena'] as const
+
+function getBrandLetterStyle(index: number, color: string): CSSProperties {
+  return {
+    ['--brand-letter-index' as '--brand-letter-index']: index,
+    ['--brand-letter-wave-color' as '--brand-letter-wave-color']: color,
+  } as CSSProperties
 }
 
 export function BrandMark({
@@ -22,14 +32,14 @@ export function BrandMark({
   return (
     <svg
       viewBox="0 0 30 24"
-      className={cn('h-6 w-7 shrink-0', className)}
+      className={cn('brand-mark h-6 w-7 shrink-0', className)}
       fill="none"
       aria-hidden="true"
     >
-      <rect x="0.8" y="7.8" width="6.4" height="6.4" rx="0" fill={colors.coral} />
-      <rect x="7.8" y="14.8" width="6.4" height="6.4" rx="0" fill={colors.green} />
-      <rect x="14.8" y="7.8" width="6.4" height="6.4" rx="0" fill={colors.gold} />
-      <rect x="21.8" y="0.8" width="6.4" height="6.4" rx="0" fill={colors.blue} />
+      <rect className="brand-mark-rect brand-mark-step-1" x="0.8" y="7.8" width="6.4" height="6.4" rx="0" fill={colors.coral} />
+      <rect className="brand-mark-rect brand-mark-step-2" x="7.8" y="14.8" width="6.4" height="6.4" rx="0" fill={colors.green} />
+      <rect className="brand-mark-rect brand-mark-step-3" x="14.8" y="7.8" width="6.4" height="6.4" rx="0" fill={colors.gold} />
+      <rect className="brand-mark-rect brand-mark-step-4" x="21.8" y="0.8" width="6.4" height="6.4" rx="0" fill={colors.blue} />
     </svg>
   )
 }
@@ -41,12 +51,34 @@ export function BrandWordmark({
   className?: string
   wordClassName?: string
 }) {
-  const wordClass = cn('font-medium text-[#8a8075]', wordClassName)
+  const colors = getBrandDotColors()
+  const waveColors = [colors.coral, colors.green, colors.gold, colors.blue]
+  const letterClass = cn('brand-wordmark-letter inline-block font-medium text-[#8a8075]', wordClassName)
+  let letterIndex = 0
 
   return (
-    <span className={cn('inline-flex items-baseline gap-1 tracking-tight', className)}>
-      <span className={wordClass}>Endpoint</span>
-      <span className={wordClass}>Arena</span>
+    <span aria-hidden="true" className={cn('inline-flex', className)}>
+      <span className="inline-flex items-baseline gap-1 tracking-tight">
+        {BRAND_WORDMARK.map((word) => (
+          <span key={word} className="brand-wordmark-word inline-flex">
+            {Array.from(word).map((letter) => {
+              const currentIndex = letterIndex
+              const color = waveColors[currentIndex % waveColors.length]
+              letterIndex += 1
+
+              return (
+                <span
+                  key={`${word}-${currentIndex}-${letter}`}
+                  className={letterClass}
+                  style={getBrandLetterStyle(currentIndex, color)}
+                >
+                  {letter}
+                </span>
+              )
+            })}
+          </span>
+        ))}
+      </span>
     </span>
   )
 }
@@ -64,12 +96,13 @@ export function BrandLink({
     <Link
       href={href}
       onClick={onClick}
+      aria-label="Endpoint Arena"
       className={cn(
-        'group flex min-w-0 items-center gap-2 rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5BA5ED]/40',
+        'brand-link group flex min-w-0 items-center gap-2 rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5BA5ED]/40',
         className
       )}
     >
-      <BrandMark className="h-[26px] w-[26px] transition-transform duration-200 group-hover:scale-[1.03]" />
+      <BrandMark className="h-[26px] w-[26px]" />
       <BrandWordmark className="text-[15px]" />
     </Link>
   )

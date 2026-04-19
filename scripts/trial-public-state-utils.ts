@@ -276,9 +276,10 @@ export type TrialModelDecisionSnapshotBundleRow = {
   id: string
   run_id: string | null
   run_date: string
-  market_id: string
+  market_id: string | null
   trial_question_id: string
-  actor_id: string
+  actor_id: string | null
+  model_key: string | null
   run_source: string
   approval_probability: number
   yes_probability: number | null

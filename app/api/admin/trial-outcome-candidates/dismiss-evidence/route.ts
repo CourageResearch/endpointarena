@@ -1,7 +1,6 @@
-import { getServerSession } from 'next-auth'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { authOptions, ensureAdmin } from '@/lib/auth'
+import { requireAdminSession } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import { dismissTrialOutcomeCandidates } from '@/lib/trial-monitor'
@@ -35,9 +34,8 @@ export async function POST(request: NextRequest) {
   const requestId = createRequestId()
 
   try {
-    await ensureAdmin()
-    const session = await getServerSession(authOptions)
-    const reviewerId = session?.user?.id ?? null
+    const session = await requireAdminSession()
+    const reviewerId = session.user.id ?? null
     const body = await parseJsonBody<PostBody>(request)
     const candidateIds = normalizeCandidateIds(body.candidateIds)
 
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
     revalidatePath('/trials')
     revalidatePath('/admin/ai')
     revalidatePath('/admin/trials')
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/oracle')
 
     return successResponse({
       success: true,

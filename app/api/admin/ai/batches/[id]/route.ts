@@ -1,6 +1,7 @@
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
-import { updateAiBatchSettings } from '@/lib/admin-ai'
+import { getAiBatchState, updateAiBatchSettings } from '@/lib/admin-ai'
+import { assertAiBatchMatchesActiveDatabase } from '@/lib/admin-ai-active-dataset'
 import {
   AI_API_CONCURRENCY_MAX,
   AI_API_CONCURRENCY_MIN,
@@ -30,6 +31,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { id } = await context.params
+    const existingBatch = await getAiBatchState(id)
+    if (existingBatch) {
+      assertAiBatchMatchesActiveDatabase(existingBatch)
+    }
+
     const batch = await updateAiBatchSettings(id, {
       apiConcurrency: body.apiConcurrency,
     })

@@ -1,11 +1,10 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { ModelIcon } from '@/components/ModelIcon'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, HeaderDots } from '@/components/site/chrome'
-import { MODEL_NAMES } from '@/lib/constants'
-import { getLeaderboardData } from '@/lib/leaderboard-data'
-import { PUBLIC_LEADERBOARD_MODE } from '@/lib/public-leaderboard'
+import { getSeason4LeaderboardData } from '@/lib/season4-leaderboard-data'
+import { getSeason4ModelName } from '@/lib/season4-model-labels'
 import { buildPageMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
@@ -19,8 +18,8 @@ const PANEL_FRAME_STYLE = {
 } as const
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'AI Accuracy Leaderboard',
-  description: 'See how AI models and human traders rank on Endpoint Arena by trial accuracy and overall market performance.',
+  title: 'AI Money Leaderboard',
+  description: 'See how AI models rank on Endpoint Arena by Season 4 onchain portfolio value.',
   path: '/leaderboard',
 })
 
@@ -70,45 +69,15 @@ function SectionHeader({ title, description }: { title: string; description?: st
 }
 
 export default async function LeaderboardPage() {
-  const { leaderboard, moneyLeaderboard } = await getLeaderboardData(PUBLIC_LEADERBOARD_MODE)
+  const { moneyLeaderboard } = await getSeason4LeaderboardData({ sync: true })
 
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
         <section className="mb-12 space-y-4">
-          <SectionHeader title="AI Accuracy Rankings" />
-          <GradientPanel className="overflow-hidden">
-            <div className="divide-y divide-[#e8ddd0]">
-              {leaderboard.map((model, index) => (
-                <div key={model.id} className="flex items-center gap-4 px-4 py-5 transition-colors duration-150 hover:bg-[#f3ebe0]/35 sm:px-6">
-                  <div className="w-10 text-lg font-mono text-[#8a8075]">#{index + 1}</div>
-                  <div className="flex h-6 w-6 items-center justify-center text-[#8a8075]">
-                    <ModelIcon id={model.id} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-base text-[#1a1a1a]">{MODEL_NAMES[model.id]}</div>
-                    <div className="mt-1 text-xs text-[#8a8075]">
-                      {model.correct} correct | {model.wrong} wrong | {model.pending} pending
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-mono text-[#8a8075]">
-                      {model.decided > 0 ? `${model.accuracy.toFixed(0)}%` : '--'}
-                    </div>
-                    <div className="text-xs text-[#b5aa9e]">
-                      avg conf {model.total > 0 ? `${model.avgConfidence.toFixed(0)}%` : '--'}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </GradientPanel>
-        </section>
-
-        <section className="mb-12 space-y-4">
-          <SectionHeader title="AI Money Rankings" />
+          <SectionHeader title="Rankings" />
           <GradientPanel className="overflow-hidden">
             <div className="divide-y divide-[#e8ddd0]">
               {moneyLeaderboard.map((model, index) => (
@@ -118,9 +87,9 @@ export default async function LeaderboardPage() {
                     <ModelIcon id={model.id} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-base text-[#1a1a1a]">{MODEL_NAMES[model.id]}</div>
+                    <div className="text-base text-[#1a1a1a]">{getSeason4ModelName(model.id)}</div>
                     <div className="mt-1 text-xs text-[#8a8075]">
-                      P/L {model.pnl == null ? '--' : `${model.pnl >= 0 ? '+' : '-'}${formatMoney(Math.abs(model.pnl))}`}
+                      {model.correct} correct | {model.wrong} wrong | {model.pending} pending
                     </div>
                   </div>
                   <div className="text-right text-2xl font-mono text-[#8a8075]">

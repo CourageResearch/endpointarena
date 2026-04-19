@@ -46,8 +46,7 @@ Set the CI values once:
 
 ```powershell
 gh secret set CI_DATABASE_URL --repo CourageResearch/endpointarena --body "postgresql://ci:ci@127.0.0.1:5432/endpointarena_ci"
-node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" | gh secret set CI_NEXTAUTH_SECRET --repo CourageResearch/endpointarena
-gh variable set CI_NEXTAUTH_URL --repo CourageResearch/endpointarena --body "https://endpointarena.com"
+node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" | gh secret set CI_PRIVY_APP_SECRET --repo CourageResearch/endpointarena
 ```
 
 The workflow also carries safe inline fallbacks so forked PR builds do not fail if repository secrets are unavailable.
@@ -74,9 +73,10 @@ node scripts/run-railway.js variable list --service endpoint-arena-app --environ
 Verify these app variables exist before cutting the release:
 
 - `DATABASE_URL`
-- `DATABASE_TARGET` when you need a Railway deployment pinned to `main` or `toy`. Railway env is the source of truth for the active target; the deployed admin switcher is read-only.
-- `NEXTAUTH_SECRET`
-- `NEXTAUTH_URL`
+- `DATABASE_TARGET` for every Railway service. Railway env is the source of truth for the active target, and deployments now fail closed if the service is not pinned to `main` or `toy`.
+- `NEXT_PUBLIC_PRIVY_APP_ID`
+- `PRIVY_APP_ID`
+- `PRIVY_APP_SECRET`
 - `NEXT_PUBLIC_SITE_URL`
 - `SITE_URL`
 - `MAINTENANCE_MODE`
@@ -99,7 +99,65 @@ npm run knip
 
 Push the release branch and wait for green GitHub `CI` before touching `master`.
 
-As of April 12, 2026, `npm audit --omit=dev` should be clear except for the inherited `nodemailer` advisory that comes through `next-auth` and does not yet have an upstream fix.
+As of April 18, 2026, `npm audit --omit=dev` should be clear after removing the legacy `next-auth`/`nodemailer` runtime.
+
+## Season 4 testnet vs real-money launch
+
+Season 4 should be treated as two separate deployment classes:
+
+- `Season 4 testnet`: Base Sepolia, mock USDC, faucet enabled, Privy dev/staging configuration, and no real-value settlement.
+- `Season 4 real money`: Base mainnet, real collateral, deposits and withdrawals, hardened wallet/security/compliance controls, and no faucet in the money path.
+
+### Season 4 testnet defaults
+
+The current season 4 plan assumes:
+
+- Privy-native auth with email OTP as the default login path, plus Google and Apple as secondary login methods.
+- Embedded wallets created after auth and used for sponsored onchain transactions.
+- Base Sepolia as the only launch network.
+- Mock USDC collateral and faucet-first human funding.
+- App-restricted YES/NO positions that are not freely transferable between wallets.
+- No season 3 bankroll carryover into season 4.
+
+### Season 4 Railway workers
+
+Testnet ops should run two long-lived Railway worker services in addition to the web app:
+
+- `season4-indexer-worker`:
+  Run `npm run season4:indexer:worker` to keep the Base Sepolia read model fresh.
+- `season4-model-cycle-worker`:
+  Run `npm run season4:model-cycle:worker` to keep funded model wallets trading onchain on a cadence.
+
+The current worker env knobs are:
+
+- `SEASON4_INDEXER_INTERVAL_SECONDS` defaults to `30`
+- `SEASON4_MODEL_CYCLE_INTERVAL_SECONDS` defaults to `300`
+- `SEASON4_MODEL_TRADE_AMOUNT_DISPLAY` defaults to `5`
+- `SEASON4_MODEL_MAX_MARKETS_PER_CYCLE` defaults to `1`
+- `SEASON4_MODEL_PRIVATE_KEYS_JSON` must map each funded model id to the corresponding Base Sepolia private key before model-cycle automation can trade
+
+### What changes for real money
+
+Do not treat the current season 4 testnet setup as production-ready. A real-money rollout must replace or add all of the following:
+
+- Chain and infra:
+  Switch Base Sepolia RPCs, contract addresses, paymaster settings, and indexer/network config to Base mainnet. Use paid/high-reliability RPC and bundler infrastructure rather than free/rate-limited developer endpoints.
+- Money movement:
+  Replace mock USDC and the faucet with real collateral flows, deposits, withdrawals, treasury management, and end-to-end ledger reconciliation. Human balances must come from actual funding events, not faucet claims.
+- Privy production hardening:
+  Use production Privy app IDs/secrets, your own Google and Apple OAuth credentials, wallet MFA, recovery policy, and team approval controls for sensitive wallet or policy changes.
+- Admin and oracle controls:
+  Replace single-operator convenience flows with multisig-controlled contract admin, pause capability, hardened resolver/oracle ops, explicit evidence policy, and replayable audit logs.
+- Compliance and risk ops:
+  Add geo-blocking for the non-U.S.-first rollout, sanctions screening, transaction monitoring, suspicious-activity escalation, fraud review, support playbooks, and accounting controls before handling real value.
+- Contracts and custody:
+  Audit production contracts, production key management, upgrade/pause procedures, and treasury custody flows before enabling real deposits or withdrawals.
+
+### Non-U.S.-first warning
+
+The real-money rollout documented here assumes a non-U.S.-first launch path. U.S. persons should remain blocked until a separate legal, product, and operational workstream is completed.
+
+Later U.S. real-money launch is not a simple config change. U.S. prediction markets are under a different regulatory path and should be treated as a distinct product launch with its own approvals, controls, and operating model.
 
 ## Legacy maintenance window cutover
 
@@ -182,13 +240,13 @@ While maintenance is still enabled, validate:
 - `https://endpointarena.com/leaderboard`
 - `https://endpointarena.com/admin/settings`
 - `https://endpointarena.com/admin/trials`
-- `https://endpointarena.com/admin/outcomes`
+- `https://endpointarena.com/admin/oracle`
 - `https://endpointarena.com/admin/ai`
 - `https://endpointarena.com/admin/tables`
 
 Also run:
 
-- One admin trial-monitor job from `/admin/outcomes`
+- One admin trial-monitor job from `/admin/oracle`
 - One daily market cycle if open markets exist
 - One `/admin/trials` draft or preview for an unused NCT number
 
@@ -210,7 +268,7 @@ After reopen, re-check:
 - `/trials`
 - One `/trials/[marketId]`
 - `/leaderboard`
-- `/admin/outcomes`
+- `/admin/oracle`
 
 Leave cron triggers disabled until the reopened site is stable. The provisioned `TRIAL_MONITOR_CRON_SECRET` and `TRIAL_SYNC_CRON_SECRET` only make the internal endpoints ready for scheduler wiring.
 

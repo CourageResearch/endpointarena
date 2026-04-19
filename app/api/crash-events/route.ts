@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
+import { getSession } from '@/lib/auth/session'
 import { ValidationError } from '@/lib/errors'
 import { logCrashEvent } from '@/lib/crash-events'
 
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
       throw new ValidationError('Crash message is required')
     }
 
-    const session = await getServerSession(authOptions).catch(() => null)
+    const session = await getSession()
     const userId = normalizeText(session?.user?.id ?? null, 128)
     const userEmail = normalizeText(session?.user?.email ?? null, 320)
 

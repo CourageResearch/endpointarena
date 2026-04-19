@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, GradientBorder, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { buildNoIndexMetadata } from '@/lib/seo'
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = buildNoIndexMetadata({
 export default function SuggestMarketThanksPage() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16">
         <GradientBorder className="rounded-none" innerClassName="rounded-none p-6 sm:p-10">

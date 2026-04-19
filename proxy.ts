@@ -1,5 +1,4 @@
-import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server'
-import { withAuth } from 'next-auth/middleware'
+import { NextResponse, type NextRequest } from 'next/server'
 
 const AUTH_API_PREFIX = '/api/auth'
 const ADMIN_API_PREFIX = '/api/admin'
@@ -9,12 +8,6 @@ const ALLOWED_PAGE_PATHS = new Set(['/icon', '/apple-icon', '/brand'])
 const ASSET_FILE_PATTERN = /\.[a-z0-9]+$/i
 const NOINDEX_PREFIXES = ['/admin', '/login', '/signup', '/profile']
 const NOINDEX_EXACT_PATHS = new Set(['/contact/thanks', '/maintenance', '/glossary2', '/glossary3'])
-
-const adminAuthProxy = withAuth({
-  pages: {
-    signIn: '/login',
-  },
-})
 
 function isStaticAssetRequest(pathname: string): boolean {
   return pathname.startsWith('/_next/') || pathname.startsWith('/images/') || ASSET_FILE_PATTERN.test(pathname)
@@ -57,16 +50,10 @@ function withNoIndexHeader(response: NextResponse): NextResponse {
   return response
 }
 
-export default async function proxy(request: NextRequest, event: NextFetchEvent) {
+export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const maintenanceMode = process.env.MAINTENANCE_MODE === 'true'
   const shouldNoIndex = shouldSendNoIndexHeader(request)
-
-  if (pathname.startsWith('/admin')) {
-    const response = await adminAuthProxy(request as any, event)
-    const nextResponse = (response as NextResponse | undefined) ?? NextResponse.next()
-    return shouldNoIndex ? withNoIndexHeader(nextResponse) : nextResponse
-  }
 
   if (
     maintenanceMode &&

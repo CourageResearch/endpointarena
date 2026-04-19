@@ -1,7 +1,7 @@
 import type { ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import { formatEventDateLabel, isSoftDecisionDate } from '@/lib/event-dates'
-import { DEFAULT_TRIAL_RESULTS_QUESTION, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
+import { DEFAULT_TRIAL_MARKET_QUESTION, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 import type { DecisionDateKind, ModelDecisionSnapshot } from '@/lib/types'
 
 export interface AccountRow {
@@ -305,7 +305,7 @@ export function daysUntilUtc(dateLike: string | null | undefined): number | null
 }
 
 export function getMarketQuestion(market: Pick<OpenMarketRow, 'event'>): string {
-  if (!market.event) return DEFAULT_TRIAL_RESULTS_QUESTION
+  if (!market.event) return DEFAULT_TRIAL_MARKET_QUESTION
   return normalizeTrialQuestionPrompt(market.event.questionPrompt)
 }
 

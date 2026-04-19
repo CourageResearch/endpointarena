@@ -1,8 +1,7 @@
 import { useId } from 'react'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, PageFrame } from '@/components/site/chrome'
 import { HomeTrialsClient } from '@/components/HomeTrialsClient'
-import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
 import type { OverviewResponse } from '@/lib/markets/overview-shared'
 
 function HeroGradientStem() {
@@ -31,20 +30,15 @@ function HeroGradientStem() {
 export function HomePageContent({
   initialTrialOverview,
   initialStatusTab,
+  heroBadgeLabel = null,
 }: {
   initialTrialOverview: OverviewResponse
   initialStatusTab?: string | null
+  heroBadgeLabel?: string | null
 }) {
-  const activeTarget = getActiveDatabaseTarget()
-  const activeDatabase = listDatabaseTargets().find((entry) => entry.target === activeTarget) ?? null
-
   return (
     <PageFrame>
-      <WhiteNavbar
-        bgClass="bg-[#F5F2ED]/80"
-        borderClass="border-[#e8ddd0]"
-        adminRuntimeLabel={activeDatabase?.label ?? null}
-      />
+      <PublicNavbar badgeLabel={heroBadgeLabel} />
 
       {/* Hero */}
       <section className="relative overflow-hidden">

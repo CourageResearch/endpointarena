@@ -1,0 +1,34 @@
+import { cookies, headers } from 'next/headers'
+import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
+import { getSession } from '@/lib/auth/session'
+import { UnauthorizedError } from '@/lib/errors'
+import { extractPrivyAccessToken, setPrivyAccessTokenCookie, setPrivyAppSessionCookie } from '@/lib/privy'
+
+export async function GET() {
+  const requestId = createRequestId()
+
+  try {
+    const [headerStore, cookieStore] = await Promise.all([headers(), cookies()])
+    const accessToken = extractPrivyAccessToken(headerStore, cookieStore)
+    const session = await getSession()
+    if (!session) {
+      throw new UnauthorizedError('Please sign in first')
+    }
+
+    const response = successResponse(session, {
+      headers: {
+        'Cache-Control': 'no-store',
+        'X-Request-Id': requestId,
+      },
+    })
+
+    if (accessToken) {
+      setPrivyAccessTokenCookie(response, accessToken)
+    }
+    setPrivyAppSessionCookie(response, session.user)
+
+    return response
+  } catch (error) {
+    return errorResponse(error, requestId, 'Failed to load current user session')
+  }
+}

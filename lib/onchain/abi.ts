@@ -1,0 +1,263 @@
+export const PREDICTION_MARKET_MANAGER_ABI = [
+  {
+    type: 'function',
+    name: 'createMarket',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'collateralToken', type: 'address' },
+      { name: 'metadataUri', type: 'string' },
+      { name: 'closeTime', type: 'uint64' },
+      { name: 'liquidityB', type: 'uint256' },
+      { name: 'initialPriceYesE18', type: 'uint256' },
+    ],
+    outputs: [{ name: 'marketId', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'closeMarket',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'marketId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'buyYes',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'marketId', type: 'uint256' },
+      { name: 'collateralAmount', type: 'uint256' },
+      { name: 'minSharesOut', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'buyNo',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'marketId', type: 'uint256' },
+      { name: 'collateralAmount', type: 'uint256' },
+      { name: 'minSharesOut', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'sellYes',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'marketId', type: 'uint256' },
+      { name: 'shareAmount', type: 'uint256' },
+      { name: 'minCollateralOut', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'sellNo',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'marketId', type: 'uint256' },
+      { name: 'shareAmount', type: 'uint256' },
+      { name: 'minCollateralOut', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'priceYesE18',
+    stateMutability: 'view',
+    inputs: [{ name: 'marketId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'markets',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256' }],
+    outputs: [
+      { name: 'collateralToken', type: 'address' },
+      { name: 'metadataUri', type: 'string' },
+      { name: 'closeTime', type: 'uint64' },
+      { name: 'liquidityB', type: 'uint256' },
+      { name: 'qYes', type: 'uint256' },
+      { name: 'qNo', type: 'uint256' },
+      { name: 'status', type: 'uint8' },
+      { name: 'resolvedOutcomeYes', type: 'bool' },
+      { name: 'exists', type: 'bool' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'yesBalances',
+    stateMutability: 'view',
+    inputs: [
+      { name: '', type: 'uint256' },
+      { name: '', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'noBalances',
+    stateMutability: 'view',
+    inputs: [
+      { name: '', type: 'uint256' },
+      { name: '', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'resolveMarket',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'marketId', type: 'uint256' },
+      { name: 'outcomeYes', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'event',
+    name: 'MarketCreated',
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'marketId', type: 'uint256' },
+      { indexed: false, name: 'metadataUri', type: 'string' },
+      { indexed: false, name: 'closeTime', type: 'uint64' },
+      { indexed: false, name: 'collateralToken', type: 'address' },
+      { indexed: false, name: 'liquidityB', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'TradeExecuted',
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'marketId', type: 'uint256' },
+      { indexed: true, name: 'trader', type: 'address' },
+      { indexed: false, name: 'isBuy', type: 'bool' },
+      { indexed: false, name: 'isYes', type: 'bool' },
+      { indexed: false, name: 'collateralAmount', type: 'uint256' },
+      { indexed: false, name: 'shareDelta', type: 'uint256' },
+      { indexed: false, name: 'priceYesE18', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'MarketResolved',
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'marketId', type: 'uint256' },
+      { indexed: false, name: 'outcomeYes', type: 'bool' },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'WinningsRedeemed',
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'marketId', type: 'uint256' },
+      { indexed: true, name: 'trader', type: 'address' },
+      { indexed: false, name: 'collateralAmount', type: 'uint256' },
+    ],
+  },
+] as const
+
+export const SEASON4_FAUCET_ABI = [
+  {
+    type: 'function',
+    name: 'canClaim',
+    stateMutability: 'view',
+    inputs: [{ name: 'recipient', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'claimAmount',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'claimCooldownSeconds',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'lastClaimedAt',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'claim',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'claimTo',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'recipient', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setClaimAmount',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'nextAmount', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setClaimCooldownSeconds',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'nextCooldownSeconds', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'event',
+    name: 'FaucetClaimed',
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'recipient', type: 'address' },
+      { indexed: false, name: 'amount', type: 'uint256' },
+    ],
+  },
+] as const
+
+export const MOCK_USDC_ABI = [
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const

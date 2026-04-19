@@ -34,8 +34,7 @@ function normalizeSiteUrl(value: string | null | undefined): string {
 function getSiteUrl(): string {
   return normalizeSiteUrl(
     process.env.NEXT_PUBLIC_SITE_URL?.trim()
-    || process.env.SITE_URL?.trim()
-    || process.env.NEXTAUTH_URL?.trim(),
+    || process.env.SITE_URL?.trim(),
   )
 }
 

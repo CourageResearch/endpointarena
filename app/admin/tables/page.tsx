@@ -1,9 +1,6 @@
 import { sql } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { authOptions } from '@/lib/auth'
-import { ADMIN_EMAIL } from '@/lib/constants'
+import { redirectIfNotAdmin } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 import { getActiveDatabaseTarget, listDatabaseTargets } from '@/lib/database-target'
 
@@ -125,11 +122,7 @@ async function getTableDetails(): Promise<TableDetails[]> {
 }
 
 export default async function AdminTablesPage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
-
+  await redirectIfNotAdmin('/admin/tables')
   const tables = await getTableDetails()
   const activeTarget = getActiveDatabaseTarget()
   const activeDatabase = listDatabaseTargets().find((entry) => entry.target === activeTarget) ?? null

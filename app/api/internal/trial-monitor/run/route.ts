@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       questionSelection: 'all_open_trials',
     })
 
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/oracle')
 
     return successResponse({ result }, {
       headers: {

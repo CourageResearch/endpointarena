@@ -95,8 +95,8 @@ const BADGE_BASE_CLASS = 'inline-flex items-center rounded-sm border px-2 py-1 t
 const METRIC_PILL_CLASS = 'inline-flex items-center rounded-sm border border-[#ddd2c5] bg-[#f9f4ec] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] leading-none text-[#6d645a]'
 const INFO_CHIP_CLASS = 'inline-flex items-center rounded-sm border border-[#ddd2c5] bg-white/80 px-2 py-1 text-[10px] font-medium leading-none text-[#6d645a]'
 const CONTENT_PANEL_CLASS = 'rounded-none border border-[#e8ddd0] bg-[#faf7f2] px-4 py-3'
-const SECTION_COPY_CLASS = 'max-w-3xl text-[12px] leading-[1.6] text-[#7c7267]'
-const CARD_VALUE_CLASS = 'text-[0.9rem] font-medium leading-[1.4] text-[#4d453c]'
+const SECTION_COPY_CLASS = 'max-w-3xl break-words text-[12px] leading-[1.6] text-[#7c7267]'
+const CARD_VALUE_CLASS = 'break-words text-[0.9rem] font-medium leading-[1.4] text-[#4d453c]'
 const BODY_COPY_CLASS = 'text-[0.92rem] whitespace-pre-wrap break-words leading-[1.6] text-[#4d453c]'
 
 function getOutcomeBadge(outcome: OracleOutcomeValue): {
@@ -170,7 +170,7 @@ function OracleStatCard({
         style={DETAILS_CARD_BORDER_STYLE}
       >
         <div className={DETAILS_TOP_LABEL_CLASS}>{label}</div>
-        <div className={cn('mt-3', CARD_VALUE_CLASS)}>{value}</div>
+        <div className={cn('mt-3 break-words', CARD_VALUE_CLASS)}>{value}</div>
         {meta ? <div className="mt-3 flex flex-wrap gap-2">{meta}</div> : null}
       </div>
     </div>
@@ -187,7 +187,7 @@ function MetaDatum({
   return (
     <div className="space-y-1">
       <div className={DETAILS_TOP_LABEL_CLASS}>{label}</div>
-      <div className={cn('text-[12px] text-[#6d645a]', DASHBOARD_META_TEXT_CLASS)}>{children}</div>
+      <div className={cn('break-words text-[12px] text-[#6d645a]', DASHBOARD_META_TEXT_CLASS)}>{children}</div>
     </div>
   )
 }
@@ -216,7 +216,7 @@ function OracleSourceCard({
         ) : null}
       </div>
 
-      <div className="mt-3 text-[0.98rem] font-medium leading-[1.45] text-[#1a1a1a] transition-colors group-hover:text-[#2c2722]">
+      <div className="mt-3 break-words text-[0.98rem] font-medium leading-[1.45] text-[#1a1a1a] transition-colors group-hover:text-[#2c2722]">
         {evidence.title}
       </div>
 
@@ -272,12 +272,14 @@ export function TrialOracleRunsPanel({
       ) : null}
 
       <section className="space-y-4">
-        <div className="px-1">
-          <div className="flex items-center gap-3">
-            <div className={DASHBOARD_SECTION_LABEL_CLASS}>Oracle Findings</div>
-            <HeaderDots />
+        {!embedded ? (
+          <div className="px-1">
+            <div className="flex items-center gap-3">
+              <div className={DASHBOARD_SECTION_LABEL_CLASS}>Oracle Findings</div>
+              <HeaderDots />
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {allFindings.length === 0 ? (
           <div className="mx-1 rounded-none border border-[#eadfce] bg-[#faf7f2] p-4 text-sm text-[#6f665b]">
@@ -313,7 +315,7 @@ export function TrialOracleRunsPanel({
 
                       <div>
                         <div className={DETAILS_TOP_LABEL_CLASS}>Question</div>
-                        <div className="mt-2 text-[0.98rem] font-medium leading-[1.45] text-[#1a1a1a]">
+                        <div className="mt-2 break-words text-[0.98rem] font-medium leading-[1.45] text-[#1a1a1a]">
                           {finding.questionPrompt}
                         </div>
                       </div>
@@ -426,7 +428,7 @@ export function TrialOracleRunsPanel({
                             {getHistorySourceLabel(entry.changeSource)}
                           </span>
                         </div>
-                        <div className="mt-3 text-[0.98rem] font-medium leading-[1.45] text-[#1a1a1a]">
+                        <div className="mt-3 break-words text-[0.98rem] font-medium leading-[1.45] text-[#1a1a1a]">
                           {entry.questionPrompt}
                         </div>
                       </div>

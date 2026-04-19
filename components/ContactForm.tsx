@@ -18,6 +18,8 @@ type FormStatus = 'idle' | 'submitting' | 'success' | 'error'
 
 type ContactResponse = {
   adminEmailSent?: boolean
+  requestId?: string
+  warningCode?: 'operator_notification_failed'
   error?: {
     message?: string
   }
@@ -105,6 +107,12 @@ export function ContactForm() {
       if (!response.ok) {
         setStatus('error')
         setFeedback(body?.error?.message ?? 'Unable to send your message right now.')
+        return
+      }
+
+      if (body?.adminEmailSent === false) {
+        setStatus('success')
+        setFeedback(`Saved, but operator notification failed. Reference ID: ${body.requestId ?? 'unavailable'}.`)
         return
       }
 

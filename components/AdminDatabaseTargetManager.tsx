@@ -4,6 +4,15 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getApiErrorMessage } from '@/lib/client-api'
 import type { DatabaseTargetRuntimeState } from '@/lib/database-target'
+import {
+  AdminRuntimeSettingsTargetControls,
+  type RuntimeSettingsTargetDto,
+} from '@/components/AdminRuntimeSettingsColumns'
+
+export type {
+  RuntimeSettingsConfigDto,
+  RuntimeSettingsTargetDto,
+} from '@/components/AdminRuntimeSettingsColumns'
 
 export type AdminDatabaseTargetOptionDto = {
   target: 'main' | 'toy'
@@ -25,13 +34,20 @@ type Props = {
   runtimeState: DatabaseTargetRuntimeState
   options: AdminDatabaseTargetOptionDto[]
   toyTrialCount: number
+  runtimeSettingsTargets: RuntimeSettingsTargetDto[]
 }
 
 function formatCount(value: number | null): string {
   return value == null ? '-' : value.toLocaleString('en-US')
 }
 
-export function AdminDatabaseTargetManager({ activeTarget, runtimeState, options, toyTrialCount }: Props) {
+export function AdminDatabaseTargetManager({
+  activeTarget,
+  runtimeState,
+  options,
+  toyTrialCount,
+  runtimeSettingsTargets,
+}: Props) {
   const router = useRouter()
   const [pendingTarget, setPendingTarget] = useState<'main' | 'toy' | null>(null)
   const [isResettingToy, setIsResettingToy] = useState(false)
@@ -39,6 +55,7 @@ export function AdminDatabaseTargetManager({ activeTarget, runtimeState, options
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const allowRuntimeSwitching = runtimeState.switchingAllowed
+  const runtimeSettingsByTarget = new Map(runtimeSettingsTargets.map((target) => [target.target, target]))
 
   useEffect(() => {
     setCurrentToyTrialCount(toyTrialCount)
@@ -112,12 +129,35 @@ export function AdminDatabaseTargetManager({ activeTarget, runtimeState, options
       const summary = (payload as {
         summary?: {
           toyTrialCount?: number
+          requestedToyTrialCount?: number
+          season4Onchain?: {
+            configured?: boolean
+            modelWalletsSeeded?: number
+            modelWalletsFunded?: number
+            warnings?: string[]
+          }
         }
       }).summary
       const resolvedToyTrialCount = summary?.toyTrialCount
+      const requestedToyTrialCount = summary?.requestedToyTrialCount
+      const trialCountLabel = typeof resolvedToyTrialCount === 'number'
+        ? resolvedToyTrialCount.toLocaleString('en-US')
+        : 'the configured number of'
+      const shortfallLabel = typeof resolvedToyTrialCount === 'number'
+        && typeof requestedToyTrialCount === 'number'
+        && resolvedToyTrialCount < requestedToyTrialCount
+        ? ` (${requestedToyTrialCount.toLocaleString('en-US')} requested)`
+        : ''
+      const onchainSummary = summary?.season4Onchain
+      const onchainLabel = onchainSummary
+        ? ` Seeded ${typeof onchainSummary.modelWalletsSeeded === 'number' ? onchainSummary.modelWalletsSeeded.toLocaleString('en-US') : '0'} model wallet row${onchainSummary.modelWalletsSeeded === 1 ? '' : 's'} and funded ${typeof onchainSummary.modelWalletsFunded === 'number' ? onchainSummary.modelWalletsFunded.toLocaleString('en-US') : '0'}.`
+        : ''
+      const warningLabel = onchainSummary?.warnings?.[0]
+        ? ` ${onchainSummary.warnings[0]}`
+        : ''
 
       setSuccessMessage(
-        `Toy DB reset to a clean slate with ${typeof resolvedToyTrialCount === 'number' ? resolvedToyTrialCount : 'the configured number of'} trial${resolvedToyTrialCount === 1 ? '' : 's'}. Refreshing site data...`
+        `Toy DB reset to a clean slate with ${trialCountLabel} trial${resolvedToyTrialCount === 1 ? '' : 's'}${shortfallLabel}.${onchainLabel}${warningLabel} Refreshing site data...`
       )
       router.refresh()
     } catch (resetError) {
@@ -158,7 +198,8 @@ export function AdminDatabaseTargetManager({ activeTarget, runtimeState, options
           const isBusy = pendingTarget != null || isResettingToy
           const disabled = !allowRuntimeSwitching || !option.configured || isPending || isBusy || isActive
           const canResetToy = allowRuntimeSwitching && option.target === 'toy' && option.configured
-          const showToyResetTarget = option.target === 'toy'
+          const runtimeSettingsTarget = runtimeSettingsByTarget.get(option.target)
+          const showToyResetTarget = option.target === 'toy' && !runtimeSettingsTarget?.config
 
           return (
             <article
@@ -248,6 +289,12 @@ export function AdminDatabaseTargetManager({ activeTarget, runtimeState, options
                         : `Switch to ${option.label}`}
                 </button>
               </div>
+
+              {runtimeSettingsTarget ? (
+                <div className="mt-4 border-t border-[#e8ddd0] pt-4">
+                  <AdminRuntimeSettingsTargetControls target={runtimeSettingsTarget} />
+                </div>
+              ) : null}
             </article>
           )
         })}

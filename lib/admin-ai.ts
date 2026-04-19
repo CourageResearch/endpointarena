@@ -4,6 +4,8 @@ import {
   aiBatches,
   marketAccounts,
   marketPositions,
+  onchainBalances,
+  onchainMarkets,
   predictionMarkets,
   trialQuestions,
   trials,
@@ -58,13 +60,34 @@ import { buildModelDecisionPrompt, parseModelDecisionResponse, type ModelDecisio
 import { buildModelDecisionSnapshotInput, generateAndStoreModelDecisionSnapshot, linkSnapshotToMarketAction, storeImportedModelDecisionSnapshot } from '@/lib/model-decision-snapshots'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getMarketModelResponseTimeoutMs } from '@/lib/markets/run-health'
+import { buildSeason4ModelDecisionInput, calculateSeason4TradeCaps } from '@/lib/season4-model-decisions'
+import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
+import { loadContractMarketStates, loadLiveModelWalletPortfolioBalances, parseModelTradeAmountDisplay, runSeason4ModelCycle } from '@/lib/season4-ops'
+import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 type OpenTrialCandidate = {
-  market: typeof predictionMarkets.$inferSelect
+  dataset: AiDataset
+  market: {
+    id: string
+    storageMarketId?: string | null
+    balanceRef?: string | null
+    priceYes: number
+    qYes: number
+    qNo: number
+    b: number
+    openedAt: Date | null
+  }
   question: typeof trialQuestions.$inferSelect & {
     trial: typeof trials.$inferSelect
   }
+}
+
+type CandidatePortfolioState = {
+  cashAvailable: number
+  yesSharesHeld: number
+  noSharesHeld: number
+  maxTradeUsd?: number
 }
 
 type CreateAiBatchInput = {
@@ -241,7 +264,11 @@ function buildLog(message: string, tone: AiBatchState['logs'][number]['tone'] = 
   }
 }
 
-async function listOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
+function buildMarketActorKey(marketId: string, actorId: string): string {
+  return `${marketId}:${actorId}`
+}
+
+async function listToyOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
   const markets = await db.query.predictionMarkets.findMany({
     columns: predictionMarketColumns,
     where: and(
@@ -269,9 +296,90 @@ async function listOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
       return filterSupportedTrialQuestions([question]).length === 1
     })
     .map((entry) => ({
-      market: entry,
+      dataset: 'toy' as const,
+      market: {
+        id: entry.id,
+        priceYes: entry.priceYes,
+        qYes: entry.qYes,
+        qNo: entry.qNo,
+        b: entry.b,
+        openedAt: entry.openedAt ?? null,
+      },
       question: entry.trialQuestion,
     }))
+    .sort((a, b) => {
+      const aDecisionAt = a.question.trial.estPrimaryCompletionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
+      const bDecisionAt = b.question.trial.estPrimaryCompletionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
+      if (aDecisionAt !== bDecisionAt) return aDecisionAt - bDecisionAt
+
+      const aOpenedAt = a.market.openedAt?.getTime() ?? 0
+      const bOpenedAt = b.market.openedAt?.getTime() ?? 0
+      if (aOpenedAt !== bOpenedAt) return aOpenedAt - bOpenedAt
+
+      return a.market.id.localeCompare(b.market.id)
+    })
+}
+
+async function listLiveOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
+  const linkedMarkets = await db.query.onchainMarkets.findMany({
+    columns: {
+      marketSlug: true,
+      onchainMarketId: true,
+      closeTime: true,
+      createdAt: true,
+      trialQuestionId: true,
+    },
+    where: and(
+      eq(onchainMarkets.status, 'deployed'),
+      isNotNull(onchainMarkets.trialQuestionId),
+    ),
+    with: {
+      trialQuestion: {
+        with: {
+          trial: true,
+        },
+      },
+    },
+  })
+
+  const supportedQuestions = filterSupportedTrialQuestions(
+    linkedMarkets.flatMap((row) => row.trialQuestion?.trial ? [row.trialQuestion] : []),
+  )
+  const supportedQuestionIds = new Set(supportedQuestions.map((question) => question.id))
+  const contractStateMap = await loadContractMarketStates(
+    linkedMarkets.flatMap((row) => row.onchainMarketId ? [row.onchainMarketId] : []),
+  )
+
+  return linkedMarkets
+    .filter((row): row is typeof row & { trialQuestion: OpenTrialCandidate['question'] } => Boolean(row.trialQuestion?.trial))
+    .filter((row) => {
+      const question = row.trialQuestion
+      if (!question) return false
+      if (!supportedQuestionIds.has(question.id)) return false
+      if (question.outcome !== 'Pending') return false
+      if (question.status !== 'live' || !question.isBettable) return false
+      if (row.closeTime && row.closeTime.getTime() <= Date.now()) return false
+      return Boolean(row.onchainMarketId && contractStateMap.get(row.onchainMarketId))
+    })
+    .flatMap((row) => {
+      const contractState = contractStateMap.get(row.onchainMarketId as string)
+      if (!contractState) return []
+
+      return [{
+        dataset: 'live' as const,
+        market: {
+          id: row.marketSlug,
+          storageMarketId: null,
+          balanceRef: row.onchainMarketId ? `market:${row.onchainMarketId}` : null,
+          priceYes: contractState.priceYes,
+          qYes: contractState.qYesDisplay,
+          qNo: contractState.qNoDisplay,
+          b: contractState.liquidityBDisplay,
+          openedAt: row.createdAt ?? null,
+        },
+        question: row.trialQuestion,
+      } satisfies OpenTrialCandidate]
+    })
     .sort((a, b) => {
       const aDecisionAt = a.question.trial.estPrimaryCompletionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
       const bDecisionAt = b.question.trial.estPrimaryCompletionDate?.getTime() ?? Number.MAX_SAFE_INTEGER
@@ -303,14 +411,14 @@ function getAiAvailableModels(): AiAvailableModel[] {
 }
 
 async function buildDatasetSummaries(): Promise<AiDatasetSummary[]> {
-  const [candidates, runtimeConfig] = await Promise.all([
-    listOpenTrialCandidates(),
+  const [toyCandidates, liveCandidates, runtimeConfig] = await Promise.all([
+    listToyOpenTrialCandidates(),
+    listLiveOpenTrialCandidates(),
     getMarketRuntimeConfig(),
   ])
-  const candidateCount = candidates.length
   const toyCandidateCount = runtimeConfig.toyTrialCount > 0
-    ? Math.min(runtimeConfig.toyTrialCount, candidateCount)
-    : candidateCount
+    ? Math.min(runtimeConfig.toyTrialCount, toyCandidates.length)
+    : toyCandidates.length
   return [
     {
       key: 'toy',
@@ -322,7 +430,7 @@ async function buildDatasetSummaries(): Promise<AiDatasetSummary[]> {
       key: 'live',
       label: getAiDatasetLabel('live'),
       description: getAiDatasetDescription('live'),
-      candidateCount,
+      candidateCount: liveCandidates.length,
     },
   ]
 }
@@ -342,7 +450,7 @@ function pickDatasetTrials(
   }
 
   if (candidates.length === 0) {
-    throw new ValidationError('No open trials are currently available for the live desk.')
+    throw new ValidationError('No deployed season 4-linked trial markets are currently available for the live desk.')
   }
 
   return candidates
@@ -361,28 +469,36 @@ function buildFrozenMarketSnapshot(candidate: OpenTrialCandidate, snapshotAt: Da
 }
 
 function buildFrozenPortfolio(input: {
-  market: typeof predictionMarkets.$inferSelect
-  account: typeof marketAccounts.$inferSelect
-  position: typeof marketPositions.$inferSelect
+  dataset: AiDataset
+  market: OpenTrialCandidate['market']
+  portfolio: CandidatePortfolioState
   runDate: Date
   runtimeConfig: Awaited<ReturnType<typeof getMarketRuntimeConfig>>
 }): AiFrozenPortfolio {
-  const tradeCaps = calculateExecutableTradeCaps({
-    state: {
-      qYes: input.market.qYes,
-      qNo: input.market.qNo,
-      b: input.market.b,
-    },
-    accountCash: input.account.cashBalance,
-    yesSharesHeld: input.position.yesShares,
-    noSharesHeld: input.position.noShares,
-  })
+  const tradeCaps = input.dataset === 'live'
+    ? calculateSeason4TradeCaps({
+        cashAvailable: input.portfolio.cashAvailable,
+        yesSharesHeld: input.portfolio.yesSharesHeld,
+        noSharesHeld: input.portfolio.noSharesHeld,
+        priceYes: input.market.priceYes,
+        maxTradeUsd: input.portfolio.maxTradeUsd ?? input.portfolio.cashAvailable,
+      })
+    : calculateExecutableTradeCaps({
+        state: {
+          qYes: input.market.qYes,
+          qNo: input.market.qNo,
+          b: input.market.b,
+        },
+        accountCash: input.portfolio.cashAvailable,
+        yesSharesHeld: input.portfolio.yesSharesHeld,
+        noSharesHeld: input.portfolio.noSharesHeld,
+      })
 
   return {
-    actorId: input.account.actorId,
-    cashAvailable: input.account.cashBalance,
-    yesSharesHeld: input.position.yesShares,
-    noSharesHeld: input.position.noShares,
+    actorId: '',
+    cashAvailable: input.portfolio.cashAvailable,
+    yesSharesHeld: input.portfolio.yesSharesHeld,
+    noSharesHeld: input.portfolio.noSharesHeld,
     maxBuyUsd: tradeCaps.maxBuyUsd,
     maxSellYesUsd: tradeCaps.maxSellYesUsd,
     maxSellNoUsd: tradeCaps.maxSellNoUsd,
@@ -414,7 +530,39 @@ function buildTaskStatus(lane: 'api' | 'subscription'): AiTaskStatus {
   return lane === 'api' ? 'queued' : 'waiting-import'
 }
 
-async function buildInitialPortfolioStates(state: Pick<AiBatchState, 'trials' | 'enabledModelIds' | 'tasks' | 'fills'>): Promise<AiPortfolioState[]> {
+async function buildInitialPortfolioStates(state: Pick<AiBatchState, 'dataset' | 'trials' | 'enabledModelIds' | 'tasks' | 'fills'>): Promise<AiPortfolioState[]> {
+  if (state.dataset === 'live') {
+    const actorIdByModelId = new Map(state.tasks.map((task) => [task.modelId, task.actorId]))
+
+    return state.enabledModelIds.map((modelId) => {
+      const actorId = actorIdByModelId.get(modelId) ?? ''
+      const tasks = state.tasks.filter((task) => task.modelId === modelId)
+      const markets = tasks.flatMap((task) => {
+        const trial = state.trials.find((entry) => entry.marketId === task.marketId)
+        if (!trial) return []
+        return [{
+          marketId: task.marketId,
+          trialQuestionId: task.trialQuestionId,
+          shortTitle: trial.shortTitle,
+          yesShares: task.frozenPortfolio.yesSharesHeld,
+          noShares: task.frozenPortfolio.noSharesHeld,
+        } satisfies AiPortfolioMarketPosition]
+      })
+      const latestFill = [...state.fills].reverse().find((fill) => fill.modelId === modelId)
+      return {
+        modelId,
+        actorId,
+        cashBalance: tasks.reduce((maxValue, task) => Math.max(maxValue, task.frozenPortfolio.cashAvailable), 0),
+        totalYesShares: markets.reduce((sum, item) => sum + item.yesShares, 0),
+        totalNoShares: markets.reduce((sum, item) => sum + item.noShares, 0),
+        markets,
+        latestActionSummary: latestFill
+          ? `${getAiModelLabel(modelId)} ${latestFill.executedAction} ${latestFill.executedAmountUsd > 0 ? `$${latestFill.executedAmountUsd.toFixed(2)}` : ''}`.trim()
+          : null,
+      }
+    })
+  }
+
   const actorIdByModelId = new Map(state.tasks.map((task) => [task.modelId, task.actorId]))
   const uniqueActorIds = Array.from(new Set(state.tasks.map((task) => task.actorId)))
   const marketIds = state.trials.map((trial) => trial.marketId)
@@ -478,8 +626,7 @@ function buildInitialBatchState(input: {
   clearOrder: ModelId[]
   trials: OpenTrialCandidate[]
   actorIdByModelId: Map<ModelId, string>
-  accountByActorId: Map<string, typeof marketAccounts.$inferSelect>
-  positionByMarketActorKey: Map<string, typeof marketPositions.$inferSelect>
+  portfolioByMarketActorKey: Map<string, CandidatePortfolioState>
   runtimeConfig: Awaited<ReturnType<typeof getMarketRuntimeConfig>>
   createdAt: Date
   apiConcurrency: number
@@ -497,9 +644,8 @@ function buildInitialBatchState(input: {
       const actorId = input.actorIdByModelId.get(modelId)
       if (!actorId) continue
 
-      const account = input.accountByActorId.get(actorId)
-      const position = input.positionByMarketActorKey.get(`${trial.marketId}:${actorId}`)
-      if (!account || !position) continue
+      const portfolio = input.portfolioByMarketActorKey.get(buildMarketActorKey(trial.marketId, actorId))
+      if (!portfolio) continue
 
       tasks.push({
         taskKey: buildAiTaskKey(input.batchId, trial.marketId, modelId),
@@ -511,13 +657,16 @@ function buildInitialBatchState(input: {
         lane: getAiModelLane(modelId),
         status: buildTaskStatus(getAiModelLane(modelId)),
         startedAt: null,
-        frozenPortfolio: buildFrozenPortfolio({
-          market: candidate.market,
-          account,
-          position,
-          runDate: normalizedRunDate,
-          runtimeConfig: input.runtimeConfig,
-        }),
+        frozenPortfolio: {
+          ...buildFrozenPortfolio({
+            dataset: input.dataset,
+            market: candidate.market,
+            portfolio,
+            runDate: normalizedRunDate,
+            runtimeConfig: input.runtimeConfig,
+          }),
+          actorId,
+        },
         frozenMarket: trial.marketSnapshot,
         decision: null,
         reasoningPreview: null,
@@ -554,6 +703,264 @@ function buildInitialBatchState(input: {
     ],
     failureMessage: null,
   }
+}
+
+async function buildLivePortfolioState(
+  candidates: OpenTrialCandidate[],
+  actorIdByModelId: Map<ModelId, string>,
+): Promise<Map<string, CandidatePortfolioState>> {
+  const modelIds = Array.from(new Set(Array.from(actorIdByModelId.keys())))
+  if (modelIds.length === 0 || candidates.length === 0) {
+    return new Map()
+  }
+
+  const marketRefs = Array.from(new Set(
+    candidates.flatMap((candidate) => candidate.market.balanceRef ? [candidate.market.balanceRef] : []),
+  ))
+  const onchainMarketIdBySlug = new Map(
+    candidates.flatMap((candidate) => (
+      candidate.market.balanceRef?.startsWith('market:')
+        ? [[candidate.market.id, candidate.market.balanceRef.slice('market:'.length)] as const]
+        : []
+    )),
+  )
+  const [balanceRows, livePortfolioByModelId] = await Promise.all([
+    db.query.onchainBalances.findMany({
+      where: and(
+        inArray(onchainBalances.modelKey, modelIds),
+        inArray(onchainBalances.marketRef, ['collateral', ...marketRefs]),
+      ),
+    }),
+    loadLiveModelWalletPortfolioBalances({
+      modelKeys: modelIds,
+      marketIds: Array.from(onchainMarketIdBySlug.values()),
+    }),
+  ])
+  const balanceByModelAndRef = new Map(
+    balanceRows
+      .filter((row): row is typeof row & { modelKey: ModelId } => typeof row.modelKey === 'string')
+      .map((row) => [`${row.modelKey}:${row.marketRef}`, row] as const),
+  )
+  const maxTradeUsd = parseModelTradeAmountDisplay()
+  const portfolioByMarketActorKey = new Map<string, CandidatePortfolioState>()
+
+  for (const candidate of candidates) {
+    for (const [modelId, actorId] of actorIdByModelId.entries()) {
+      const collateralRow = balanceByModelAndRef.get(`${modelId}:collateral`)
+      const positionRow = candidate.market.balanceRef
+        ? balanceByModelAndRef.get(`${modelId}:${candidate.market.balanceRef}`)
+        : null
+      const livePortfolio = livePortfolioByModelId.get(modelId)
+      const livePosition = onchainMarketIdBySlug.has(candidate.market.id)
+        ? livePortfolio?.positionsByMarketId.get(onchainMarketIdBySlug.get(candidate.market.id) as string)
+        : null
+
+      portfolioByMarketActorKey.set(buildMarketActorKey(candidate.market.id, actorId), {
+        cashAvailable: livePortfolio?.collateralBalanceDisplay ?? collateralRow?.collateralDisplay ?? 0,
+        yesSharesHeld: livePosition?.yesSharesHeld ?? positionRow?.yesShares ?? 0,
+        noSharesHeld: livePosition?.noSharesHeld ?? positionRow?.noShares ?? 0,
+        maxTradeUsd,
+      })
+    }
+  }
+
+  return portfolioByMarketActorKey
+}
+
+function frozenPortfolioChanged(left: AiFrozenPortfolio, right: AiFrozenPortfolio): boolean {
+  return (
+    Math.abs(left.cashAvailable - right.cashAvailable) > 1e-9 ||
+    Math.abs(left.yesSharesHeld - right.yesSharesHeld) > 1e-9 ||
+    Math.abs(left.noSharesHeld - right.noSharesHeld) > 1e-9 ||
+    Math.abs(left.maxBuyUsd - right.maxBuyUsd) > 1e-9 ||
+    Math.abs(left.maxSellYesUsd - right.maxSellYesUsd) > 1e-9 ||
+    Math.abs(left.maxSellNoUsd - right.maxSellNoUsd) > 1e-9
+  )
+}
+
+async function readFreshLiveBatchPortfolioState(
+  state: AiBatchState,
+  shouldRefreshTask: (task: AiDecisionTask) => boolean,
+): Promise<{
+  state: AiBatchState
+  changed: boolean
+  refreshedCount: number
+}> {
+  if (state.dataset !== 'live' || state.tasks.length === 0) {
+    return { state, changed: false, refreshedCount: 0 }
+  }
+
+  const refreshableTasks = state.tasks.filter(shouldRefreshTask)
+  if (refreshableTasks.length === 0) {
+    return { state, changed: false, refreshedCount: 0 }
+  }
+
+  const marketSlugs = Array.from(new Set(refreshableTasks.map((task) => task.marketId)))
+  const linkedMarkets = marketSlugs.length === 0
+    ? []
+    : await db.query.onchainMarkets.findMany({
+        columns: {
+          marketSlug: true,
+          onchainMarketId: true,
+        },
+        where: inArray(onchainMarkets.marketSlug, marketSlugs),
+      })
+
+  const marketRefBySlug = new Map<string, string>()
+  const onchainMarketIdBySlug = new Map<string, string>()
+  for (const row of linkedMarkets) {
+    if (row.onchainMarketId) {
+      marketRefBySlug.set(row.marketSlug, `market:${row.onchainMarketId}`)
+      onchainMarketIdBySlug.set(row.marketSlug, row.onchainMarketId)
+    }
+  }
+
+  const modelIds = Array.from(new Set(refreshableTasks.map((task) => task.modelId)))
+  const marketRefs = Array.from(new Set(['collateral', ...Array.from(marketRefBySlug.values())]))
+  const [balanceRows, livePortfolioByModelId] = modelIds.length === 0 || marketRefs.length === 0
+    ? [[], new Map()]
+    : await Promise.all([
+        db.query.onchainBalances.findMany({
+          where: and(
+            inArray(onchainBalances.modelKey, modelIds),
+            inArray(onchainBalances.marketRef, marketRefs),
+          ),
+        }),
+        loadLiveModelWalletPortfolioBalances({
+          modelKeys: modelIds,
+          marketIds: Array.from(onchainMarketIdBySlug.values()),
+        }),
+      ])
+
+  const balanceByModelAndRef = new Map<string, (typeof balanceRows)[number]>()
+  for (const row of balanceRows) {
+    if (typeof row.modelKey === 'string') {
+      balanceByModelAndRef.set(`${row.modelKey}:${row.marketRef}`, row)
+    }
+  }
+
+  const maxTradeUsd = parseModelTradeAmountDisplay()
+  let refreshedCount = 0
+  const nextTasks = state.tasks.map((task) => {
+    if (!shouldRefreshTask(task)) return task
+
+    const collateralRow = balanceByModelAndRef.get(`${task.modelId}:collateral`)
+    const positionRef = marketRefBySlug.get(task.marketId)
+    const positionRow = positionRef
+      ? balanceByModelAndRef.get(`${task.modelId}:${positionRef}`)
+      : null
+    const livePortfolio = livePortfolioByModelId.get(task.modelId)
+    const livePosition = onchainMarketIdBySlug.has(task.marketId)
+      ? livePortfolio?.positionsByMarketId.get(onchainMarketIdBySlug.get(task.marketId) as string)
+      : null
+    const cashAvailable = livePortfolio?.collateralBalanceDisplay ?? collateralRow?.collateralDisplay ?? 0
+    const yesSharesHeld = livePosition?.yesSharesHeld ?? positionRow?.yesShares ?? 0
+    const noSharesHeld = livePosition?.noSharesHeld ?? positionRow?.noShares ?? 0
+    const tradeCaps = calculateSeason4TradeCaps({
+      cashAvailable,
+      yesSharesHeld,
+      noSharesHeld,
+      priceYes: task.frozenMarket.priceYes,
+      maxTradeUsd,
+    })
+    const frozenPortfolio = {
+      ...task.frozenPortfolio,
+      cashAvailable,
+      yesSharesHeld,
+      noSharesHeld,
+      maxBuyUsd: tradeCaps.maxBuyUsd,
+      maxSellYesUsd: tradeCaps.maxSellYesUsd,
+      maxSellNoUsd: tradeCaps.maxSellNoUsd,
+    }
+
+    if (!frozenPortfolioChanged(task.frozenPortfolio, frozenPortfolio)) {
+      return task
+    }
+
+    refreshedCount += 1
+    return {
+      ...task,
+      frozenPortfolio,
+    }
+  })
+
+  if (refreshedCount === 0) {
+    return { state, changed: false, refreshedCount: 0 }
+  }
+
+  return {
+    state: await hydratePortfolioStates({
+      ...state,
+      tasks: nextTasks,
+    }),
+    changed: true,
+    refreshedCount,
+  }
+}
+
+async function refreshAndStoreLiveBatchPortfolio(args: {
+  batchId: string
+  reason: string
+  shouldRefreshTask: (task: AiDecisionTask) => boolean
+}): Promise<{
+  state: AiBatchState | null
+  changed: boolean
+}> {
+  await syncSeason4OnchainIndex()
+
+  let changed = false
+  const next = await mutateBatchState(args.batchId, async (state) => {
+    if (state.dataset !== 'live' || isTerminalBatchStatus(state.status)) {
+      return state
+    }
+
+    const refreshed = await readFreshLiveBatchPortfolioState(state, args.shouldRefreshTask)
+    changed = refreshed.changed
+    if (!refreshed.changed) {
+      return state
+    }
+
+    return {
+      ...refreshed.state,
+      logs: [
+        ...refreshed.state.logs,
+        buildLog(
+          `${args.reason} ${refreshed.refreshedCount.toLocaleString('en-US')} pending task${refreshed.refreshedCount === 1 ? '' : 's'} refreshed from onchain balances.`,
+          'success',
+        ),
+      ],
+    }
+  })
+
+  return { state: next, changed }
+}
+
+function buildLegacyPortfolioState(args: {
+  candidates: OpenTrialCandidate[]
+  actorIds: string[]
+  accounts: typeof marketAccounts.$inferSelect[]
+  positions: typeof marketPositions.$inferSelect[]
+}): Map<string, CandidatePortfolioState> {
+  const accountByActorId = new Map(args.accounts.map((account) => [account.actorId, account]))
+  const positionByMarketActorKey = new Map(
+    args.positions.map((position) => [buildMarketActorKey(position.marketId, position.actorId), position]),
+  )
+  const portfolioByMarketActorKey = new Map<string, CandidatePortfolioState>()
+
+  for (const candidate of args.candidates) {
+    for (const actorId of args.actorIds) {
+      const account = accountByActorId.get(actorId)
+      const position = positionByMarketActorKey.get(buildMarketActorKey(candidate.market.id, actorId))
+      if (!account || !position) continue
+      portfolioByMarketActorKey.set(buildMarketActorKey(candidate.market.id, actorId), {
+        cashAvailable: account.cashBalance,
+        yesSharesHeld: position.yesShares,
+        noSharesHeld: position.noShares,
+      })
+    }
+  }
+
+  return portfolioByMarketActorKey
 }
 
 function serializeBatchState(state: AiBatchState): Record<string, unknown> {
@@ -663,41 +1070,86 @@ function reconstructSnapshotArgs(batch: AiBatchState, task: AiDecisionTask) {
 
   const runtimeMarket = {
     id: trial.marketId,
-    trialQuestionId: trial.trialQuestionId,
     priceYes: task.frozenMarket.priceYes,
     qYes: task.frozenMarket.qYes,
     qNo: task.frozenMarket.qNo,
     b: task.frozenMarket.b,
     openedAt: task.frozenMarket.openedAt ? new Date(task.frozenMarket.openedAt) : null,
-  } as typeof predictionMarkets.$inferSelect
+  }
 
-  const runtimeAccount = {
+  const snapshotArgs = {
+    runSource: 'manual' as const,
+    modelId: task.modelId,
     actorId: task.actorId,
-    cashBalance: task.frozenPortfolio.cashAvailable,
-  } as typeof marketAccounts.$inferSelect
+    recordedAt: new Date(batch.createdAt),
+    runDate: new Date(batch.createdAt),
+    trial: runtimeTrial,
+    trialQuestionId: trial.trialQuestionId,
+    questionPrompt: trial.questionPrompt,
+    market: runtimeMarket,
+    storageMarketId: batch.dataset === 'live' ? null : trial.marketId,
+    portfolio: {
+      cashAvailable: task.frozenPortfolio.cashAvailable,
+      yesSharesHeld: task.frozenPortfolio.yesSharesHeld,
+      noSharesHeld: task.frozenPortfolio.noSharesHeld,
+    },
+  }
 
-  const runtimePosition = {
-    marketId: task.marketId,
-    actorId: task.actorId,
-    yesShares: task.frozenPortfolio.yesSharesHeld,
-    noShares: task.frozenPortfolio.noSharesHeld,
-  } as typeof marketPositions.$inferSelect
+  if (batch.dataset === 'live') {
+    const { input, tradeCaps } = buildSeason4ModelDecisionInput({
+      marketId: trial.marketId,
+      marketSlug: trial.marketId,
+      onchainMarketId: trial.marketId,
+      title: trial.shortTitle,
+      metadataUri: null,
+      closeTime: null,
+      qYesDisplay: task.frozenMarket.qYes,
+      qNoDisplay: task.frozenMarket.qNo,
+      liquidityBDisplay: task.frozenMarket.b,
+      priceYes: task.frozenMarket.priceYes,
+      portfolio: {
+        collateralBalanceDisplay: task.frozenPortfolio.cashAvailable,
+        yesSharesHeld: task.frozenPortfolio.yesSharesHeld,
+        noSharesHeld: task.frozenPortfolio.noSharesHeld,
+      },
+      maxTradeUsd: parseModelTradeAmountDisplay(),
+      asOf: new Date(batch.createdAt),
+      trial: {
+        trialQuestionId: trial.trialQuestionId,
+        questionPrompt: trial.questionPrompt,
+        shortTitle: trial.shortTitle,
+        sponsorName: trial.sponsorName,
+        sponsorTicker: trial.sponsorTicker,
+        exactPhase: trial.exactPhase,
+        estPrimaryCompletionDate: new Date(trial.decisionDate),
+        indication: trial.indication,
+        intervention: trial.intervention,
+        primaryEndpoint: trial.primaryEndpoint,
+        currentStatus: trial.currentStatus,
+        briefSummary: trial.briefSummary,
+        nctNumber: trial.nctNumber,
+      },
+    })
+
+    input.meta.modelId = task.modelId
+
+    return {
+      trial,
+      snapshotArgs: {
+        ...snapshotArgs,
+        prebuiltInput: input,
+        precomputedTradeCaps: {
+          maxBuyUsd: tradeCaps.maxBuyUsd,
+          maxSellYesUsd: tradeCaps.maxSellYesUsd,
+          maxSellNoUsd: tradeCaps.maxSellNoUsd,
+        },
+      },
+    }
+  }
 
   return {
     trial,
-    snapshotArgs: {
-      runSource: 'manual' as const,
-      modelId: task.modelId,
-      actorId: task.actorId,
-      recordedAt: new Date(batch.createdAt),
-      runDate: new Date(batch.createdAt),
-      trial: runtimeTrial,
-      trialQuestionId: trial.trialQuestionId,
-      questionPrompt: trial.questionPrompt,
-      market: runtimeMarket,
-      account: runtimeAccount,
-      position: runtimePosition,
-    },
+    snapshotArgs,
   }
 }
 
@@ -1448,6 +1900,22 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
       if (state.status === 'reset' || state.status === 'cleared') return
     }
 
+    if (state.dataset === 'live') {
+      const refreshedBeforeApi = await refreshAndStoreLiveBatchPortfolio({
+        batchId,
+        reason: 'Live cash refreshed before API model execution.',
+        shouldRefreshTask: (task) => (
+          task.lane === 'api' &&
+          task.status === 'queued' &&
+          !task.snapshotId &&
+          !task.decision
+        ),
+      })
+      if (!refreshedBeforeApi.state) return
+      state = refreshedBeforeApi.state
+      if (state.status === 'reset' || state.status === 'cleared') return
+    }
+
     const apiTasks = state.tasks.filter((task) => task.lane === 'api' && task.status === 'queued')
     if (apiTasks.length > 0) {
       await runWithConcurrency(apiTasks, state.apiConcurrency, async (task) => {
@@ -1472,6 +1940,64 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
     }
 
     if (readyToClear) {
+      if (refreshed.dataset === 'live') {
+        if (refreshed.status !== 'clearing') {
+          await mutateBatchState(batchId, (current) => ({
+            ...current,
+            status: 'clearing',
+            logs: current.logs.some((entry) => entry.message === 'All model decisions are in. Running the season 4 model cycle now.')
+              ? current.logs
+              : [...current.logs, buildLog('All model decisions are in. Running the season 4 model cycle now.', 'success')],
+          }))
+        }
+
+        try {
+          const summary = await runSeason4ModelCycle({
+            modelKeys: refreshed.enabledModelIds,
+            marketSlugs: refreshed.trials.map((trial) => trial.marketId),
+            decisions: refreshed.tasks.flatMap((task) => (
+              task.decision
+                ? [{
+                    modelKey: task.modelId,
+                    marketSlug: task.marketId,
+                    decision: task.decision,
+                  }]
+                : []
+            )),
+          })
+          revalidateSeason4Routes()
+
+          await mutateBatchState(batchId, async (currentState) => hydratePortfolioStates({
+            ...currentState,
+            status: 'cleared',
+            tasks: currentState.tasks.map((task) => (
+              task.status === 'ready'
+                ? {
+                    ...task,
+                    status: 'cleared',
+                  }
+                : task
+            )),
+            logs: [
+              ...currentState.logs,
+              buildLog(
+                `Season 4 model cycle complete. ${summary.tradesExecuted.toLocaleString('en-US')} trade${summary.tradesExecuted === 1 ? '' : 's'} executed.`,
+                summary.tradesExecuted > 0 ? 'success' : 'warning',
+              ),
+            ],
+          }))
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Season 4 model cycle failed.'
+          await mutateBatchState(batchId, (currentState) => ({
+            ...currentState,
+            status: 'failed',
+            failureMessage: message,
+            logs: [...currentState.logs, buildLog(`Season 4 model cycle failed: ${message}`, 'error')],
+          }))
+        }
+        return
+      }
+
       await clearBatch(batchId)
     }
   })().finally(() => {
@@ -1546,35 +2072,57 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
   }
 
   const runtimeConfig = await getMarketRuntimeConfig()
-  const candidates = pickDatasetTrials(input.dataset, await listOpenTrialCandidates(), runtimeConfig.toyTrialCount)
+  const [toyCandidates, liveCandidates] = await Promise.all([
+    listToyOpenTrialCandidates(),
+    listLiveOpenTrialCandidates(),
+  ])
+  const candidates = pickDatasetTrials(
+    input.dataset,
+    input.dataset === 'live' ? liveCandidates : toyCandidates,
+    runtimeConfig.toyTrialCount,
+  )
   const effectiveRunAt = input.runDate ?? new Date()
   const rowCreatedAt = new Date()
   const clearOrder = rotateModelOrder(normalizeRunDate(effectiveRunAt)).filter((modelId) => enabledModelIds.includes(modelId))
 
-  await ensureMarketAccounts()
-  await Promise.all(candidates.map((candidate) => ensureMarketPositions(candidate.market.id)))
+  const actorIdByModelId = input.dataset === 'live'
+    ? new Map(enabledModelIds.map((modelId) => [modelId, modelId] as const))
+    : await getModelActorIds(enabledModelIds)
+  const actorIds = input.dataset === 'live'
+    ? []
+    : Array.from(new Set(Array.from(actorIdByModelId.values())))
+  let portfolioByMarketActorKey = new Map<string, CandidatePortfolioState>()
 
-  const actorIdByModelId = await getModelActorIds(enabledModelIds)
-  const actorIds = Array.from(new Set(Array.from(actorIdByModelId.values())))
-  const marketIds = candidates.map((candidate) => candidate.market.id)
-  const [accounts, positions] = await Promise.all([
-    actorIds.length === 0
-      ? []
-      : db.query.marketAccounts.findMany({
-          where: inArray(marketAccounts.actorId, actorIds),
-        }),
-    actorIds.length === 0 || marketIds.length === 0
-      ? []
-      : db.query.marketPositions.findMany({
-          where: and(
-            inArray(marketPositions.actorId, actorIds),
-            inArray(marketPositions.marketId, marketIds),
-          ),
-        }),
-  ])
+  if (input.dataset === 'live') {
+    await syncSeason4OnchainIndex()
+    portfolioByMarketActorKey = await buildLivePortfolioState(candidates, actorIdByModelId)
+  } else {
+    await ensureMarketAccounts()
+    await Promise.all(candidates.map((candidate) => ensureMarketPositions(candidate.market.id)))
+    const marketIds = candidates.map((candidate) => candidate.market.id)
+    const [accounts, positions] = await Promise.all([
+      actorIds.length === 0
+        ? []
+        : db.query.marketAccounts.findMany({
+            where: inArray(marketAccounts.actorId, actorIds),
+          }),
+      actorIds.length === 0 || marketIds.length === 0
+        ? []
+        : db.query.marketPositions.findMany({
+            where: and(
+              inArray(marketPositions.actorId, actorIds),
+              inArray(marketPositions.marketId, marketIds),
+            ),
+          }),
+    ])
+    portfolioByMarketActorKey = buildLegacyPortfolioState({
+      candidates,
+      actorIds,
+      accounts,
+      positions,
+    })
+  }
 
-  const accountByActorId = new Map(accounts.map((account) => [account.actorId, account]))
-  const positionByMarketActorKey = new Map(positions.map((position) => [`${position.marketId}:${position.actorId}`, position]))
   const batchId = crypto.randomUUID()
   let state = buildInitialBatchState({
     batchId,
@@ -1583,8 +2131,7 @@ export async function createAiBatch(input: CreateAiBatchInput): Promise<AiBatchS
     clearOrder,
     trials: candidates,
     actorIdByModelId,
-    accountByActorId,
-    positionByMarketActorKey,
+    portfolioByMarketActorKey,
     runtimeConfig,
     createdAt: effectiveRunAt,
     apiConcurrency,
@@ -1645,7 +2192,23 @@ export async function exportAiSubscriptionPacket(batchId: string, modelId: AiSub
     throw new NotFoundError('Batch not found')
   }
 
-  const batch = parseBatchState(row)
+  let batch = parseBatchState(row)
+  if (batch.dataset === 'live') {
+    const refreshed = await refreshAndStoreLiveBatchPortfolio({
+      batchId,
+      reason: `Live cash refreshed before exporting ${getAiModelLabel(modelId)}.`,
+      shouldRefreshTask: (task) => (
+        task.modelId === modelId &&
+        !task.snapshotId &&
+        !task.decision &&
+        task.status !== 'running' &&
+        task.status !== 'ready' &&
+        task.status !== 'cleared'
+      ),
+    })
+    batch = refreshed.state ?? batch
+  }
+
   const packet = await buildExportPacket(batch, modelId)
 
   await mutateBatchState(batchId, (state) => ({
@@ -1703,6 +2266,35 @@ export async function importAiSubscriptionPacket(batchId: string, payload: {
   if (normalizedPayload.batchId !== batchId) {
     throw new ValidationError('Decision JSON batchId does not match the selected batch.')
   }
+  if (normalizedPayload.modelId !== modelId) {
+    throw new ValidationError(`Decision JSON modelId is ${normalizedPayload.modelId}, but this import is for ${modelId}.`)
+  }
+  if (normalizedPayload.decisions.length === 0) {
+    throw new ValidationError(`Decision JSON has no decisions for ${getAiModelLabel(modelId)}.`)
+  }
+
+  if (batch.dataset === 'live') {
+    const importedTaskKeys = new Set(normalizedPayload.decisions.map((item) => item.taskKey))
+    const refreshed = await refreshAndStoreLiveBatchPortfolio({
+      batchId,
+      reason: `Live cash refreshed before importing ${getAiModelLabel(modelId)}.`,
+      shouldRefreshTask: (task) => (
+        task.modelId === modelId &&
+        importedTaskKeys.has(task.taskKey) &&
+        !task.snapshotId &&
+        !task.decision &&
+        task.status !== 'running' &&
+        task.status !== 'ready' &&
+        task.status !== 'cleared'
+      ),
+    })
+
+    if (refreshed.changed) {
+      throw new ValidationError(
+        `The ${getAiModelLabel(modelId)} subscription packet was based on stale wallet balances. Export a fresh packet and rerun the prompt so the model sees current onchain cash.`,
+      )
+    }
+  }
 
   if (normalizedPayload !== payload) {
     await mutateBatchState(batchId, (state) => ({
@@ -1710,6 +2302,8 @@ export async function importAiSubscriptionPacket(batchId: string, payload: {
       logs: [...state.logs, buildLog(`${getAiModelLabel(modelId)} raw response normalized into import format.`, 'warning')],
     }))
   }
+
+  let updatedCount = 0
 
   for (const item of normalizedPayload.decisions) {
     const task = batch.tasks.find((entry) => entry.taskKey === item.taskKey && entry.modelId === modelId)
@@ -1756,6 +2350,11 @@ export async function importAiSubscriptionPacket(batchId: string, payload: {
           : entry
       )),
     }))
+    updatedCount += 1
+  }
+
+  if (updatedCount === 0) {
+    throw new ValidationError(`No pending ${getAiModelLabel(modelId)} tasks were updated. Check that the JSON belongs to the current batch and lane.`)
   }
 
   const final = await getBatchRowById(batchId)
@@ -1777,13 +2376,29 @@ export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
     throw new NotFoundError('Batch not found')
   }
 
-  const batch = parseBatchState(row)
+  let batch = parseBatchState(row)
   if (isTerminalBatchStatus(batch.status)) {
     throw new ConflictError('Batch is already closed.')
   }
 
   if (batch.tasks.length === 0) {
     throw new ValidationError('Batch has no tasks to run.')
+  }
+
+  if (batch.dataset === 'live') {
+    const refreshed = await refreshAndStoreLiveBatchPortfolio({
+      batchId,
+      reason: 'Live cash refreshed before starting the batch.',
+      shouldRefreshTask: (task) => (
+        !task.snapshotId &&
+        !task.decision &&
+        task.status !== 'running' &&
+        task.status !== 'ready' &&
+        task.status !== 'cleared' &&
+        (task.lane === 'api' || !task.exportedAt)
+      ),
+    })
+    batch = refreshed.state ?? batch
   }
 
   const next = await mutateBatchState(batchId, (state) => {
@@ -1799,7 +2414,9 @@ export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
       logs: [
         ...state.logs,
         buildLog(
-          'Batch collection started by admin. API models can now execute while subscription imports continue, and the shared AMM will clear once every lane is ready.',
+          batch.dataset === 'live'
+            ? 'Batch collection started by admin. API models can now execute while subscription imports continue, and the season 4 model cycle will run automatically once every lane is ready.'
+            : 'Batch collection started by admin. API models can now execute while subscription imports continue, and the shared AMM will clear once every lane is ready.',
           'warning',
         ),
       ],

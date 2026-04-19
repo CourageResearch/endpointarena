@@ -36,6 +36,12 @@ interface ModelDecisionGeneratorConfig {
   enabled: () => boolean
 }
 
+type AnthropicDecisionOptions = {
+  signal?: AbortSignal
+  providerModelId?: string
+  responseLabel?: string
+}
+
 interface OpenAICompatibleResponseFormat {
   type: 'json_object' | 'json_schema'
   json_schema?: {
@@ -215,23 +221,22 @@ function buildOutput(
   }
 }
 
-async function generateClaudeApiDecision(
+export async function generateAnthropicDecision(
   input: ModelDecisionInput,
-  options?: { signal?: AbortSignal },
+  options: AnthropicDecisionOptions = {},
 ): Promise<ModelDecisionGeneration> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prompt = buildModelDecisionPrompt(input)
   const message = await client.messages.create({
-    model: MODEL_PROVIDER_MODEL_IDS['claude-opus'],
+    model: options.providerModelId ?? MODEL_PROVIDER_MODEL_IDS['claude-opus'],
     max_tokens: 6000,
     messages: [{ role: 'user', content: prompt }],
     tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 7 }],
-    signal: options?.signal,
-  } as any)
+  } as any, options.signal ? { signal: options.signal } : undefined)
 
   const content = extractClaudeResponseText(message)
   if (!content) {
-    throw new Error('No text content in Claude Opus 4.6 response')
+    throw new Error(`No text content in ${options.responseLabel ?? 'Claude Opus'} response`)
   }
 
   const toolUseCount = Array.isArray(message?.content)
@@ -239,6 +244,16 @@ async function generateClaudeApiDecision(
     : 0
 
   return buildOutput(content, input, parseUsageFromClaudeMessage(message, toolUseCount))
+}
+
+async function generateClaudeApiDecision(
+  input: ModelDecisionInput,
+  options?: { signal?: AbortSignal },
+): Promise<ModelDecisionGeneration> {
+  return generateAnthropicDecision(input, {
+    signal: options?.signal,
+    responseLabel: 'Claude Opus',
+  })
 }
 
 async function generateClaudeDecision(

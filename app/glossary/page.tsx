@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WhiteNavbar } from '@/components/WhiteNavbar'
+import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import { GlossaryTermsPhase2Focused } from '@/components/GlossaryTermsPhase2Focused'
 import { buildPageMetadata } from '@/lib/seo'
@@ -13,7 +13,7 @@ export const metadata: Metadata = buildPageMetadata({
 export default function GlossaryPage() {
   return (
     <PageFrame>
-      <WhiteNavbar bgClass="bg-[#F5F2ED]/80" borderClass="border-[#e8ddd0]" />
+      <PublicNavbar />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         <header className="mb-10">

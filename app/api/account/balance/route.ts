@@ -1,24 +1,25 @@
-import { eq } from 'drizzle-orm'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
+import { requireSession } from '@/lib/auth/session'
 import { db, users } from '@/lib/db'
+import { getSeason4NavbarBalance } from '@/lib/season4-market-data'
+import { eq } from 'drizzle-orm'
 import { UnauthorizedError } from '@/lib/errors'
-import { ensureHumanTradingAccount, getCanonicalHumanStartingCash } from '@/lib/human-cash'
+
+export function buildSeason4AccountBalancePayload(season4Balance: number | null) {
+  return {
+    cashBalance: season4Balance ?? 0,
+  }
+}
 
 export async function GET() {
   const requestId = createRequestId()
 
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      throw new UnauthorizedError('Please sign in first')
-    }
+    const session = await requireSession()
 
     const user = await db.query.users.findFirst({
       columns: {
         id: true,
-        name: true,
       },
       where: eq(users.id, session.user.id),
     })
@@ -27,15 +28,8 @@ export async function GET() {
       throw new UnauthorizedError('User account not found')
     }
 
-    const { account } = await ensureHumanTradingAccount({
-      userId: user.id,
-      displayName: user.name,
-      startingCash: getCanonicalHumanStartingCash(),
-    })
-
-    return successResponse({
-      cashBalance: account.cashBalance,
-    }, {
+    const season4Balance = await getSeason4NavbarBalance(user.id)
+    return successResponse(buildSeason4AccountBalancePayload(season4Balance), {
       headers: {
         'Cache-Control': 'no-store',
         'X-Request-Id': requestId,

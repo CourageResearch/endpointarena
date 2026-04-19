@@ -1,7 +1,7 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db, trials, trialQuestions } from '@/lib/db'
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { NotFoundError } from '@/lib/errors'
 
@@ -51,8 +51,8 @@ export async function DELETE(
     revalidatePath('/admin')
     revalidatePath('/admin/ai')
     revalidatePath('/admin/trials')
-    revalidatePath('/admin/markets')
-    revalidatePath('/admin/outcomes')
+    revalidatePath('/admin/base')
+    revalidatePath('/admin/oracle')
     revalidatePath('/admin/predictions')
 
     return successResponse(

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import {

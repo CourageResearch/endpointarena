@@ -20,6 +20,10 @@ export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   email: text('email').unique(),
+  privyUserId: text('privy_user_id'),
+  embeddedWalletAddress: text('embedded_wallet_address'),
+  walletProvisioningStatus: text('wallet_provisioning_status').notNull().default('not_started'),
+  walletProvisionedAt: utcTimestamp('wallet_provisioned_at'),
   signupLocation: text('signup_location'),
   signupState: text('signup_state'),
   passwordHash: text('password_hash'),
@@ -36,10 +40,15 @@ export const users = pgTable('users', {
   xVerifiedPostId: text('x_verified_post_id'),
   xMustStayUntil: utcTimestamp('x_must_stay_until'),
 }, (table) => ({
+  privyUserIdUniqueIdx: uniqueIndex('users_privy_user_id_idx').on(table.privyUserId),
   xUserIdUniqueIdx: uniqueIndex('users_x_user_id_idx').on(table.xUserId),
   displayNameCheck: check(
     'users_display_name_check',
     sql`${table.name} ~ '^[A-Za-z0-9]{1,20}$'`
+  ),
+  walletProvisioningStatusCheck: check(
+    'users_wallet_provisioning_status_check',
+    sql`${table.walletProvisioningStatus} IN ('not_started', 'provisioning', 'provisioned', 'error')`
   ),
 }))
 
@@ -745,9 +754,10 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   runId: text('run_id').references(() => marketRuns.id, { onDelete: 'set null' }),
   runDate: utcDate('run_date').notNull(),
-  marketId: text('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
+  marketId: text('market_id').references(() => predictionMarkets.id, { onDelete: 'set null' }),
   trialQuestionId: text('trial_question_id').notNull().references(() => trialQuestions.id, { onDelete: 'cascade' }),
-  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
+  actorId: text('actor_id').references(() => marketActors.id, { onDelete: 'cascade' }),
+  modelKey: text('model_key'),
   runSource: text('run_source').notNull(),
   approvalProbability: real('approval_probability').notNull(),
   yesProbability: real('yes_probability'),
@@ -787,9 +797,19 @@ export const modelDecisionSnapshots = pgTable('model_decision_snapshots', {
     table.actorId,
     table.createdAt,
   ),
+  questionModelKeyCreatedIdx: index('model_decision_snapshots_question_model_key_created_idx').on(
+    table.trialQuestionId,
+    table.modelKey,
+    table.createdAt,
+  ),
   marketActorCreatedIdx: index('model_decision_snapshots_market_actor_created_idx').on(
     table.marketId,
     table.actorId,
+    table.createdAt,
+  ),
+  marketModelKeyCreatedIdx: index('model_decision_snapshots_market_model_key_created_idx').on(
+    table.marketId,
+    table.modelKey,
     table.createdAt,
   ),
   marketActorRunDateCreatedIdx: index('model_decision_snapshots_market_actor_run_date_created_idx').on(
@@ -919,6 +939,9 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   id: text('id').primaryKey(),
   openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
   toyTrialCount: integer('toy_trial_count').notNull().default(0),
+  season4MarketLiquidityBDisplay: real('season4_market_liquidity_b_display').notNull().default(25000),
+  season4HumanStartingBankrollDisplay: real('season4_human_starting_bankroll_display').notNull().default(1000),
+  season4StartingBankrollDisplay: real('season4_starting_bankroll_display').notNull().default(1000),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
@@ -929,6 +952,18 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   toyTrialCountCheck: check(
     'market_runtime_configs_toy_trial_count_check',
     sql`${table.toyTrialCount} >= 0`
+  ),
+  season4MarketLiquidityBDisplayCheck: check(
+    'market_runtime_configs_s4_market_liquidity_b_check',
+    sql`${table.season4MarketLiquidityBDisplay} > 0`
+  ),
+  season4HumanStartingBankrollDisplayCheck: check(
+    'market_runtime_configs_s4_human_bankroll_display_check',
+    sql`${table.season4HumanStartingBankrollDisplay} >= 0`
+  ),
+  season4StartingBankrollDisplayCheck: check(
+    'market_runtime_configs_season4_starting_bankroll_display_check',
+    sql`${table.season4StartingBankrollDisplay} >= 0`
   ),
 }))
 
@@ -1198,6 +1233,228 @@ export const marketDailySnapshotsRelations = relations(marketDailySnapshots, ({ 
   }),
 }))
 
+export const onchainUserWallets = pgTable('onchain_user_wallets', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  privyUserId: text('privy_user_id'),
+  chainId: integer('chain_id').notNull().default(84532),
+  walletAddress: text('wallet_address'),
+  provisioningStatus: text('provisioning_status').notNull().default('pending'),
+  firstClaimedAt: utcTimestamp('first_claimed_at'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  userUniqueIdx: uniqueIndex('onchain_user_wallets_user_id_idx').on(table.userId),
+  walletUniqueIdx: uniqueIndex('onchain_user_wallets_wallet_address_idx').on(table.walletAddress),
+  chainIdCheck: check(
+    'onchain_user_wallets_chain_id_check',
+    sql`${table.chainId} > 0`
+  ),
+  provisioningStatusCheck: check(
+    'onchain_user_wallets_provisioning_status_check',
+    sql`${table.provisioningStatus} IN ('pending', 'provisioning', 'ready', 'error')`
+  ),
+}))
+
+export const onchainModelWallets = pgTable('onchain_model_wallets', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  modelKey: text('model_key').notNull(),
+  displayName: text('display_name').notNull(),
+  chainId: integer('chain_id').notNull().default(84532),
+  walletAddress: text('wallet_address'),
+  fundingStatus: text('funding_status').notNull().default('pending'),
+  bankrollDisplay: real('bankroll_display').notNull().default(0),
+  fundedAt: utcTimestamp('funded_at'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  modelKeyUniqueIdx: uniqueIndex('onchain_model_wallets_model_key_idx').on(table.modelKey),
+  walletUniqueIdx: uniqueIndex('onchain_model_wallets_wallet_address_idx').on(table.walletAddress),
+  chainIdCheck: check(
+    'onchain_model_wallets_chain_id_check',
+    sql`${table.chainId} > 0`
+  ),
+  fundingStatusCheck: check(
+    'onchain_model_wallets_funding_status_check',
+    sql`${table.fundingStatus} IN ('pending', 'funded', 'error')`
+  ),
+  bankrollDisplayCheck: check(
+    'onchain_model_wallets_bankroll_display_check',
+    sql`${table.bankrollDisplay} >= 0`
+  ),
+}))
+
+export const onchainMarkets = pgTable('onchain_markets', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trialQuestionId: text('trial_question_id').references(() => trialQuestions.id, { onDelete: 'set null' }),
+  marketSlug: text('market_slug').notNull(),
+  chainId: integer('chain_id').notNull().default(84532),
+  managerAddress: text('manager_address').notNull(),
+  onchainMarketId: text('onchain_market_id'),
+  title: text('title').notNull(),
+  metadataUri: text('metadata_uri'),
+  collateralTokenAddress: text('collateral_token_address'),
+  executionMode: text('execution_mode').notNull().default('onchain_lmsr'),
+  positionModel: text('position_model').notNull().default('onchain_app_restricted'),
+  status: text('status').notNull().default('draft'),
+  closeTime: utcTimestamp('close_time'),
+  deployTxHash: text('deploy_tx_hash'),
+  resolveTxHash: text('resolve_tx_hash'),
+  resolvedOutcome: text('resolved_outcome'),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  marketSlugUniqueIdx: uniqueIndex('onchain_markets_market_slug_idx').on(table.marketSlug),
+  marketAddressUniqueIdx: uniqueIndex('onchain_markets_chain_market_idx').on(table.chainId, table.managerAddress, table.onchainMarketId),
+  chainIdCheck: check(
+    'onchain_markets_chain_id_check',
+    sql`${table.chainId} > 0`
+  ),
+  executionModeCheck: check(
+    'onchain_markets_execution_mode_check',
+    sql`${table.executionMode} = 'onchain_lmsr'`
+  ),
+  positionModelCheck: check(
+    'onchain_markets_position_model_check',
+    sql`${table.positionModel} = 'onchain_app_restricted'`
+  ),
+  statusCheck: check(
+    'onchain_markets_status_check',
+    sql`${table.status} IN ('draft', 'deployed', 'closed', 'resolved', 'archived')`
+  ),
+  resolvedOutcomeCheck: check(
+    'onchain_markets_resolved_outcome_check',
+    sql`${table.resolvedOutcome} IS NULL OR ${table.resolvedOutcome} IN ('YES', 'NO')`
+  ),
+}))
+
+export const onchainFaucetClaims = pgTable('onchain_faucet_claims', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  walletAddress: text('wallet_address').notNull(),
+  chainId: integer('chain_id').notNull().default(84532),
+  amountAtomic: text('amount_atomic').notNull(),
+  amountDisplay: real('amount_display').notNull(),
+  status: text('status').notNull().default('requested'),
+  txHash: text('tx_hash'),
+  errorMessage: text('error_message'),
+  requestedAt: utcTimestamp('requested_at').notNull().$defaultFn(() => new Date()),
+  processedAt: utcTimestamp('processed_at'),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  walletRequestedAtIdx: index('onchain_faucet_claims_wallet_requested_at_idx').on(table.walletAddress, table.requestedAt),
+  txHashIdx: index('onchain_faucet_claims_tx_hash_idx').on(table.txHash),
+  amountDisplayCheck: check(
+    'onchain_faucet_claims_amount_display_check',
+    sql`${table.amountDisplay} > 0`
+  ),
+  statusCheck: check(
+    'onchain_faucet_claims_status_check',
+    sql`${table.status} IN ('requested', 'submitted', 'confirmed', 'failed', 'skipped')`
+  ),
+}))
+
+export const onchainIndexerCursors = pgTable('onchain_indexer_cursors', {
+  id: text('id').primaryKey(),
+  chainId: integer('chain_id').notNull().default(84532),
+  contractAddress: text('contract_address').notNull(),
+  lastSyncedBlock: text('last_synced_block').notNull().default('0'),
+  latestSeenBlock: text('latest_seen_block').notNull().default('0'),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  contractUniqueIdx: uniqueIndex('onchain_indexer_cursors_contract_idx').on(table.chainId, table.contractAddress),
+  chainIdCheck: check(
+    'onchain_indexer_cursors_chain_id_check',
+    sql`${table.chainId} > 0`
+  ),
+}))
+
+export const onchainEvents = pgTable('onchain_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  chainId: integer('chain_id').notNull().default(84532),
+  contractAddress: text('contract_address').notNull(),
+  txHash: text('tx_hash').notNull(),
+  blockHash: text('block_hash'),
+  blockNumber: text('block_number').notNull(),
+  logIndex: integer('log_index').notNull(),
+  eventName: text('event_name').notNull(),
+  marketRef: text('market_ref'),
+  walletAddress: text('wallet_address'),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  txLogUniqueIdx: uniqueIndex('onchain_events_tx_log_idx').on(table.chainId, table.txHash, table.logIndex),
+  contractBlockIdx: index('onchain_events_contract_block_idx').on(table.contractAddress, table.blockNumber),
+  eventNameIdx: index('onchain_events_event_name_idx').on(table.eventName),
+  chainIdCheck: check(
+    'onchain_events_chain_id_check',
+    sql`${table.chainId} > 0`
+  ),
+  logIndexCheck: check(
+    'onchain_events_log_index_check',
+    sql`${table.logIndex} >= 0`
+  ),
+}))
+
+export const onchainBalances = pgTable('onchain_balances', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  chainId: integer('chain_id').notNull().default(84532),
+  marketRef: text('market_ref').notNull().default('collateral'),
+  walletAddress: text('wallet_address').notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  modelKey: text('model_key'),
+  collateralDisplay: real('collateral_display').notNull().default(0),
+  yesShares: real('yes_shares').notNull().default(0),
+  noShares: real('no_shares').notNull().default(0),
+  lastIndexedBlock: text('last_indexed_block').notNull().default('0'),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  walletMarketUniqueIdx: uniqueIndex('onchain_balances_wallet_market_idx').on(table.chainId, table.walletAddress, table.marketRef),
+  walletIdx: index('onchain_balances_wallet_idx').on(table.walletAddress),
+  userIdx: index('onchain_balances_user_idx').on(table.userId),
+  modelKeyIdx: index('onchain_balances_model_key_idx').on(table.modelKey),
+  collateralCheck: check(
+    'onchain_balances_collateral_display_check',
+    sql`${table.collateralDisplay} >= 0`
+  ),
+  yesSharesCheck: check(
+    'onchain_balances_yes_shares_check',
+    sql`${table.yesShares} >= 0`
+  ),
+  noSharesCheck: check(
+    'onchain_balances_no_shares_check',
+    sql`${table.noShares} >= 0`
+  ),
+}))
+
+export const onchainUserWalletsRelations = relations(onchainUserWallets, ({ one }) => ({
+  user: one(users, {
+    fields: [onchainUserWallets.userId],
+    references: [users.id],
+  }),
+}))
+
+export const onchainMarketsRelations = relations(onchainMarkets, ({ one }) => ({
+  trialQuestion: one(trialQuestions, {
+    fields: [onchainMarkets.trialQuestionId],
+    references: [trialQuestions.id],
+  }),
+}))
+
+export const onchainFaucetClaimsRelations = relations(onchainFaucetClaims, ({ one }) => ({
+  user: one(users, {
+    fields: [onchainFaucetClaims.userId],
+    references: [users.id],
+  }),
+}))
+
+export const onchainBalancesRelations = relations(onchainBalances, ({ one }) => ({
+  user: one(users, {
+    fields: [onchainBalances.userId],
+    references: [users.id],
+  }),
+}))
+
 export type User = typeof users.$inferSelect
 export type Trial = typeof trials.$inferSelect
 export type NewTrial = typeof trials.$inferInsert
@@ -1251,3 +1508,17 @@ export type MarketDailySnapshot = typeof marketDailySnapshots.$inferSelect
 export type NewMarketDailySnapshot = typeof marketDailySnapshots.$inferInsert
 export type MarketRuntimeConfig = typeof marketRuntimeConfigs.$inferSelect
 export type NewMarketRuntimeConfig = typeof marketRuntimeConfigs.$inferInsert
+export type OnchainUserWallet = typeof onchainUserWallets.$inferSelect
+export type NewOnchainUserWallet = typeof onchainUserWallets.$inferInsert
+export type OnchainModelWallet = typeof onchainModelWallets.$inferSelect
+export type NewOnchainModelWallet = typeof onchainModelWallets.$inferInsert
+export type OnchainMarket = typeof onchainMarkets.$inferSelect
+export type NewOnchainMarket = typeof onchainMarkets.$inferInsert
+export type OnchainFaucetClaim = typeof onchainFaucetClaims.$inferSelect
+export type NewOnchainFaucetClaim = typeof onchainFaucetClaims.$inferInsert
+export type OnchainIndexerCursor = typeof onchainIndexerCursors.$inferSelect
+export type NewOnchainIndexerCursor = typeof onchainIndexerCursors.$inferInsert
+export type OnchainEvent = typeof onchainEvents.$inferSelect
+export type NewOnchainEvent = typeof onchainEvents.$inferInsert
+export type OnchainBalance = typeof onchainBalances.$inferSelect
+export type NewOnchainBalance = typeof onchainBalances.$inferInsert

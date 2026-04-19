@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
-import { sendAnalyticsEvents } from '@/lib/analytics-events'
+import {
+  isLocalhostHostname,
+  normalizeAnalyticsPathname,
+  sendAnalyticsEvents,
+  shouldTrackPublicAnalyticsPath,
+} from '@/lib/analytics-events'
 
 type AnalyticsEvent = {
   type: 'pageview'
@@ -12,10 +17,6 @@ type AnalyticsEvent = {
 
 const FLUSH_DELAY = 2000
 const BATCH_MAX = 10
-
-function isLocalhostHostname(hostname: string) {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
-}
 
 export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -55,10 +56,15 @@ export function AnalyticsTracker({ children }: { children: React.ReactNode }) {
   // Track page views on route change (skip admin pages)
   useEffect(() => {
     if (isLocalhost) return
-    if (pathname.startsWith('/admin')) return
+    if (!shouldTrackPublicAnalyticsPath(pathname)) return
+    if (typeof document !== 'undefined' && document.querySelector('[data-endpoint-page-kind="not-found"]')) {
+      return
+    }
+    const normalizedPath = normalizeAnalyticsPathname(pathname)
+    if (!normalizedPath) return
     enqueue({
       type: 'pageview',
-      url: pathname,
+      url: normalizedPath,
       referrer: typeof document !== 'undefined' ? document.referrer : undefined,
     })
   }, [isLocalhost, pathname, enqueue])

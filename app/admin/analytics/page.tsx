@@ -2,10 +2,7 @@ import { db } from '@/lib/db'
 import { analyticsEvents } from '@/lib/schema'
 import { gte } from 'drizzle-orm'
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { redirect } from 'next/navigation'
-import { ADMIN_EMAIL } from '@/lib/constants'
+import { redirectIfNotAdmin } from '@/lib/admin-auth'
 import { countApproxUniqueVisitors } from '@/lib/analytics-events'
 import {
   ADMIN_ACTIVITY_DAY_FILTERS,
@@ -35,6 +32,7 @@ async function getAnalyticsData(days: number) {
 
   const pageviews = allEvents.filter(e => e.type === 'pageview')
   const clicks = allEvents.filter(e => e.type === 'click')
+  const notFoundEvents = allEvents.filter(e => e.type === 'not_found')
 
   // Unique visitors (distinct sessionHash)
   const uniqueVisitors = countApproxUniqueVisitors(pageviews)
@@ -68,6 +66,42 @@ async function getAnalyticsData(days: number) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15)
     .map(([url, count]) => ({ url, count, pct: pageviews.length > 0 ? ((count / pageviews.length) * 100).toFixed(1) : '0' }))
+
+  const notFoundCounts = new Map<string, { count: number; referrers: Map<string, Date> }>()
+  for (const event of notFoundEvents) {
+    const key = event.url
+    if (!key) continue
+
+    const existing = notFoundCounts.get(key) ?? {
+      count: 0,
+      referrers: new Map<string, Date>(),
+    }
+
+    existing.count += 1
+
+    if (event.referrer) {
+      const previousSeenAt = existing.referrers.get(event.referrer)
+      const seenAt = event.createdAt instanceof Date ? event.createdAt : new Date(0)
+      if (!previousSeenAt || previousSeenAt < seenAt) {
+        existing.referrers.set(event.referrer, seenAt)
+      }
+    }
+
+    notFoundCounts.set(key, existing)
+  }
+
+  const topMissingPages = Array.from(notFoundCounts.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 15)
+    .map(([url, value]) => ({
+      url,
+      count: value.count,
+      pct: notFoundEvents.length > 0 ? ((value.count / notFoundEvents.length) * 100).toFixed(1) : '0',
+      recentReferrers: Array.from(value.referrers.entries())
+        .sort((a, b) => b[1].getTime() - a[1].getTime())
+        .slice(0, 3)
+        .map(([referrer]) => referrer),
+    }))
 
   // Top clicked elements
   const clickCounts = new Map<string, { count: number; url: string }>()
@@ -130,9 +164,11 @@ async function getAnalyticsData(days: number) {
     totalPageViews: pageviews.length,
     uniqueVisitors,
     totalClicks: clicks.length,
+    totalNotFoundHits: notFoundEvents.length,
     uniquePages,
     dailyViews,
     topPages,
+    topMissingPages,
     topClicks,
     topReferrers,
     topCountries,
@@ -145,11 +181,7 @@ export default async function AnalyticsPage({
 }: {
   searchParams?: Promise<PageSearchParams>
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    redirect('/login')
-  }
-
+  await redirectIfNotAdmin('/admin/analytics')
   const resolvedSearchParams = (await searchParams) ?? {}
   const days = parseAdminDayFilter(resolvedSearchParams.days, ADMIN_ACTIVITY_DAY_FILTERS, 7)
   const data = await getAnalyticsData(days)
@@ -182,6 +214,51 @@ export default async function AnalyticsPage({
               <div className="text-2xl font-bold text-[#EF6F67]">{data.uniquePages}</div>
               <div className="text-[#EF6F67]/60 text-xs">Pages Tracked</div>
             </div>
+            <div className="bg-white/80 border border-[#c43a2b]/30 rounded-none p-3">
+              <div className="text-2xl font-bold text-[#c43a2b]">{data.totalNotFoundHits.toLocaleString()}</div>
+              <div className="text-[#c43a2b]/70 text-xs">404 Hits</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Missing Pages */}
+        <section className="mb-8">
+          <h2 className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em] mb-3">Missing Pages</h2>
+          <div className="bg-white/80 border border-[#e8ddd0] rounded-none overflow-hidden">
+            {data.topMissingPages.length === 0 ? (
+              <div className="p-4 text-[#8a8075] text-sm">No missing-page hits yet</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#e8ddd0]">
+                    <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Path</th>
+                    <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Hits</th>
+                    <th className="text-right text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">%</th>
+                    <th className="text-left text-[#b5aa9e] text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2">Recent Referrers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.topMissingPages.map((page) => (
+                    <tr key={page.url} className="border-b border-[#e8ddd0] hover:bg-[#f3ebe0]/30">
+                      <td className="px-4 py-2 text-[#8a8075] font-mono text-xs">{page.url}</td>
+                      <td className="px-4 py-2 text-right text-[#1a1a1a]">{page.count.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right text-[#8a8075]">{page.pct}%</td>
+                      <td className="px-4 py-2 text-[#8a8075] text-xs">
+                        {page.recentReferrers.length > 0 ? (
+                          <div className="space-y-1">
+                            {page.recentReferrers.map((referrer) => (
+                              <div key={`${page.url}-${referrer}`} className="break-all">{referrer}</div>
+                            ))}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 

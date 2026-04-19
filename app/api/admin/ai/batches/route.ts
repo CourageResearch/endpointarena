@@ -1,14 +1,13 @@
-import { ensureAdmin } from '@/lib/auth'
+import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { createAiBatch } from '@/lib/admin-ai'
 import {
   AI_API_CONCURRENCY_MAX,
   AI_API_CONCURRENCY_MIN,
   isAiApiConcurrency,
-  isAiDataset,
 } from '@/lib/admin-ai-shared'
+import { validateRequestedAiDatasetForActiveDatabase } from '@/lib/admin-ai-active-dataset'
 import { isModelId } from '@/lib/constants'
-import { getActiveDatabaseTarget } from '@/lib/database-target'
 import { ValidationError } from '@/lib/errors'
 
 type CreateBatchBody = {
@@ -62,10 +61,7 @@ export async function POST(request: Request) {
     await ensureAdmin()
 
     const body = await parseJsonBody<CreateBatchBody>(request)
-    const dataset = typeof body.dataset === 'string' ? body.dataset : ''
-    if (!isAiDataset(dataset)) {
-      throw new ValidationError('dataset must be toy or live')
-    }
+    const dataset = validateRequestedAiDatasetForActiveDatabase(body.dataset)
 
     const rawEnabledModelIds = Array.isArray(body.enabledModelIds)
       ? body.enabledModelIds.filter((value): value is string => typeof value === 'string').map((value) => value.trim())
@@ -79,7 +75,7 @@ export async function POST(request: Request) {
       throw new ValidationError(`apiConcurrency must be an integer between ${AI_API_CONCURRENCY_MIN} and ${AI_API_CONCURRENCY_MAX}`)
     }
     const runDate = parseToyBatchRunDate(body.runDate)
-    if (runDate && (dataset !== 'toy' || getActiveDatabaseTarget() !== 'toy')) {
+    if (runDate && dataset !== 'toy') {
       throw new ValidationError('runDate backtesting is only available when Toy DB is active.')
     }
 

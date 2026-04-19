@@ -177,20 +177,22 @@ async function sendAdminNotification({
   email,
   message,
   createdAt,
+  requestId,
 }: {
   kind: ContactKind
   name: string
   email: string
   message: string
   createdAt: Date
+  requestId: string
 }): Promise<boolean> {
   if (!resend) {
-    console.warn('Contact notification email skipped: RESEND_API_KEY is not configured')
+    console.warn(`[contact:${requestId}] Contact notification email skipped: RESEND_API_KEY is not configured`)
     return false
   }
 
   if (!CONTACT_ADMIN_EMAIL) {
-    console.warn('Contact notification email skipped: CONTACT_ADMIN_EMAIL is not configured')
+    console.warn(`[contact:${requestId}] Contact notification email skipped: CONTACT_ADMIN_EMAIL is not configured`)
     return false
   }
 
@@ -210,13 +212,13 @@ async function sendAdminNotification({
     })
 
     if (result.error) {
-      console.error('Contact notification email failed:', result.error)
+      console.error(`[contact:${requestId}] Contact notification email failed:`, result.error)
       return false
     }
 
     return true
   } catch (error) {
-    console.error('Contact notification email failed:', error)
+    console.error(`[contact:${requestId}] Contact notification email failed:`, error)
     return false
   }
 }
@@ -249,12 +251,18 @@ export async function POST(request: NextRequest) {
       email,
       message,
       createdAt,
+      requestId,
     })
 
     return successResponse(
-      {
+      adminEmailSent ? {
         ok: true,
         adminEmailSent,
+      } : {
+        ok: true,
+        adminEmailSent: false,
+        warningCode: 'operator_notification_failed' as const,
+        requestId,
       },
       {
         headers: {

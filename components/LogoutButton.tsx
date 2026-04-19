@@ -1,13 +1,15 @@
 'use client'
 
-import { signOut } from 'next-auth/react'
+import { useAuth } from '@/lib/auth/use-auth'
 
 export function LogoutButton() {
+  const { signOut } = useAuth()
+
   const handleLogout = () => {
     const callbackUrl = typeof window !== 'undefined'
       ? `${window.location.origin}/`
       : '/'
-    signOut({ callbackUrl })
+    void signOut(callbackUrl)
   }
 
   return (

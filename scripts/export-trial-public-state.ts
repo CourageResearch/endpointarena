@@ -443,6 +443,7 @@ async function main() {
           mds.market_id,
           mds.trial_question_id,
           mds.actor_id,
+          mds.model_key,
           mds.run_source,
           mds.approval_probability,
           mds.yes_probability,
@@ -475,9 +476,9 @@ async function main() {
           mds.linked_market_action_id,
           mds.created_at
         from model_decision_snapshots mds
-        join market_actors actor on actor.id = mds.actor_id
+        left join market_actors actor on actor.id = mds.actor_id
         where mds.trial_question_id is not null
-          and actor.actor_type = 'model'
+          and (actor.actor_type = 'model' or mds.model_key is not null)
         order by mds.created_at, mds.id
       `,
       sql<TrialMarketPositionBundleRow[]>`
@@ -531,6 +532,7 @@ async function main() {
           from model_decision_snapshots mds
           join market_actors actor on actor.id = mds.actor_id
           where mds.trial_question_id is not null
+            and mds.actor_id is not null
             and actor.actor_type = 'model'
           union
           select distinct mrl.actor_id as actor_id

@@ -1,34 +1,11 @@
-import { NextRequest } from 'next/server'
-import { ensureAdmin } from '@/lib/auth'
-import { createRequestId, errorResponse, parseOptionalJsonBody, successResponse } from '@/lib/api-response'
+import { createRequestId, errorResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
-import { requestDailyRunStop } from '@/lib/markets/run-control'
 
-export async function POST(request: NextRequest) {
+function buildLegacyDailyRunCancelError() {
+  return new ValidationError('Legacy offchain daily trial run controls are retired in season 4. Use the season 4 model-cycle controls from /admin/base instead.')
+}
+
+export async function POST() {
   const requestId = createRequestId()
-
-  try {
-    await ensureAdmin()
-
-    const body = await parseOptionalJsonBody<{ runId?: string }>(request, {})
-    const runId = typeof body.runId === 'string' && body.runId.trim().length > 0
-      ? body.runId.trim()
-      : undefined
-
-    const stoppedRunId = await requestDailyRunStop(runId)
-    if (!stoppedRunId) {
-      throw new ValidationError('No running daily trial cycle was found to stop.')
-    }
-
-    return successResponse({
-      runId: stoppedRunId,
-      message: 'Stop requested. The current in-flight model step will finish, then the daily trial cycle will halt.',
-    }, {
-      headers: {
-        'X-Request-Id': requestId,
-      },
-    })
-  } catch (error) {
-    return errorResponse(error, requestId, 'Failed to stop daily trial cycle')
-  }
+  return errorResponse(buildLegacyDailyRunCancelError(), requestId, 'Legacy daily run control route is disabled')
 }

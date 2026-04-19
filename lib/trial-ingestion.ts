@@ -21,8 +21,6 @@ import {
   trialSyncRuns,
   trialSyncRunItems,
 } from '@/lib/db'
-import { openMarketForTrialQuestion } from '@/lib/markets/engine'
-import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
 
@@ -65,6 +63,10 @@ export type TrialIngestionSummary = {
 }
 
 export type IngestTrialOptions = {
+  /**
+   * @deprecated Season 4 trial ingestion never opens legacy offchain markets.
+   * This option is accepted for old callers, but it no longer changes behavior.
+   */
   maxMarketsToOpen?: number
   reset?: boolean
   preserveExistingSponsorTickerOnNull?: boolean
@@ -323,20 +325,8 @@ export async function ingestTrials(
 
       summary.questionsUpserted += 1
 
-      if (!definition.isBettable || definition.status !== 'live') {
-        continue
-      }
-
-      const existingMarket = await db.query.predictionMarkets.findFirst({
-        columns: predictionMarketColumns,
-        where: eq(predictionMarkets.trialQuestionId, question.id),
-      })
-      const canOpenAnotherMarket = options.maxMarketsToOpen == null || summary.marketsOpened < options.maxMarketsToOpen
-
-      if (!existingMarket && canOpenAnotherMarket && shouldOpenMarketForTrial(row, now)) {
-        await openMarketForTrialQuestion(question.id)
-        summary.marketsOpened += 1
-      }
+      // Season 4 sync is question-only. Linked onchain markets are created
+      // through manual/admin Season 4 intake, never by the legacy LMSR opener.
     }
   }
 

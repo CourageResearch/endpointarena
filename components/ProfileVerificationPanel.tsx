@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { getSession, signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import { XInlineMark, XLogoMark } from '@/components/XMark'
+import { useAuth } from '@/lib/auth/use-auth'
 import { getApiErrorMessage } from '@/lib/client-api'
 
 type ConnectionStatus = {
   authenticated: boolean
+  oauthConfigured: boolean
   connected: boolean
   requiresReconnect: boolean
   xCheckState: 'ok' | 'requires_reconnect' | 'temporarily_unavailable'
@@ -22,13 +22,12 @@ function normalizeCallbackUrl(raw: string | null): string {
 }
 
 export function ProfileVerificationPanel() {
-  const router = useRouter()
+  const { fetchWithAuth } = useAuth()
   const [callbackUrl, setCallbackUrl] = useState('/trials')
   const [localhostRedirectUrl, setLocalhostRedirectUrl] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusData, setStatusData] = useState<ConnectionStatus | null>(null)
   const [error, setError] = useState<ReactNode>('')
-  const [xAuthAvailable, setXAuthAvailable] = useState<boolean | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -45,35 +44,34 @@ export function ProfileVerificationPanel() {
           <XInlineMark className="mx-0.5" /> login consent completed but callback failed. Check OAuth2 client secret and redirect URI in <XInlineMark className="mx-0.5" /> app settings.
         </>,
       )
+    } else if (oauthError === 'XAuthUnavailable') {
+      setError(
+        <>
+          <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
+        </>,
+      )
     } else if (oauthError === 'AccessDenied') {
       setError(
         <>
           <XInlineMark className="mx-0.5" /> authorization was cancelled. Authorize the app to continue.
         </>,
       )
+    } else if (oauthError === 'XAccountAlreadyLinked') {
+      setError(
+        <>
+          That <XInlineMark className="mx-0.5" /> account is already linked to another Endpoint Arena user.
+        </>,
+      )
+    } else if (oauthError === 'XConnectionFailed') {
+      setError(
+        <>
+          We couldn&apos;t finish reconnecting <XInlineMark className="mx-0.5" />. Please try again.
+        </>,
+      )
+    } else if (oauthError === 'XSessionExpired') {
+      setError('Please sign in again before reconnecting your X account.')
     } else if (oauthError) {
       setError(`Authentication error: ${oauthError}`)
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadProviders() {
-      try {
-        const response = await fetch('/api/auth/providers', { cache: 'no-store' })
-        const payload = await response.json().catch(() => ({}))
-        if (!cancelled) {
-          setXAuthAvailable(Boolean(payload && typeof payload === 'object' && 'twitter' in payload))
-        }
-      } catch {
-        if (!cancelled) setXAuthAvailable(false)
-      }
-    }
-
-    void loadProviders()
-    return () => {
-      cancelled = true
     }
   }, [])
 
@@ -83,7 +81,7 @@ export function ProfileVerificationPanel() {
     async function loadStatus() {
       setStatusLoading(true)
       try {
-        const response = await fetch('/api/x-connection/status', {
+        const response = await fetchWithAuth('/api/x-connection/status', {
           cache: 'no-store',
         })
         const payload = await response.json().catch(() => ({}))
@@ -108,10 +106,10 @@ export function ProfileVerificationPanel() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [fetchWithAuth])
 
   const startXConnection = async () => {
-    if (xAuthAvailable === false) {
+    if (statusData?.oauthConfigured === false) {
       setError(
         <>
           <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
@@ -120,20 +118,12 @@ export function ProfileVerificationPanel() {
       return
     }
 
-    const session = await getSession()
-    if (!session?.user?.id) {
-      router.push(`/login?error=XSessionExpired&callbackUrl=${encodeURIComponent(callbackUrl)}`)
-      return
-    }
-
     setError('')
-    await signIn('twitter', {
-      callbackUrl: `/profile?callbackUrl=${encodeURIComponent(callbackUrl)}`,
-    })
+    window.location.assign(`/api/x-connection/start?callbackUrl=${encodeURIComponent(callbackUrl)}`)
   }
 
   useEffect(() => {
-    if (xAuthAvailable === null || window.location.hostname === 'localhost') return
+    if (window.location.hostname === 'localhost') return
 
     const params = new URLSearchParams(window.location.search)
     if (params.get('connectX') !== '1') return
@@ -144,10 +134,10 @@ export function ProfileVerificationPanel() {
     window.history.replaceState(null, '', nextUrl)
 
     void startXConnection()
-  }, [xAuthAvailable, callbackUrl, router])
+  }, [callbackUrl, statusData?.oauthConfigured])
 
   const handleConnectX = async () => {
-    if (xAuthAvailable === false) {
+    if (statusData?.oauthConfigured === false) {
       setError(
         <>
           <XInlineMark className="mx-0.5" /> login is not configured yet. Add <code className="font-mono text-[0.92em]">X_CLIENT_ID</code> and <code className="font-mono text-[0.92em]">X_CLIENT_SECRET</code>.
@@ -196,7 +186,7 @@ export function ProfileVerificationPanel() {
           <button
             type="button"
             onClick={handleConnectX}
-            disabled={xAuthAvailable === false}
+            disabled={statusData?.oauthConfigured === false}
             className="mt-3 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Reconnect <XInlineMark className="mx-1" logoClassName="h-[0.9em] w-[0.9em]" /> account
@@ -218,13 +208,13 @@ export function ProfileVerificationPanel() {
           <button
             type="button"
             onClick={handleConnectX}
-            disabled={xAuthAvailable === false}
+            disabled={statusData?.oauthConfigured === false}
             className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span aria-hidden="true" className="mr-2 inline-flex h-4 w-4 items-center justify-center">
               <XLogoMark className="h-4 w-4" />
             </span>
-            {xAuthAvailable === false ? (
+            {statusData?.oauthConfigured === false ? (
               'Login unavailable'
             ) : localhostRedirectUrl ? (
               'Open 127.0.0.1 and continue'
@@ -251,7 +241,7 @@ export function ProfileVerificationPanel() {
           <button
             type="button"
             onClick={handleConnectX}
-            disabled={xAuthAvailable === false}
+            disabled={statusData?.oauthConfigured === false}
             className="mt-4 inline-flex items-center rounded-sm border border-[#d9cdbf] bg-[#fdfbf8] px-4 py-2 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f5eee5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {statusData.requiresReconnect ? 'Reconnect account' : 'Reconnect or switch account'}

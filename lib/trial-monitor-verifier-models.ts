@@ -1,4 +1,5 @@
 import { ConfigurationError, ValidationError } from '@/lib/errors'
+import { MODEL_REGISTRY } from '@/lib/model-registry'
 
 export type TrialMonitorVerifierModelKey =
   | 'gpt-5.4'
@@ -25,40 +26,25 @@ export type TrialMonitorVerifierOption = {
   available: boolean
 }
 
-const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMonitorVerifierSpec> = {
-  'gpt-5.4': {
-    key: 'gpt-5.4',
-    label: 'GPT-5.4 (OpenAI)',
-    provider: 'openai',
-    providerLabel: 'OpenAI',
-    envKey: 'OPENAI_API_KEY',
-    model: 'gpt-5.4',
-  },
-  'grok-4.20': {
-    key: 'grok-4.20',
-    label: 'Grok 4.20 (xAI)',
-    provider: 'xai',
-    providerLabel: 'xAI',
-    envKey: 'XAI_API_KEY',
-    model: 'grok-4.20-reasoning',
-  },
-  'gemini-3-pro': {
-    key: 'gemini-3-pro',
-    label: 'Gemini 3.1 Pro (Google)',
-    provider: 'google',
-    providerLabel: 'Google',
-    envKey: 'GOOGLE_API_KEY',
-    model: 'gemini-3.1-pro-preview',
-  },
-  'claude-opus': {
-    key: 'claude-opus',
-    label: 'Claude Opus 4.6 (Anthropic)',
-    provider: 'anthropic',
-    providerLabel: 'Anthropic',
-    envKey: 'ANTHROPIC_API_KEY',
-    model: 'claude-opus-4-6',
-  },
-}
+const TRIAL_MONITOR_VERIFIER_SPECS: Record<TrialMonitorVerifierModelKey, TrialMonitorVerifierSpec> = Object.fromEntries(
+  (['gpt-5.4', 'grok-4.20', 'gemini-3-pro', 'claude-opus'] as const).map((key) => {
+    const entry = MODEL_REGISTRY[key]
+    const verifier = entry.verifier
+    if (!verifier) {
+      throw new Error(`Missing verifier metadata for ${key}`)
+    }
+
+    return [key, {
+      key,
+      label: `${entry.fullName} (${verifier.providerLabel})`,
+      provider: verifier.provider,
+      providerLabel: verifier.providerLabel,
+      envKey: verifier.envKey,
+      model: entry.runtime.providerModelId,
+      selectable: 'selectable' in verifier ? verifier.selectable : undefined,
+    }]
+  }),
+) as Record<TrialMonitorVerifierModelKey, TrialMonitorVerifierSpec>
 
 const TRIAL_MONITOR_VERIFIER_KEYS = Object.keys(TRIAL_MONITOR_VERIFIER_SPECS) as TrialMonitorVerifierModelKey[]
 const MANUAL_CHAT_REVIEW_VERIFIER_KEY = 'manual-chat-review'

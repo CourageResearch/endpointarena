@@ -4,14 +4,15 @@ import { type ModelId } from '@/lib/constants'
 import { getDaysUntilUtc } from '@/lib/date'
 import {
   db,
-  marketAccounts,
-  marketPositions,
   modelDecisionSnapshots,
   trials,
-  predictionMarkets,
 } from '@/lib/db'
 import { type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
-import { calculateExecutableTradeCaps, normalizeRunDate } from '@/lib/markets/engine'
+import {
+  calculateLegacyExecutableTradeCaps,
+  normalizeLegacyRunDate,
+  type LegacyExecutableTradeCaps,
+} from '@/lib/legacy-season3/market-math'
 import { type Prediction, type PredictionHistoryEntry } from '@/lib/types'
 import { isMockMarketSnapshotLike } from '@/lib/mock-market-data'
 import {
@@ -125,9 +126,9 @@ export async function getUnifiedPredictionHistoriesByQuestionIds(
 
   for (const row of snapshotRows) {
     if (isMockMarketSnapshotLike(row)) continue
-    const predictorId = row.actor.modelKey ?? row.actorId
+    const predictorId = row.modelKey ?? row.actor?.modelKey ?? row.actorId
     const ownerId = row.trialQuestionId
-    if (!ownerId) continue
+    if (!ownerId || !predictorId) continue
     pushHistory(
       ownerId,
       predictorId,
@@ -183,11 +184,14 @@ export async function getMarketDecisionHistoryByMarketIds(
   const historyByMarketId = new Map<string, PredictionHistoryEntry[]>()
   for (const row of snapshotRows) {
     if (isMockMarketSnapshotLike(row)) continue
+    if (!row.marketId) continue
+    const predictorId = row.modelKey ?? row.actor?.modelKey ?? row.actorId
+    if (!predictorId) continue
     const current = historyByMarketId.get(row.marketId) || []
     current.push(
       mapSnapshotPrediction(
         row,
-        row.actor.modelKey ?? row.actorId,
+        predictorId,
         questionOutcomeById.get(row.trialQuestionId ?? '') || 'Pending',
       ),
     )
@@ -313,15 +317,32 @@ type ModelDecisionSnapshotArgs = {
   runSource: DecisionRunSource
   runId?: string | null
   modelId: ModelId
-  actorId: string
+  actorId?: string | null
   recordedAt?: Date | null
   runDate: Date
   trial: typeof trials.$inferSelect
   trialQuestionId: string
   questionPrompt: string
-  market: typeof predictionMarkets.$inferSelect
-  account: typeof marketAccounts.$inferSelect
-  position: typeof marketPositions.$inferSelect
+  market: {
+    id: string
+    priceYes: number
+    qYes: number
+    qNo: number
+    b: number
+    openedAt?: Date | null
+  }
+  storageMarketId?: string | null
+  portfolio: {
+    cashAvailable: number
+    yesSharesHeld: number
+    noSharesHeld: number
+  }
+  prebuiltInput?: ModelDecisionInput
+  precomputedTradeCaps?: {
+    maxBuyUsd: number
+    maxSellYesUsd: number
+    maxSellNoUsd: number
+  }
   runtimeConfig: MarketRuntimeConfig
 }
 
@@ -364,19 +385,27 @@ function buildModelDecisionSnapshotPrediction(args: {
 export function buildModelDecisionSnapshotInput(args: ModelDecisionSnapshotArgs): {
   input: ModelDecisionInput
   normalizedRunDate: Date
-  tradeCaps: ReturnType<typeof calculateExecutableTradeCaps>
+  tradeCaps: Pick<LegacyExecutableTradeCaps, 'maxBuyUsd' | 'maxSellYesUsd' | 'maxSellNoUsd'>
 } {
-  const normalizedRunDate = normalizeRunDate(args.runDate)
-  const tradeCaps = calculateExecutableTradeCaps({
+  const normalizedRunDate = normalizeLegacyRunDate(args.runDate)
+  const tradeCaps = args.precomputedTradeCaps ?? calculateLegacyExecutableTradeCaps({
     state: {
       qYes: args.market.qYes,
       qNo: args.market.qNo,
       b: args.market.b,
     },
-    accountCash: args.account.cashBalance,
-    yesSharesHeld: args.position.yesShares,
-    noSharesHeld: args.position.noShares,
+    accountCash: args.portfolio.cashAvailable,
+    yesSharesHeld: args.portfolio.yesSharesHeld,
+    noSharesHeld: args.portfolio.noSharesHeld,
   })
+
+  if (args.prebuiltInput) {
+    return {
+      input: args.prebuiltInput,
+      normalizedRunDate,
+      tradeCaps,
+    }
+  }
 
   const input: ModelDecisionInput = {
     meta: {
@@ -410,9 +439,9 @@ export function buildModelDecisionSnapshotInput(args: ModelDecisionSnapshotArgs)
       noPrice: 1 - args.market.priceYes,
     },
     portfolio: {
-      cashAvailable: args.account.cashBalance,
-      yesSharesHeld: args.position.yesShares,
-      noSharesHeld: args.position.noShares,
+      cashAvailable: args.portfolio.cashAvailable,
+      yesSharesHeld: args.portfolio.yesSharesHeld,
+      noSharesHeld: args.portfolio.noSharesHeld,
       maxBuyUsd: tradeCaps.maxBuyUsd,
       maxSellYesUsd: tradeCaps.maxSellYesUsd,
       maxSellNoUsd: tradeCaps.maxSellNoUsd,
@@ -436,15 +465,18 @@ async function insertStoredModelDecisionSnapshot(args: {
   durationMs: number | null
   usage: PersistedRunUsage
   input: ModelDecisionInput
-  tradeCaps: ReturnType<typeof calculateExecutableTradeCaps>
+  tradeCaps: Pick<LegacyExecutableTradeCaps, 'maxBuyUsd' | 'maxSellYesUsd' | 'maxSellNoUsd'>
 }): StoredDecisionSnapshotResult {
-  const normalizedRunDate = normalizeRunDate(args.snapshotArgs.runDate)
+  const normalizedRunDate = normalizeLegacyRunDate(args.snapshotArgs.runDate)
   const [snapshot] = await db.insert(modelDecisionSnapshots).values({
     runId: args.snapshotArgs.runSource === 'cycle' ? args.snapshotArgs.runId ?? null : null,
     runDate: normalizedRunDate,
-    marketId: args.snapshotArgs.market.id,
+    marketId: args.snapshotArgs.storageMarketId === undefined
+      ? args.snapshotArgs.market.id
+      : args.snapshotArgs.storageMarketId,
     trialQuestionId: args.snapshotArgs.trialQuestionId,
-    actorId: args.snapshotArgs.actorId,
+    actorId: args.snapshotArgs.storageMarketId === null ? null : args.snapshotArgs.actorId ?? null,
+    modelKey: args.snapshotArgs.modelId,
     runSource: args.snapshotArgs.runSource,
     approvalProbability: args.decision.forecast.approvalProbability,
     yesProbability: args.decision.forecast.yesProbability ?? args.decision.forecast.approvalProbability,
@@ -456,9 +488,9 @@ async function insertStoredModelDecisionSnapshot(args: {
     proposedExplanation: args.decision.action.explanation,
     marketPriceYes: args.snapshotArgs.market.priceYes,
     marketPriceNo: 1 - args.snapshotArgs.market.priceYes,
-    cashAvailable: args.snapshotArgs.account.cashBalance,
-    yesSharesHeld: args.snapshotArgs.position.yesShares,
-    noSharesHeld: args.snapshotArgs.position.noShares,
+    cashAvailable: args.snapshotArgs.portfolio.cashAvailable,
+    yesSharesHeld: args.snapshotArgs.portfolio.yesSharesHeld,
+    noSharesHeld: args.snapshotArgs.portfolio.noSharesHeld,
     maxBuyUsd: args.tradeCaps.maxBuyUsd,
     maxSellYesUsd: args.tradeCaps.maxSellYesUsd,
     maxSellNoUsd: args.tradeCaps.maxSellNoUsd,

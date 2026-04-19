@@ -7,6 +7,7 @@ import {
   requireAdminUserId,
   type ManualTrialIntakeInput,
 } from '@/lib/manual-trial-intake'
+import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
 
 type PublishRequestBody = {
   form: ManualTrialIntakeInput
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
     revalidatePath('/admin/ai')
     revalidatePath('/admin/trials')
     revalidatePath('/admin/predictions')
+    revalidatePath('/admin/base')
+    revalidateSeason4Routes({ marketSlug: result.market.marketSlug })
 
     return successResponse({ success: true, ...result }, {
       headers: {

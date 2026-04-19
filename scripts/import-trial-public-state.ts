@@ -460,9 +460,9 @@ async function loadTargetTrialNamespaceCounts(sql: postgres.Sql): Promise<TrialP
       (
         select count(*)::bigint
         from model_decision_snapshots mds
-        join market_actors actor on actor.id = mds.actor_id
+        left join market_actors actor on actor.id = mds.actor_id
         where mds.trial_question_id is not null
-          and actor.actor_type = 'model'
+          and (actor.actor_type = 'model' or mds.model_key is not null)
       ) as trial_model_decision_snapshots,
       (
         select count(*)::bigint
@@ -839,14 +839,17 @@ function validateBundleIntegrity(bundle: TrialPublicStateBundle): string[] {
     if (row.run_id && !trialRunIds.has(row.run_id)) {
       errors.push(`trial_model_decision_snapshots.${row.id} references missing run_id ${row.run_id}`)
     }
-    if (!marketIds.has(row.market_id)) {
+    if (row.market_id && !marketIds.has(row.market_id)) {
       errors.push(`trial_model_decision_snapshots.${row.id} references missing market_id ${row.market_id}`)
     }
     if (row.trial_question_id && !questionIds.has(row.trial_question_id)) {
       errors.push(`trial_model_decision_snapshots.${row.id} references missing trial_question_id ${row.trial_question_id}`)
     }
-    if (!actorIdSet.has(row.actor_id)) {
+    if (row.actor_id && !actorIdSet.has(row.actor_id)) {
       errors.push(`trial_model_decision_snapshots.${row.id} references missing actor_id ${row.actor_id}`)
+    }
+    if (!row.actor_id && !row.model_key) {
+      errors.push(`trial_model_decision_snapshots.${row.id} must include actor_id or model_key`)
     }
     if (row.linked_market_action_id && !actionIds.has(row.linked_market_action_id)) {
       errors.push(
@@ -1673,8 +1676,10 @@ async function insertTrialModelDecisionSnapshots(
   supportedCostSources: Set<string>,
 ): Promise<void> {
   const formattedRows = rows.map((row) => {
-    const targetActorId = sourceActorIdToTargetActorId.get(row.actor_id)
-    if (!targetActorId) {
+    const targetActorId = row.actor_id
+      ? sourceActorIdToTargetActorId.get(row.actor_id)
+      : null
+    if (row.actor_id && !targetActorId) {
       throw new Error(`Missing target actor mapping for model snapshot ${row.id}`)
     }
 
@@ -1687,6 +1692,7 @@ async function insertTrialModelDecisionSnapshots(
       market_id: row.market_id,
       trial_question_id: row.trial_question_id,
       actor_id: targetActorId,
+      model_key: row.model_key ?? null,
       run_source: row.run_source,
       approval_probability: row.approval_probability,
       yes_probability: row.yes_probability,
@@ -1731,6 +1737,7 @@ async function insertTrialModelDecisionSnapshots(
         'market_id',
         'trial_question_id',
         'actor_id',
+        'model_key',
         'run_source',
         'approval_probability',
         'yes_probability',

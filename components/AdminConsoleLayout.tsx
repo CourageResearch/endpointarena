@@ -14,7 +14,7 @@ import {
   type AdminDayFilterOption,
 } from '@/lib/admin-search-params'
 
-type AdminTab = 'predictions' | 'trials' | 'waitlist' | 'users' | 'contact' | 'review' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'outcomes' | 'tables'
+type AdminTab = 'predictions' | 'trials' | 'base' | 'waitlist' | 'users' | 'contact' | 'suggestions' | 'ai' | 'settings' | 'analytics' | 'searches' | 'crashes' | 'oracle' | 'tables'
 
 interface AdminConsoleLayoutProps {
   title: string
@@ -50,8 +50,16 @@ const ADMIN_TABS: Array<{
     activeBadgeClass: 'bg-[#D39D2E]/12 text-[#b8841f]',
   },
   {
-    id: 'outcomes',
-    href: '/admin/outcomes',
+    id: 'base',
+    href: '/admin/base',
+    label: 'Base',
+    activeClass: 'border-[#5BA5ED] text-[#4a8cca]',
+    hoverClass: 'hover:border-[#5BA5ED]/55 hover:text-[#4a8cca]',
+    activeBadgeClass: 'bg-[#5BA5ED]/12 text-[#4a8cca]',
+  },
+  {
+    id: 'oracle',
+    href: '/admin/oracle',
     label: 'Oracle',
     activeClass: 'border-[#5BA5ED] text-[#4a8cca]',
     hoverClass: 'hover:border-[#5BA5ED]/55 hover:text-[#4a8cca]',
@@ -74,8 +82,8 @@ const ADMIN_TABS: Array<{
     activeBadgeClass: 'bg-[#EF6F67]/12 text-[#c86a63]',
   },
   {
-    id: 'review',
-    href: '/admin/review',
+    id: 'suggestions',
+    href: '/admin/suggestions',
     label: 'Suggestions',
     activeClass: 'border-[#D39D2E] text-[#b8841f]',
     hoverClass: 'hover:border-[#D39D2E]/55 hover:text-[#b8841f]',
@@ -182,7 +190,7 @@ async function getContactCount() {
   }
 }
 
-async function getReviewCount() {
+async function getSuggestionsCount() {
   try {
     const rows = await db
       .select({ count: sql<number>`count(*)` })
@@ -190,7 +198,7 @@ async function getReviewCount() {
       .where(like(contactMessages.message, `${MARKET_SUGGESTION_MESSAGE_PREFIX}%`))
     return rows[0]?.count ?? 0
   } catch (error) {
-    console.error('Failed to load review count:', error)
+    console.error('Failed to load suggestions count:', error)
     return 0
   }
 }
@@ -216,11 +224,11 @@ export async function AdminConsoleLayout({
   topActions,
   children,
 }: AdminConsoleLayoutProps) {
-  const [waitlistBadge, usersCount, contactCount, reviewCount, crashes24hCount] = await Promise.all([
+  const [waitlistBadge, usersCount, contactCount, suggestionsCount, crashes24hCount] = await Promise.all([
     getWaitlistBadgeData(),
     getUsersCount(),
     getContactCount(),
-    getReviewCount(),
+    getSuggestionsCount(),
     getCrashes24hCount(),
   ])
   const activeDatabaseTarget = getActiveDatabaseTarget()
@@ -280,7 +288,7 @@ export async function AdminConsoleLayout({
             {contactCount}
           </span>
         ) : null}
-        {tab.id === 'review' ? (
+        {tab.id === 'suggestions' ? (
           <span
             title="Total market suggestions"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -289,7 +297,7 @@ export async function AdminConsoleLayout({
                 : 'bg-[#f3ebe0] text-[#8a8075]'
             }`}
           >
-            {reviewCount}
+            {suggestionsCount}
           </span>
         ) : null}
         {tab.id === 'crashes' ? (
@@ -314,29 +322,26 @@ export async function AdminConsoleLayout({
         bgClass="bg-[#F5F2ED]/80"
         borderClass="border-[#e8ddd0]"
         adminRuntimeLabel={activeDatabase?.label ?? null}
+        forceAdminBadges
       />
 
-      <main className={`${SITE_CONTAINER_CLASS} py-8`}>
+      <main className={`${SITE_CONTAINER_CLASS} py-5`}>
         <header className="mb-7">
-          <div className="py-4 sm:py-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#b5aa9e]">Admin Console</p>
-                <HeaderDots />
-              </div>
-              <h1 className="text-2xl font-semibold text-[#1a1a1a] mt-1">{title}</h1>
+          <div className="mb-2 flex items-center gap-2">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#b5aa9e]">Admin</p>
+            <HeaderDots />
+          </div>
+          <nav
+            aria-label={`${title} admin sections`}
+            className="admin-tabs-scroll flex overflow-x-auto border-b border-[#d8ccb9]"
+          >
+            {ADMIN_TABS.map((tab) => renderTabLink(tab.id))}
+          </nav>
+          {topActions ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {topActions}
             </div>
-          </div>
-          <div className="mt-1">
-            <nav className="admin-tabs-scroll flex overflow-x-auto border-b border-[#d8ccb9]">
-              {ADMIN_TABS.map((tab) => renderTabLink(tab.id))}
-            </nav>
-            {topActions ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {topActions}
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </header>
 
         {children}

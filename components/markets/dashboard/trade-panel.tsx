@@ -21,8 +21,10 @@ import {
   type TraderSnapshot,
 } from '@/components/markets/dashboard/shared'
 
-const TRADE_DIRECTION_TAB_CLASS = 'relative inline-flex h-7 items-end px-0 pb-[6px] !font-sans !text-[11px] !font-medium uppercase tracking-[0.18em] !leading-none transition-colors after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:scale-x-0 after:rounded-full after:bg-current after:transition-transform focus-visible:outline-none disabled:cursor-not-allowed'
+const TRADE_DIRECTION_TAB_CLASS = 'relative -mb-px inline-flex h-9 items-center justify-center border-b-2 px-3 !font-sans !font-medium uppercase transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:border-transparent'
+const TRADE_DIRECTION_TAB_LABEL_CLASS = '!text-[11px] tracking-[0.12em]'
 
+// Season 3/offchain-only panel. Season 4 live trading uses components/season4.
 function getOutcomeTone(outcome: MarketResolutionRow['outcome'] | undefined) {
   if (outcome === 'YES') {
     return {
@@ -116,7 +118,7 @@ export function MarketTradePanel({
       <div className="rounded-none">
         <div className="rounded-none border border-transparent p-4" style={DETAILS_CARD_BORDER_STYLE}>
           <div className="-mx-4 -mt-4 mb-4 border-b border-[#e8ddd0] bg-[#f8f3ec]/45 px-4">
-            <div className="flex items-center gap-0">
+            <div>
               {isResolvedMarket ? (
                 <div className="flex w-full items-center justify-between gap-3 py-[9px]">
                   <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#8a8075]">
@@ -130,50 +132,56 @@ export function MarketTradePanel({
                   </span>
                 </div>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled={!canTrade}
-                    onClick={() => onTradeDirectionChange('buy')}
-                    className={cn(
-                      TRADE_DIRECTION_TAB_CLASS,
-                      tradeDirection === 'buy'
-                        ? canTrade
-                          ? 'text-[#61584e] after:scale-x-100'
-                          : 'text-[#b8aa99] after:scale-x-100'
-                        : canTrade
-                          ? 'text-[#978a7b] hover:text-[#7f7468]'
-                          : 'text-[#b8aa99]',
-                    )}
-                  >
-                    Buy
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canTrade}
-                    onClick={() => onTradeDirectionChange('sell')}
-                    className={cn(
-                      'ml-3',
-                      TRADE_DIRECTION_TAB_CLASS,
-                      tradeDirection === 'sell'
-                        ? canTrade
-                          ? 'text-[#61584e] after:scale-x-100'
-                          : 'text-[#b8aa99] after:scale-x-100'
-                        : canTrade
-                          ? 'text-[#978a7b] hover:text-[#7f7468]'
-                          : 'text-[#b8aa99]',
-                    )}
-                  >
-                    Sell
-                  </button>
-                </>
+                <div className="py-3">
+                  <p className="text-[0.92rem] font-semibold leading-[1.35] text-[#1a1a1a]">
+                    {marketQuestion}
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 border-b border-[#e7ddd0]">
+                    <button
+                      type="button"
+                      disabled={!canTrade}
+                      onClick={() => onTradeDirectionChange('buy')}
+                      className={cn(
+                        TRADE_DIRECTION_TAB_CLASS,
+                        tradeDirection === 'buy'
+                          ? canTrade
+                            ? 'border-[#5DBB63] text-[#2f7b40]'
+                            : 'border-[#d6c8b7] text-[#b8aa99]'
+                          : canTrade
+                            ? 'border-transparent text-[#9d9184] hover:border-[#5DBB63]/55 hover:text-[#45934a]'
+                            : 'text-[#b8aa99]',
+                      )}
+                    >
+                      <span className={TRADE_DIRECTION_TAB_LABEL_CLASS}>Buy</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canTrade}
+                      onClick={() => onTradeDirectionChange('sell')}
+                      className={cn(
+                        TRADE_DIRECTION_TAB_CLASS,
+                        tradeDirection === 'sell'
+                          ? canTrade
+                            ? 'border-[#EF6F67] text-[#c43a2b]'
+                            : 'border-[#d6c8b7] text-[#b8aa99]'
+                          : canTrade
+                            ? 'border-transparent text-[#9d9184] hover:border-[#EF6F67]/55 hover:text-[#c86a63]'
+                            : 'text-[#b8aa99]',
+                      )}
+                    >
+                      <span className={TRADE_DIRECTION_TAB_LABEL_CLASS}>Sell</span>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
-          <p className={cn('mb-3', DETAILS_BODY_TEXT_CLASS)}>
-            {marketQuestion}
-          </p>
+          {isResolvedMarket ? (
+            <p className={cn('mb-3', DETAILS_BODY_TEXT_CLASS)}>
+              {marketQuestion}
+            </p>
+          ) : null}
 
           {isResolvedMarket ? (
             <>
