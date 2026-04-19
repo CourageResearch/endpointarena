@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import { closeDbConnections } from '@/lib/db'
 import { runSeason4ModelCycle } from '@/lib/season4-ops'
 
 dotenv.config({ path: '.env.local', quiet: true })
@@ -12,4 +13,6 @@ async function main() {
 void main().catch((error) => {
   console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
+}).finally(async () => {
+  await closeDbConnections()
 })

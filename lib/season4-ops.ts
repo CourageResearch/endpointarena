@@ -59,6 +59,8 @@ const MIN_MODEL_ETH_BALANCE_WEI = BigInt(10_000_000_000_000)
 const PRICE_E18 = BigInt('1000000000000000000')
 const PRICE_INPUT_SCALE = BigInt(1_000_000)
 const DEFAULT_INITIAL_PRICE_YES_E18 = PRICE_E18 / BigInt(2)
+const RPC_BLOCK_POLL_ATTEMPTS = 10
+const RPC_BLOCK_POLL_DELAY_MS = 1_000
 const CONTRACT_OWNER_ABI = [
   {
     type: 'function',
@@ -283,6 +285,18 @@ function parsePositiveBigInt(value: string | number | bigint | null | undefined,
     throw new ValidationError('Liquidity B must be greater than zero')
   }
   return parsed
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function waitForRpcBlock(getLatestBlock: () => Promise<bigint>, targetBlock: bigint): Promise<void> {
+  for (let attempt = 0; attempt < RPC_BLOCK_POLL_ATTEMPTS; attempt += 1) {
+    const latestBlock = await getLatestBlock()
+    if (latestBlock >= targetBlock) return
+    await sleep(RPC_BLOCK_POLL_DELAY_MS)
+  }
 }
 
 function season4LiquidityBDisplayToAtomic(value: number): bigint {
@@ -1569,7 +1583,19 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
                 args: [config.managerAddress, maxUint256],
                 account,
               })
-              await publicClient.waitForTransactionReceipt({ hash: approveTxHash })
+              const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTxHash })
+              await waitForRpcBlock(() => publicClient.getBlockNumber(), approveReceipt.blockNumber)
+
+              const nextAllowance = await publicClient.readContract({
+                address: config.collateralTokenAddress,
+                abi: MOCK_USDC_ABI,
+                functionName: 'allowance',
+                args: [account.address, config.managerAddress],
+              }) as bigint
+
+              if (nextAllowance < tradeExecution.amountAtomic) {
+                throw new Error(`Allowance not ready for model trade: ${nextAllowance.toString()}`)
+              }
             }
 
             collateralApproved = true
