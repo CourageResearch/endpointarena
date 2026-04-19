@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 const AUTH_API_PREFIX = '/api/auth'
 const ADMIN_API_PREFIX = '/api/admin'
 const ALLOWED_API_PREFIXES = [AUTH_API_PREFIX, ADMIN_API_PREFIX]
+const ALLOWED_API_PATHS = new Set(['/api/health', '/api/season4/onchain/status'])
 const ALLOWED_PAGE_PREFIXES = ['/admin', '/login', '/maintenance']
 const ALLOWED_PAGE_PATHS = new Set(['/icon', '/apple-icon', '/brand'])
 const ASSET_FILE_PATTERN = /\.[a-z0-9]+$/i
@@ -18,7 +19,7 @@ function isAllowedPageDuringMaintenance(pathname: string): boolean {
 }
 
 function isAllowedApiDuringMaintenance(pathname: string): boolean {
-  return pathname === '/api/health' || ALLOWED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  return ALLOWED_API_PATHS.has(pathname) || ALLOWED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
 function maintenanceApiResponse(): NextResponse {
