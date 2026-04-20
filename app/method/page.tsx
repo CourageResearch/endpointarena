@@ -7,9 +7,12 @@ import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import {
   METHOD_PAGE_EXAMPLE_RESPONSE_TEXT,
+  METHOD_PAGE_MAX_TRADE_LABEL,
+  METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL,
   METHOD_PAGE_PROMPT_TEXT,
   METHOD_PAGE_SCHEMA_TEXT,
   METHOD_PAGE_SCORING_NOTE,
+  METHOD_PAGE_SEASON4_RUNTIME_NOTE,
 } from '@/lib/methodology-page'
 import { buildPageMetadata } from '@/lib/seo'
 import { cn } from '@/lib/utils'
@@ -71,22 +74,22 @@ export default async function MethodPage() {
   const processSteps = [
     {
       title: 'Track Trial Questions',
-      description: 'Monitor active trial readouts and outcome questions, including completion timing, sponsor context, and market-ready metadata.'
+      description: 'Publish linked clinical-trial questions into Season 4 markets from saved trial facts. Markets missing required linked trial fields are skipped rather than filled with placeholders.'
     },
     {
       title: 'Prepare Shared Context',
-      description: 'Each model receives the same structured event, market, and portfolio context. One provider call produces both a forecast snapshot and a proposed market action, while application-side guardrails enforce trading limits.'
+      description: 'Each funded model wallet receives the same structured trial facts, live onchain YES/NO price, wallet cash and positions, and allowed action caps.'
     },
     {
       title: 'Record Decision Snapshots',
-      description: 'Ask each model for an intrinsic approval forecast first, then a market action for the same timepoint. Each snapshot stores approval probability, binary call, confidence, reasoning, and proposed action.'
+      description: 'Ask each model for an intrinsic YES forecast from trial fields first, then a market action after seeing price and portfolio context. Batch/API and imported decisions are stored with probability, binary call, confidence, reasoning, and proposed action.'
     },
     {
-      title: 'Wait for Trial Outcomes',
-      description: "Unlike benchmarks with known answers, we wait for the real-world readout to land. There's no way to game this because the outcome does not exist until the trial data arrives."
+      title: 'Execute Onchain Trades',
+      description: 'The live AI desk passes ready decisions into the Season 4 model cycle. The cycle caps each action to the wallet and market limits, submits Base Sepolia buy/sell transactions from model wallets, and lets the indexer mirror events back into the app.'
     },
     {
-      title: 'Score Results',
+      title: 'Resolve and Rank',
       description: METHOD_PAGE_SCORING_NOTE,
     }
   ]
@@ -145,6 +148,33 @@ export default async function MethodPage() {
               ))}
             </div>
           </SoftOutlinePanel>
+        </section>
+
+        {/* Season 4 Runtime */}
+        <section className="mb-10 sm:mb-16">
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-medium text-[#b5aa9e] uppercase tracking-[0.2em]">Season 4 onchain runtime</span>
+              <HeaderDots />
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <SoftOutlinePanel className="h-full p-4 sm:p-6">
+              <h3 className="mb-2 text-base font-semibold text-[#1a1a1a]">Market Venue</h3>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Base Sepolia markets use mock USDC, onchain YES/NO positions, and an app read model mirrored from emitted contract events.</p>
+            </SoftOutlinePanel>
+            <SoftOutlinePanel className="h-full p-4 sm:p-6">
+              <h3 className="mb-2 text-base font-semibold text-[#1a1a1a]">Model Wallets</h3>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Funded model wallets default to {METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL} mock USDC unless the admin runtime config overrides the model bankroll, and each model-cycle trade is capped at {METHOD_PAGE_MAX_TRADE_LABEL} mock USDC by default.</p>
+            </SoftOutlinePanel>
+            <SoftOutlinePanel className="h-full p-4 sm:p-6">
+              <h3 className="mb-2 text-base font-semibold text-[#1a1a1a]">Human Wallets</h3>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Users authenticate with Privy, receive an embedded wallet, start at 0, and fund through the configured mock-USDC faucet.</p>
+            </SoftOutlinePanel>
+          </div>
+          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-[#8a8075]">
+            {METHOD_PAGE_SEASON4_RUNTIME_NOTE}
+          </p>
         </section>
 
         {/* Model Cards */}

@@ -130,7 +130,6 @@ export async function PATCH(request: NextRequest) {
     assertNoLiveLegacyConfigPatch(body)
     const target = parseDatabaseTarget(body.target) ?? getActiveDatabaseTarget()
     const targetDb = getDbForTarget(target)
-    const previousConfig = await getTrialRuntimeConfig(targetDb)
     const config = await updateTrialRuntimeConfig({
       toyTrialCount: body.toyTrialCount,
       season4MarketLiquidityBDisplay: body.season4MarketLiquidityBDisplay,
@@ -138,10 +137,7 @@ export async function PATCH(request: NextRequest) {
       season4StartingBankrollDisplay: body.season4StartingBankrollDisplay,
     }, targetDb)
     let faucetSync: Awaited<ReturnType<typeof syncSeason4FaucetClaimAmount>> = { txHash: null, warning: null }
-    if (
-      body.season4HumanStartingBankrollDisplay !== undefined
-      && config.season4HumanStartingBankrollDisplay !== previousConfig.season4HumanStartingBankrollDisplay
-    ) {
+    if (body.season4HumanStartingBankrollDisplay !== undefined) {
       try {
         faucetSync = await syncSeason4FaucetClaimAmount(config.season4HumanStartingBankrollDisplay, target)
       } catch (error) {

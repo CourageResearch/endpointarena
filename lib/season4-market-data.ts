@@ -3,7 +3,7 @@ import { createPublicClient, formatEther, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
 import { NotFoundError } from '@/lib/errors'
-import { PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
+import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4OnchainConfig, requireSeason4OnchainConfig } from '@/lib/onchain/config'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import { normalizeWalletAddress } from '@/lib/onchain/wallet-link'
@@ -265,11 +265,27 @@ async function resolveViewerState(args: {
     walletAddress: normalizedWallet,
   })
 
+  let collateralBalanceDisplay = collateralBalance?.collateralDisplay ?? 0
   let canClaimFromFaucet = false
   let gasBalanceEth: string | null = null
 
   const config = getSeason4OnchainConfig()
-  if (!faucetClaimState.hasClaimed && normalizedWallet && config.enabled && config.faucetAddress) {
+  if (normalizedWallet && config.enabled && config.collateralTokenAddress) {
+    try {
+      const client = createSeason4PublicClient()
+      const tokenBalance = await client.readContract({
+        address: config.collateralTokenAddress,
+        abi: MOCK_USDC_ABI,
+        functionName: 'balanceOf',
+        args: [normalizedWallet as `0x${string}`],
+      }) as bigint
+      collateralBalanceDisplay = atomicToDisplay(tokenBalance)
+    } catch {
+      // Keep the mirrored balance if the live token read fails.
+    }
+  }
+
+  if ((config.target === 'toy' || !faucetClaimState.hasClaimed) && normalizedWallet && config.enabled && config.faucetAddress) {
     try {
       const client = createSeason4PublicClient()
       const [canClaim, lastClaimedAt, gasBalance] = await Promise.all([
@@ -287,7 +303,9 @@ async function resolveViewerState(args: {
         }) as Promise<bigint>,
         client.getBalance({ address: normalizedWallet as `0x${string}` }),
       ])
-      canClaimFromFaucet = canClaim && lastClaimedAt === BigInt(0)
+      canClaimFromFaucet = config.target === 'toy'
+        ? canClaim
+        : canClaim && lastClaimedAt === BigInt(0)
       gasBalanceEth = formatEther(gasBalance)
     } catch {
       canClaimFromFaucet = false
@@ -299,7 +317,7 @@ async function resolveViewerState(args: {
     userId: args.userId,
     walletAddress: normalizedWallet,
     walletProvisioningStatus: args.walletProvisioningStatus,
-    collateralBalanceDisplay: collateralBalance?.collateralDisplay ?? 0,
+    collateralBalanceDisplay,
     gasBalanceEth,
     yesShares: marketBalance?.yesShares ?? 0,
     noShares: marketBalance?.noShares ?? 0,

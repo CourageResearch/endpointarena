@@ -56,6 +56,7 @@ export function AdminDatabaseTargetManager({
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const allowRuntimeSwitching = runtimeState.switchingAllowed
   const runtimeSettingsByTarget = new Map(runtimeSettingsTargets.map((target) => [target.target, target]))
+  const canResetToyDatabase = !runtimeState.isRailwayRuntime
 
   useEffect(() => {
     setCurrentToyTrialCount(toyTrialCount)
@@ -108,7 +109,7 @@ export function AdminDatabaseTargetManager({
   }
 
   const resetToyDatabase = async () => {
-    if (!allowRuntimeSwitching || isResettingToy || pendingTarget) {
+    if (!canResetToyDatabase || isResettingToy || pendingTarget) {
       return
     }
 
@@ -197,7 +198,7 @@ export function AdminDatabaseTargetManager({
           const isPending = pendingTarget === option.target
           const isBusy = pendingTarget != null || isResettingToy
           const disabled = !allowRuntimeSwitching || !option.configured || isPending || isBusy || isActive
-          const canResetToy = allowRuntimeSwitching && option.target === 'toy' && option.configured
+          const canResetToy = canResetToyDatabase && option.target === 'toy' && option.configured
           const runtimeSettingsTarget = runtimeSettingsByTarget.get(option.target)
           const showToyResetTarget = option.target === 'toy' && !runtimeSettingsTarget?.config
 

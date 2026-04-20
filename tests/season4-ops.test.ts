@@ -75,12 +75,12 @@ test('season 4 trade transitions update shares, cash, and market price in the ex
   const initialPrice = calculateSeason4PriceYes({
     qYesDisplay: 0,
     qNoDisplay: 0,
-    liquidityBDisplay: 25000,
+    liquidityBDisplay: 1000,
   })
   const next = applySeason4TradeToState({
     qYesDisplay: 0,
     qNoDisplay: 0,
-    liquidityBDisplay: 25000,
+    liquidityBDisplay: 1000,
     collateralBalanceDisplay: 20,
     yesSharesHeld: 0,
     noSharesHeld: 0,

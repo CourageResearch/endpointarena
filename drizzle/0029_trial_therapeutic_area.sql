@@ -1,0 +1,3 @@
+ALTER TABLE "trials" ADD COLUMN "therapeutic_area" text;--> statement-breakpoint
+ALTER TABLE "trials" ADD CONSTRAINT "trials_therapeutic_area_check" CHECK ("trials"."therapeutic_area" IS NULL OR "trials"."therapeutic_area" IN ('Oncology', 'Cardiovascular', 'Neurology', 'Psychiatry', 'Infectious disease', 'Endocrinology', 'Metabolic', 'Rare disease', 'Autoimmune', 'Respiratory', 'Gastroenterology', 'Hepatology', 'Nephrology', 'Hematology', 'Vaccines', 'Dermatology', 'Ophthalmology', 'Women''s health', 'Urology', 'Musculoskeletal', 'Pain', 'Critical care', 'Devices'));--> statement-breakpoint
+CREATE INDEX "trials_therapeutic_area_idx" ON "trials" USING btree ("therapeutic_area");

@@ -6,6 +6,7 @@ import {
   marketPositions,
   onchainBalances,
   onchainMarkets,
+  onchainModelWallets,
   predictionMarkets,
   trialQuestions,
   trials,
@@ -127,6 +128,12 @@ function isTerminalBatchStatus(status: AiBatchStatus): boolean {
 
 function toModelIds(values: Iterable<ModelId>): ModelId[] {
   return Array.from(new Set(values))
+}
+
+function trimOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 function toIsoString(value: Date | string | null | undefined): string | null {
@@ -705,6 +712,34 @@ function buildInitialBatchState(input: {
   }
 }
 
+function formatModelList(modelIds: ModelId[]): string {
+  const labels = modelIds.map((modelId) => getAiModelLabel(modelId))
+  if (labels.length <= 3) return labels.join(', ')
+  return `${labels.slice(0, 3).join(', ')} and ${labels.length - 3} more`
+}
+
+async function assertLiveModelWalletsConfigured(modelIds: ModelId[]): Promise<void> {
+  const uniqueModelIds = Array.from(new Set(modelIds))
+  if (uniqueModelIds.length === 0) return
+
+  const walletRows = await db.select({
+    modelKey: onchainModelWallets.modelKey,
+    walletAddress: onchainModelWallets.walletAddress,
+  })
+    .from(onchainModelWallets)
+    .where(inArray(onchainModelWallets.modelKey, uniqueModelIds))
+
+  const walletAddressByModelId = new Map(
+    walletRows.map((row) => [row.modelKey, trimOrNull(row.walletAddress)] as const),
+  )
+  const missingWalletModels = uniqueModelIds.filter((modelId) => !walletAddressByModelId.get(modelId))
+  if (missingWalletModels.length === 0) return
+
+  throw new ValidationError(
+    `Live AI batch cannot run until model wallets are configured for ${formatModelList(missingWalletModels)}. Set SEASON4_MODEL_WALLETS_JSON and SEASON4_MODEL_PRIVATE_KEYS_JSON, then run Seed model wallets and Fund model wallets.`,
+  )
+}
+
 async function buildLivePortfolioState(
   candidates: OpenTrialCandidate[],
   actorIdByModelId: Map<ModelId, string>,
@@ -713,6 +748,8 @@ async function buildLivePortfolioState(
   if (modelIds.length === 0 || candidates.length === 0) {
     return new Map()
   }
+
+  await assertLiveModelWalletsConfigured(modelIds)
 
   const marketRefs = Array.from(new Set(
     candidates.flatMap((candidate) => candidate.market.balanceRef ? [candidate.market.balanceRef] : []),
@@ -816,6 +853,8 @@ async function readFreshLiveBatchPortfolioState(
   }
 
   const modelIds = Array.from(new Set(refreshableTasks.map((task) => task.modelId)))
+  await assertLiveModelWalletsConfigured(modelIds)
+
   const marketRefs = Array.from(new Set(['collateral', ...Array.from(marketRefBySlug.values())]))
   const [balanceRows, livePortfolioByModelId] = modelIds.length === 0 || marketRefs.length === 0
     ? [[], new Map()]

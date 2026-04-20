@@ -24,6 +24,7 @@ function buildTrial() {
     sponsorName: 'Acme Bio',
     sponsorTicker: null,
     indication: 'Test indication',
+    therapeuticArea: 'Oncology',
     exactPhase: 'Phase 2',
     intervention: 'AB-101',
     primaryEndpoint: 'Primary endpoint',

@@ -9,6 +9,7 @@ const STATIC_ROUTES = [
   '/',
   '/trials',
   '/leaderboard',
+  '/poll',
   '/method',
   '/glossary',
   '/waitlist',

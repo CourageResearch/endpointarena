@@ -13,8 +13,6 @@ import { Season4WalletAddressCopy } from '@/components/season4/Season4WalletAddr
 import { getSession } from '@/lib/auth/session'
 import { db, users } from '@/lib/db'
 import { DISPLAY_NAME_MAX_LENGTH, getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
-import { MOCK_USDC_DECIMALS, formatSeason4FaucetUsdcAmount } from '@/lib/season4-faucet-config'
-import { getMarketRuntimeConfig } from '@/lib/markets/runtime-config'
 import { getSeason4ProfileData } from '@/lib/season4-profile-data'
 import { buildNoIndexMetadata } from '@/lib/seo'
 
@@ -83,24 +81,24 @@ export default async function ProfilePage() {
   }
 
   const profile = await getSeason4ProfileData(session.user.id, { sync: true })
-  const runtimeConfig = await getMarketRuntimeConfig()
   const xStatus = profile.user.xUsername ? `@${profile.user.xUsername}` : 'Not linked'
   const editableIdentity = profile.user.name?.trim() || getGeneratedDisplayName(profile.user.email ?? profile.user.id)
-  const faucetUsdcAmountLabel = formatSeason4FaucetUsdcAmount(
-    BigInt(Math.round(runtimeConfig.season4HumanStartingBankrollDisplay * MOCK_USDC_DECIMALS)),
-  )
 
   return (
     <PageFrame>
       <PublicNavbar />
 
       <main className="mx-auto max-w-5xl px-4 pb-6 pt-10 sm:px-6 sm:pb-8 sm:pt-16">
-        <Season4ProfileActions
-          className="mb-6"
-          walletAddress={profile.wallet.address}
-          canClaimFromFaucet={profile.viewer.canClaimFromFaucet}
-          claimAmountLabel={faucetUsdcAmountLabel}
-        />
+        {!profile.viewer.hasClaimedFaucet ? (
+          <Season4ProfileActions
+            className="mb-6"
+            walletAddress={profile.wallet.address}
+            isFaucetConfigured={profile.chain.enabled}
+            hasClaimedFaucet={profile.viewer.hasClaimedFaucet}
+            canClaimFromFaucet={profile.viewer.canClaimFromFaucet}
+            claimAmountLabel={profile.viewer.faucetClaimAmountLabel}
+          />
+        ) : null}
 
         <GradientBorder className="rounded-sm" innerClassName="rounded-sm p-6 sm:p-9">
           <section>
@@ -114,8 +112,9 @@ export default async function ProfilePage() {
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-sm border border-[#e8ddd0] bg-[#fffdfa] p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Cash</p>
-                <p className="mt-3 text-lg font-semibold tabular-nums text-[#1a1a1a]">
-                  {formatUsd(profile.totals.collateralBalanceDisplay)}
+                <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-lg font-semibold tabular-nums text-[#1a1a1a]">
+                  <span>{formatUsd(profile.totals.collateralBalanceDisplay)}</span>
+                  <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#8a8075]">USDC testnet</span>
                 </p>
                 <div
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[#d9cdbf] bg-[#f8f3ec] px-1.5 py-0.5 text-[7px] font-medium uppercase tracking-[0.12em] text-[#8a8075] sm:text-[8px]"
@@ -143,19 +142,23 @@ export default async function ProfilePage() {
                 <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Identity</h2>
                 <HeaderDots />
               </div>
-              <div className="mt-4 grid gap-3 text-sm text-[#7f7469] sm:grid-cols-2">
-                <p>
-                  Email: <span className="font-medium text-[#1a1a1a]">{profile.user.email ?? 'No email on file'}</span>
-                </p>
-                <p>
-                  Wallet: <Season4WalletAddressCopy value={profile.wallet.address} />
-                </p>
-                <p>
-                  Wallet status: <span className="font-medium text-[#1a1a1a]">{profile.wallet.provisioningStatus}</span>
-                </p>
-                <p>
-                  X: <span className="font-medium text-[#1a1a1a]">{xStatus}</span>
-                </p>
+              <div className="mt-4 grid gap-6 text-sm text-[#7f7469] sm:grid-cols-2">
+                <div className="space-y-3">
+                  <p>
+                    Email: <span className="font-medium text-[#1a1a1a]">{profile.user.email ?? 'No email on file'}</span>
+                  </p>
+                  <p>
+                    X: <span className="font-medium text-[#1a1a1a]">{xStatus}</span>
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <p>
+                    Wallet: <Season4WalletAddressCopy value={profile.wallet.address} />
+                  </p>
+                  <p>
+                    Wallet status: <span className="font-medium text-[#1a1a1a]">{profile.wallet.provisioningStatus}</span>
+                  </p>
+                </div>
               </div>
             </div>
 

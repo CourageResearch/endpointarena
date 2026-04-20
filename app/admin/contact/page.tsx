@@ -8,6 +8,10 @@ import { LocalDateTime } from '@/components/ui/local-date-time'
 
 export const dynamic = 'force-dynamic'
 
+function getXProfileUrl(xHandle: string): string {
+  return `https://x.com/${encodeURIComponent(xHandle.replace(/^@/, ''))}`
+}
+
 async function deleteContactMessage(formData: FormData) {
   'use server'
 
@@ -65,18 +69,21 @@ export default async function AdminContactPage() {
           <p className="mt-4 text-sm text-[#8a8075]">No contact messages yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[920px] text-sm">
               <thead>
                 <tr className="border-b border-[#e8ddd0]">
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Received</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">X Handle</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Message</th>
                   <th className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {messages.map((message) => {
+                  const displayXHandle = message.xHandle?.trim() ?? ''
+
                   return (
                     <tr key={message.id} className="border-b border-[#e8ddd0] align-top hover:bg-[#f3ebe0]/30">
                       <td className="px-3 py-2 text-[#8a8075] whitespace-nowrap">
@@ -90,6 +97,20 @@ export default async function AdminContactPage() {
                         >
                           {message.email}
                         </a>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {displayXHandle ? (
+                          <a
+                            href={getXProfileUrl(displayXHandle)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#8a8075] hover:text-[#1a1a1a] underline decoration-[#d8ccb9] underline-offset-2"
+                          >
+                            {displayXHandle}
+                          </a>
+                        ) : (
+                          <span className="text-[#8a8075]">Not provided</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-[#1a1a1a]">
                         <p className="max-w-[520px] whitespace-pre-wrap break-words">{message.message}</p>

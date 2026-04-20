@@ -3,9 +3,11 @@ import { PrivyClient, type LinkedAccount, type User as PrivyUser } from '@privy-
 import { eq } from 'drizzle-orm'
 import type { NextResponse } from 'next/server'
 import { db, users } from '@/lib/db'
+import { ConfigurationError, ConflictError } from '@/lib/errors'
 import { getGeneratedDisplayName, resolveDisplayName } from '@/lib/display-name'
 import type { AppSessionUser, WalletProvisioningStatus } from '@/lib/auth/types'
 import { ensureOnchainUserWalletLink, normalizeWalletAddress } from '@/lib/onchain/wallet-link'
+import { extractPrivyXIdentity } from '@/lib/privy-linked-accounts'
 
 type SyncableAppUser = {
   id: string
@@ -17,6 +19,10 @@ type SyncableAppUser = {
   embeddedWalletAddress: string | null
   walletProvisioningStatus: WalletProvisioningStatus
   walletProvisionedAt: Date | null
+}
+
+type ReturnedSyncableAppUser = Omit<SyncableAppUser, 'walletProvisioningStatus'> & {
+  walletProvisioningStatus: string | null
 }
 
 type HeaderLike = {
@@ -152,9 +158,33 @@ function extractEmbeddedWalletAddress(linkedAccounts: LinkedAccount[]): string |
   return null
 }
 
+function hasEmbeddedEthereumWallet(linkedAccounts: LinkedAccount[]): boolean {
+  return linkedAccounts.some((account) => (
+    account.type === 'wallet'
+    && account.chain_type === 'ethereum'
+    && account.connector_type === 'embedded'
+  ))
+}
+
 function getWalletProvisioningStatus(walletAddress: string | null, existingStatus: WalletProvisioningStatus | null): WalletProvisioningStatus {
   if (walletAddress) return 'provisioned'
   return existingStatus ?? 'not_started'
+}
+
+function toSyncableAppUser(user: ReturnedSyncableAppUser): SyncableAppUser {
+  return {
+    ...user,
+    walletProvisioningStatus: asWalletProvisioningStatus(user.walletProvisioningStatus) ?? 'not_started',
+  }
+}
+
+function isPostgresUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const code = Reflect.get(error, 'code')
+  if (code === '23505') return true
+
+  return isPostgresUniqueViolation(Reflect.get(error, 'cause'))
 }
 
 export function isPrivyConfigured(): boolean {
@@ -175,6 +205,22 @@ export function getPrivyClient(): PrivyClient | null {
   })
 
   return cachedPrivyClient
+}
+
+export async function ensurePrivyEmbeddedEthereumWallet(privyUserId: string): Promise<PrivyUser> {
+  const privyClient = getPrivyClient()
+  if (!privyClient) {
+    throw new ConfigurationError('Privy is not configured for this environment')
+  }
+
+  let privyUser = await privyClient.users()._get(privyUserId)
+  if (!hasEmbeddedEthereumWallet(privyUser.linked_accounts)) {
+    privyUser = await privyClient.users().pregenerateWallets(privyUserId, {
+      wallets: [{ chain_type: 'ethereum' }],
+    })
+  }
+
+  return privyUser
 }
 
 export function extractPrivyAccessToken(headers: HeaderLike, cookieStore: CookieLike): string | null {
@@ -289,8 +335,9 @@ export function clearPrivyAppSessionCookie(response: NextResponse): void {
   })
 }
 
-export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<SyncableAppUser> {
+async function syncPrivyUserToLocalUserOnce(privyUser: PrivyUser, retryOnUniqueViolation: boolean): Promise<SyncableAppUser> {
   const primaryEmail = extractPrimaryEmail(privyUser.linked_accounts)
+  const xIdentity = extractPrivyXIdentity(privyUser.linked_accounts)
   const walletAddress = extractEmbeddedWalletAddress(privyUser.linked_accounts)
 
   const existingByPrivyId = await db.query.users.findFirst({
@@ -299,7 +346,9 @@ export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<Sy
       name: true,
       email: true,
       image: true,
+      xUserId: true,
       xUsername: true,
+      xConnectedAt: true,
       privyUserId: true,
       embeddedWalletAddress: true,
       walletProvisioningStatus: true,
@@ -315,7 +364,9 @@ export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<Sy
           name: true,
           email: true,
           image: true,
+          xUserId: true,
           xUsername: true,
+          xConnectedAt: true,
           privyUserId: true,
           embeddedWalletAddress: true,
           walletProvisioningStatus: true,
@@ -325,40 +376,85 @@ export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<Sy
       })
     : null
 
-  const existingUser = existingByPrivyId ?? existingByEmail
-  const fallbackSeed = primaryEmail ?? privyUser.id
+  const existingByXId = xIdentity
+    ? await db.query.users.findFirst({
+        columns: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          xUserId: true,
+          xUsername: true,
+          xConnectedAt: true,
+          privyUserId: true,
+          embeddedWalletAddress: true,
+          walletProvisioningStatus: true,
+          walletProvisionedAt: true,
+        },
+        where: eq(users.xUserId, xIdentity.xUserId),
+      })
+    : null
+
+  const existingOwner = existingByPrivyId ?? existingByEmail
+  if (existingOwner && existingByXId && existingOwner.id !== existingByXId.id) {
+    throw new ConflictError('This X account is already linked to another Endpoint Arena user')
+  }
+
+  const existingUser = existingOwner ?? existingByXId
+  const fallbackSeed = primaryEmail ?? xIdentity?.xUsername ?? xIdentity?.xUserId ?? privyUser.id
   const resolvedName = existingUser?.name || extractDisplayName(privyUser.linked_accounts, fallbackSeed)
   const resolvedWalletAddress = walletAddress ?? normalizeWalletAddress(existingUser?.embeddedWalletAddress ?? null)
   const resolvedWalletProvisionedAt = resolvedWalletAddress
     ? existingUser?.walletProvisionedAt ?? new Date()
     : existingUser?.walletProvisionedAt ?? null
+  const resolvedXUserId = xIdentity?.xUserId ?? existingUser?.xUserId ?? null
+  const resolvedXUsername = xIdentity
+    ? xIdentity.xUsername ?? existingUser?.xUsername ?? null
+    : existingUser?.xUsername ?? null
+  const resolvedXConnectedAt = xIdentity
+    ? existingUser?.xConnectedAt ?? new Date()
+    : existingUser?.xConnectedAt ?? null
   const walletProvisioningStatus = getWalletProvisioningStatus(
     resolvedWalletAddress,
     asWalletProvisioningStatus(existingUser?.walletProvisioningStatus ?? null),
   )
 
   if (existingUser) {
-    const [updatedUser] = await db.update(users)
-      .set({
-        email: primaryEmail ?? existingUser.email,
-        name: resolvedName,
-        privyUserId: privyUser.id,
-        embeddedWalletAddress: resolvedWalletAddress,
-        walletProvisioningStatus,
-        walletProvisionedAt: resolvedWalletProvisionedAt,
-      })
-      .where(eq(users.id, existingUser.id))
-      .returning({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        image: users.image,
-        xUsername: users.xUsername,
-        privyUserId: users.privyUserId,
-        embeddedWalletAddress: users.embeddedWalletAddress,
-        walletProvisioningStatus: users.walletProvisioningStatus,
-        walletProvisionedAt: users.walletProvisionedAt,
-      })
+    let updatedUser: ReturnedSyncableAppUser | undefined
+
+    try {
+      const updatedRows = await db.update(users)
+        .set({
+          email: primaryEmail ?? existingUser.email,
+          name: resolvedName,
+          privyUserId: privyUser.id,
+          xUserId: resolvedXUserId,
+          xUsername: resolvedXUsername,
+          xConnectedAt: resolvedXConnectedAt,
+          embeddedWalletAddress: resolvedWalletAddress,
+          walletProvisioningStatus,
+          walletProvisionedAt: resolvedWalletProvisionedAt,
+        })
+        .where(eq(users.id, existingUser.id))
+        .returning({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          image: users.image,
+          xUsername: users.xUsername,
+          privyUserId: users.privyUserId,
+          embeddedWalletAddress: users.embeddedWalletAddress,
+          walletProvisioningStatus: users.walletProvisioningStatus,
+          walletProvisionedAt: users.walletProvisionedAt,
+        })
+      updatedUser = updatedRows[0]
+    } catch (error) {
+      if (retryOnUniqueViolation && isPostgresUniqueViolation(error)) {
+        return syncPrivyUserToLocalUserOnce(privyUser, false)
+      }
+
+      throw error
+    }
 
     if (!updatedUser) {
       throw new Error('Failed to update the Privy-linked user record')
@@ -372,32 +468,43 @@ export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<Sy
       })
     }
 
-    return {
-      ...updatedUser,
-      walletProvisioningStatus: asWalletProvisioningStatus(updatedUser.walletProvisioningStatus) ?? 'not_started',
-    }
+    return toSyncableAppUser(updatedUser)
   }
 
-  const [createdUser] = await db.insert(users)
-    .values({
-      name: resolvedName,
-      email: primaryEmail,
-      privyUserId: privyUser.id,
-      embeddedWalletAddress: resolvedWalletAddress,
-      walletProvisioningStatus,
-      walletProvisionedAt: resolvedWalletProvisionedAt,
-    })
-    .returning({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      image: users.image,
-      xUsername: users.xUsername,
-      privyUserId: users.privyUserId,
-      embeddedWalletAddress: users.embeddedWalletAddress,
-      walletProvisioningStatus: users.walletProvisioningStatus,
-      walletProvisionedAt: users.walletProvisionedAt,
-    })
+  let createdUser: ReturnedSyncableAppUser | undefined
+
+  try {
+    const createdRows = await db.insert(users)
+      .values({
+        name: resolvedName,
+        email: primaryEmail,
+        privyUserId: privyUser.id,
+        xUserId: resolvedXUserId,
+        xUsername: resolvedXUsername,
+        xConnectedAt: resolvedXConnectedAt,
+        embeddedWalletAddress: resolvedWalletAddress,
+        walletProvisioningStatus,
+        walletProvisionedAt: resolvedWalletProvisionedAt,
+      })
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        image: users.image,
+        xUsername: users.xUsername,
+        privyUserId: users.privyUserId,
+        embeddedWalletAddress: users.embeddedWalletAddress,
+        walletProvisioningStatus: users.walletProvisioningStatus,
+        walletProvisionedAt: users.walletProvisionedAt,
+      })
+    createdUser = createdRows[0]
+  } catch (error) {
+    if (retryOnUniqueViolation && isPostgresUniqueViolation(error)) {
+      return syncPrivyUserToLocalUserOnce(privyUser, false)
+    }
+
+    throw error
+  }
 
   if (!createdUser) {
     throw new Error('Failed to create the Privy-linked user record')
@@ -411,8 +518,9 @@ export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<Sy
     })
   }
 
-  return {
-    ...createdUser,
-    walletProvisioningStatus: asWalletProvisioningStatus(createdUser.walletProvisioningStatus) ?? 'not_started',
-  }
+  return toSyncableAppUser(createdUser)
+}
+
+export async function syncPrivyUserToLocalUser(privyUser: PrivyUser): Promise<SyncableAppUser> {
+  return syncPrivyUserToLocalUserOnce(privyUser, true)
 }

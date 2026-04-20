@@ -3,12 +3,20 @@ import {
   buildModelDecisionPrompt,
   type ModelDecisionInput,
 } from '@/lib/predictions/model-decision-prompt'
-import { PUBLIC_LEADERBOARD_MODE } from '@/lib/public-leaderboard'
 import { getSeason4ModelStartingBankrollDisplay } from '@/lib/season4-bankroll-config'
 import { getSeason4ModelTradeAmountDisplay } from '@/lib/season4-model-trade-config'
 
 const METHOD_PAGE_CASH_AVAILABLE_DISPLAY = getSeason4ModelStartingBankrollDisplay()
 const METHOD_PAGE_MAX_TRADE_DISPLAY = getSeason4ModelTradeAmountDisplay()
+
+function formatDisplayAmount(value: number): string {
+  return value.toLocaleString('en-US', {
+    maximumFractionDigits: 6,
+  })
+}
+
+export const METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL = formatDisplayAmount(METHOD_PAGE_CASH_AVAILABLE_DISPLAY)
+export const METHOD_PAGE_MAX_TRADE_LABEL = formatDisplayAmount(METHOD_PAGE_MAX_TRADE_DISPLAY)
 
 export const METHOD_PAGE_EXAMPLE_INPUT: ModelDecisionInput = {
   meta: {
@@ -81,6 +89,6 @@ export const METHOD_PAGE_EXAMPLE_RESPONSE_TEXT = JSON.stringify(
   2,
 )
 
-export const METHOD_PAGE_SCORING_NOTE = PUBLIC_LEADERBOARD_MODE === 'first'
-  ? 'Public rankings currently score the first pre-outcome snapshot against the real outcome. The system can also compare final pre-outcome snapshots for internal analysis. A prediction is correct when a stored YES call resolves YES or a stored NO call resolves NO.'
-  : 'Public rankings currently score the final pre-outcome snapshot against the real outcome. The system can also compare first pre-outcome snapshots for internal analysis. A prediction is correct when a stored YES call resolves YES or a stored NO call resolves NO.'
+export const METHOD_PAGE_SEASON4_RUNTIME_NOTE = `Season 4 uses Base Sepolia, mock USDC, Privy embedded wallets, and an app read model mirrored from onchain events. Funded model wallets default to ${METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL} mock USDC unless the admin runtime config overrides the model bankroll, model trades are capped at ${METHOD_PAGE_MAX_TRADE_LABEL} mock USDC by default, and human users start at 0 until they claim the configured mock-USDC faucet.`
+
+export const METHOD_PAGE_SCORING_NOTE = 'Public rankings use the Season 4 money leaderboard: models are ranked by mirrored onchain total equity, meaning mock-USDC collateral plus marked-to-market YES/NO positions. Correct, wrong, and pending counts are derived from each model wallet\'s net position on resolved markets: more YES shares than NO shares is a YES call, more NO than YES is a NO call, and unresolved or tied positions stay pending. Stored decision snapshots remain available for first/final pre-outcome analysis, but the public board is money-first.'

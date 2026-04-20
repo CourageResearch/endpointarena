@@ -30,7 +30,7 @@ dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
 
 const MOCK_USDC_DECIMALS = 6
-const DEFAULT_LIQUIDITY_B = BigInt(25_000_000_000)
+const DEFAULT_LIQUIDITY_B = BigInt(1_000_000_000)
 const DEFAULT_TRADE_AMOUNT = BigInt(10_000_000)
 const DEFAULT_CLAIM_AMOUNT = DEFAULT_SEASON4_FAUCET_CLAIM_AMOUNT_ATOMIC
 const DEFAULT_INITIAL_PRICE_YES_E18 = BigInt('500000000000000000')

@@ -25,6 +25,25 @@ type ContactResponse = {
   }
 }
 
+function FieldLabel({
+  htmlFor,
+  label,
+  requirement,
+}: {
+  htmlFor: string
+  label: string
+  requirement: 'Required' | 'Optional'
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label htmlFor={htmlFor} className={FORM_FIELD_LABEL_CLASS}>
+        {label}
+      </label>
+      <span className="text-xs text-[#8a8075]">{requirement}</span>
+    </div>
+  )
+}
+
 export function ContactForm() {
   const router = useRouter()
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -32,23 +51,23 @@ export function ContactForm() {
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [xHandle, setXHandle] = useState('')
   const [message, setMessage] = useState('')
   const [status, setStatus] = useState<FormStatus>('idle')
   const [feedback, setFeedback] = useState('')
   const [submitAttempted, setSubmitAttempted] = useState(false)
-  const [nameTouched, setNameTouched] = useState(false)
   const [emailTouched, setEmailTouched] = useState(false)
   const [messageTouched, setMessageTouched] = useState(false)
 
   const trimmedName = name.trim()
   const trimmedEmail = email.trim()
+  const trimmedXHandle = xHandle.trim()
   const trimmedMessage = message.trim()
   const emailIsValid = EMAIL_PATTERN.test(trimmedEmail)
   const messageLength = message.length
   const messageTooLong = messageLength > MAX_MESSAGE_LENGTH
   const isSubmitting = status === 'submitting'
 
-  const showNameError = (submitAttempted || nameTouched) && trimmedName.length === 0
   const showEmailError = (submitAttempted || emailTouched) && !emailIsValid
   const showMessageError = (submitAttempted || messageTouched) && (trimmedMessage.length === 0 || messageTooLong)
 
@@ -65,12 +84,6 @@ export function ContactForm() {
     setSubmitAttempted(true)
 
     if (isSubmitting) {
-      return
-    }
-
-    if (trimmedName.length === 0) {
-      setNameTouched(true)
-      nameInputRef.current?.focus()
       return
     }
 
@@ -98,6 +111,7 @@ export function ContactForm() {
         body: JSON.stringify({
           name: trimmedName,
           email: trimmedEmail,
+          xHandle: trimmedXHandle,
           message: trimmedMessage,
         }),
       })
@@ -130,9 +144,7 @@ export function ContactForm() {
     <form className="space-y-4" onSubmit={handleSubmit} noValidate>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label htmlFor="contact-name" className={FORM_FIELD_LABEL_CLASS}>
-            Name
-          </label>
+          <FieldLabel htmlFor="contact-name" label="Name" requirement="Optional" />
           <input
             id="contact-name"
             ref={nameInputRef}
@@ -143,20 +155,13 @@ export function ContactForm() {
               resetFeedback()
               setName(event.target.value)
             }}
-            onBlur={() => setNameTouched(true)}
             placeholder="Ada Lovelace"
-            aria-invalid={showNameError}
             className={FORM_INPUT_CLASS}
           />
-          {showNameError ? (
-            <p className={FORM_ERROR_TEXT_CLASS}>Name is required.</p>
-          ) : null}
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="contact-email" className={FORM_FIELD_LABEL_CLASS}>
-            Email
-          </label>
+          <FieldLabel htmlFor="contact-email" label="Email" requirement="Required" />
           <input
             id="contact-email"
             ref={emailInputRef}
@@ -177,12 +182,29 @@ export function ContactForm() {
             <p className={FORM_ERROR_TEXT_CLASS}>Enter a valid email address.</p>
           ) : null}
         </div>
+
+        <div className="space-y-1 sm:col-span-2">
+          <FieldLabel htmlFor="contact-x-handle" label="X handle" requirement="Optional" />
+          <input
+            id="contact-x-handle"
+            type="text"
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={xHandle}
+            onChange={(event) => {
+              resetFeedback()
+              setXHandle(event.target.value)
+            }}
+            placeholder="@ada_lovelace"
+            className={FORM_INPUT_CLASS}
+          />
+        </div>
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="contact-message" className={FORM_FIELD_LABEL_CLASS}>
-          Message
-        </label>
+        <FieldLabel htmlFor="contact-message" label="Message" requirement="Required" />
         <textarea
           id="contact-message"
           ref={messageInputRef}

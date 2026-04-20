@@ -6,9 +6,9 @@ const MARKET_RUNTIME_CONFIG_ID = 'default'
 const MAX_CONFIG_NUMBER = 10_000_000
 export const DEFAULT_TOY_TRIAL_COUNT = 0
 export const MIN_TOY_TRIAL_COUNT = 0
-export const DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY = 25_000
+export const DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY = 1_000
 export const DEFAULT_SEASON4_STARTING_BANKROLL_DISPLAY = 1000
-export const DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY = 1000
+export const DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY = 100
 type MarketRuntimeConfigDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export type MarketRuntimeConfig = {

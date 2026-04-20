@@ -23,6 +23,7 @@ import {
   onchainIndexerCursors,
   onchainMarkets,
   onchainModelWallets,
+  onchainUserWallets,
   trials,
   predictionMarkets,
   trialMonitorRuns,
@@ -40,12 +41,15 @@ import { openMarketForTrialQuestion } from '@/lib/markets/engine'
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import {
   DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY,
+  DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY,
+  DEFAULT_SEASON4_STARTING_BANKROLL_DISPLAY,
   getMarketRuntimeConfig,
 } from '@/lib/markets/runtime-config'
 import { MOCK_USDC_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4DeployerPrivateKey, getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { getSeason4ModelName } from '@/lib/season4-model-labels'
 import { filterSupportedTrialQuestions, TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
+import { TRIAL_THERAPEUTIC_AREAS } from '@/lib/trial-therapeutic-areas'
 import { userColumns, type UserColumnsRow } from '@/lib/users/query-shapes'
 
 type DatabaseClient = typeof db
@@ -56,12 +60,38 @@ const DEFAULT_OPENING_LMSR_B = 100000
 const MOCK_USDC_DISPLAY_DIVISOR = 1_000_000
 const DEFAULT_MODEL_ETH_TOP_UP_WEI = BigInt(20_000_000_000_000)
 const MIN_MODEL_ETH_BALANCE_WEI = BigInt(10_000_000_000_000)
+const trialTherapeuticAreaSqlList = TRIAL_THERAPEUTIC_AREAS.map((area) => `'${area.replace(/'/g, "''")}'`).join(', ')
+
+const toySeedTrialColumns = {
+  id: true,
+  nctNumber: true,
+  source: true,
+  shortTitle: true,
+  sponsorName: true,
+  sponsorTicker: true,
+  indication: true,
+  therapeuticArea: true,
+  exactPhase: true,
+  intervention: true,
+  primaryEndpoint: true,
+  studyStartDate: true,
+  estPrimaryCompletionDate: true,
+  estStudyCompletionDate: true,
+  estResultsPostingDate: true,
+  currentStatus: true,
+  estEnrollment: true,
+  keyLocations: true,
+  briefSummary: true,
+  standardBettingMarkets: true,
+} as const satisfies Partial<Record<keyof typeof trials.$inferSelect, true>>
 
 let localToyDatabasePreparedUrl: string | null = null
 let localToyDatabasePreparationPromise: Promise<void> | null = null
 
+type ToySeedTrial = Pick<typeof trials.$inferSelect, keyof typeof toySeedTrialColumns>
+
 type SourceTrial = {
-  trial: typeof trials.$inferSelect
+  trial: ToySeedTrial
   market: Pick<typeof predictionMarkets.$inferSelect, 'openingProbability' | 'houseOpeningProbability'>
 }
 
@@ -80,6 +110,7 @@ type ToyModelWalletFunding = {
   modelKey: ModelId
   walletAddress: Address
   claimTxHash: Hex | null
+  balanceAdjustTxHash: Hex | null
   gasTopUpTxHash: Hex | null
   gasBalanceEth: string
   collateralBalanceDisplay: number
@@ -165,6 +196,10 @@ function parseToyModelWalletMap(): Partial<Record<ModelId, Address>> {
 
 function formatTokenDisplay(value: bigint): number {
   return Number(value) / MOCK_USDC_DISPLAY_DIVISOR
+}
+
+function toMockUsdcUnits(displayValue: number): bigint {
+  return BigInt(Math.round(displayValue * MOCK_USDC_DISPLAY_DIVISOR))
 }
 
 async function ensureLocalToyDatabaseExists(connectionString: string): Promise<boolean> {
@@ -283,6 +318,8 @@ async function ensureLocalToyDatabasePrepared(): Promise<void> {
 }
 
 async function ensureToyRuntimeConfig(dbClient: DatabaseClient): Promise<void> {
+  await ensureToyRuntimeConfigSchema(dbClient)
+
   const mainDb = getDbForTarget('main')
   const mainConfig = await getMarketRuntimeConfig(mainDb).catch(() => null)
   const now = new Date()
@@ -293,12 +330,165 @@ async function ensureToyRuntimeConfig(dbClient: DatabaseClient): Promise<void> {
       openingLmsrB: mainConfig?.openingLmsrB ?? DEFAULT_OPENING_LMSR_B,
       toyTrialCount: mainConfig?.toyTrialCount ?? 0,
       season4MarketLiquidityBDisplay: mainConfig?.season4MarketLiquidityBDisplay ?? DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY,
-      season4HumanStartingBankrollDisplay: mainConfig?.season4HumanStartingBankrollDisplay ?? 1000,
-      season4StartingBankrollDisplay: mainConfig?.season4StartingBankrollDisplay ?? 1000,
+      season4HumanStartingBankrollDisplay: mainConfig?.season4HumanStartingBankrollDisplay ?? DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY,
+      season4StartingBankrollDisplay: mainConfig?.season4StartingBankrollDisplay ?? DEFAULT_SEASON4_STARTING_BANKROLL_DISPLAY,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoNothing()
+}
+
+async function ensureToyRuntimeConfigSchema(dbClient: DatabaseClient): Promise<void> {
+  // Existing local toy databases may predate the Season 4 runtime config fields.
+  await dbClient.execute(sql`
+    create table if not exists "market_runtime_configs" (
+      "id" text primary key,
+      "opening_lmsr_b" real not null default 100000,
+      "toy_trial_count" integer not null default 0,
+      "season4_market_liquidity_b_display" real not null default 1000,
+      "season4_human_starting_bankroll_display" real not null default 100,
+      "season4_starting_bankroll_display" real not null default 1000,
+      "created_at" timestamp not null default now(),
+      "updated_at" timestamp not null default now()
+    )
+  `)
+
+  await dbClient.execute(sql`
+    alter table "market_runtime_configs"
+      add column if not exists "opening_lmsr_b" real not null default 100000,
+      add column if not exists "toy_trial_count" integer not null default 0,
+      add column if not exists "season4_market_liquidity_b_display" real not null default 1000,
+      add column if not exists "season4_starting_bankroll_display" real not null default 1000,
+      add column if not exists "season4_human_starting_bankroll_display" real,
+      add column if not exists "created_at" timestamp not null default now(),
+      add column if not exists "updated_at" timestamp not null default now()
+  `)
+
+  await dbClient.execute(sql`
+    update "market_runtime_configs"
+    set "season4_human_starting_bankroll_display" =
+      coalesce("season4_human_starting_bankroll_display", 100),
+      "created_at" = coalesce("created_at", now()),
+      "updated_at" = coalesce("updated_at", now())
+  `)
+
+  await dbClient.execute(sql`
+    update "market_runtime_configs"
+    set "season4_market_liquidity_b_display" = 1000,
+      "updated_at" = now()
+    where "id" = 'default'
+      and "season4_market_liquidity_b_display" <> 1000
+  `)
+
+  await dbClient.execute(sql`
+    update "market_runtime_configs"
+    set "season4_human_starting_bankroll_display" = 100,
+      "updated_at" = now()
+    where "id" = 'default'
+      and "season4_human_starting_bankroll_display" = 1000
+  `)
+
+  await dbClient.execute(sql`
+    update "market_runtime_configs"
+    set "toy_trial_count" = 0,
+      "updated_at" = now()
+    where "id" = 'default'
+      and "toy_trial_count" <> 0
+  `)
+
+  await dbClient.execute(sql`
+    alter table "market_runtime_configs"
+      alter column "opening_lmsr_b" set default 100000,
+      alter column "toy_trial_count" set default 0,
+      alter column "season4_market_liquidity_b_display" set default 1000,
+      alter column "season4_human_starting_bankroll_display" set default 100,
+      alter column "season4_human_starting_bankroll_display" set not null,
+      alter column "season4_starting_bankroll_display" set default 1000,
+      alter column "created_at" set default now(),
+      alter column "created_at" set not null,
+      alter column "updated_at" set default now(),
+      alter column "updated_at" set not null
+  `)
+
+  await dbClient.execute(sql`
+    alter table "market_runtime_configs"
+      drop column if exists "warmup_run_count",
+      drop column if exists "warmup_max_trade_usd",
+      drop column if exists "warmup_buy_cash_fraction",
+      drop column if exists "steady_max_trade_usd",
+      drop column if exists "steady_buy_cash_fraction",
+      drop column if exists "signup_user_limit",
+      drop column if exists "max_position_per_side_shares"
+  `)
+
+  await dbClient.execute(sql`
+    alter table "market_runtime_configs"
+      drop constraint if exists "market_runtime_configs_max_position_per_side_shares_check",
+      drop constraint if exists "market_runtime_configs_season4_human_starting_bankroll_display_"
+  `)
+
+  await dbClient.execute(sql`
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.market_runtime_configs'::regclass
+          and conname = 'market_runtime_configs_opening_lmsr_b_check'
+      ) then
+        alter table "market_runtime_configs"
+          add constraint "market_runtime_configs_opening_lmsr_b_check"
+          check ("market_runtime_configs"."opening_lmsr_b" > 0 and "market_runtime_configs"."opening_lmsr_b" <= 10000000);
+      end if;
+
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.market_runtime_configs'::regclass
+          and conname = 'market_runtime_configs_toy_trial_count_check'
+      ) then
+        alter table "market_runtime_configs"
+          add constraint "market_runtime_configs_toy_trial_count_check"
+          check ("market_runtime_configs"."toy_trial_count" >= 0);
+      end if;
+
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.market_runtime_configs'::regclass
+          and conname = 'market_runtime_configs_s4_market_liquidity_b_check'
+      ) then
+        alter table "market_runtime_configs"
+          add constraint "market_runtime_configs_s4_market_liquidity_b_check"
+          check ("market_runtime_configs"."season4_market_liquidity_b_display" > 0);
+      end if;
+
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.market_runtime_configs'::regclass
+          and conname = 'market_runtime_configs_s4_human_bankroll_display_check'
+      ) then
+        alter table "market_runtime_configs"
+          add constraint "market_runtime_configs_s4_human_bankroll_display_check"
+          check ("market_runtime_configs"."season4_human_starting_bankroll_display" >= 0);
+      end if;
+
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.market_runtime_configs'::regclass
+          and conname = 'market_runtime_configs_season4_starting_bankroll_display_check'
+      ) then
+        alter table "market_runtime_configs"
+          add constraint "market_runtime_configs_season4_starting_bankroll_display_check"
+          check ("market_runtime_configs"."season4_starting_bankroll_display" >= 0);
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
+  `)
 }
 
 async function ensureToyTrialMonitorRunsSchema(dbClient: DatabaseClient): Promise<void> {
@@ -307,6 +497,203 @@ async function ensureToyTrialMonitorRunsSchema(dbClient: DatabaseClient): Promis
     alter table trial_monitor_runs
     add column if not exists verifier_model_key text,
     add column if not exists scoped_nct_number text
+  `)
+}
+
+async function ensureToyDecisionSnapshotSchemaCompatibility(dbClient: DatabaseClient): Promise<void> {
+  // Older toy databases can predate Season 4's actor-free model snapshot reads.
+  await dbClient.execute(sql`
+    alter table "model_decision_snapshots"
+      add column if not exists "model_key" text
+  `)
+
+  await dbClient.execute(sql`
+    alter table "model_decision_snapshots"
+      alter column "actor_id" drop not null,
+      alter column "market_id" drop not null
+  `)
+
+  await dbClient.execute(sql`
+    update "model_decision_snapshots" as snapshot
+    set "model_key" = actor."model_key"
+    from "market_actors" as actor
+    where snapshot."actor_id" = actor."id"
+      and snapshot."model_key" is null
+      and actor."model_key" is not null
+  `)
+
+  await dbClient.execute(sql`
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.model_decision_snapshots'::regclass
+          and conname = 'model_decision_snapshots_market_id_prediction_markets_id_fk'
+      ) then
+        alter table "model_decision_snapshots"
+          add constraint "model_decision_snapshots_market_id_prediction_markets_id_fk"
+          foreign key ("market_id") references "public"."prediction_markets"("id")
+          on delete set null on update no action;
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
+  `)
+
+  await dbClient.execute(sql`
+    create index if not exists "model_decision_snapshots_question_model_key_created_idx"
+    on "model_decision_snapshots" using btree ("trial_question_id", "model_key", "created_at")
+  `)
+
+  await dbClient.execute(sql`
+    create index if not exists "model_decision_snapshots_market_model_key_created_idx"
+    on "model_decision_snapshots" using btree ("market_id", "model_key", "created_at")
+  `)
+}
+
+async function ensureToyUserSchemaCompatibility(dbClient: DatabaseClient): Promise<void> {
+  // Older toy databases predate the Season 4 Privy user fields and the X rename.
+  await dbClient.execute(sql`
+    do $$
+    begin
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'tweet_challenge_token_hash'
+      ) and not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'x_challenge_token_hash'
+      ) then
+        alter table "users" rename column "tweet_challenge_token_hash" to "x_challenge_token_hash";
+      end if;
+
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'tweet_challenge_expires_at'
+      ) and not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'x_challenge_expires_at'
+      ) then
+        alter table "users" rename column "tweet_challenge_expires_at" to "x_challenge_expires_at";
+      end if;
+
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'tweet_verified_at'
+      ) and not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'x_verified_at'
+      ) then
+        alter table "users" rename column "tweet_verified_at" to "x_verified_at";
+      end if;
+
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'tweet_verified_tweet_id'
+      ) and not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'x_verified_post_id'
+      ) then
+        alter table "users" rename column "tweet_verified_tweet_id" to "x_verified_post_id";
+      end if;
+
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'tweet_must_stay_until'
+      ) and not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'users'
+          and column_name = 'x_must_stay_until'
+      ) then
+        alter table "users" rename column "tweet_must_stay_until" to "x_must_stay_until";
+      end if;
+    end $$;
+  `)
+
+  await dbClient.execute(sql`
+    alter table "users"
+      add column if not exists "privy_user_id" text,
+      add column if not exists "embedded_wallet_address" text,
+      add column if not exists "wallet_provisioning_status" text,
+      add column if not exists "wallet_provisioned_at" timestamp with time zone,
+      add column if not exists "x_challenge_token" text,
+      add column if not exists "x_challenge_token_hash" text,
+      add column if not exists "x_challenge_expires_at" timestamp with time zone,
+      add column if not exists "x_verified_at" timestamp with time zone,
+      add column if not exists "x_verified_post_id" text,
+      add column if not exists "x_must_stay_until" timestamp with time zone
+  `)
+
+  await dbClient.execute(sql`
+    update "users"
+    set "wallet_provisioning_status" = 'not_started'
+    where "wallet_provisioning_status" is null
+       or btrim("wallet_provisioning_status") = ''
+  `)
+
+  await dbClient.execute(sql`
+    alter table "users"
+      alter column "wallet_provisioning_status" set default 'not_started',
+      alter column "wallet_provisioning_status" set not null
+  `)
+
+  await dbClient.execute(sql`
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.users'::regclass
+          and conname = 'users_wallet_provisioning_status_check'
+      ) then
+        alter table "users"
+          add constraint "users_wallet_provisioning_status_check"
+          check ("users"."wallet_provisioning_status" in ('not_started', 'provisioning', 'provisioned', 'error'));
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
+  `)
+
+  await dbClient.execute(sql`
+    create unique index if not exists "users_privy_user_id_idx"
+    on "users" using btree ("privy_user_id")
+  `)
+
+  await dbClient.execute(sql`
+    create unique index if not exists "users_x_user_id_idx"
+    on "users" using btree ("x_user_id")
   `)
 }
 
@@ -334,6 +721,34 @@ async function ensureToyTrialSchemaCompatibility(dbClient: DatabaseClient): Prom
 
   await dbClient.execute(sql`
     alter table "trials" add column if not exists "source" text
+  `)
+
+  await dbClient.execute(sql`
+    alter table "trials" add column if not exists "therapeutic_area" text
+  `)
+
+  await dbClient.execute(sql`
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.trials'::regclass
+          and conname = 'trials_therapeutic_area_check'
+      ) then
+        alter table "trials"
+          add constraint "trials_therapeutic_area_check"
+          check ("trials"."therapeutic_area" is null or "trials"."therapeutic_area" in (${sql.raw(trialTherapeuticAreaSqlList)}));
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
+  `)
+
+  await dbClient.execute(sql`
+    create index if not exists "trials_therapeutic_area_idx"
+    on "trials" using btree ("therapeutic_area")
   `)
 
   await dbClient.execute(sql`
@@ -368,13 +783,22 @@ async function ensureToyTrialSchemaCompatibility(dbClient: DatabaseClient): Prom
   `)
 
   await dbClient.execute(sql`
-    alter table "trials" drop constraint if exists "trials_source_check"
-  `)
-
-  await dbClient.execute(sql`
-    alter table "trials"
-    add constraint "trials_source_check"
-    check ("trials"."source" in ('sync_import', 'manual_admin'))
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.trials'::regclass
+          and conname = 'trials_source_check'
+      ) then
+        alter table "trials"
+          add constraint "trials_source_check"
+          check ("trials"."source" in ('sync_import', 'manual_admin'));
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
   `)
 
   await dbClient.execute(sql`
@@ -531,34 +955,220 @@ async function ensureToyTrialSchemaCompatibility(dbClient: DatabaseClient): Prom
   `)
 
   await dbClient.execute(sql`
-    alter table "prediction_markets" drop constraint if exists "prediction_markets_opened_by_user_id_users_id_fk"
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.prediction_markets'::regclass
+          and conname = 'prediction_markets_opened_by_user_id_users_id_fk'
+      ) then
+        alter table "prediction_markets"
+          add constraint "prediction_markets_opened_by_user_id_users_id_fk"
+          foreign key ("opened_by_user_id") references "public"."users"("id") on delete set null on update no action;
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
   `)
 
   await dbClient.execute(sql`
-    alter table "prediction_markets"
-    add constraint "prediction_markets_opened_by_user_id_users_id_fk"
-    foreign key ("opened_by_user_id") references "public"."users"("id") on delete set null on update no action
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.prediction_markets'::regclass
+          and conname = 'prediction_markets_house_opening_probability_check'
+      ) then
+        alter table "prediction_markets"
+          add constraint "prediction_markets_house_opening_probability_check"
+          check ("prediction_markets"."house_opening_probability" >= 0 and "prediction_markets"."house_opening_probability" <= 1);
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
   `)
 
   await dbClient.execute(sql`
-    alter table "prediction_markets" drop constraint if exists "prediction_markets_house_opening_probability_check"
+    do $$
+    begin
+      if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.prediction_markets'::regclass
+          and conname = 'prediction_markets_opening_line_source_check'
+      ) then
+        alter table "prediction_markets"
+          add constraint "prediction_markets_opening_line_source_check"
+          check ("prediction_markets"."opening_line_source" in ('house_model', 'admin_override'));
+      end if;
+    exception
+      when duplicate_object then
+        null;
+    end $$;
+  `)
+}
+
+async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Promise<void> {
+  // Season 4 local toy databases created before onchain markets need these tables
+  // before reset can clear and re-seed runtime state.
+  await dbClient.execute(sql`
+    create table if not exists "onchain_user_wallets" (
+      "id" text primary key not null,
+      "user_id" text not null references "public"."users"("id") on delete cascade on update no action,
+      "privy_user_id" text,
+      "chain_id" integer default 84532 not null,
+      "wallet_address" text,
+      "provisioning_status" text default 'pending' not null,
+      "first_claimed_at" timestamp with time zone,
+      "created_at" timestamp with time zone not null,
+      "updated_at" timestamp with time zone not null,
+      constraint "onchain_user_wallets_chain_id_check" check ("onchain_user_wallets"."chain_id" > 0),
+      constraint "onchain_user_wallets_provisioning_status_check"
+        check ("onchain_user_wallets"."provisioning_status" in ('pending', 'provisioning', 'ready', 'error'))
+    )
   `)
 
   await dbClient.execute(sql`
-    alter table "prediction_markets"
-    add constraint "prediction_markets_house_opening_probability_check"
-    check ("prediction_markets"."house_opening_probability" >= 0 and "prediction_markets"."house_opening_probability" <= 1)
+    create table if not exists "onchain_model_wallets" (
+      "id" text primary key not null,
+      "model_key" text not null,
+      "display_name" text not null,
+      "chain_id" integer default 84532 not null,
+      "wallet_address" text,
+      "funding_status" text default 'pending' not null,
+      "bankroll_display" real default 0 not null,
+      "funded_at" timestamp with time zone,
+      "created_at" timestamp with time zone not null,
+      "updated_at" timestamp with time zone not null,
+      constraint "onchain_model_wallets_chain_id_check" check ("onchain_model_wallets"."chain_id" > 0),
+      constraint "onchain_model_wallets_funding_status_check"
+        check ("onchain_model_wallets"."funding_status" in ('pending', 'funded', 'error')),
+      constraint "onchain_model_wallets_bankroll_display_check"
+        check ("onchain_model_wallets"."bankroll_display" >= 0)
+    )
   `)
 
   await dbClient.execute(sql`
-    alter table "prediction_markets" drop constraint if exists "prediction_markets_opening_line_source_check"
+    create table if not exists "onchain_markets" (
+      "id" text primary key not null,
+      "trial_question_id" text references "public"."trial_questions"("id") on delete set null on update no action,
+      "market_slug" text not null,
+      "chain_id" integer default 84532 not null,
+      "manager_address" text not null,
+      "onchain_market_id" text,
+      "title" text not null,
+      "metadata_uri" text,
+      "collateral_token_address" text,
+      "execution_mode" text default 'onchain_lmsr' not null,
+      "position_model" text default 'onchain_app_restricted' not null,
+      "status" text default 'draft' not null,
+      "close_time" timestamp with time zone,
+      "deploy_tx_hash" text,
+      "resolve_tx_hash" text,
+      "resolved_outcome" text,
+      "created_at" timestamp with time zone not null,
+      "updated_at" timestamp with time zone not null,
+      constraint "onchain_markets_chain_id_check" check ("onchain_markets"."chain_id" > 0),
+      constraint "onchain_markets_execution_mode_check" check ("onchain_markets"."execution_mode" = 'onchain_lmsr'),
+      constraint "onchain_markets_position_model_check" check ("onchain_markets"."position_model" = 'onchain_app_restricted'),
+      constraint "onchain_markets_status_check"
+        check ("onchain_markets"."status" in ('draft', 'deployed', 'closed', 'resolved', 'archived')),
+      constraint "onchain_markets_resolved_outcome_check"
+        check ("onchain_markets"."resolved_outcome" is null or "onchain_markets"."resolved_outcome" in ('YES', 'NO'))
+    )
   `)
 
   await dbClient.execute(sql`
-    alter table "prediction_markets"
-    add constraint "prediction_markets_opening_line_source_check"
-    check ("prediction_markets"."opening_line_source" in ('house_model', 'admin_override'))
+    create table if not exists "onchain_faucet_claims" (
+      "id" text primary key not null,
+      "user_id" text references "public"."users"("id") on delete set null on update no action,
+      "wallet_address" text not null,
+      "chain_id" integer default 84532 not null,
+      "amount_atomic" text not null,
+      "amount_display" real not null,
+      "status" text default 'requested' not null,
+      "tx_hash" text,
+      "error_message" text,
+      "requested_at" timestamp with time zone not null,
+      "processed_at" timestamp with time zone,
+      "updated_at" timestamp with time zone not null,
+      constraint "onchain_faucet_claims_amount_display_check"
+        check ("onchain_faucet_claims"."amount_display" > 0),
+      constraint "onchain_faucet_claims_status_check"
+        check ("onchain_faucet_claims"."status" in ('requested', 'submitted', 'confirmed', 'failed', 'skipped'))
+    )
   `)
+
+  await dbClient.execute(sql`
+    create table if not exists "onchain_indexer_cursors" (
+      "id" text primary key not null,
+      "chain_id" integer default 84532 not null,
+      "contract_address" text not null,
+      "last_synced_block" text default '0' not null,
+      "latest_seen_block" text default '0' not null,
+      "updated_at" timestamp with time zone not null,
+      constraint "onchain_indexer_cursors_chain_id_check" check ("onchain_indexer_cursors"."chain_id" > 0)
+    )
+  `)
+
+  await dbClient.execute(sql`
+    create table if not exists "onchain_events" (
+      "id" text primary key not null,
+      "chain_id" integer default 84532 not null,
+      "contract_address" text not null,
+      "tx_hash" text not null,
+      "block_hash" text,
+      "block_number" text not null,
+      "log_index" integer not null,
+      "event_name" text not null,
+      "market_ref" text,
+      "wallet_address" text,
+      "payload" jsonb not null,
+      "created_at" timestamp with time zone not null,
+      constraint "onchain_events_chain_id_check" check ("onchain_events"."chain_id" > 0),
+      constraint "onchain_events_log_index_check" check ("onchain_events"."log_index" >= 0)
+    )
+  `)
+
+  await dbClient.execute(sql`
+    create table if not exists "onchain_balances" (
+      "id" text primary key not null,
+      "chain_id" integer default 84532 not null,
+      "market_ref" text default 'collateral' not null,
+      "wallet_address" text not null,
+      "user_id" text references "public"."users"("id") on delete set null on update no action,
+      "model_key" text,
+      "collateral_display" real default 0 not null,
+      "yes_shares" real default 0 not null,
+      "no_shares" real default 0 not null,
+      "last_indexed_block" text default '0' not null,
+      "updated_at" timestamp with time zone not null,
+      constraint "onchain_balances_collateral_display_check" check ("onchain_balances"."collateral_display" >= 0),
+      constraint "onchain_balances_yes_shares_check" check ("onchain_balances"."yes_shares" >= 0),
+      constraint "onchain_balances_no_shares_check" check ("onchain_balances"."no_shares" >= 0)
+    )
+  `)
+
+  await dbClient.execute(sql`create unique index if not exists "onchain_user_wallets_user_id_idx" on "onchain_user_wallets" using btree ("user_id")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_user_wallets_wallet_address_idx" on "onchain_user_wallets" using btree ("wallet_address")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_model_wallets_model_key_idx" on "onchain_model_wallets" using btree ("model_key")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_model_wallets_wallet_address_idx" on "onchain_model_wallets" using btree ("wallet_address")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_markets_market_slug_idx" on "onchain_markets" using btree ("market_slug")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_markets_chain_market_idx" on "onchain_markets" using btree ("chain_id", "manager_address", "onchain_market_id")`)
+  await dbClient.execute(sql`create index if not exists "onchain_faucet_claims_wallet_requested_at_idx" on "onchain_faucet_claims" using btree ("wallet_address", "requested_at")`)
+  await dbClient.execute(sql`create index if not exists "onchain_faucet_claims_tx_hash_idx" on "onchain_faucet_claims" using btree ("tx_hash")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_indexer_cursors_contract_idx" on "onchain_indexer_cursors" using btree ("chain_id", "contract_address")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_events_tx_log_idx" on "onchain_events" using btree ("chain_id", "tx_hash", "log_index")`)
+  await dbClient.execute(sql`create index if not exists "onchain_events_contract_block_idx" on "onchain_events" using btree ("contract_address", "block_number")`)
+  await dbClient.execute(sql`create index if not exists "onchain_events_event_name_idx" on "onchain_events" using btree ("event_name")`)
+  await dbClient.execute(sql`create unique index if not exists "onchain_balances_wallet_market_idx" on "onchain_balances" using btree ("chain_id", "wallet_address", "market_ref")`)
+  await dbClient.execute(sql`create index if not exists "onchain_balances_wallet_idx" on "onchain_balances" using btree ("wallet_address")`)
+  await dbClient.execute(sql`create index if not exists "onchain_balances_user_idx" on "onchain_balances" using btree ("user_id")`)
+  await dbClient.execute(sql`create index if not exists "onchain_balances_model_key_idx" on "onchain_balances" using btree ("model_key")`)
 }
 
 function compareSourceTrials(left: SourceTrial, right: SourceTrial) {
@@ -581,7 +1191,9 @@ async function listMainOpenTrials(dbClient: DatabaseClient): Promise<SourceTrial
     with: {
       trialQuestion: {
         with: {
-          trial: true,
+          trial: {
+            columns: toySeedTrialColumns,
+          },
         },
       },
     },
@@ -729,6 +1341,7 @@ async function resetToyRuntimeState(dbClient: DatabaseClient): Promise<void> {
     await tx.delete(onchainIndexerCursors)
     await tx.delete(onchainMarkets)
     await tx.delete(onchainModelWallets)
+    await tx.delete(onchainUserWallets)
     await tx.delete(aiBatches)
     await tx.delete(trialOutcomeCandidateEvidence)
     await tx.delete(trialOutcomeCandidates)
@@ -879,6 +1492,14 @@ async function fundToyModelWallets(
   funded: ToyModelWalletFunding[]
   warnings: string[]
 }> {
+  const configuredWallets = seededWallets.filter((model) => model.walletAddress)
+  if (configuredWallets.length === 0) {
+    return {
+      funded: [],
+      warnings: ['No Toy model wallet addresses are configured; seeded model-wallet rows but skipped funding. Set SEASON4_MODEL_WALLETS_JSON and SEASON4_MODEL_PRIVATE_KEYS_JSON before resetting Toy DB.'],
+    }
+  }
+
   const config = getSeason4OnchainConfig('toy')
   if (!config.enabled || !config.rpcUrl || !config.faucetAddress || !config.collateralTokenAddress) {
     return {
@@ -907,10 +1528,11 @@ async function fundToyModelWallets(
   })
   const funded: ToyModelWalletFunding[] = []
   const warnings: string[] = []
+  const runtimeConfig = await getMarketRuntimeConfig(dbClient)
+  const nextClaimAmount = toMockUsdcUnits(runtimeConfig.season4HumanStartingBankrollDisplay)
+  const modelTargetCollateral = toMockUsdcUnits(runtimeConfig.season4StartingBankrollDisplay)
 
   try {
-    const { season4HumanStartingBankrollDisplay } = await getMarketRuntimeConfig(dbClient)
-    const nextClaimAmount = BigInt(Math.round(season4HumanStartingBankrollDisplay * MOCK_USDC_DISPLAY_DIVISOR))
     const currentClaimAmount = await publicClient.readContract({
       address: config.faucetAddress,
       abi: SEASON4_FAUCET_ABI,
@@ -937,25 +1559,35 @@ async function fundToyModelWallets(
 
     const walletAddress = model.walletAddress
     let claimTxHash: Hex | null = null
+    let balanceAdjustTxHash: Hex | null = null
     let gasTopUpTxHash: Hex | null = null
 
     try {
-      const canClaim = await publicClient.readContract({
-        address: config.faucetAddress,
-        abi: SEASON4_FAUCET_ABI,
-        functionName: 'canClaim',
+      const currentCollateralBalance = await publicClient.readContract({
+        address: config.collateralTokenAddress,
+        abi: MOCK_USDC_ABI,
+        functionName: 'balanceOf',
         args: [walletAddress],
-      }) as boolean
+      }) as bigint
 
-      if (canClaim) {
-        claimTxHash = await walletClient.writeContract({
-          address: config.faucetAddress,
-          abi: SEASON4_FAUCET_ABI,
-          functionName: 'claimTo',
-          args: [walletAddress],
+      if (currentCollateralBalance < modelTargetCollateral) {
+        balanceAdjustTxHash = await walletClient.writeContract({
+          address: config.collateralTokenAddress,
+          abi: MOCK_USDC_ABI,
+          functionName: 'mint',
+          args: [walletAddress, modelTargetCollateral - currentCollateralBalance],
           account: deployer,
         })
-        await publicClient.waitForTransactionReceipt({ hash: claimTxHash })
+        await publicClient.waitForTransactionReceipt({ hash: balanceAdjustTxHash })
+      } else if (currentCollateralBalance > modelTargetCollateral) {
+        balanceAdjustTxHash = await walletClient.writeContract({
+          address: config.collateralTokenAddress,
+          abi: MOCK_USDC_ABI,
+          functionName: 'burn',
+          args: [walletAddress, currentCollateralBalance - modelTargetCollateral],
+          account: deployer,
+        })
+        await publicClient.waitForTransactionReceipt({ hash: balanceAdjustTxHash })
       }
 
       const gasBalance = await publicClient.getBalance({ address: walletAddress })
@@ -1000,6 +1632,7 @@ async function fundToyModelWallets(
         modelKey: model.modelKey,
         walletAddress,
         claimTxHash,
+        balanceAdjustTxHash,
         gasTopUpTxHash,
         gasBalanceEth: formatEther(nextGasBalance),
         collateralBalanceDisplay,
@@ -1038,6 +1671,7 @@ async function seedToyTrials(dbClient: DatabaseClient, sourceTrials: SourceTrial
           sponsorName: source.trial.sponsorName,
           sponsorTicker: source.trial.sponsorTicker,
           indication: source.trial.indication,
+          therapeuticArea: source.trial.therapeuticArea,
           exactPhase: source.trial.exactPhase,
           intervention: source.trial.intervention,
           primaryEndpoint: source.trial.primaryEndpoint,
@@ -1098,8 +1732,11 @@ export async function ensureToyDatabaseSchema(): Promise<void> {
   await ensureLocalToyDatabasePrepared()
 
   const toyDb = getDbForTarget('toy')
+  await ensureToyUserSchemaCompatibility(toyDb)
   await ensureToyTrialSchemaCompatibility(toyDb)
   await ensureToyTrialMonitorRunsSchema(toyDb)
+  await ensureToyDecisionSnapshotSchemaCompatibility(toyDb)
+  await ensureToyOnchainSchemaCompatibility(toyDb)
   await ensureToyRuntimeConfig(toyDb)
 }
 

@@ -16,11 +16,15 @@ function txUrl(hash: string): string {
 
 export function Season4ProfileActions({
   walletAddress,
+  isFaucetConfigured,
+  hasClaimedFaucet,
   canClaimFromFaucet,
   claimAmountLabel,
   className,
 }: {
   walletAddress: string | null
+  isFaucetConfigured: boolean
+  hasClaimedFaucet: boolean
   canClaimFromFaucet: boolean
   claimAmountLabel: string
   className?: string
@@ -32,8 +36,12 @@ export function Season4ProfileActions({
   const [txHashes, setTxHashes] = useState<string[]>([])
   const [notice, setNotice] = useState<string | null>(null)
 
-  const claimDisabled = !walletAddress || !canClaimFromFaucet || busyAction !== null
-  const isClaimReady = Boolean(walletAddress && canClaimFromFaucet)
+  const claimDisabled = !walletAddress || hasClaimedFaucet || !canClaimFromFaucet || busyAction !== null
+  const isClaimReady = Boolean(walletAddress && !hasClaimedFaucet && canClaimFromFaucet)
+
+  if (walletAddress && hasClaimedFaucet) {
+    return null
+  }
 
   const handleClaim = async () => {
     if (claimDisabled) return
@@ -85,7 +93,7 @@ export function Season4ProfileActions({
       )}
     >
       <div className="flex items-center gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Test Net Faucet</h2>
+        <h2 className="text-xs font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Testnet Faucet</h2>
         <HeaderDots />
       </div>
 
@@ -125,10 +133,14 @@ export function Season4ProfileActions({
         </div>
       ) : (
         <div className="rounded-sm border border-[#eadcc9] bg-white p-4 sm:p-5">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Already Claimed</p>
-          <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">Faucet claimed</h3>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#b5aa9e]">Not claimable</p>
+          <h3 className="mt-2 text-base font-medium text-[#1a1a1a]">
+            {isFaucetConfigured ? 'Faucet unavailable' : 'Faucet not configured'}
+          </h3>
           <p className="mt-2 text-sm text-[#6d645a]">
-            Each account can claim the Season 4 faucet once.
+            {isFaucetConfigured
+              ? 'Your wallet is linked, but the faucet is not available for this wallet right now.'
+              : 'Your wallet is linked, but this local environment is missing the Season 4 faucet contract settings.'}
           </p>
         </div>
       )}

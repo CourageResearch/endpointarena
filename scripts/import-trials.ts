@@ -246,6 +246,7 @@ async function main() {
         sponsorName: sponsor.sponsorName,
         sponsorTicker: sponsor.sponsorTicker,
         indication: row['Indication'].trim(),
+        therapeuticArea: null,
         exactPhase: row['Exact Phase'].trim(),
         intervention: row['Intervention'].trim(),
         primaryEndpoint: row['Primary Endpoint'].trim(),

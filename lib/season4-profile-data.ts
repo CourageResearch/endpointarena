@@ -3,12 +3,12 @@ import { createPublicClient, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
 import { NotFoundError } from '@/lib/errors'
-import { PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
+import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import { normalizeWalletAddress } from '@/lib/onchain/wallet-link'
 import { getSeason4FaucetClaimState } from '@/lib/season4-faucet-eligibility'
-import { formatSeason4FaucetEthAmount } from '@/lib/season4-faucet-config'
+import { formatSeason4FaucetEthAmount, formatSeason4FaucetUsdcAmount } from '@/lib/season4-faucet-config'
 import { onchainBalances, onchainEvents, onchainMarkets, onchainUserWallets, users } from '@/lib/schema'
 
 const MARKET_DECIMALS = 1_000_000
@@ -61,7 +61,9 @@ export type Season4ProfileData = {
   }
   viewer: {
     collateralBalanceDisplay: number
+    hasClaimedFaucet: boolean
     canClaimFromFaucet: boolean
+    faucetClaimAmountLabel: string
     latestFaucetClaim: {
       status: string
       txHash: string | null
@@ -228,7 +230,24 @@ export async function getSeason4ProfileData(
       ])
     : [[], []]
 
-  const collateralBalance = balanceRows.find((row) => row.marketRef === 'collateral')?.collateralDisplay ?? 0
+  let collateralBalance = balanceRows.find((row) => row.marketRef === 'collateral')?.collateralDisplay ?? 0
+  if (walletAddress && config.enabled && config.collateralTokenAddress) {
+    try {
+      const client = createPublicClient({
+        chain: baseSepolia,
+        transport: http(config.rpcUrl ?? undefined),
+      })
+      const tokenBalance = await client.readContract({
+        address: config.collateralTokenAddress,
+        abi: MOCK_USDC_ABI,
+        functionName: 'balanceOf',
+        args: [walletAddress as `0x${string}`],
+      }) as bigint
+      collateralBalance = atomicToDisplay(tokenBalance)
+    } catch {
+      // Keep the mirrored balance if the live token read fails.
+    }
+  }
 
   const marketIds = Array.from(new Set([
     ...balanceRows.map((row) => extractMarketId(row.marketRef)),
@@ -379,14 +398,16 @@ export async function getSeason4ProfileData(
   }, [])
 
   let canClaimFromFaucet = false
-  if (!faucetClaimState.hasClaimed && walletAddress && config.enabled && config.faucetAddress) {
+  let hasClaimedFaucet = faucetClaimState.hasClaimed
+  let faucetClaimAmountLabel = formatSeason4FaucetUsdcAmount()
+  if ((config.target === 'toy' || !faucetClaimState.hasClaimed) && walletAddress && config.enabled && config.faucetAddress) {
     try {
       const client = createPublicClient({
         chain: baseSepolia,
         transport: http(config.rpcUrl ?? undefined),
       })
 
-      const [canClaim, lastClaimedAt] = await Promise.all([
+      const [canClaim, lastClaimedAt, claimAmount] = await Promise.all([
         client.readContract({
           address: config.faucetAddress!,
           abi: SEASON4_FAUCET_ABI,
@@ -399,8 +420,19 @@ export async function getSeason4ProfileData(
           functionName: 'lastClaimedAt',
           args: [walletAddress as `0x${string}`],
         }) as Promise<bigint>,
+        client.readContract({
+          address: config.faucetAddress!,
+          abi: SEASON4_FAUCET_ABI,
+          functionName: 'claimAmount',
+        }) as Promise<bigint>,
       ])
-      canClaimFromFaucet = canClaim && lastClaimedAt === BigInt(0)
+      hasClaimedFaucet = config.target === 'toy'
+        ? faucetClaimState.hasClaimed
+        : lastClaimedAt > BigInt(0)
+      canClaimFromFaucet = config.target === 'toy'
+        ? canClaim
+        : canClaim && lastClaimedAt === BigInt(0)
+      faucetClaimAmountLabel = formatSeason4FaucetUsdcAmount(claimAmount)
     } catch {
       canClaimFromFaucet = false
     }
@@ -430,7 +462,9 @@ export async function getSeason4ProfileData(
     },
     viewer: {
       collateralBalanceDisplay: collateralBalance,
+      hasClaimedFaucet,
       canClaimFromFaucet,
+      faucetClaimAmountLabel,
       latestFaucetClaim: faucetClaimState.latestClaim
         ? {
             status: faucetClaimState.latestClaim.status,

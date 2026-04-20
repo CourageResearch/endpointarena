@@ -156,6 +156,7 @@ async function main() {
           sponsor_name,
           sponsor_ticker,
           indication,
+          therapeutic_area,
           exact_phase,
           intervention,
           primary_endpoint,

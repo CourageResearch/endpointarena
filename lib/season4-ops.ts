@@ -1160,6 +1160,13 @@ export async function seedSeason4ModelWallets(input: Season4SeedModelWalletInput
 
 export async function fundSeason4ModelWallets(): Promise<Season4ModelWalletFundingSummary> {
   const seeded = await seedSeason4ModelWallets()
+  const configuredWallets = seeded.seededModels.filter((model) => model.walletAddress)
+  if (configuredWallets.length === 0) {
+    throw new ValidationError(
+      'No model wallet addresses are configured. Set SEASON4_MODEL_WALLETS_JSON and SEASON4_MODEL_PRIVATE_KEYS_JSON, then run Seed model wallets before funding.',
+    )
+  }
+
   const { config, account: deployer, publicClient, walletClient } = createOpsClients()
 
   const funded: Season4ModelWalletFundingSummary['funded'] = []
