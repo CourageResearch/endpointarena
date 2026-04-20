@@ -8,7 +8,6 @@
     "scripts/deploy-season4-manager.ts",
     "scripts/fund-season4-model-wallets.ts",
     "scripts/index-season4-onchain.ts",
-    "scripts/purge-season4-deprecated-manager.ts",
     "scripts/reset-season4.ts",
     "scripts/seed-season4-model-wallets.ts",
     "scripts/smoke-season4-market.ts"
@@ -86,9 +85,6 @@
       "exports"
     ],
     "lib/errors.ts": [
-      "exports"
-    ],
-    "lib/human-cash.ts": [
       "exports"
     ],
     "lib/market-actors.ts": [

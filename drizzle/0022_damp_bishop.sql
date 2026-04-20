@@ -69,7 +69,7 @@ CREATE TABLE "onchain_markets" (
 	"title" text NOT NULL,
 	"metadata_uri" text,
 	"collateral_token_address" text,
-	"execution_mode" text DEFAULT 'onchain_lmsr' NOT NULL,
+	"execution_mode" text DEFAULT 'collateralized_qb_v1' NOT NULL,
 	"position_model" text DEFAULT 'onchain_app_restricted' NOT NULL,
 	"status" text DEFAULT 'draft' NOT NULL,
 	"close_time" timestamp with time zone,
@@ -79,7 +79,7 @@ CREATE TABLE "onchain_markets" (
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "onchain_markets_chain_id_check" CHECK ("onchain_markets"."chain_id" > 0),
-	CONSTRAINT "onchain_markets_execution_mode_check" CHECK ("onchain_markets"."execution_mode" = 'onchain_lmsr'),
+	CONSTRAINT "onchain_markets_execution_mode_check" CHECK ("onchain_markets"."execution_mode" = 'collateralized_qb_v1'),
 	CONSTRAINT "onchain_markets_position_model_check" CHECK ("onchain_markets"."position_model" = 'onchain_app_restricted'),
 	CONSTRAINT "onchain_markets_status_check" CHECK ("onchain_markets"."status" IN ('draft', 'deployed', 'closed', 'resolved', 'archived')),
 	CONSTRAINT "onchain_markets_resolved_outcome_check" CHECK ("onchain_markets"."resolved_outcome" IS NULL OR "onchain_markets"."resolved_outcome" IN ('YES', 'NO'))

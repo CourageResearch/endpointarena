@@ -239,6 +239,13 @@
       "when": 1776614400000,
       "tag": "0033_default_season4_liquidity_b_1000",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1776618000000,
+      "tag": "0034_remove_legacy_amm_labels",
+      "breakpoints": true
     }
   ]
 }

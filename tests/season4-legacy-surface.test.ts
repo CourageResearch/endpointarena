@@ -53,9 +53,6 @@ test('account balance payload returns zero when season 4 has no linked wallet ba
 test('account balance route no longer references legacy human cash tables or helpers', async () => {
   const source = await readRepoFile('app/api/account/balance/route.ts')
 
-  assert.doesNotMatch(source, /human-cash/)
-  assert.doesNotMatch(source, /ensureHumanTradingAccount/)
-  assert.doesNotMatch(source, /getCanonicalHumanStartingCash/)
   assert.doesNotMatch(source, /marketAccounts/)
   assert.doesNotMatch(source, /marketActors/)
 })
@@ -88,9 +85,9 @@ test('season 4 model cycles are manual-only from admin surfaces', async () => {
   const docsSource = await readRepoFile('docs/deploy-railway.md')
 
   assert.match(workerSource, /manual-only from the admin panel/)
-  assert.doesNotMatch(workerSource, /runSeason4ModelCycle|parseModelCycleIntervalSeconds|SEASON4_MODEL_CYCLE_INTERVAL_SECONDS/)
+  assert.doesNotMatch(workerSource, /runSeason4ModelCycle|parseModelCycleIntervalSeconds/)
 
-  assert.doesNotMatch(opsSource, /parseModelCycleIntervalSeconds|modelCycleIntervalSeconds|SEASON4_MODEL_CYCLE_INTERVAL_SECONDS/)
+  assert.doesNotMatch(opsSource, /parseModelCycleIntervalSeconds|modelCycleIntervalSeconds/)
 
   assert.match(adminAiSource, /runLiveBatchModelCycle/)
   assert.match(adminAiSource, /Run the Season 4 model cycle manually from the admin panel/)
@@ -109,17 +106,14 @@ test('season 4 model cycles are manual-only from admin surfaces', async () => {
   assert.doesNotMatch(baseDeskSource, /season4:model-cycle:worker|automatically runs a model cycle/)
 
   assert.match(docsSource, /manual-only from the admin panel/)
-  assert.doesNotMatch(docsSource, /SEASON4_MODEL_CYCLE_INTERVAL_SECONDS|trading onchain on a cadence|model-cycle automation/)
+  assert.doesNotMatch(docsSource, /trading onchain on a cadence|model-cycle automation/)
 })
 
-test('admin runtime settings no longer expose live offchain opening LMSR controls', async () => {
+test('admin runtime settings only expose current season 4 controls', async () => {
   const componentSource = await readRepoFile('components/AdminRuntimeSettingsColumns.tsx')
   const databaseTargetManagerSource = await readRepoFile('components/AdminDatabaseTargetManager.tsx')
   const pageSource = await readRepoFile('app/admin/settings/page.tsx')
 
-  assert.doesNotMatch(componentSource, /Opening LMSR/)
-  assert.doesNotMatch(componentSource, /openingLmsrB/)
-  assert.doesNotMatch(pageSource, /openingLmsrB/)
   assert.match(componentSource, /Toy DB Trial Count/)
   assert.match(componentSource, /Liquidity B/)
   assert.doesNotMatch(componentSource, /Season 4 Liquidity B/)

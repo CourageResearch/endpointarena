@@ -18,15 +18,12 @@ async function migrate() {
   await sql`
     CREATE TABLE IF NOT EXISTS market_runtime_configs (
       id TEXT PRIMARY KEY,
-      opening_lmsr_b REAL NOT NULL DEFAULT 100000,
       toy_trial_count INTEGER NOT NULL DEFAULT 0,
       season4_market_liquidity_b_display REAL NOT NULL DEFAULT 1000,
       season4_human_starting_bankroll_display REAL NOT NULL DEFAULT 100,
       season4_starting_bankroll_display REAL NOT NULL DEFAULT 1000,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW(),
-      CONSTRAINT market_runtime_configs_opening_lmsr_b_check
-        CHECK (opening_lmsr_b > 0 AND opening_lmsr_b <= 10000000),
       CONSTRAINT market_runtime_configs_toy_trial_count_check
         CHECK (toy_trial_count >= 0),
       CONSTRAINT market_runtime_configs_s4_market_liquidity_b_check
@@ -47,7 +44,6 @@ async function migrate() {
     SET season4_human_starting_bankroll_display =
       COALESCE(season4_human_starting_bankroll_display, 100)
   `
-  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN toy_trial_count SET DEFAULT 0`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_market_liquidity_b_display SET DEFAULT 1000`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_human_starting_bankroll_display SET DEFAULT 100`
@@ -80,6 +76,8 @@ async function migrate() {
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS steady_max_trade_usd`
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS steady_buy_cash_fraction`
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS signup_user_limit`
+  await sql`ALTER TABLE market_runtime_configs DROP CONSTRAINT IF EXISTS market_runtime_configs_opening_lmsr_b_check`
+  await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS opening_lmsr_b`
   await sql`ALTER TABLE market_runtime_configs DROP CONSTRAINT IF EXISTS market_runtime_configs_max_position_per_side_shares_check`
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS max_position_per_side_shares`
   await sql`ALTER TABLE market_runtime_configs DROP CONSTRAINT IF EXISTS market_runtime_configs_toy_trial_count_check`
@@ -92,7 +90,6 @@ async function migrate() {
   await sql`
     INSERT INTO market_runtime_configs (
       id,
-      opening_lmsr_b,
       toy_trial_count,
       season4_market_liquidity_b_display,
       season4_human_starting_bankroll_display,
@@ -102,7 +99,6 @@ async function migrate() {
     )
     VALUES (
       'default',
-      100000,
       0,
       1000,
       100,

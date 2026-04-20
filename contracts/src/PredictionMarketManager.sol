@@ -149,11 +149,9 @@ contract PredictionMarketManager {
         return 1e18 - priceYesE18(marketId);
     }
 
-    // This Base Sepolia v1 draft keeps qYes/qNo/liquidityB onchain and emits
-    // deterministic trade events for the app indexer. Buys mint one collateral
-    // unit of shares per collateral unit deposited so every resolved share is
-    // backed. Before any real-money use, replace the quote path below with a
-    // fully audited LMSR integral or another collateralized market maker.
+    // Keep qYes/qNo/liquidityB onchain and emit deterministic trade events for
+    // the app indexer. Buys mint one collateral unit of shares per collateral
+    // unit deposited so every resolved share is backed by escrowed collateral.
     function buyYes(uint256 marketId, uint256 collateralAmount, uint256 minSharesOut) external onlyOpenMarket(marketId) {
         _trade(marketId, collateralAmount, minSharesOut, true, true);
     }

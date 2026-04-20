@@ -1979,13 +1979,6 @@
           "notNull": true,
           "default": 10000
         },
-        "opening_lmsr_b": {
-          "name": "opening_lmsr_b",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 100000
-        },
         "toy_trial_count": {
           "name": "toy_trial_count",
           "type": "integer",
@@ -2015,10 +2008,6 @@
         "market_runtime_configs_max_position_per_side_shares_check": {
           "name": "market_runtime_configs_max_position_per_side_shares_check",
           "value": "\"market_runtime_configs\".\"max_position_per_side_shares\" >= 0 AND \"market_runtime_configs\".\"max_position_per_side_shares\" <= 10000000"
-        },
-        "market_runtime_configs_opening_lmsr_b_check": {
-          "name": "market_runtime_configs_opening_lmsr_b_check",
-          "value": "\"market_runtime_configs\".\"opening_lmsr_b\" > 0 AND \"market_runtime_configs\".\"opening_lmsr_b\" <= 10000000"
         },
         "market_runtime_configs_toy_trial_count_check": {
           "name": "market_runtime_configs_toy_trial_count_check",

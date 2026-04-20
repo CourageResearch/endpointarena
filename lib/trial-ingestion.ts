@@ -331,7 +331,7 @@ export async function ingestTrials(
       summary.questionsUpserted += 1
 
       // Season 4 sync is question-only. Linked onchain markets are created
-      // through manual/admin Season 4 intake, never by the legacy LMSR opener.
+      // through manual/admin Season 4 intake.
     }
   }
 

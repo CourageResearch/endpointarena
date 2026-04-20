@@ -945,7 +945,6 @@ export const marketDailySnapshots = pgTable('market_daily_snapshots', {
 
 export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   id: text('id').primaryKey(),
-  openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
   toyTrialCount: integer('toy_trial_count').notNull().default(0),
   season4MarketLiquidityBDisplay: real('season4_market_liquidity_b_display').notNull().default(1000),
   season4HumanStartingBankrollDisplay: real('season4_human_starting_bankroll_display').notNull().default(100),
@@ -953,10 +952,6 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  openingLmsrBCheck: check(
-    'market_runtime_configs_opening_lmsr_b_check',
-    sql`${table.openingLmsrB} > 0 AND ${table.openingLmsrB} <= 10000000`
-  ),
   toyTrialCountCheck: check(
     'market_runtime_configs_toy_trial_count_check',
     sql`${table.toyTrialCount} >= 0`
@@ -1320,7 +1315,7 @@ export const onchainMarkets = pgTable('onchain_markets', {
   title: text('title').notNull(),
   metadataUri: text('metadata_uri'),
   collateralTokenAddress: text('collateral_token_address'),
-  executionMode: text('execution_mode').notNull().default('onchain_lmsr'),
+  executionMode: text('execution_mode').notNull().default('collateralized_qb_v1'),
   positionModel: text('position_model').notNull().default('onchain_app_restricted'),
   status: text('status').notNull().default('draft'),
   closeTime: utcTimestamp('close_time'),
@@ -1338,7 +1333,7 @@ export const onchainMarkets = pgTable('onchain_markets', {
   ),
   executionModeCheck: check(
     'onchain_markets_execution_mode_check',
-    sql`${table.executionMode} = 'onchain_lmsr'`
+    sql`${table.executionMode} = 'collateralized_qb_v1'`
   ),
   positionModelCheck: check(
     'onchain_markets_position_model_check',

@@ -12,7 +12,6 @@ export const DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY = 100
 type MarketRuntimeConfigDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export type MarketRuntimeConfig = {
-  openingLmsrB: number
   toyTrialCount: number
   season4MarketLiquidityBDisplay: number
   season4HumanStartingBankrollDisplay: number
@@ -22,7 +21,6 @@ export type MarketRuntimeConfig = {
 }
 
 export type MarketRuntimeConfigPatchInput = Partial<{
-  openingLmsrB: unknown
   toyTrialCount: unknown
   season4MarketLiquidityBDisplay: unknown
   season4HumanStartingBankrollDisplay: unknown
@@ -30,7 +28,6 @@ export type MarketRuntimeConfigPatchInput = Partial<{
 }>
 
 type MarketRuntimeConfigPatch = Partial<{
-  openingLmsrB: number
   toyTrialCount: number
   season4MarketLiquidityBDisplay: number
   season4HumanStartingBankrollDisplay: number
@@ -39,7 +36,6 @@ type MarketRuntimeConfigPatch = Partial<{
 
 const marketRuntimeConfigColumns = {
   id: true,
-  openingLmsrB: true,
   toyTrialCount: true,
   season4MarketLiquidityBDisplay: true,
   season4HumanStartingBankrollDisplay: true,
@@ -58,14 +54,6 @@ function coerceNumber(value: unknown, fieldName: string): number {
 
 function parsePatch(input: MarketRuntimeConfigPatchInput): MarketRuntimeConfigPatch {
   const patch: MarketRuntimeConfigPatch = {}
-
-  if (input.openingLmsrB !== undefined) {
-    const parsed = Math.round(coerceNumber(input.openingLmsrB, 'openingLmsrB'))
-    if (parsed <= 0 || parsed > MAX_CONFIG_NUMBER) {
-      throw new ValidationError(`openingLmsrB must be between 1 and ${MAX_CONFIG_NUMBER}`)
-    }
-    patch.openingLmsrB = parsed
-  }
 
   if (input.toyTrialCount !== undefined) {
     const parsed = Math.round(coerceNumber(input.toyTrialCount, 'toyTrialCount'))
@@ -108,7 +96,6 @@ function mapRow(row: typeof marketRuntimeConfigs.$inferSelect): MarketRuntimeCon
   }
 
   return {
-    openingLmsrB: row.openingLmsrB,
     toyTrialCount: row.toyTrialCount ?? DEFAULT_TOY_TRIAL_COUNT,
     season4MarketLiquidityBDisplay: row.season4MarketLiquidityBDisplay ?? DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY,
     season4HumanStartingBankrollDisplay: row.season4HumanStartingBankrollDisplay ?? DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY,
