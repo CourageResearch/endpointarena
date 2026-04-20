@@ -65,7 +65,6 @@ import {
   trialQuestions,
   trials,
 } from '@/lib/schema'
-import { getSeason4ModelTradeAmountDisplay } from '@/lib/season4-model-trade-config'
 
 const DEFAULT_MARKET_LIQUIDITY_B = season4LiquidityBDisplayToAtomic(DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY)
 const CONTRACT_OWNER_ABI = [
@@ -123,7 +122,6 @@ export type Season4OpsDashboardData = {
   }
   automation: {
     indexerIntervalSeconds: number
-    tradeAmountDisplay: number
     maxMarketsPerCycle: number
     tradeSlippageBps: number
   }
@@ -183,14 +181,15 @@ export type Season4ModelWalletFundingSummary = {
     modelKey: ModelId
     walletAddress: string
     claimTxHash: string | null
+    balanceAdjustTxHash: string | null
     gasTopUpTxHash: string | null
     gasBalanceEth: string
+    collateralBalanceDisplay: number
   }>
 }
 
 export type Season4ModelCycleSummary = {
   chainId: number
-  tradeAmountDisplay: number
   maxMarketsPerCycle: number
   tradeSlippageBps: number
   configuredModels: number
@@ -210,6 +209,8 @@ export type Season4ModelCycleSummary = {
     confidencePercent: number
     explanation: string
     reasoning: string
+    priceBefore: number
+    priceAfter: number
     priceYes: number
     txHash: string
     approvedTxHash: string | null
@@ -225,6 +226,7 @@ export type Season4ModelCycleSummary = {
 export type RunSeason4ModelCycleOptions = {
   modelKeys?: ModelId[]
   marketSlugs?: string[]
+  requireProvidedDecisions?: boolean
   decisions?: Array<{
     modelKey: ModelId
     marketSlug: string
@@ -386,8 +388,13 @@ function parseEnvModelPrivateKeys(): Partial<Record<ModelId, Hex>> {
   }
 }
 
-export function parseModelTradeAmountDisplay(): number {
-  return getSeason4ModelTradeAmountDisplay()
+export function getConfiguredSeason4ModelPrivateKeyAddresses(): Partial<Record<ModelId, Address>> {
+  const privateKeys = parseEnvModelPrivateKeys()
+  const addresses: Partial<Record<ModelId, Address>> = {}
+  for (const [modelKey, privateKey] of Object.entries(privateKeys) as Array<[ModelId, Hex]>) {
+    addresses[modelKey] = privateKeyToAccount(privateKey).address.toLowerCase() as Address
+  }
+  return addresses
 }
 
 function parseMaxMarketsPerCycle(): number {
@@ -423,6 +430,39 @@ function parseModelTradeSlippageBps(): number {
 function applySlippageLimit(expectedOutputAtomic: bigint, slippageBps: number): bigint {
   const clampedBps = Math.max(0, Math.min(MAX_SEASON4_TRADE_SLIPPAGE_BPS, Math.trunc(slippageBps)))
   return (expectedOutputAtomic * BigInt(10_000 - clampedBps)) / BigInt(10_000)
+}
+
+async function mirrorSeason4ModelCollateralBalance(args: {
+  chainId: number
+  modelKey: ModelId
+  walletAddress: Address
+  collateralBalanceDisplay: number
+  blockNumber: bigint
+}): Promise<void> {
+  const now = new Date()
+  await db.insert(onchainBalances)
+    .values({
+      chainId: args.chainId,
+      walletAddress: args.walletAddress.toLowerCase(),
+      marketRef: 'collateral',
+      modelKey: args.modelKey,
+      collateralDisplay: args.collateralBalanceDisplay,
+      yesShares: 0,
+      noShares: 0,
+      lastIndexedBlock: args.blockNumber.toString(),
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [onchainBalances.chainId, onchainBalances.walletAddress, onchainBalances.marketRef],
+      set: {
+        modelKey: args.modelKey,
+        collateralDisplay: args.collateralBalanceDisplay,
+        yesShares: 0,
+        noShares: 0,
+        lastIndexedBlock: args.blockNumber.toString(),
+        updatedAt: now,
+      },
+    })
 }
 
 async function withModelCycleLock<T>(work: () => Promise<T>): Promise<T> {
@@ -912,7 +952,6 @@ export async function getSeason4OpsDashboardData(options: { sync?: boolean } = {
     },
     automation: {
       indexerIntervalSeconds: parseIndexerIntervalSeconds(),
-      tradeAmountDisplay: parseModelTradeAmountDisplay(),
       maxMarketsPerCycle: parseMaxMarketsPerCycle(),
       tradeSlippageBps: parseModelTradeSlippageBps(),
     },
@@ -1212,30 +1251,36 @@ export async function fundSeason4ModelWallets(): Promise<Season4ModelWalletFundi
   const { config, account: deployer, publicClient, walletClient } = createOpsClients()
 
   const funded: Season4ModelWalletFundingSummary['funded'] = []
+  const targetCollateralAtomic = season4DisplayToAtomic(seeded.bankrollDisplay)
 
   for (const model of seeded.seededModels) {
     if (!model.walletAddress) continue
 
     const walletAddress = model.walletAddress as Address
-    let claimTxHash: Hex | null = null
+    const claimTxHash: Hex | null = null
+    let balanceAdjustTxHash: Hex | null = null
     let gasTopUpTxHash: Hex | null = null
 
-    const canClaim = await publicClient.readContract({
-      address: config.faucetAddress,
-      abi: SEASON4_FAUCET_ABI,
-      functionName: 'canClaim',
+    const currentCollateralBalance = await publicClient.readContract({
+      address: config.collateralTokenAddress,
+      abi: MOCK_USDC_ABI,
+      functionName: 'balanceOf',
       args: [walletAddress],
-    }) as boolean
+    }) as bigint
 
-    if (canClaim) {
-      claimTxHash = await walletClient.writeContract({
-        address: config.faucetAddress,
-        abi: SEASON4_FAUCET_ABI,
-        functionName: 'claimTo',
-        args: [walletAddress],
+    if (currentCollateralBalance < targetCollateralAtomic) {
+      balanceAdjustTxHash = await walletClient.writeContract({
+        address: config.collateralTokenAddress,
+        abi: MOCK_USDC_ABI,
+        functionName: 'mint',
+        args: [walletAddress, targetCollateralAtomic - currentCollateralBalance],
         account: deployer,
       })
-      await publicClient.waitForTransactionReceipt({ hash: claimTxHash })
+      const balanceAdjustReceipt = await publicClient.waitForTransactionReceipt({ hash: balanceAdjustTxHash })
+      if (balanceAdjustReceipt.status !== 'success') {
+        throw new Error(`Model wallet collateral top-up reverted for ${model.modelKey}`)
+      }
+      await waitForRpcBlock(() => publicClient.getBlockNumber(), balanceAdjustReceipt.blockNumber)
     }
 
     const gasBalance = await publicClient.getBalance({ address: walletAddress })
@@ -1253,16 +1298,40 @@ export async function fundSeason4ModelWallets(): Promise<Season4ModelWalletFundi
         value: DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
         chain: SEASON4_CHAIN,
       })
-      await publicClient.waitForTransactionReceipt({ hash: gasTopUpTxHash })
+      const gasTopUpReceipt = await publicClient.waitForTransactionReceipt({ hash: gasTopUpTxHash })
+      if (gasTopUpReceipt.status !== 'success') {
+        throw new Error(`Model wallet gas top-up reverted for ${model.modelKey}`)
+      }
+      await waitForRpcBlock(() => publicClient.getBlockNumber(), gasTopUpReceipt.blockNumber)
     }
 
-    const nextGasBalance = await publicClient.getBalance({ address: walletAddress })
+    const [nextGasBalance, nextCollateralBalance, latestBlock] = await Promise.all([
+      publicClient.getBalance({ address: walletAddress }),
+      publicClient.readContract({
+        address: config.collateralTokenAddress,
+        abi: MOCK_USDC_ABI,
+        functionName: 'balanceOf',
+        args: [walletAddress],
+      }) as Promise<bigint>,
+      publicClient.getBlockNumber(),
+    ])
+    const collateralBalanceDisplay = season4AtomicToDisplay(nextCollateralBalance)
+    await mirrorSeason4ModelCollateralBalance({
+      chainId: config.chainId,
+      modelKey: model.modelKey,
+      walletAddress,
+      collateralBalanceDisplay,
+      blockNumber: latestBlock,
+    })
+
     funded.push({
       modelKey: model.modelKey,
       walletAddress,
       claimTxHash,
+      balanceAdjustTxHash,
       gasTopUpTxHash,
       gasBalanceEth: formatEther(nextGasBalance),
+      collateralBalanceDisplay,
     })
   }
 
@@ -1282,7 +1351,6 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
 async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions = {}): Promise<Season4ModelCycleSummary> {
   const config = requireSeason4OnchainConfig()
   const privateKeys = parseEnvModelPrivateKeys()
-  const tradeAmountDisplay = parseModelTradeAmountDisplay()
   const maxMarketsPerCycle = parseMaxMarketsPerCycle()
   const tradeSlippageBps = parseModelTradeSlippageBps()
   const initialIndexSummary = await syncSeason4OnchainIndex()
@@ -1419,7 +1487,6 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
 
   const summary: Season4ModelCycleSummary = {
     chainId: config.chainId,
-    tradeAmountDisplay,
     maxMarketsPerCycle,
     tradeSlippageBps,
     configuredModels: 0,
@@ -1432,9 +1499,25 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
 
   if (activeMarkets.length === 0) {
     if (summary.skipped.length === 0) {
-      summary.skipped.push({ modelKey: 'all', reason: 'No active season 4 markets are ready for a model cycle.' })
+      summary.skipped.push({ modelKey: 'all', reason: 'No active season 4 markets are ready for trade execution.' })
     }
     return summary
+  }
+
+  if (options.requireProvidedDecisions) {
+    const missingDecisions: string[] = []
+    for (const row of scopedModelWalletRows) {
+      if (!isModelId(row.modelKey)) continue
+      for (const market of activeMarkets) {
+        if (!providedDecisionByModelMarket.has(`${row.modelKey}:${market.marketSlug}`)) {
+          missingDecisions.push(`${row.modelKey} on ${market.marketSlug}`)
+        }
+      }
+    }
+
+    if (missingDecisions.length > 0) {
+      throw new ValidationError(`Stored batch decisions are missing for ${missingDecisions.slice(0, 5).join(', ')}${missingDecisions.length > 5 ? `, and ${missingDecisions.length - 5} more` : ''}. Refusing to generate fresh decisions during trade execution.`)
+    }
   }
 
   const publicClient = createPublicClient({
@@ -1578,7 +1661,6 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
           yesSharesHeld: currentPosition.yesSharesHeld,
           noSharesHeld: currentPosition.noSharesHeld,
         },
-        maxTradeUsd: tradeAmountDisplay,
         asOf: new Date(),
         trial: liveMarket.trial,
       } as const
@@ -1598,6 +1680,10 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
       if (providedDecision) {
         rawDecision = providedDecision
       } else {
+        if (options.requireProvidedDecisions) {
+          throw new ValidationError(`Stored batch decision is missing for ${row.modelKey} on ${liveMarket.marketSlug}. Refusing to generate a fresh decision during trade execution.`)
+        }
+
         if (!canGenerateDecision) {
           summary.skipped.push({
             modelKey: row.modelKey,
@@ -1779,7 +1865,9 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
           confidencePercent: cappedDecision.confidencePercent,
           explanation: cappedDecision.explanation,
           reasoning: cappedDecision.reasoning,
-          priceYes: liveMarket.priceYes,
+          priceBefore: liveMarket.priceYes,
+          priceAfter: nextState.priceYes,
+          priceYes: nextState.priceYes,
           txHash,
           approvedTxHash: approveTxHash,
         })

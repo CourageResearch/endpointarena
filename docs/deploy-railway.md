@@ -128,16 +128,17 @@ Testnet ops should run only the recurring indexer worker in addition to the web 
 - `season4-indexer-worker`:
   Run `npm run season4:indexer:worker` to keep the Base Sepolia read model fresh.
 - `season4-model-cycle-worker`:
-  This command is intentionally disabled/no-op. Season 4 model cycles are manual-only from the admin panel.
+  This command is intentionally disabled/no-op. Season 4 trade execution is manual-only from a ready Admin AI batch.
 
 The current worker env knobs are:
 
 - `SEASON4_INDEXER_INTERVAL_SECONDS` defaults to `30`
-- `SEASON4_MODEL_TRADE_AMOUNT_DISPLAY` defaults to `5`
 - `SEASON4_MODEL_MAX_MARKETS_PER_CYCLE` defaults to `1`
 - `SEASON4_INDEXER_CONFIRMATIONS` defaults to `3` blocks before mirroring events
-- `SEASON4_TRADE_SLIPPAGE_BPS` defaults to `100` bps for model-cycle and UI trade limits
-- `SEASON4_MODEL_PRIVATE_KEYS_JSON` must map each funded model id to the corresponding Base Sepolia private key before a manually started model cycle can trade
+- `SEASON4_TRADE_SLIPPAGE_BPS` defaults to `100` bps for Admin AI trade execution and UI trade limits
+- `SEASON4_MODEL_PRIVATE_KEYS_JSON` must map each funded model id to the corresponding Base Sepolia private key before a ready Admin AI batch can execute trades
+
+Model buy limits are derived from each model wallet's available mock-USDC balance. There is no fixed-dollar model buy cap.
 
 ### What changes for real money
 

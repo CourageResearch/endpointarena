@@ -42,7 +42,7 @@ async function assertLegacyDailyRunDisabled(response: Response) {
 
   assert.equal(payload.error?.code, 'VALIDATION_ERROR')
   assert.match(payload.error?.message ?? '', /Legacy offchain daily trial runs are retired in season 4/)
-  assert.match(payload.error?.message ?? '', /season 4 model cycle/i)
+  assert.match(payload.error?.message ?? '', /(?:Admin AI|\/admin\/ai).*Execute Trades/i)
 }
 
 test('account balance payload returns zero when season 4 has no linked wallet balance', () => {
@@ -75,13 +75,14 @@ test('legacy daily run routes are disabled for season 4', async () => {
   assert.match(cancelPayload.error?.message ?? '', /Legacy offchain daily trial run controls are retired in season 4/)
 })
 
-test('season 4 model cycles are manual-only from admin surfaces', async () => {
+test('season 4 trade execution is manual-only from admin AI surfaces', async () => {
   const workerSource = await readRepoFile('scripts/season4-model-cycle-worker.ts')
   const opsSource = await readRepoFile('lib/season4-ops.ts')
   const adminAiSource = await readRepoFile('lib/admin-ai.ts')
   const adminAiDeskSource = await readRepoFile('components/admin-ai/AdminAiDesk.tsx')
   const adminDeskSource = await readRepoFile('components/admin/Season4AdminDesk.tsx')
   const baseDeskSource = await readRepoFile('components/admin/Season4BaseDesk.tsx')
+  const directModelCycleRouteSource = await readRepoFile('app/api/admin/season4/model-cycle/run/route.ts')
   const docsSource = await readRepoFile('docs/deploy-railway.md')
 
   assert.match(workerSource, /manual-only from the admin panel/)
@@ -90,23 +91,27 @@ test('season 4 model cycles are manual-only from admin surfaces', async () => {
   assert.doesNotMatch(opsSource, /DEFAULT_SEASON4_MODEL_CYCLE_INTERVAL_SECONDS/)
 
   assert.match(adminAiSource, /runLiveBatchModelCycle/)
-  assert.match(adminAiSource, /Run the Season 4 model cycle manually from the admin panel/)
-  assert.match(adminAiSource, /Admin started the Season 4 model cycle/)
+  assert.match(adminAiSource, /Execute trades manually from the admin panel/)
+  assert.match(adminAiSource, /Admin started trade execution/)
+  assert.match(adminAiSource, /requireProvidedDecisions: true/)
   assert.doesNotMatch(adminAiSource, /will run automatically|Running the season 4 model cycle now|run automatically once/)
 
-  assert.match(adminAiDeskSource, /Run Model Cycle/)
-  assert.match(adminAiDeskSource, /Run the model cycle manually from the admin panel/)
+  assert.match(adminAiDeskSource, /Execute Trades/)
+  assert.match(adminAiDeskSource, /Execute trades manually from the admin panel/)
   assert.doesNotMatch(adminAiDeskSource, /Starting the season 4 model cycle automatically|will run automatically/)
 
-  assert.match(adminDeskSource, /Run model cycle now/)
-  assert.match(adminDeskSource, /Model cycles are manual-only/)
+  assert.match(adminDeskSource, /Open Admin AI to execute trades/)
+  assert.match(adminDeskSource, /AI trades execute only from a ready Admin AI batch/)
   assert.doesNotMatch(adminDeskSource, /run model cycles every|season4:model-cycle:worker|automatically runs a model cycle/)
 
-  assert.match(baseDeskSource, /Run model cycle now/)
-  assert.match(baseDeskSource, /Model cycles are manual-only/)
+  assert.match(baseDeskSource, /Open Admin AI to execute trades/)
+  assert.match(baseDeskSource, /Direct model-cycle execution is intentionally disabled/)
   assert.doesNotMatch(baseDeskSource, /season4:model-cycle:worker|automatically runs a model cycle/)
 
-  assert.match(docsSource, /manual-only from the admin panel/)
+  assert.match(directModelCycleRouteSource, /Direct Season 4 model-cycle execution is retired/)
+  assert.doesNotMatch(directModelCycleRouteSource, /runSeason4ModelCycle/)
+
+  assert.match(docsSource, /trade execution is manual-only from a ready Admin AI batch/)
   assert.doesNotMatch(docsSource, /SEASON4_MODEL_CYCLE_INTERVAL_SECONDS|trading onchain on a cadence|model-cycle automation|keep funded model wallets trading onchain on a cadence/)
 })
 

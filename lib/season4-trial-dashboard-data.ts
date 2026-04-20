@@ -92,6 +92,7 @@ export async function loadSeason4DashboardMarket(detail: Season4MarketDetail): P
   const trialQuestionId = detail.trial?.trialQuestionId ?? detail.market.trialQuestionId ?? undefined
   const onchainMarketId = detail.market.onchainMarketId
   const marketRef = onchainMarketId ? `market:${onchainMarketId}` : null
+  const marketEventRefs = onchainMarketId ? [onchainMarketId, `market:${onchainMarketId}`] : []
   const resolvedOutcome = chooseDisplayResolvedOutcome(detail)
   const priceYes = resolvedOutcome === 'YES'
     ? 1
@@ -154,7 +155,7 @@ export async function loadSeason4DashboardMarket(detail: Season4MarketDetail): P
     normalizedModelWallets.map((row) => [row.walletAddress, row.modelKey] as const),
   )
 
-  const tradeEventRows = onchainMarketId && modelWalletAddresses.length > 0
+  const tradeEventRows = marketEventRefs.length > 0 && modelWalletAddresses.length > 0
     ? await db.select({
         walletAddress: onchainEvents.walletAddress,
         payload: onchainEvents.payload,
@@ -162,7 +163,7 @@ export async function loadSeason4DashboardMarket(detail: Season4MarketDetail): P
         .from(onchainEvents)
         .where(and(
           eq(onchainEvents.eventName, 'TradeExecuted'),
-          eq(onchainEvents.marketRef, onchainMarketId),
+          inArray(onchainEvents.marketRef, marketEventRefs),
           inArray(onchainEvents.walletAddress, modelWalletAddresses),
         ))
     : []

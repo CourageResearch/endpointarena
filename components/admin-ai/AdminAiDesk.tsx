@@ -199,26 +199,26 @@ function getDeskStatusDetail(batch: AiBatchState | null, progress: AiBatchProgre
 
   if (status === 'ready') {
     return batch.dataset === 'live'
-      ? 'All model decisions are in. Run the model cycle manually from the admin panel.'
+      ? 'All model decisions are in. Execute trades manually from the admin panel.'
       : 'All model decisions are in. The batch is ready to clear.'
   }
 
   if (status === 'clearing') {
     return batch.dataset === 'live'
-      ? 'The admin-started season 4 model cycle is executing onchain now.'
+      ? 'The admin-started trade execution step is running now.'
       : 'The batch is executing against the shared AMM now.'
   }
 
   if (status === 'cleared') {
     return batch.dataset === 'live'
-      ? 'All model decisions are in, the manual season 4 model cycle ran, and this batch is final.'
+      ? 'All model decisions are in, the manual trade execution step ran, and this batch is final.'
       : 'All model decisions are in, the AMM trades were executed, and this batch is final.'
   }
 
   if (status === 'failed') {
     const hasSuccessfulFill = batch.fills.some((fill) => fill.status === 'ok')
     return hasSuccessfulFill
-      ? 'A task failed after live AMM movement. Reset and stage a fresh batch to preserve fairness.'
+      ? 'A task failed after live onchain market movement. Reset and stage a fresh batch to preserve fairness.'
       : 'A task failed before clearing completed. You can retry the failed task in place.'
   }
 
@@ -510,7 +510,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
     return () => {
       source.close()
     }
-  }, [batch?.id, batch?.status, refreshBatchSnapshot])
+  }, [batch?.id, batch?.status])
 
   useEffect(() => {
     if (!batch?.runStartedAt || isTerminal(batch.status)) {
@@ -524,7 +524,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [batch?.id, batch?.runStartedAt, batch?.status, refreshBatchSnapshot])
+  }, [batch?.id, batch?.runStartedAt, batch?.status])
 
   useEffect(() => {
     if (!batch || isTerminal(batch.status) || busyKey != null) {
@@ -854,9 +854,9 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
     }
   }
 
-  async function runLiveModelCycleNow() {
+  async function clearLiveBatchOnchainNow() {
     if (!batch) return
-    setBusyKey('run-model-cycle')
+    setBusyKey('clear-onchain')
     setUiError(null)
     try {
       const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/clear`, {
@@ -864,7 +864,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
       })
       replaceBatch(payload.batch)
     } catch (error) {
-      setUiError(error instanceof Error ? error.message : 'Failed to run model cycle')
+      setUiError(error instanceof Error ? error.message : 'Failed to execute trades')
     } finally {
       setBusyKey(null)
     }
@@ -912,7 +912,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
         ) : null}
       </section>
 
-      <section className="border border-[#e8ddd0] bg-white/85 p-5">
+      <section className="overflow-hidden border border-[#e8ddd0] bg-white/85 p-5">
         <div className="flex flex-col gap-5">
           <div>
             <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Enabled Models</p>
@@ -1031,11 +1031,11 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
             {canRunLiveModelCycle ? (
               <button
                 type="button"
-                onClick={() => void runLiveModelCycleNow()}
+                onClick={() => void clearLiveBatchOnchainNow()}
                 disabled={busyKey != null}
                 className="border border-[#3a8a2e] bg-[#3a8a2e] px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {busyKey === 'run-model-cycle' ? 'Running model cycle...' : 'Run Model Cycle'}
+                {busyKey === 'clear-onchain' ? 'Executing trades...' : 'Execute Trades'}
               </button>
             ) : null}
           </div>
@@ -1069,7 +1069,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                     : `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the shared AMM can clear.`
                   : `The API lane is live. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect.`
                 : batch.status === 'ready' && batch.dataset === 'live'
-                  ? 'All model decisions are in. Use Run Model Cycle when ready.'
+                  ? 'All model decisions are in. Use Execute Trades when ready.'
                   : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix now refreshes automatically as tasks finish.`}
             </div>
           ) : null}
@@ -1080,13 +1080,13 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
           ) : null}
           {batch?.status === 'failed' && successfulFillCount > 0 ? (
             <div className="border border-[#c43a2b]/30 bg-[#fff3f1] px-3 py-2 text-sm text-[#8d2c22]">
-              Clearing already touched the live AMM before the failure. To preserve fairness, reset this batch and stage a fresh one instead of retrying in place.
+              Clearing already touched the live onchain markets before the failure. To preserve fairness, reset this batch and stage a fresh one instead of retrying in place.
             </div>
           ) : null}
           {batch?.status === 'cleared' ? (
             <div className="border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-3 py-2 text-sm text-[#2f6f24]">
               {batch.dataset === 'live'
-                ? 'Batch complete. All selected models have finished, and the manually triggered season 4 model cycle is final.'
+                ? 'Batch complete. All selected models have finished, and the manually triggered trade execution step is final.'
                 : 'Batch complete. All selected models have finished, and the AMM clearing tape is final.'}
             </div>
           ) : null}
@@ -1408,7 +1408,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                       <p className="text-[11px] text-[#8d2c22]/80">
                         {canRetryFailedTaskInPlace
                           ? 'Retry keeps the original frozen snapshot and clear order.'
-                          : 'Retry is disabled because the live AMM has already moved in this batch.'}
+                          : 'Retry is disabled because the live onchain markets have already moved in this batch.'}
                       </p>
                     </div>
                   </div>
@@ -1522,7 +1522,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                               const secondaryDetail = task.fill
                                 ? `Price ${formatPercent(task.fill.priceBefore)} to ${formatPercent(task.fill.priceAfter)}`
                                 : task.decision
-                                  ? truncateText(task.decision.action.explanation || task.reasoningPreview || task.decision.forecast.reasoning, 92)
+                                  ? null
                                   : task.status === 'error'
                                     ? truncateText(task.errorMessage ?? batch.failureMessage ?? 'Task failed before returning a decision.', 92)
                                     : !batch.runStartedAt && task.lane === 'api'
@@ -1554,12 +1554,16 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                                           {formatUsd(task.fill.executedAmountUsd)}
                                         </p>
                                       ) : null}
-                                      <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                      {secondaryDetail ? (
+                                        <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                      ) : null}
                                     </>
                                   ) : (
                                     <>
                                       <p className="mt-1 text-xs leading-4 text-[#5f564c]">{primaryDetail}</p>
-                                      <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                      {secondaryDetail ? (
+                                        <p className="mt-1 text-[11px] leading-4 text-[#6f665b]">{secondaryDetail}</p>
+                                      ) : null}
                                     </>
                                   )}
                                   {task.durationMs != null ? (
@@ -1582,7 +1586,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
           </div>
         ) : null}
         {selectedTrial ? (
-          <div className="mt-4">
+          <div className="mt-4 min-w-0 max-w-full">
             <div className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-3xl">
@@ -1614,97 +1618,124 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 </div>
               </div>
             </div>
-            <div className="mt-4 grid gap-3">
-            {selectedTasks.map((task) => (
-              <article key={task.taskKey} className="border border-[#d8ccb9] bg-[#fcfaf7] p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-[#1a1a1a]">{availableModelById.get(task.modelId)?.label ?? task.modelId}</p>
-                    <p className="mt-1 text-xs text-[#8a8075]">{task.lane === 'api' ? 'API lane' : 'Subscription lane'}</p>
-                    {task.durationMs != null ? (
-                      <p className="mt-1 text-xs text-[#8a8075]">Run time: {formatDurationMs(task.durationMs)}</p>
+            <div className="mt-4 grid min-w-0 gap-2.5">
+              {selectedTasks.map((task) => {
+                const modelLabel = availableModelById.get(task.modelId)?.label ?? task.modelId
+                const laneLabel = task.lane === 'api' ? 'API lane' : 'Subscription lane'
+                const pendingIntentLabel = !batch?.runStartedAt && task.lane === 'api'
+                  ? 'Queued for API lane start'
+                  : task.status === 'waiting-import'
+                    ? 'Waiting for import'
+                    : 'Waiting for decision'
+                const pendingTradeIntent = !batch?.runStartedAt && task.lane === 'api'
+                  ? 'No trade intent yet. Start the API lane to begin this model.'
+                  : task.status === 'waiting-import'
+                    ? 'No trade intent yet. Import the JSON for this model.'
+                    : 'No trade intent yet'
+                const forecastReasoning = task.decision?.forecast.reasoning
+                  ?? task.errorMessage
+                  ?? (!batch?.runStartedAt && task.lane === 'api'
+                    ? 'Queued. This API model will not run until you start the API lane.'
+                    : task.status === 'waiting-import'
+                      ? 'Waiting for imported subscription JSON.'
+                      : 'Waiting for the lane to return.')
+
+                return (
+                  <article key={task.taskKey} className="min-w-0 max-w-full overflow-hidden border border-[#d8ccb9] bg-[#fcfaf7] px-3.5 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#e8ddd0] pb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <p className="min-w-0 text-sm font-semibold text-[#1a1a1a]">{modelLabel}</p>
+                          <p className="text-xs text-[#8a8075]">{laneLabel}</p>
+                          {task.durationMs != null ? (
+                            <p className="text-xs text-[#8a8075]">Run time: {formatDurationMs(task.durationMs)}</p>
+                          ) : null}
+                          {task.estimatedCostUsd ? (
+                            <p className="text-xs text-[#8a8075]">{formatUsd(task.estimatedCostUsd)} estimated cost</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${getOrderBookTaskTone(task)}`}>
+                        {getOrderBookTaskBadge(task)}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid min-w-0 gap-x-5 gap-y-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1.35fr)]">
+                      <section className="min-w-0 overflow-hidden border-l border-[#e8ddd0] pl-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Locked Snapshot</p>
+                        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs leading-5">
+                          <dt className="text-[#8a8075]">Frozen price</dt>
+                          <dd className="min-w-0 break-words font-medium text-[#1a1a1a]">{formatPercent(task.frozenMarket.priceYes)} yes</dd>
+                          <dt className="text-[#8a8075]">Cash</dt>
+                          <dd className="min-w-0 break-words text-[#5f564c]">{formatUsd(task.frozenPortfolio.cashAvailable)}</dd>
+                          <dt className="text-[#8a8075]">YES held</dt>
+                          <dd className="min-w-0 break-words text-[#5f564c]">{task.frozenPortfolio.yesSharesHeld.toFixed(0)}</dd>
+                          <dt className="text-[#8a8075]">NO held</dt>
+                          <dd className="min-w-0 break-words text-[#5f564c]">{task.frozenPortfolio.noSharesHeld.toFixed(0)}</dd>
+                        </dl>
+                      </section>
+                      <section className="min-w-0 overflow-hidden border-l border-[#e8ddd0] pl-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Intent</p>
+                        {task.decision ? (
+                          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs leading-5">
+                            <dt className="text-[#8a8075]">Call</dt>
+                            <dd className="min-w-0 break-words font-semibold text-[#1a1a1a]">{task.decision.forecast.binaryCall.toUpperCase()}</dd>
+                            <dt className="text-[#8a8075]">Confidence</dt>
+                            <dd className="min-w-0 break-words text-[#5f564c]">{task.decision.forecast.confidence}</dd>
+                            <dt className="text-[#8a8075]">Action</dt>
+                            <dd className="min-w-0 break-words text-[#5f564c]">
+                              {`${task.decision.action.type} ${task.decision.action.amountUsd > 0 ? formatUsd(task.decision.action.amountUsd) : ''}`.trim()}
+                            </dd>
+                          </dl>
+                        ) : (
+                          <>
+                            <p className="mt-2 text-xs font-medium leading-5 text-[#1a1a1a]">{pendingIntentLabel}</p>
+                            <p className="mt-1 text-xs leading-5 text-[#6f665b]">{pendingTradeIntent}</p>
+                          </>
+                        )}
+                      </section>
+                      <section className="min-w-0 overflow-hidden border-l border-[#e8ddd0] pl-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Intent Reasoning</p>
+                        <p className="mt-2 break-words text-xs leading-5 text-[#5f564c] [overflow-wrap:anywhere]">
+                          {task.decision?.action.explanation ?? pendingTradeIntent}
+                        </p>
+                      </section>
+                      <section className="min-w-0 overflow-hidden border-l border-[#e8ddd0] pl-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Forecast Reasoning</p>
+                        <p className="mt-2 break-words text-xs leading-5 text-[#5f564c] [overflow-wrap:anywhere]">{forecastReasoning}</p>
+                      </section>
+                    </div>
+                    {task.status === 'error' ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void retryTask(task.taskKey)}
+                          disabled={successfulFillCount > 0 || batch?.status === 'reset' || batch?.status === 'cleared' || busyKey != null}
+                          className="border border-[#1a1a1a] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {busyKey === `retry:${task.taskKey}`
+                            ? 'Retrying...'
+                            : task.decision
+                              ? 'Retry From Frozen Decision'
+                              : task.lane === 'api'
+                                ? 'Retry API Task'
+                                : 'Reopen Import'}
+                        </button>
+                        <p className="text-xs text-[#8a8075]">
+                          {successfulFillCount === 0
+                            ? 'Retry keeps the original frozen snapshot and clear order.'
+                            : 'Retry is disabled because the live onchain markets have already moved in this batch.'}
+                        </p>
+                      </div>
                     ) : null}
-                    {task.estimatedCostUsd ? (
-                      <p className="mt-1 text-xs text-[#8a8075]">{formatUsd(task.estimatedCostUsd)} estimated cost</p>
+                    {task.fill ? (
+                      <div className="mt-3 min-w-0 break-words border border-[#e8ddd0] bg-[#f8f4ee] px-3 py-3 text-sm text-[#5f564c] [overflow-wrap:anywhere]">
+                        Filled {task.fill.executedAction} from {formatPercent(task.fill.priceBefore)} to {formatPercent(task.fill.priceAfter)}.
+                      </div>
                     ) : null}
-                  </div>
-                  <span className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${getOrderBookTaskTone(task)}`}>
-                    {getOrderBookTaskBadge(task)}
-                  </span>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Locked Snapshot</p>
-                    <p className="mt-2 text-sm text-[#1a1a1a]">Frozen price: {formatPercent(task.frozenMarket.priceYes)} yes</p>
-                    <p className="mt-1 text-xs text-[#6f665b]">Cash: {formatUsd(task.frozenPortfolio.cashAvailable)}</p>
-                    <p className="mt-1 text-xs text-[#6f665b]">YES held: {task.frozenPortfolio.yesSharesHeld.toFixed(0)}</p>
-                    <p className="mt-1 text-xs text-[#6f665b]">NO held: {task.frozenPortfolio.noSharesHeld.toFixed(0)}</p>
-                  </div>
-                  <div className="border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Intent</p>
-                    <p className="mt-2 text-sm font-medium text-[#1a1a1a]">
-                      {task.decision
-                        ? `${task.decision.forecast.binaryCall.toUpperCase()} / ${task.decision.forecast.confidence}`
-                        : !batch?.runStartedAt && task.lane === 'api'
-                          ? 'Queued for API lane start'
-                          : task.status === 'waiting-import'
-                            ? 'Waiting for import'
-                            : 'Waiting for decision'}
-                    </p>
-                    <p className="mt-1 text-xs text-[#6f665b]">
-                      {task.decision
-                        ? `${task.decision.action.type} ${task.decision.action.amountUsd > 0 ? formatUsd(task.decision.action.amountUsd) : ''}`.trim()
-                        : !batch?.runStartedAt && task.lane === 'api'
-                          ? 'No trade intent yet. Start the API lane to begin this model.'
-                          : task.status === 'waiting-import'
-                            ? 'No trade intent yet. Import the JSON for this model.'
-                            : 'No trade intent yet'}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 border border-[#e8ddd0] bg-[#fcfaf7] px-3 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Reasoning</p>
-                  <p className="mt-2 text-sm leading-6 text-[#5f564c]">
-                    {task.decision?.forecast.reasoning
-                      ?? task.errorMessage
-                      ?? (!batch?.runStartedAt && task.lane === 'api'
-                        ? 'Queued. This API model will not run until you start the API lane.'
-                        : task.status === 'waiting-import'
-                          ? 'Waiting for imported subscription JSON.'
-                          : 'Waiting for the lane to return.')}
-                  </p>
-                </div>
-                {task.status === 'error' ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void retryTask(task.taskKey)}
-                      disabled={successfulFillCount > 0 || batch?.status === 'reset' || batch?.status === 'cleared' || busyKey != null}
-                      className="border border-[#1a1a1a] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {busyKey === `retry:${task.taskKey}`
-                        ? 'Retrying...'
-                        : task.decision
-                          ? 'Retry From Frozen Decision'
-                          : task.lane === 'api'
-                            ? 'Retry API Task'
-                            : 'Reopen Import'}
-                    </button>
-                    <p className="text-xs text-[#8a8075]">
-                      {successfulFillCount === 0
-                        ? 'Retry keeps the original frozen snapshot and clear order.'
-                        : 'Retry is disabled because the live AMM has already moved in this batch.'}
-                    </p>
-                  </div>
-                ) : null}
-                {task.fill ? (
-                  <div className="mt-3 border border-[#e8ddd0] bg-[#f8f4ee] px-3 py-3 text-sm text-[#5f564c]">
-                    Filled {task.fill.executedAction} from {formatPercent(task.fill.priceBefore)} to {formatPercent(task.fill.priceAfter)}.
-                  </div>
-                ) : null}
-              </article>
-            ))}
-          </div>
+                  </article>
+                )
+              })}
+            </div>
           </div>
         ) : (
           <div className="mt-4 border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
@@ -1810,7 +1841,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 )) : (
                   <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
                     {dataset === 'live'
-                      ? 'Fills will appear here after an admin runs the Season 4 model cycle.'
+                      ? 'Fills will appear here after an admin executes trades.'
                       : 'Fills will appear here as the shared AMM clears each task.'}
                   </div>
                 )}

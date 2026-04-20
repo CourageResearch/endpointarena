@@ -285,6 +285,43 @@ export type AiBatchProgress = {
   failureMessage: string | null
 }
 
+export type AiLiveTradeExecutionTrade = {
+  modelKey: ModelId
+  marketSlug: string
+  action: ModelDecisionResult['action']['type']
+  requestedAction: ModelDecisionResult['action']['type']
+  requestedAmountDisplay: number
+  executedAmountDisplay: number
+  shareAmountDisplay: number
+  explanation: string
+  priceYes?: number
+  priceBefore?: number
+  priceAfter?: number
+  txHash: string
+}
+
+export type AiLiveTradeExecutionSkip = {
+  modelKey: string
+  marketSlug?: string | null
+  reason: string
+}
+
+export type AiLiveTradeExecutionSummary = {
+  tradesExecuted: number
+  trades: AiLiveTradeExecutionTrade[]
+  skipped: AiLiveTradeExecutionSkip[]
+}
+
+export type AiLiveTradeExecutionReconciliation = {
+  status: AiBatchStatus
+  failureMessage: string | null
+  tasks: AiDecisionTask[]
+  fills: AiFillEvent[]
+  okCount: number
+  errorCount: number
+  errorMessages: string[]
+}
+
 export type AiSubscriptionExportTask = {
   taskKey: string
   marketId: string
@@ -604,5 +641,209 @@ export function deriveAiBatchProgress(batch: AiBatchState | null): AiBatchProgre
     fillCount: batch.fills.length,
     logCount: batch.logs.length,
     failureMessage: batch.failureMessage,
+  }
+}
+
+function buildLiveExecutionKey(modelId: string, marketId: string): string {
+  return `${modelId}:${marketId}`
+}
+
+function finiteOrFallback(value: number | null | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function getSkippedTradeReason(task: AiDecisionTask, skipped: AiLiveTradeExecutionSkip[]): string | null {
+  const exact = skipped.find((entry) => entry.modelKey === task.modelId && entry.marketSlug === task.marketId)
+  if (exact) return exact.reason
+
+  const modelWide = skipped.find((entry) => entry.modelKey === task.modelId && !entry.marketSlug)
+  if (modelWide) return modelWide.reason
+
+  const marketWide = skipped.find((entry) => entry.modelKey === 'all' && (!entry.marketSlug || entry.marketSlug === task.marketId))
+  if (marketWide) return marketWide.reason
+
+  return null
+}
+
+function getSharesDelta(action: ModelDecisionResult['action']['type'], shareAmountDisplay: number): number {
+  const shares = Math.max(0, finiteOrFallback(shareAmountDisplay, 0))
+  return action === 'SELL_YES' || action === 'SELL_NO' ? -shares : shares
+}
+
+function appendFillOnce(fills: AiFillEvent[], seenTaskKeys: Set<string>, fill: AiFillEvent): void {
+  if (seenTaskKeys.has(fill.taskKey)) return
+  fills.push(fill)
+  seenTaskKeys.add(fill.taskKey)
+}
+
+export function reconcileAiLiveTradeExecution(
+  batch: AiBatchState,
+  summary: AiLiveTradeExecutionSummary,
+  nowIso = new Date().toISOString(),
+): AiLiveTradeExecutionReconciliation {
+  const tradesByTask = new Map(
+    summary.trades.map((trade) => [buildLiveExecutionKey(trade.modelKey, trade.marketSlug), trade] as const),
+  )
+  const nextFills = [...batch.fills]
+  const filledTaskKeys = new Set(nextFills.map((fill) => fill.taskKey))
+  const errorMessages: string[] = []
+  let okCount = 0
+  let errorCount = 0
+
+  const nextTasks = batch.tasks.map((task) => {
+    if (task.status !== 'ready') return task
+
+    const taskKey = buildLiveExecutionKey(task.modelId, task.marketId)
+    const trade = tradesByTask.get(taskKey)
+    const requestedAction = task.decision?.action.type ?? trade?.requestedAction ?? 'HOLD'
+    const requestedAmountUsd = task.decision?.action.amountUsd ?? trade?.requestedAmountDisplay ?? 0
+    const fallbackPrice = finiteOrFallback(task.frozenMarket.priceYes, 0.5)
+
+    if (trade) {
+      const priceBefore = finiteOrFallback(trade.priceBefore, finiteOrFallback(trade.priceYes, fallbackPrice))
+      const priceAfter = finiteOrFallback(trade.priceAfter, finiteOrFallback(trade.priceYes, priceBefore))
+      const fillSummary: AiTaskFillSummary = {
+        fillEventId: trade.txHash,
+        marketActionId: null,
+        executedAction: trade.action,
+        executedAmountUsd: Math.max(0, finiteOrFallback(trade.executedAmountDisplay, 0)),
+        sharesDelta: getSharesDelta(trade.action, trade.shareAmountDisplay),
+        priceBefore,
+        priceAfter,
+        explanation: trade.explanation,
+        status: 'ok',
+        errorMessage: null,
+      }
+      const fillEvent: AiFillEvent = {
+        id: trade.txHash,
+        marketId: task.marketId,
+        trialQuestionId: task.trialQuestionId,
+        modelId: task.modelId,
+        taskKey: task.taskKey,
+        requestedAction,
+        requestedAmountUsd,
+        executedAction: fillSummary.executedAction,
+        executedAmountUsd: fillSummary.executedAmountUsd,
+        sharesDelta: fillSummary.sharesDelta,
+        priceBefore,
+        priceAfter,
+        explanation: fillSummary.explanation,
+        snapshotId: task.snapshotId,
+        marketActionId: null,
+        status: 'ok',
+        createdAt: nowIso,
+        errorMessage: null,
+      }
+
+      appendFillOnce(nextFills, filledTaskKeys, fillEvent)
+      okCount += 1
+      return {
+        ...task,
+        status: 'cleared' as const,
+        fill: fillSummary,
+      }
+    }
+
+    if (task.decision?.action.type === 'HOLD') {
+      const fillId = `hold:${task.taskKey}:${nowIso}`
+      const fillSummary: AiTaskFillSummary = {
+        fillEventId: fillId,
+        marketActionId: null,
+        executedAction: 'HOLD',
+        executedAmountUsd: 0,
+        sharesDelta: 0,
+        priceBefore: fallbackPrice,
+        priceAfter: fallbackPrice,
+        explanation: task.decision.action.explanation,
+        status: 'ok',
+        errorMessage: null,
+      }
+      const fillEvent: AiFillEvent = {
+        id: fillId,
+        marketId: task.marketId,
+        trialQuestionId: task.trialQuestionId,
+        modelId: task.modelId,
+        taskKey: task.taskKey,
+        requestedAction: 'HOLD',
+        requestedAmountUsd,
+        executedAction: 'HOLD',
+        executedAmountUsd: 0,
+        sharesDelta: 0,
+        priceBefore: fallbackPrice,
+        priceAfter: fallbackPrice,
+        explanation: fillSummary.explanation,
+        snapshotId: task.snapshotId,
+        marketActionId: null,
+        status: 'ok',
+        createdAt: nowIso,
+        errorMessage: null,
+      }
+
+      appendFillOnce(nextFills, filledTaskKeys, fillEvent)
+      okCount += 1
+      return {
+        ...task,
+        status: 'cleared' as const,
+        fill: fillSummary,
+      }
+    }
+
+    const skipReason = getSkippedTradeReason(task, summary.skipped)
+    const message = skipReason
+      ? `Trade execution skipped for ${getAiModelLabel(task.modelId)} on ${task.marketId}: ${skipReason}`
+      : `Trade execution returned no fill for ${getAiModelLabel(task.modelId)} on ${task.marketId}.`
+    const fillId = `error:${task.taskKey}:${nowIso}`
+    const fillSummary: AiTaskFillSummary = {
+      fillEventId: fillId,
+      marketActionId: null,
+      executedAction: 'HOLD',
+      executedAmountUsd: 0,
+      sharesDelta: 0,
+      priceBefore: fallbackPrice,
+      priceAfter: fallbackPrice,
+      explanation: message,
+      status: 'error',
+      errorMessage: message,
+    }
+    const fillEvent: AiFillEvent = {
+      id: fillId,
+      marketId: task.marketId,
+      trialQuestionId: task.trialQuestionId,
+      modelId: task.modelId,
+      taskKey: task.taskKey,
+      requestedAction,
+      requestedAmountUsd,
+      executedAction: 'HOLD',
+      executedAmountUsd: 0,
+      sharesDelta: 0,
+      priceBefore: fallbackPrice,
+      priceAfter: fallbackPrice,
+      explanation: message,
+      snapshotId: task.snapshotId,
+      marketActionId: null,
+      status: 'error',
+      createdAt: nowIso,
+      errorMessage: message,
+    }
+
+    appendFillOnce(nextFills, filledTaskKeys, fillEvent)
+    errorCount += 1
+    errorMessages.push(message)
+    return {
+      ...task,
+      status: 'error' as const,
+      errorMessage: message,
+      fill: fillSummary,
+    }
+  })
+
+  return {
+    status: errorCount > 0 ? 'failed' : 'cleared',
+    failureMessage: errorMessages[0] ?? null,
+    tasks: nextTasks,
+    fills: nextFills,
+    okCount,
+    errorCount,
+    errorMessages,
   }
 }

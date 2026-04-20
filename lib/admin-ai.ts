@@ -22,6 +22,7 @@ import {
   getAiModelLabel,
   getAiModelLane,
   normalizeAiApiConcurrency,
+  reconcileAiLiveTradeExecution,
   isAiSubscriptionImportWorkflow,
   LEGACY_AI_SUBSCRIPTION_IMPORT_WORKFLOW,
   listAiSupportedModelIds,
@@ -64,7 +65,7 @@ import { getMarketModelResponseTimeoutMs } from '@/lib/markets/run-health'
 import { buildSeason4ModelDecisionInput, calculateSeason4TradeCaps } from '@/lib/season4-model-decisions'
 import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
-import { loadContractMarketStates, loadLiveModelWalletPortfolioBalances, parseModelTradeAmountDisplay, runSeason4ModelCycle } from '@/lib/season4-ops'
+import { getConfiguredSeason4ModelPrivateKeyAddresses, loadContractMarketStates, loadLiveModelWalletPortfolioBalances, runSeason4ModelCycle } from '@/lib/season4-ops'
 import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
@@ -89,7 +90,6 @@ type CandidatePortfolioState = {
   cashAvailable: number
   yesSharesHeld: number
   noSharesHeld: number
-  maxTradeUsd?: number
 }
 
 type CreateAiBatchInput = {
@@ -493,7 +493,6 @@ function buildFrozenPortfolio(input: {
         yesSharesHeld: input.portfolio.yesSharesHeld,
         noSharesHeld: input.portfolio.noSharesHeld,
         priceYes: input.market.priceYes,
-        maxTradeUsd: input.portfolio.maxTradeUsd ?? input.portfolio.cashAvailable,
       })
     : calculateExecutableTradeCaps({
         state: {
@@ -738,11 +737,30 @@ async function assertLiveModelWalletsConfigured(modelIds: ModelId[]): Promise<vo
     walletRows.map((row) => [row.modelKey, trimOrNull(row.walletAddress)] as const),
   )
   const missingWalletModels = uniqueModelIds.filter((modelId) => !walletAddressByModelId.get(modelId))
-  if (missingWalletModels.length === 0) return
+  if (missingWalletModels.length > 0) {
+    throw new ValidationError(
+      `Live AI batch cannot run until model wallets are configured for ${formatModelList(missingWalletModels)}. Set SEASON4_MODEL_WALLETS_JSON and SEASON4_MODEL_PRIVATE_KEYS_JSON, then run Seed model wallets and Fund model wallets.`,
+    )
+  }
 
-  throw new ValidationError(
-    `Live AI batch cannot run until model wallets are configured for ${formatModelList(missingWalletModels)}. Set SEASON4_MODEL_WALLETS_JSON and SEASON4_MODEL_PRIVATE_KEYS_JSON, then run Seed model wallets and Fund model wallets.`,
-  )
+  const configuredPrivateKeyAddresses = getConfiguredSeason4ModelPrivateKeyAddresses()
+  const missingPrivateKeyModels = uniqueModelIds.filter((modelId) => !configuredPrivateKeyAddresses[modelId])
+  if (missingPrivateKeyModels.length > 0) {
+    throw new ValidationError(
+      `Live AI batch cannot run until model private keys are configured for ${formatModelList(missingPrivateKeyModels)}. Set SEASON4_MODEL_PRIVATE_KEYS_JSON, then run Seed model wallets and Fund model wallets.`,
+    )
+  }
+
+  const mismatchedModels = uniqueModelIds.filter((modelId) => {
+    const storedWalletAddress = walletAddressByModelId.get(modelId)?.toLowerCase()
+    const configuredAddress = configuredPrivateKeyAddresses[modelId]?.toLowerCase()
+    return Boolean(storedWalletAddress && configuredAddress && storedWalletAddress !== configuredAddress)
+  })
+  if (mismatchedModels.length > 0) {
+    throw new ValidationError(
+      `Live AI batch cannot run because stored model wallet addresses do not match configured private keys for ${formatModelList(mismatchedModels)}. Run Seed model wallets and Fund model wallets, then stage a fresh batch.`,
+    )
+  }
 }
 
 async function buildLivePortfolioState(
@@ -783,7 +801,6 @@ async function buildLivePortfolioState(
       .filter((row): row is typeof row & { modelKey: ModelId } => typeof row.modelKey === 'string')
       .map((row) => [`${row.modelKey}:${row.marketRef}`, row] as const),
   )
-  const maxTradeUsd = parseModelTradeAmountDisplay()
   const portfolioByMarketActorKey = new Map<string, CandidatePortfolioState>()
 
   for (const candidate of candidates) {
@@ -801,7 +818,6 @@ async function buildLivePortfolioState(
         cashAvailable: livePortfolio?.collateralBalanceDisplay ?? collateralRow?.collateralDisplay ?? 0,
         yesSharesHeld: livePosition?.yesSharesHeld ?? positionRow?.yesShares ?? 0,
         noSharesHeld: livePosition?.noSharesHeld ?? positionRow?.noShares ?? 0,
-        maxTradeUsd,
       })
     }
   }
@@ -889,7 +905,6 @@ async function readFreshLiveBatchPortfolioState(
     }
   }
 
-  const maxTradeUsd = parseModelTradeAmountDisplay()
   let refreshedCount = 0
   const nextTasks = state.tasks.map((task) => {
     if (!shouldRefreshTask(task)) return task
@@ -911,7 +926,6 @@ async function readFreshLiveBatchPortfolioState(
       yesSharesHeld,
       noSharesHeld,
       priceYes: task.frozenMarket.priceYes,
-      maxTradeUsd,
     })
     const frozenPortfolio = {
       ...task.frozenPortfolio,
@@ -1162,7 +1176,6 @@ function reconstructSnapshotArgs(batch: AiBatchState, task: AiDecisionTask) {
         yesSharesHeld: task.frozenPortfolio.yesSharesHeld,
         noSharesHeld: task.frozenPortfolio.noSharesHeld,
       },
-      maxTradeUsd: parseModelTradeAmountDisplay(),
       asOf: new Date(batch.createdAt),
       trial: {
         trialQuestionId: trial.trialQuestionId,
@@ -1939,40 +1952,45 @@ async function runLiveBatchModelCycle(batchId: string): Promise<void> {
 
   const state = parseBatchState(row)
   if (state.dataset !== 'live') {
-    throw new ConflictError('Only live batches can run a Season 4 model cycle.')
+    throw new ConflictError('Only live batches can execute trades.')
   }
   if (!state.runStartedAt) {
-    throw new ConflictError('Run the batch before starting the model cycle.')
+    throw new ConflictError('Run the batch before executing trades.')
   }
   if (state.status === 'cleared' || state.status === 'reset') {
     throw new ConflictError('This batch is already closed.')
   }
   if (state.status === 'failed') {
-    throw new ConflictError('Resolve the failed batch before starting the model cycle.')
+    throw new ConflictError('Resolve the failed batch before executing trades.')
   }
   if (state.status === 'clearing') {
-    throw new ConflictError('The model cycle is already running.')
+    throw new ConflictError('Onchain clearing is already running.')
   }
   if (state.status !== 'ready') {
-    throw new ConflictError('Batch is not ready for a manual model cycle yet.')
+    throw new ConflictError('Batch is not ready for manual trade execution yet.')
   }
   const notReady = state.tasks.find((task) => task.status !== 'ready' && task.status !== 'cleared')
   if (notReady) {
-    throw new ConflictError('Batch cannot run a model cycle until every enabled model has returned.')
+    throw new ConflictError('Batch cannot execute trades until every enabled model has returned.')
+  }
+  const missingDecision = state.tasks.find((task) => task.status === 'ready' && !task.decision)
+  if (missingDecision) {
+    throw new ConflictError(`Stored decision is missing for ${getAiModelLabel(missingDecision.modelId)} on ${missingDecision.marketId}. Reset and restage the batch instead of generating a fresh decision during trade execution.`)
   }
 
   await mutateBatchState(batchId, (current) => ({
     ...current,
     status: 'clearing',
-    logs: current.logs.some((entry) => entry.message === 'Admin started the Season 4 model cycle.')
+    logs: current.logs.some((entry) => entry.message === 'Admin started trade execution.')
       ? current.logs
-      : [...current.logs, buildLog('Admin started the Season 4 model cycle.', 'warning')],
+      : [...current.logs, buildLog('Admin started trade execution.', 'warning')],
   }))
 
   try {
     const summary = await runSeason4ModelCycle({
       modelKeys: state.enabledModelIds,
       marketSlugs: state.trials.map((trial) => trial.marketId),
+      requireProvidedDecisions: true,
       decisions: state.tasks.flatMap((task) => (
         task.decision
           ? [{
@@ -1987,30 +2005,41 @@ async function runLiveBatchModelCycle(batchId: string): Promise<void> {
 
     await mutateBatchState(batchId, async (currentState) => hydratePortfolioStates({
       ...currentState,
-      status: 'cleared',
-      tasks: currentState.tasks.map((task) => (
-        task.status === 'ready'
-          ? {
-              ...task,
-              status: 'cleared',
-            }
-          : task
-      )),
-      logs: [
-        ...currentState.logs,
-        buildLog(
-          `Season 4 model cycle complete. ${summary.tradesExecuted.toLocaleString('en-US')} trade${summary.tradesExecuted === 1 ? '' : 's'} executed.`,
-          summary.tradesExecuted > 0 ? 'success' : 'warning',
-        ),
-      ],
+      ...(() => {
+        const reconciliation = reconcileAiLiveTradeExecution(currentState, summary)
+        const statusLog = reconciliation.errorCount > 0
+          ? buildLog(
+              `Trade execution incomplete. ${summary.tradesExecuted.toLocaleString('en-US')} trade${summary.tradesExecuted === 1 ? '' : 's'} executed; ${reconciliation.errorCount.toLocaleString('en-US')} task${reconciliation.errorCount === 1 ? '' : 's'} need attention.`,
+              'error',
+            )
+          : buildLog(
+              `Trade execution complete. ${summary.tradesExecuted.toLocaleString('en-US')} trade${summary.tradesExecuted === 1 ? '' : 's'} executed.`,
+              summary.tradesExecuted > 0 ? 'success' : 'warning',
+            )
+        const errorLogs = reconciliation.errorMessages
+          .slice(0, 6)
+          .map((message) => buildLog(message, 'error'))
+
+        return {
+          status: reconciliation.status,
+          failureMessage: reconciliation.failureMessage,
+          tasks: reconciliation.tasks,
+          fills: reconciliation.fills,
+          logs: [
+            ...currentState.logs,
+            ...errorLogs,
+            statusLog,
+          ],
+        }
+      })(),
     }))
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Season 4 model cycle failed.'
+    const message = error instanceof Error ? error.message : 'Trade execution failed.'
     await mutateBatchState(batchId, (currentState) => ({
       ...currentState,
       status: 'failed',
       failureMessage: message,
-      logs: [...currentState.logs, buildLog(`Season 4 model cycle failed: ${message}`, 'error')],
+      logs: [...currentState.logs, buildLog(`Trade execution failed: ${message}`, 'error')],
     }))
     throw error
   }
@@ -2081,9 +2110,9 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
           await mutateBatchState(batchId, (current) => ({
             ...current,
             status: 'ready',
-            logs: current.logs.some((entry) => entry.message === 'All model decisions are in. Run the Season 4 model cycle manually from the admin panel.')
+            logs: current.logs.some((entry) => entry.message === 'All model decisions are in. Execute trades manually from the admin panel.')
               ? current.logs
-              : [...current.logs, buildLog('All model decisions are in. Run the Season 4 model cycle manually from the admin panel.', 'success')],
+              : [...current.logs, buildLog('All model decisions are in. Execute trades manually from the admin panel.', 'success')],
           }))
         }
         return
@@ -2506,7 +2535,7 @@ export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
         ...state.logs,
         buildLog(
           batch.dataset === 'live'
-            ? 'Batch collection started by admin. API models can now execute while subscription imports continue; run the season 4 model cycle manually once every lane is ready.'
+            ? 'Batch collection started by admin. API models can now execute while subscription imports continue; execute trades manually once every lane is ready.'
             : 'Batch collection started by admin. API models can now execute while subscription imports continue, and the shared AMM will clear once every lane is ready.',
           'warning',
         ),
@@ -2543,7 +2572,7 @@ export async function retryAiTask(batchId: string, taskKey: string): Promise<AiB
 
   const successfulFills = batch.fills.filter((fill) => fill.status === 'ok')
   if (successfulFills.length > 0) {
-    throw new ConflictError('This batch already started clearing against the live AMM. Reset and stage a new batch to preserve fairness.')
+    throw new ConflictError('This batch already started clearing against the live onchain markets. Reset and stage a new batch to preserve fairness.')
   }
 
   const nextTaskStatus: AiTaskStatus = task.decision

@@ -238,7 +238,7 @@ export function MarketDecisionSnapshotsPanel({
 
                       <aside className={CONTENT_PANEL_CLASS}>
                         <div>
-                          <div className={DETAILS_TOP_LABEL_CLASS}>Latest Action</div>
+                          <div className={DETAILS_TOP_LABEL_CLASS}>Latest Proposal</div>
                           {latestActionChips ? (
                             <div className="mt-2 flex flex-wrap gap-2">
                               {latestActionChips.map((chip) => (

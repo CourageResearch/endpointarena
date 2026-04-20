@@ -319,7 +319,7 @@ export function Season4AdminDesk({ initialData }: { initialData: Season4OpsDashb
         <article className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Operations</h2>
           <p className="mt-1 text-sm text-[#6f665b]">
-            Run the core season 4 maintenance actions from the app. AI model cycles only start from an admin action.
+            Run the core season 4 maintenance actions from the app. AI trades execute only from a ready Admin AI batch.
           </p>
 
           <div className="mt-4 grid gap-2">
@@ -337,19 +337,12 @@ export function Season4AdminDesk({ initialData }: { initialData: Season4OpsDashb
               {pendingAction === 'sync-indexer' ? 'Syncing indexer...' : 'Sync indexer now'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => void runAdminAction<{ summary: { tradesExecuted: number } }>({
-                key: 'run-model-cycle',
-                url: '/api/admin/season4/model-cycle/run',
-                fallbackMessage: 'Failed to run the season 4 model cycle',
-                successMessage: (result) => `Model cycle complete. Executed ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'}.`,
-              })}
-              disabled={pendingAction !== null || !initialData.chain.enabled}
-              className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff] disabled:cursor-not-allowed disabled:opacity-50"
+            <Link
+              href="/admin/ai"
+              className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff]"
             >
-              {pendingAction === 'run-model-cycle' ? 'Running model cycle...' : 'Run model cycle now'}
-            </button>
+              Open Admin AI to execute trades
+            </Link>
 
             <button
               type="button"
@@ -373,7 +366,7 @@ export function Season4AdminDesk({ initialData }: { initialData: Season4OpsDashb
               npm run season4:indexer:worker
             </code>
             <p className="mt-3 text-xs text-[#6f665b]">
-              Railway only runs the indexer on a schedule. Model cycles are never scheduled by a worker; run them manually from this panel when ready. Each cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
+              Railway only runs the indexer on a schedule. Model cycles are never scheduled by a worker; run them manually from this panel when ready. Each cycle covers up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}, and buy size is limited by each model wallet&apos;s available cash.
             </p>
           </div>
         </article>
@@ -474,7 +467,7 @@ export function Season4AdminDesk({ initialData }: { initialData: Season4OpsDashb
       <section className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
         <h2 className="text-sm font-semibold text-[#1a1a1a]">Model wallets</h2>
         <p className="mt-1 text-sm text-[#6f665b]">
-          This is the funding state used when an admin manually runs a model cycle.
+          This is the funding state used when an admin manually clears a ready AI batch onchain.
         </p>
 
         <div className="mt-4 overflow-x-auto">

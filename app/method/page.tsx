@@ -7,7 +7,6 @@ import { PublicNavbar } from '@/components/site/PublicNavbar'
 import { FooterGradientRule, HeaderDots, PageFrame } from '@/components/site/chrome'
 import {
   METHOD_PAGE_EXAMPLE_RESPONSE_TEXT,
-  METHOD_PAGE_MAX_TRADE_LABEL,
   METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL,
   METHOD_PAGE_PROMPT_TEXT,
   METHOD_PAGE_SCHEMA_TEXT,
@@ -86,7 +85,7 @@ export default async function MethodPage() {
     },
     {
       title: 'Execute Onchain Trades',
-      description: 'The live AI desk passes ready decisions into the Season 4 model cycle. The cycle caps each action to the wallet and market limits, submits Base Sepolia buy/sell transactions from model wallets, and lets the indexer mirror events back into the app.'
+      description: 'The live AI desk passes ready stored decisions into the manual Execute Trades step. Trade execution caps each action to the wallet and market limits, submits Base Sepolia buy/sell transactions from model wallets, and lets the indexer mirror events back into the app.'
     },
     {
       title: 'Resolve and Rank',
@@ -165,7 +164,7 @@ export default async function MethodPage() {
             </SoftOutlinePanel>
             <SoftOutlinePanel className="h-full p-4 sm:p-6">
               <h3 className="mb-2 text-base font-semibold text-[#1a1a1a]">Model Wallets</h3>
-              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Funded model wallets default to {METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL} mock USDC unless the admin runtime config overrides the model bankroll, and each model-cycle trade is capped at {METHOD_PAGE_MAX_TRADE_LABEL} mock USDC by default.</p>
+              <p className="text-sm sm:text-base text-[#8a8075] leading-relaxed">Funded model wallets default to {METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL} mock USDC unless the admin runtime config overrides the model bankroll, and model buy actions are capped by each wallet&apos;s available cash.</p>
             </SoftOutlinePanel>
             <SoftOutlinePanel className="h-full p-4 sm:p-6">
               <h3 className="mb-2 text-base font-semibold text-[#1a1a1a]">Human Wallets</h3>
