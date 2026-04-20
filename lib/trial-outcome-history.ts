@@ -6,6 +6,7 @@ import {
   trialQuestionOutcomeHistory,
   trialQuestions,
 } from '@/lib/db'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 
 export type TrialQuestionOutcomeValue = 'Pending' | 'YES' | 'NO'
 export type TrialQuestionOutcomeHistoryChangeSource = 'manual_admin' | 'accepted_candidate'
@@ -200,7 +201,8 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
     ...acceptedCandidates.map((candidate) => candidate.trialQuestionId),
     ...resolvedQuestions.map((question) => question.id),
   ]))
-  const season4MarketRows = questionIds.length > 0
+  const config = getSeason4OnchainConfig()
+  const season4MarketRows = questionIds.length > 0 && config.managerAddress
     ? await db.query.onchainMarkets.findMany({
         columns: {
           trialQuestionId: true,
@@ -208,6 +210,7 @@ async function listTrialQuestionOutcomeHistoryInternal(input?: {
           createdAt: true,
         },
         where: and(
+          eq(onchainMarkets.managerAddress, config.managerAddress),
           inArray(onchainMarkets.trialQuestionId, questionIds),
           ne(onchainMarkets.status, 'archived'),
         ),

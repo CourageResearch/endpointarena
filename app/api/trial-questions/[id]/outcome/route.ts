@@ -1,10 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { db, onchainMarkets, trialQuestions } from '@/lib/db'
 import { requireAdminSession } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
 import { resolveSeason4Market } from '@/lib/season4-ops'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
@@ -40,14 +41,20 @@ export async function PATCH(
     const question = await db.query.trialQuestions.findFirst({
       where: eq(trialQuestions.id, id),
     })
-    const linkedSeason4Markets = await db.query.onchainMarkets.findMany({
-      columns: {
-        marketSlug: true,
-        status: true,
-        resolvedOutcome: true,
-      },
-      where: eq(onchainMarkets.trialQuestionId, id),
-    })
+    const config = getSeason4OnchainConfig()
+    const linkedSeason4Markets = config.managerAddress
+      ? await db.query.onchainMarkets.findMany({
+          columns: {
+            marketSlug: true,
+            status: true,
+            resolvedOutcome: true,
+          },
+          where: and(
+            eq(onchainMarkets.managerAddress, config.managerAddress),
+            eq(onchainMarkets.trialQuestionId, id),
+          ),
+        })
+      : []
 
     if (!question) {
       throw new NotFoundError('Trial question not found')

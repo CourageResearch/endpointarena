@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
-import { inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { db, onchainMarkets } from '@/lib/db'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { absoluteUrl } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
@@ -26,12 +27,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   let markets: Array<{ marketSlug: string; updatedAt: Date }> = []
   try {
+    const config = getSeason4OnchainConfig()
     markets = await db.query.onchainMarkets.findMany({
       columns: {
         marketSlug: true,
         updatedAt: true,
       },
-      where: inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']),
+      where: and(
+        config.managerAddress
+          ? eq(onchainMarkets.managerAddress, config.managerAddress)
+          : eq(onchainMarkets.managerAddress, ''),
+        inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']),
+      ),
     })
   } catch {
     return staticEntries

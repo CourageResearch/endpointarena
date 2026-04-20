@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { createPublicClient, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
@@ -268,6 +268,7 @@ export async function getSeason4LeaderboardData(options: { sync?: boolean } = {}
     await syncSeason4OnchainIndex()
   }
 
+  const config = getSeason4OnchainConfig()
   const [modelWalletRows, balanceRows, marketRows, userRows, walletLinks] = await Promise.all([
     db.select({
       modelKey: onchainModelWallets.modelKey,
@@ -294,7 +295,12 @@ export async function getSeason4LeaderboardData(options: { sync?: boolean } = {}
       createdAt: onchainMarkets.createdAt,
     })
       .from(onchainMarkets)
-      .where(inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']))
+      .where(and(
+        config.managerAddress
+          ? eq(onchainMarkets.managerAddress, config.managerAddress)
+          : eq(onchainMarkets.managerAddress, ''),
+        inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']),
+      ))
       .orderBy(desc(onchainMarkets.createdAt)),
     db.select({
       id: users.id,

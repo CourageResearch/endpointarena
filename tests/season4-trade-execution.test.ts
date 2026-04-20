@@ -13,7 +13,7 @@ test('season 4 buy executions map USD collateral into atomic contract calls', ()
   assert.deepEqual(buyYes, {
     contractFunctionName: 'buyYes',
     amountAtomic: BigInt(7_500_000),
-    shareAmountDisplay: 30,
+    shareAmountDisplay: 7.5,
   })
 
   const buyNo = buildSeason4TradeExecution({
@@ -24,7 +24,7 @@ test('season 4 buy executions map USD collateral into atomic contract calls', ()
   assert.deepEqual(buyNo, {
     contractFunctionName: 'buyNo',
     amountAtomic: BigInt(7_500_000),
-    shareAmountDisplay: 30,
+    shareAmountDisplay: 7.5,
   })
 })
 
@@ -60,7 +60,7 @@ test('season 4 trade execution preserves six-decimal mock USDC precision', () =>
   })
 
   assert.equal(execution?.amountAtomic, BigInt(123_457))
-  assert.equal(execution?.shareAmountDisplay, 0.246914)
+  assert.equal(execution?.shareAmountDisplay, 0.123457)
 })
 
 test('season 4 trade execution skips hold and zero-sized trades', () => {

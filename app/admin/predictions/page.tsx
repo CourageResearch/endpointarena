@@ -5,11 +5,13 @@ import { redirectIfNotAdmin } from '@/lib/admin-auth'
 import { MODEL_IDS } from '@/lib/constants'
 import { db, onchainMarkets, trialQuestions } from '@/lib/db'
 import { attachUnifiedPredictionsToQuestions } from '@/lib/model-decision-snapshots'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { filterSupportedTrialQuestions, normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
 export const dynamic = 'force-dynamic'
 
 async function getData() {
+  const config = getSeason4OnchainConfig()
   const linkedMarkets = await db.select({
     marketSlug: onchainMarkets.marketSlug,
     trialQuestionId: onchainMarkets.trialQuestionId,
@@ -20,6 +22,9 @@ async function getData() {
   })
     .from(onchainMarkets)
     .where(and(
+      config.managerAddress
+        ? eq(onchainMarkets.managerAddress, config.managerAddress)
+        : eq(onchainMarkets.managerAddress, ''),
       isNotNull(onchainMarkets.trialQuestionId),
       inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']),
     ))

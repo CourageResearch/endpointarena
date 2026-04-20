@@ -46,7 +46,7 @@ async function futureCloseTime(seconds = 3_600): Promise<bigint> {
 async function deployContracts() {
   const [owner, trader, unfundedTrader] = await viem.getWalletClients()
   const token = await viem.deployContract('MockUSDC' as never) as Contract
-  const manager = await viem.deployContract('PredictionMarketManager' as never) as Contract
+  const manager = await viem.deployContract('PredictionMarketManager' as never, [BigInt(1)]) as Contract
 
   await token.write.mint([trader.account.address, STARTING_COLLATERAL])
   await token.write.approve([manager.address, maxUint256], { account: trader.account.address })
@@ -85,6 +85,14 @@ async function createMarket(
 }
 
 describe('PredictionMarketManager Season 4 AMM', () => {
+  test('constructor can start new deployments after existing market ids', async () => {
+    const [owner] = await viem.getWalletClients()
+    const manager = await viem.deployContract('PredictionMarketManager' as never, [BigInt(42)]) as Contract
+
+    assert.ok(sameAddress(owner.account.address)(await manager.read.owner()))
+    assert.equal(await manager.read.nextMarketId(), BigInt(42))
+  })
+
   test('market creation validates required parameters', async () => {
     const { manager, token } = await deployContracts()
     const closeTime = await futureCloseTime()
@@ -124,7 +132,7 @@ describe('PredictionMarketManager Season 4 AMM', () => {
     const { manager, token, trader } = await deployContracts()
     const { marketId } = await createMarket(manager, token)
     const priceBefore = await manager.read.priceYesE18([marketId])
-    const expectedShares = (TRADE_AMOUNT * ONE) / priceBefore
+    const expectedShares = TRADE_AMOUNT
     const traderBalanceBefore = await token.read.balanceOf([trader.account.address])
 
     await viem.assertions.emitWithArgs(
@@ -148,8 +156,7 @@ describe('PredictionMarketManager Season 4 AMM', () => {
     const { manager, token, trader } = await deployContracts()
     const { marketId } = await createMarket(manager, token)
     const priceBefore = await manager.read.priceYesE18([marketId])
-    const noPriceBefore = ONE - priceBefore
-    const expectedShares = (TRADE_AMOUNT * ONE) / noPriceBefore
+    const expectedShares = TRADE_AMOUNT
 
     await viem.assertions.emitWithArgs(
       manager.write.buyNo([marketId, TRADE_AMOUNT, ZERO], { account: trader.account.address }),
@@ -251,8 +258,7 @@ describe('PredictionMarketManager Season 4 AMM', () => {
   test('trade slippage limits reject overly optimistic buy and sell limits', async () => {
     const { manager, token, trader } = await deployContracts()
     const { marketId } = await createMarket(manager, token)
-    const priceBeforeBuy = await manager.read.priceYesE18([marketId])
-    const expectedBuyShares = (TRADE_AMOUNT * ONE) / priceBeforeBuy
+    const expectedBuyShares = TRADE_AMOUNT
 
     await viem.assertions.revertWith(
       manager.write.buyYes([marketId, TRADE_AMOUNT, expectedBuyShares + ONE_UNIT], { account: trader.account.address }),
@@ -320,7 +326,31 @@ describe('PredictionMarketManager Season 4 AMM', () => {
     assert.equal(await manager.read.noBalances([marketId, trader.account.address]), ZERO)
   })
 
-  test('immediate same-side buy then sell must not increase trader collateral', {
-    todo: 'Current Base Sepolia v1 draft uses marginal-price execution; enable as a blocking invariant when pricing is upgraded to an audited integral.',
+  test('one-sided winning redemption is covered by deposited collateral', async () => {
+    const { manager, token, trader } = await deployContracts()
+    const { marketId } = await createMarket(manager, token)
+
+    await manager.write.buyYes([marketId, TRADE_AMOUNT, TRADE_AMOUNT], { account: trader.account.address })
+    assert.equal(await token.read.balanceOf([manager.address]), TRADE_AMOUNT)
+    assert.equal(await manager.read.yesBalances([marketId, trader.account.address]), TRADE_AMOUNT)
+
+    await manager.write.resolveMarket([marketId, true])
+    await manager.write.redeemWinnings([marketId], { account: trader.account.address })
+
+    assert.equal(await token.read.balanceOf([manager.address]), ZERO)
+    assert.equal(await manager.read.yesBalances([marketId, trader.account.address]), ZERO)
+  })
+
+  test('immediate same-side buy then sell must not increase trader collateral', async () => {
+    const { manager, token, trader } = await deployContracts()
+    const { marketId } = await createMarket(manager, token)
+    const balanceBefore = await token.read.balanceOf([trader.account.address])
+
+    await manager.write.buyYes([marketId, TRADE_AMOUNT, TRADE_AMOUNT], { account: trader.account.address })
+    const sharesHeld = await manager.read.yesBalances([marketId, trader.account.address])
+    await manager.write.sellYes([marketId, sharesHeld, ZERO], { account: trader.account.address })
+
+    const balanceAfter = await token.read.balanceOf([trader.account.address])
+    assert.ok(balanceAfter <= balanceBefore)
   })
 })

@@ -219,7 +219,7 @@ async function deployContracts(target: DeploymentTarget): Promise<DeploymentSumm
     abi: artifacts.PredictionMarketManager.abi,
     bytecode: artifacts.PredictionMarketManager.bytecode,
     account,
-    args: [],
+    args: [BigInt(1)],
   })
   const managerReceipt = await publicClient.waitForTransactionReceipt({ hash: managerDeployHash })
   const marketManagerAddress = managerReceipt.contractAddress

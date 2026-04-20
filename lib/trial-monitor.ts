@@ -13,6 +13,7 @@ import {
   trialQuestions,
 } from '@/lib/db'
 import { ConfigurationError, ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '@/lib/errors'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { resolveSeason4Market } from '@/lib/season4-ops'
 import { buildTrialOutcomeEvidenceHash } from '@/lib/trial-outcome-candidate-hash'
 import { recordTrialQuestionOutcomeHistory } from '@/lib/trial-outcome-history'
@@ -119,8 +120,12 @@ async function listMonitorableTrialOutcomeQuestionsInternal(): Promise<TrialQues
 }
 
 async function listAllOpenTrialOutcomeQuestionsInternal(): Promise<TrialQuestionWithTrial[]> {
+  const config = getSeason4OnchainConfig()
+  if (!config.managerAddress) return []
+
   const openMarkets = await db.query.onchainMarkets.findMany({
     where: and(
+      eq(onchainMarkets.managerAddress, config.managerAddress),
       inArray(onchainMarkets.status, ['deployed', 'closed']),
       isNotNull(onchainMarkets.trialQuestionId),
     ),
@@ -2103,14 +2108,20 @@ export async function reviewTrialOutcomeCandidate(input: {
     }
 
     const nextOutcomeDate = candidate.proposedOutcomeDate ?? now
-    const linkedSeason4Markets = await db.query.onchainMarkets.findMany({
-      columns: {
-        marketSlug: true,
-        status: true,
-        resolvedOutcome: true,
-      },
-      where: eq(onchainMarkets.trialQuestionId, candidate.trialQuestionId),
-    })
+    const config = getSeason4OnchainConfig()
+    const linkedSeason4Markets = config.managerAddress
+      ? await db.query.onchainMarkets.findMany({
+          columns: {
+            marketSlug: true,
+            status: true,
+            resolvedOutcome: true,
+          },
+          where: and(
+            eq(onchainMarkets.managerAddress, config.managerAddress),
+            eq(onchainMarkets.trialQuestionId, candidate.trialQuestionId),
+          ),
+        })
+      : []
 
     const resolvedSeason4Markets = linkedSeason4Markets.filter((entry) => entry.status === 'resolved')
     const conflictingSeason4Market = resolvedSeason4Markets.find((entry) => (
