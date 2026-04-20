@@ -20,8 +20,8 @@ async function migrate() {
       id TEXT PRIMARY KEY,
       opening_lmsr_b REAL NOT NULL DEFAULT 100000,
       toy_trial_count INTEGER NOT NULL DEFAULT 0,
-      season4_market_liquidity_b_display REAL NOT NULL DEFAULT 25000,
-      season4_human_starting_bankroll_display REAL NOT NULL DEFAULT 1000,
+      season4_market_liquidity_b_display REAL NOT NULL DEFAULT 1000,
+      season4_human_starting_bankroll_display REAL NOT NULL DEFAULT 100,
       season4_starting_bankroll_display REAL NOT NULL DEFAULT 1000,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW(),
@@ -39,20 +39,41 @@ async function migrate() {
   `
 
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS toy_trial_count INTEGER NOT NULL DEFAULT 0`
-  await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS season4_market_liquidity_b_display REAL NOT NULL DEFAULT 25000`
+  await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS season4_market_liquidity_b_display REAL NOT NULL DEFAULT 1000`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS season4_starting_bankroll_display REAL NOT NULL DEFAULT 1000`
   await sql`ALTER TABLE market_runtime_configs ADD COLUMN IF NOT EXISTS season4_human_starting_bankroll_display REAL`
   await sql`
     UPDATE market_runtime_configs
     SET season4_human_starting_bankroll_display =
-      COALESCE(season4_human_starting_bankroll_display, season4_starting_bankroll_display, 1000)
+      COALESCE(season4_human_starting_bankroll_display, 100)
   `
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN opening_lmsr_b SET DEFAULT 100000`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN toy_trial_count SET DEFAULT 0`
-  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_market_liquidity_b_display SET DEFAULT 25000`
-  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_human_starting_bankroll_display SET DEFAULT 1000`
+  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_market_liquidity_b_display SET DEFAULT 1000`
+  await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_human_starting_bankroll_display SET DEFAULT 100`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_human_starting_bankroll_display SET NOT NULL`
   await sql`ALTER TABLE market_runtime_configs ALTER COLUMN season4_starting_bankroll_display SET DEFAULT 1000`
+  await sql`
+    UPDATE market_runtime_configs
+    SET toy_trial_count = 0,
+      updated_at = NOW()
+    WHERE id = 'default'
+      AND toy_trial_count <> 0
+  `
+  await sql`
+    UPDATE market_runtime_configs
+    SET season4_human_starting_bankroll_display = 100,
+      updated_at = NOW()
+    WHERE id = 'default'
+      AND season4_human_starting_bankroll_display = 1000
+  `
+  await sql`
+    UPDATE market_runtime_configs
+    SET season4_market_liquidity_b_display = 1000,
+      updated_at = NOW()
+    WHERE id = 'default'
+      AND season4_market_liquidity_b_display <> 1000
+  `
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS warmup_run_count`
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS warmup_max_trade_usd`
   await sql`ALTER TABLE market_runtime_configs DROP COLUMN IF EXISTS warmup_buy_cash_fraction`
@@ -83,8 +104,8 @@ async function migrate() {
       'default',
       100000,
       0,
-      25000,
       1000,
+      100,
       1000,
       NOW(),
       NOW()

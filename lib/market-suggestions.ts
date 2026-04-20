@@ -1,19 +1,27 @@
 const MARKET_SUGGESTION_HEADER = 'Market suggestion request'
 const MARKET_SUGGESTION_REQUESTED_NCT_PREFIX = 'Requested NCT: '
 const MARKET_SUGGESTION_DETAILS_LABEL = 'Additional context:'
+const MARKET_SUGGESTION_NCT_PATTERN = /^NCT\d{8}$/i
 export const EMPTY_MARKET_SUGGESTION_DETAILS = 'No additional context provided.'
 export const MARKET_SUGGESTION_MESSAGE_PREFIX = `${MARKET_SUGGESTION_HEADER}\n${MARKET_SUGGESTION_REQUESTED_NCT_PREFIX}`
 
 const MARKET_SUGGESTION_DETAILS_SEPARATOR = `\n\n${MARKET_SUGGESTION_DETAILS_LABEL}\n`
 
-export function normalizeMarketSuggestionNctNumber(value: string): string {
-  return value.trim()
+export function normalizeMarketSuggestionNctNumber(value: string | null | undefined): string | null {
+  const candidate = typeof value === 'string' ? value.trim().toUpperCase() : ''
+  return MARKET_SUGGESTION_NCT_PATTERN.test(candidate) ? candidate : null
 }
 
 export function buildMarketSuggestionMessage(nctNumber: string, details: string): string {
+  const normalizedNctNumber = normalizeMarketSuggestionNctNumber(nctNumber)
+
+  if (!normalizedNctNumber) {
+    throw new Error('Market suggestion NCT number is invalid')
+  }
+
   return [
     MARKET_SUGGESTION_HEADER,
-    `${MARKET_SUGGESTION_REQUESTED_NCT_PREFIX}${normalizeMarketSuggestionNctNumber(nctNumber)}`,
+    `${MARKET_SUGGESTION_REQUESTED_NCT_PREFIX}${normalizedNctNumber}`,
     '',
     MARKET_SUGGESTION_DETAILS_LABEL,
     details,
@@ -51,7 +59,7 @@ export function parseMarketSuggestionMessage(message: string | null | undefined)
     : rawDetails
 
   return {
-    nctNumber: nctCandidate.length > 0 ? nctCandidate : null,
+    nctNumber: nctCandidate,
     details,
     rawMessage,
   }

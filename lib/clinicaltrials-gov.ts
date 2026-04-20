@@ -252,6 +252,26 @@ export async function fetchClinicalTrialsStudies(input: FetchStudiesInput): Prom
   }
 }
 
+export async function fetchClinicalTrialsStudyByNctNumber(nctNumber: string): Promise<ClinicalTrialsGovStudy | null> {
+  const normalizedNctNumber = nctNumber.trim().toUpperCase()
+  if (!/^NCT\d{8}$/.test(normalizedNctNumber)) {
+    return null
+  }
+
+  try {
+    return await fetchJson<ClinicalTrialsGovStudy>(`/studies/${encodeURIComponent(normalizedNctNumber)}`)
+  } catch (error) {
+    if (
+      error instanceof ExternalServiceError
+      && typeof error.details?.status === 'number'
+      && error.details.status === 404
+    ) {
+      return null
+    }
+    throw error
+  }
+}
+
 function buildClinicalTrialsBaseQueryTerm() {
   return 'AREA[LeadSponsorClass]INDUSTRY AND AREA[StudyType]INTERVENTIONAL AND AREA[Phase]PHASE2'
 }
@@ -427,6 +447,7 @@ export function mapClinicalTrialsStudyToTrialInput(
     sponsorName,
     sponsorTicker: sponsorOverride?.sponsorTicker?.trim() || null,
     indication: summarizeConditions(study.protocolSection?.conditionsModule?.conditions),
+    therapeuticArea: null,
     exactPhase: humanizePhases(study.protocolSection?.designModule?.phases),
     intervention: summarizeInterventions(study.protocolSection?.armsInterventionsModule?.interventions),
     primaryEndpoint: summarizePrimaryOutcomes(study.protocolSection?.outcomesModule?.primaryOutcomes),

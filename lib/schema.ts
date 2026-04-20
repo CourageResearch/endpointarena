@@ -12,9 +12,11 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
+import { TRIAL_THERAPEUTIC_AREAS } from '@/lib/trial-therapeutic-areas'
 
 const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true })
 const utcDate = (name: string) => date(name, { mode: 'date' })
+const trialTherapeuticAreaSqlList = TRIAL_THERAPEUTIC_AREAS.map((area) => `'${area.replace(/'/g, "''")}'`).join(', ')
 
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -88,6 +90,7 @@ export const trials = pgTable('trials', {
   sponsorName: text('sponsor_name').notNull(),
   sponsorTicker: text('sponsor_ticker'),
   indication: text('indication').notNull(),
+  therapeuticArea: text('therapeutic_area'),
   exactPhase: text('exact_phase').notNull(),
   intervention: text('intervention').notNull(),
   primaryEndpoint: text('primary_endpoint').notNull(),
@@ -107,6 +110,7 @@ export const trials = pgTable('trials', {
   nctNumberUniqueIdx: uniqueIndex('trials_nct_number_idx').on(table.nctNumber),
   primaryCompletionIdx: index('trials_primary_completion_idx').on(table.estPrimaryCompletionDate),
   sponsorTickerIdx: index('trials_sponsor_ticker_idx').on(table.sponsorTicker),
+  therapeuticAreaIdx: index('trials_therapeutic_area_idx').on(table.therapeuticArea),
   currentStatusIdx: index('trials_current_status_idx').on(table.currentStatus),
   sourceCheck: check(
     'trials_source_check',
@@ -115,6 +119,10 @@ export const trials = pgTable('trials', {
   estEnrollmentCheck: check(
     'trials_est_enrollment_check',
     sql`${table.estEnrollment} IS NULL OR ${table.estEnrollment} >= 0`
+  ),
+  therapeuticAreaCheck: check(
+    'trials_therapeutic_area_check',
+    sql`${table.therapeuticArea} IS NULL OR ${table.therapeuticArea} IN (${sql.raw(trialTherapeuticAreaSqlList)})`
   ),
 }))
 
@@ -939,8 +947,8 @@ export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   id: text('id').primaryKey(),
   openingLmsrB: real('opening_lmsr_b').notNull().default(100000),
   toyTrialCount: integer('toy_trial_count').notNull().default(0),
-  season4MarketLiquidityBDisplay: real('season4_market_liquidity_b_display').notNull().default(25000),
-  season4HumanStartingBankrollDisplay: real('season4_human_starting_bankroll_display').notNull().default(1000),
+  season4MarketLiquidityBDisplay: real('season4_market_liquidity_b_display').notNull().default(1000),
+  season4HumanStartingBankrollDisplay: real('season4_human_starting_bankroll_display').notNull().default(100),
   season4StartingBankrollDisplay: real('season4_starting_bankroll_display').notNull().default(1000),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
@@ -1026,10 +1034,28 @@ export const contactMessages = pgTable('contact_messages', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   email: text('email').notNull(),
+  xHandle: text('x_handle'),
   message: text('message').notNull(),
   createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   createdAtIdx: index('contact_messages_created_at_idx').on(table.createdAt),
+}))
+
+export const pollVotes = pgTable('poll_votes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  nctNumber: text('nct_number').notNull(),
+  voterHash: text('voter_hash').notNull(),
+  weekStartDate: utcDate('week_start_date').notNull(),
+  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  voterWeekUniqueIdx: uniqueIndex('poll_votes_voter_week_idx').on(table.voterHash, table.weekStartDate),
+  nctWeekIdx: index('poll_votes_nct_week_idx').on(table.nctNumber, table.weekStartDate),
+  createdAtIdx: index('poll_votes_created_at_idx').on(table.createdAt),
+  nctNumberCheck: check(
+    'poll_votes_nct_number_check',
+    sql`${table.nctNumber} ~ '^NCT[0-9]{8}$'`
+  ),
 }))
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -1486,6 +1512,8 @@ export type WaitlistEntry = typeof waitlistEntries.$inferSelect
 export type NewWaitlistEntry = typeof waitlistEntries.$inferInsert
 export type ContactMessage = typeof contactMessages.$inferSelect
 export type NewContactMessage = typeof contactMessages.$inferInsert
+export type PollVote = typeof pollVotes.$inferSelect
+export type NewPollVote = typeof pollVotes.$inferInsert
 export type PredictionMarket = typeof predictionMarkets.$inferSelect
 export type NewPredictionMarket = typeof predictionMarkets.$inferInsert
 export type MarketAccount = typeof marketAccounts.$inferSelect

@@ -35,31 +35,50 @@ const MAX_DETAILS_LENGTH = (
   - buildMarketSuggestionMessage('NCT12345678', '').length
 )
 
+function FieldLabel({
+  htmlFor,
+  label,
+  requirement,
+}: {
+  htmlFor: string
+  label: string
+  requirement: 'Required' | 'Optional'
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label htmlFor={htmlFor} className={FORM_FIELD_LABEL_CLASS}>
+        {label}
+      </label>
+      <span className="text-xs text-[#8a8075]">{requirement}</span>
+    </div>
+  )
+}
+
 export function MarketSuggestionForm() {
   const router = useRouter()
   const nctInputRef = useRef<HTMLInputElement | null>(null)
   const detailsInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [xHandle, setXHandle] = useState('')
   const [nctNumber, setNctNumber] = useState('')
   const [details, setDetails] = useState('')
   const [status, setStatus] = useState<FormStatus>('idle')
   const [feedback, setFeedback] = useState('')
   const [submitAttempted, setSubmitAttempted] = useState(false)
-  const [nctTouched, setNctTouched] = useState(false)
-  const [detailsTouched, setDetailsTouched] = useState(false)
 
   const trimmedName = name.trim()
   const trimmedEmail = email.trim()
+  const trimmedXHandle = xHandle.trim()
   const normalizedNctNumber = normalizeMarketSuggestionNctNumber(nctNumber)
   const trimmedDetails = details.trim()
-  const nctIsValid = typeof normalizedNctNumber === 'string' && normalizedNctNumber.length > 0
+  const nctIsValid = normalizedNctNumber !== null
   const detailsTooLong = details.length > MAX_DETAILS_LENGTH
   const remainingChars = MAX_DETAILS_LENGTH - details.length
   const isSubmitting = status === 'submitting'
 
-  const showNctError = (submitAttempted || nctTouched) && !nctIsValid
-  const showDetailsError = (submitAttempted || detailsTouched) && detailsTooLong
+  const showNctError = submitAttempted && !nctIsValid
+  const showDetailsError = submitAttempted && detailsTooLong
 
   const resetFeedback = () => {
     if (status === 'idle') return
@@ -76,13 +95,11 @@ export function MarketSuggestionForm() {
     }
 
     if (!nctIsValid) {
-      setNctTouched(true)
       nctInputRef.current?.focus()
       return
     }
 
     if (detailsTooLong) {
-      setDetailsTouched(true)
       detailsInputRef.current?.focus()
       return
     }
@@ -100,6 +117,7 @@ export function MarketSuggestionForm() {
           kind: 'market-suggestion',
           name: trimmedName,
           email: trimmedEmail,
+          xHandle: trimmedXHandle,
           message: buildMarketSuggestionMessage(normalizedNctNumber, trimmedDetails || EMPTY_MARKET_SUGGESTION_DETAILS),
         }),
       })
@@ -132,9 +150,7 @@ export function MarketSuggestionForm() {
     <form className="space-y-4" onSubmit={handleSubmit} noValidate>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label htmlFor="market-suggestion-name" className={FORM_FIELD_LABEL_CLASS}>
-            Name
-          </label>
+          <FieldLabel htmlFor="market-suggestion-name" label="Name" requirement="Optional" />
           <input
             id="market-suggestion-name"
             type="text"
@@ -150,9 +166,7 @@ export function MarketSuggestionForm() {
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="market-suggestion-email" className={FORM_FIELD_LABEL_CLASS}>
-            Email
-          </label>
+          <FieldLabel htmlFor="market-suggestion-email" label="Email" requirement="Optional" />
           <input
             id="market-suggestion-email"
             type="email"
@@ -166,12 +180,29 @@ export function MarketSuggestionForm() {
             className={FORM_INPUT_CLASS}
           />
         </div>
+
+        <div className="space-y-1 sm:col-span-2">
+          <FieldLabel htmlFor="market-suggestion-x-handle" label="X handle" requirement="Optional" />
+          <input
+            id="market-suggestion-x-handle"
+            type="text"
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={xHandle}
+            onChange={(event) => {
+              resetFeedback()
+              setXHandle(event.target.value)
+            }}
+            placeholder="@ada_lovelace"
+            className={FORM_INPUT_CLASS}
+          />
+        </div>
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="market-suggestion-nct" className={FORM_FIELD_LABEL_CLASS}>
-          NCT Number
-        </label>
+        <FieldLabel htmlFor="market-suggestion-nct" label="NCT Number" requirement="Required" />
         <input
           id="market-suggestion-nct"
           ref={nctInputRef}
@@ -181,24 +212,20 @@ export function MarketSuggestionForm() {
           value={nctNumber}
           onChange={(event) => {
             resetFeedback()
-            setNctNumber(normalizeMarketSuggestionNctNumber(event.target.value))
+            setNctNumber(event.target.value)
           }}
-          onBlur={() => setNctTouched(true)}
           placeholder="NCT12345678"
+          pattern="^NCT[0-9]{8}$"
           aria-invalid={showNctError}
           className={FORM_INPUT_CLASS}
         />
         {showNctError ? (
-          <p className={FORM_ERROR_TEXT_CLASS}>Enter a trial identifier.</p>
-        ) : (
-          <p className="text-xs text-[#8a8075]">Required</p>
-        )}
+          <p className={FORM_ERROR_TEXT_CLASS}>Enter an NCT number like NCT12345678.</p>
+        ) : null}
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="market-suggestion-details" className={FORM_FIELD_LABEL_CLASS}>
-          Why should we add it?
-        </label>
+        <FieldLabel htmlFor="market-suggestion-details" label="Why should we add it?" requirement="Optional" />
         <textarea
           id="market-suggestion-details"
           ref={detailsInputRef}
@@ -207,7 +234,6 @@ export function MarketSuggestionForm() {
             resetFeedback()
             setDetails(event.target.value)
           }}
-          onBlur={() => setDetailsTouched(true)}
           placeholder="Add any context that would help us prioritize this trial."
           rows={6}
           aria-invalid={showDetailsError}
@@ -221,7 +247,7 @@ export function MarketSuggestionForm() {
           ) : (
             <span />
           )}
-          <p className={`text-xs ${remainingChars < 0 ? 'text-[#c24f45]' : 'text-[#8a8075]'}`}>
+          <p className={`text-xs ${submitAttempted && remainingChars < 0 ? 'text-[#c24f45]' : 'text-[#8a8075]'}`}>
             {remainingChars} characters left
           </p>
         </div>

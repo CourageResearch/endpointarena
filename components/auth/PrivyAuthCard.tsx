@@ -1,12 +1,76 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLoginWithEmail, useLoginWithOAuth, usePrivy } from '@privy-io/react-auth'
+import { XLogoMark } from '@/components/XMark'
 import { GradientBorder } from '@/components/site/chrome'
 import { normalizeCallbackUrl, resolveDestination } from '@/lib/auth/client-navigation'
+import { isSettledPrivyOnlySession } from '@/lib/auth/session-state'
 import { useAuth } from '@/lib/auth/use-auth'
 
 type PrivyAuthMode = 'login' | 'signup'
+type AuthOAuthProvider = 'google' | 'twitter'
+
+const FINALIZE_TIMEOUT_MS = 15000
+const PRIVY_ERROR_LINKED_TO_ANOTHER_USER = 'linked_to_another_user'
+const PRIVY_ERROR_USER_DOES_NOT_EXIST = 'user_does_not_exist'
+
+type ApiErrorPayload = {
+  error?: {
+    message?: string
+  } | string
+  message?: string
+}
+
+function GoogleLogoMark({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  )
+}
+
+function createFinalizeTimeoutError(): Error {
+  const error = new Error('Account setup is taking longer than expected. Please try again.')
+  error.name = 'AbortError'
+  return error
+}
+
+async function withFinalizeTimeout<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController()
+  let timeoutId: number | null = null
+
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<never>((_resolve, reject) => {
+        timeoutId = window.setTimeout(() => {
+          controller.abort()
+          reject(createFinalizeTimeoutError())
+        }, FINALIZE_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId)
+    }
+  }
+}
 
 function getOAuthErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
@@ -16,11 +80,53 @@ function getOAuthErrorMessage(error: unknown): string {
   return 'That sign-in attempt did not complete. Please try again.'
 }
 
+function getPrivyErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object' || !('privyErrorCode' in error)) {
+    return null
+  }
+
+  const code = (error as { privyErrorCode?: unknown }).privyErrorCode
+  return typeof code === 'string' && code.trim() ? code : null
+}
+
+function getEmailAuthErrorMessage(error: unknown, fallbackMessage: string): string {
+  const message = error instanceof Error ? error.message.trim() : ''
+  const privyErrorCode = getPrivyErrorCode(error)
+
+  if (
+    privyErrorCode === PRIVY_ERROR_LINKED_TO_ANOTHER_USER
+    || /already linked this email/i.test(message)
+  ) {
+    return 'This browser is still signed into a different Privy session. Start over, then request a new email code.'
+  }
+
+  if (privyErrorCode === PRIVY_ERROR_USER_DOES_NOT_EXIST) {
+    return 'No account exists for that email yet. Create one first.'
+  }
+
+  return message || fallbackMessage
+}
+
+function getApiErrorMessage(payload: ApiErrorPayload | null): string | null {
+  const message = payload?.message?.trim()
+  if (message) return message
+
+  if (typeof payload?.error === 'string') {
+    const errorMessage = payload.error.trim()
+    return errorMessage || null
+  }
+
+  const nestedMessage = payload?.error?.message?.trim()
+  return nestedMessage || null
+}
+
 export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
   const auth = useAuth()
-  const { ready, authenticated, getAccessToken } = usePrivy()
+  const { ready, authenticated, getAccessToken, logout, user } = usePrivy()
   const { sendCode, loginWithCode, state: emailFlowState } = useLoginWithEmail()
   const { initOAuth, loading: oauthLoading } = useLoginWithOAuth()
+  const finalizingRef = useRef(false)
+  const finalizedAttemptKeyRef = useRef<string | null>(null)
 
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -32,6 +138,7 @@ export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
 
   const disableSignup = mode === 'login'
   const destination = useMemo(() => normalizeCallbackUrl(callbackUrl), [callbackUrl])
+  const hasPrivyOnlySession = isSettledPrivyOnlySession(authenticated, auth.status)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -39,46 +146,95 @@ export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
   }, [])
 
   useEffect(() => {
-    if (auth.status !== 'authenticated' || isFinalizing) return
+    if (auth.status !== 'authenticated') return
 
     window.location.assign(destination)
-  }, [auth.status, destination, isFinalizing])
+  }, [auth.status, destination])
 
   const finalizePrivyLogin = useCallback(async () => {
-    if (isFinalizing) return
+    if (finalizingRef.current) return
 
+    finalizingRef.current = true
     setIsFinalizing(true)
     setError('')
 
     try {
-      const accessToken = await getAccessToken()
-      const headers = new Headers()
-      if (accessToken) {
-        headers.set('Authorization', `Bearer ${accessToken}`)
-      }
+      await withFinalizeTimeout(async (signal) => {
+        const accessToken = await getAccessToken()
+        const headers = new Headers()
+        if (accessToken) {
+          headers.set('Authorization', `Bearer ${accessToken}`)
+        }
 
-      const response = await fetch('/api/auth/privy/sync', {
-        method: 'POST',
-        credentials: 'include',
-        headers,
+        const response = await fetch('/api/auth/privy/sync', {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+          signal,
+        })
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as ApiErrorPayload | null
+          throw new Error(getApiErrorMessage(payload) || 'Failed to finish account setup')
+        }
       })
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({})) as { error?: string; message?: string }
-        throw new Error(payload.message || payload.error || 'Failed to finish account setup')
-      }
 
       window.location.assign(resolveDestination(destination, destination))
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : 'Failed to finish account setup')
+      const message = syncError instanceof Error && syncError.name === 'AbortError'
+        ? 'Account setup is taking longer than expected. Please try again.'
+        : syncError instanceof Error
+          ? syncError.message
+          : 'Failed to finish account setup'
+
+      setError(message)
       setIsFinalizing(false)
+    } finally {
+      finalizingRef.current = false
     }
-  }, [destination, getAccessToken, isFinalizing])
+  }, [destination, getAccessToken])
+
+  const clearPrivyOnlySession = useCallback(async () => {
+    finalizingRef.current = false
+    finalizedAttemptKeyRef.current = null
+    setIsFinalizing(false)
+
+    await Promise.all([
+      logout().catch(() => undefined),
+      fetch('/api/auth/privy/logout', {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(() => undefined),
+    ])
+  }, [logout])
 
   useEffect(() => {
-    if (!ready || !authenticated || auth.status === 'authenticated') return
+    if (!ready || !hasPrivyOnlySession) return
+
+    const attemptKey = `${user?.id ?? 'privy'}:${destination}`
+    if (finalizedAttemptKeyRef.current === attemptKey) return
+
+    finalizedAttemptKeyRef.current = attemptKey
     void finalizePrivyLogin()
-  }, [auth.status, authenticated, finalizePrivyLogin, ready])
+  }, [destination, finalizePrivyLogin, hasPrivyOnlySession, ready, user?.id])
+
+  const handleRetrySetup = () => {
+    finalizedAttemptKeyRef.current = null
+    void finalizePrivyLogin()
+  }
+
+  const handleStartOver = async () => {
+    setIsSubmitting(true)
+    setError('')
+
+    try {
+      await clearPrivyOnlySession()
+      setCode('')
+      setStep('email')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const handleSendCode = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -89,13 +245,17 @@ export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
     setError('')
 
     try {
+      if (hasPrivyOnlySession) {
+        await clearPrivyOnlySession()
+      }
+
       await sendCode({
         email: email.trim(),
         disableSignup,
       })
       setStep('code')
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : 'Failed to send the sign-in code')
+      setError(getEmailAuthErrorMessage(sendError, 'Failed to send the sign-in code'))
     } finally {
       setIsSubmitting(false)
     }
@@ -110,18 +270,27 @@ export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
     setError('')
 
     try {
+      if (hasPrivyOnlySession && !isFinalizing) {
+        setError('This code was requested while another Privy session was active. Start over and request a new email code.')
+        return
+      }
+
       await loginWithCode({ code: code.trim() })
     } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : 'Failed to verify the code')
+      setError(getEmailAuthErrorMessage(verifyError, 'Failed to verify the code'))
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleOAuthLogin = async (provider: 'google') => {
+  const handleOAuthLogin = async (provider: AuthOAuthProvider) => {
     setError('')
 
     try {
+      if (hasPrivyOnlySession) {
+        await clearPrivyOnlySession()
+      }
+
       await initOAuth({
         provider,
         disableSignup,
@@ -155,9 +324,21 @@ export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
             type="button"
             onClick={() => void handleOAuthLogin('google')}
             disabled={isBusy}
-            className="rounded-sm border border-[#e8ddd0] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f8f3ec] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Continue with Google"
+            className="inline-flex items-center justify-center rounded-sm border border-[#e8ddd0] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f8f3ec] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Continue with Google
+            <span>Continue with</span>
+            <GoogleLogoMark className="ml-2 h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleOAuthLogin('twitter')}
+            disabled={isBusy}
+            aria-label="Continue with X"
+            className="inline-flex items-center justify-center rounded-sm border border-[#e8ddd0] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] transition-colors hover:bg-[#f8f3ec] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span>Continue with</span>
+            <XLogoMark className="ml-2 h-4 w-4" />
           </button>
         </div>
 
@@ -256,9 +437,29 @@ export function PrivyAuthCard({ mode }: { mode: PrivyAuthMode }) {
         </p>
 
         {error ? (
-          <p className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
-            {error}
-          </p>
+          <div className="rounded-sm border border-[#ef6f67]/35 bg-[#ef6f67]/10 px-3 py-2 text-sm text-[#b94e47]">
+            <p>{error}</p>
+            {authenticated ? (
+              <div className="mt-2 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleRetrySetup}
+                  disabled={isBusy}
+                  className="text-sm font-medium text-[#1a1a1a] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Finish current sign-in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleStartOver()}
+                  disabled={isBusy}
+                  className="text-sm font-medium text-[#1a1a1a] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Start over
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </GradientBorder>

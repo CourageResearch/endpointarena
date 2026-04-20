@@ -23,6 +23,7 @@ import {
 } from '@/lib/db'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import { TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
+import type { TrialTherapeuticArea } from '@/lib/trial-therapeutic-areas'
 
 const EXISTING_TRIAL_CHUNK_SIZE = 500
 
@@ -32,6 +33,7 @@ export type NormalizedTrialInput = {
   sponsorName: string
   sponsorTicker: string | null
   indication: string
+  therapeuticArea: TrialTherapeuticArea | null
   exactPhase: string
   intervention: string
   primaryEndpoint: string
@@ -120,6 +122,7 @@ function buildChangeSummary(existingTrial: typeof trials.$inferSelect, nextTrial
   check('sponsor', existingTrial.sponsorName !== nextTrial.sponsorName)
   check('ticker', (existingTrial.sponsorTicker ?? null) !== nextTrial.sponsorTicker)
   check('indication', existingTrial.indication !== nextTrial.indication)
+  check('therapeutic area', (existingTrial.therapeuticArea ?? null) !== nextTrial.therapeuticArea)
   check('phase', existingTrial.exactPhase !== nextTrial.exactPhase)
   check('intervention', existingTrial.intervention !== nextTrial.intervention)
   check('primary endpoint', existingTrial.primaryEndpoint !== nextTrial.primaryEndpoint)
@@ -227,6 +230,7 @@ export async function ingestTrials(
           sponsorName: row.sponsorName,
           sponsorTicker,
           indication: row.indication,
+          therapeuticArea: row.therapeuticArea,
           exactPhase: row.exactPhase,
           intervention: row.intervention,
           primaryEndpoint: row.primaryEndpoint,
@@ -264,6 +268,7 @@ export async function ingestTrials(
             sponsorName: row.sponsorName,
             sponsorTicker,
             indication: row.indication,
+            therapeuticArea: row.therapeuticArea,
             exactPhase: row.exactPhase,
             intervention: row.intervention,
             primaryEndpoint: row.primaryEndpoint,

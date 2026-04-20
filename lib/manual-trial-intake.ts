@@ -28,6 +28,11 @@ import {
 import { MODEL_PROVIDER_MODEL_IDS } from '@/lib/model-runtime-metadata'
 import { TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
 import type { NormalizedTrialInput } from '@/lib/trial-ingestion'
+import {
+  TRIAL_THERAPEUTIC_AREAS,
+  isTrialTherapeuticArea,
+  type TrialTherapeuticArea,
+} from '@/lib/trial-therapeutic-areas'
 
 const MANUAL_TRIAL_DRAFT_MODEL = process.env.MANUAL_TRIAL_INTAKE_MODEL?.trim() || MODEL_PROVIDER_MODEL_IDS['gpt-5.4']
 const MANUAL_TRIAL_AI_TIMEOUT_MS = 90_000
@@ -43,6 +48,7 @@ const MANUAL_TRIAL_DRAFT_SCHEMA = {
     sponsorTicker: { type: ['string', 'null'] },
     exactPhase: { type: 'string' },
     indication: { type: 'string' },
+    therapeuticArea: { type: 'string', enum: TRIAL_THERAPEUTIC_AREAS },
     intervention: { type: 'string' },
     primaryEndpoint: { type: 'string' },
     currentStatus: { type: 'string' },
@@ -60,6 +66,7 @@ const MANUAL_TRIAL_DRAFT_SCHEMA = {
     'sponsorTicker',
     'exactPhase',
     'indication',
+    'therapeuticArea',
     'intervention',
     'primaryEndpoint',
     'currentStatus',
@@ -101,6 +108,7 @@ export type ManualTrialIntakeInput = {
   sponsorTicker?: unknown
   exactPhase?: unknown
   indication?: unknown
+  therapeuticArea?: unknown
   intervention?: unknown
   primaryEndpoint?: unknown
   estPrimaryCompletionDate?: unknown
@@ -121,6 +129,7 @@ export type ManualTrialDraftForm = {
   sponsorTicker: string
   exactPhase: string
   indication: string
+  therapeuticArea: string
   intervention: string
   primaryEndpoint: string
   estPrimaryCompletionDate: string
@@ -182,6 +191,7 @@ type ManualTrialAiDraft = {
   sponsorTicker: string | null
   exactPhase: string
   indication: string
+  therapeuticArea: TrialTherapeuticArea
   intervention: string
   primaryEndpoint: string
   currentStatus: string
@@ -336,6 +346,23 @@ function parseOptionalProbability(value: unknown): number | null {
   return parsed
 }
 
+function normalizeOptionalTherapeuticArea(value: unknown): TrialTherapeuticArea | null {
+  if (value == null || value === '') return null
+  if (isTrialTherapeuticArea(value)) return value
+  return null
+}
+
+function normalizeTherapeuticArea(value: unknown, required: boolean): TrialTherapeuticArea | null {
+  const therapeuticArea = normalizeOptionalTherapeuticArea(value)
+  if (therapeuticArea) return therapeuticArea
+
+  if (required) {
+    throw new ValidationError(`therapeuticArea must be one of: ${TRIAL_THERAPEUTIC_AREAS.join(', ')}`)
+  }
+
+  return null
+}
+
 function normalizeNctNumber(value: unknown): string {
   const trimmed = requireNonEmptyString(value, 'nctNumber').toUpperCase()
   if (!/^NCT\d{8}$/.test(trimmed)) {
@@ -437,6 +464,7 @@ function buildManualTrialDraftForm(
     sponsorTicker: normalizedTrial.sponsorTicker ?? '',
     exactPhase: normalizedTrial.exactPhase,
     indication: normalizedTrial.indication,
+    therapeuticArea: normalizedTrial.therapeuticArea ?? '',
     intervention: normalizedTrial.intervention,
     primaryEndpoint: normalizedTrial.primaryEndpoint,
     estPrimaryCompletionDate: formatDateInput(normalizedTrial.estPrimaryCompletionDate),
@@ -451,7 +479,10 @@ function buildManualTrialDraftForm(
   }
 }
 
-function normalizeManualTrialInput(input: ManualTrialIntakeInput): {
+function normalizeManualTrialInput(
+  input: ManualTrialIntakeInput,
+  options: { requireTherapeuticArea?: boolean } = {},
+): {
   normalizedTrial: NormalizedTrialInput
   openingProbabilityOverride: number | null
 } {
@@ -462,6 +493,7 @@ function normalizeManualTrialInput(input: ManualTrialIntakeInput): {
       sponsorName: requireNonEmptyString(input.sponsorName, 'sponsorName'),
       sponsorTicker: optionalString(input.sponsorTicker),
       indication: requireNonEmptyString(input.indication, 'indication'),
+      therapeuticArea: normalizeTherapeuticArea(input.therapeuticArea, Boolean(options.requireTherapeuticArea)),
       exactPhase: requireNonEmptyString(input.exactPhase, 'exactPhase'),
       intervention: requireNonEmptyString(input.intervention, 'intervention'),
       primaryEndpoint: requireNonEmptyString(input.primaryEndpoint, 'primaryEndpoint'),
@@ -651,6 +683,8 @@ function buildManualTrialDraftPrompt(study: ClinicalTrialsGovStudy, baseline: No
     '- Base openingProbabilitySuggestion on the trial facts only, not on any current market price.',
     '- Keep shortTitle concise and readable for an admin review queue.',
     '- Keep indication, intervention, and primaryEndpoint specific but compact.',
+    `- Set therapeuticArea to exactly one of these labels: ${TRIAL_THERAPEUTIC_AREAS.join(', ')}.`,
+    '- Pick the primary condition domain from the ClinicalTrials.gov conditions and endpoints. Use Vaccines or Devices only when the study is primarily a vaccine or device study.',
     '- exactPhase should stay concise like "Phase 2" or "Phase 1/Phase 2".',
     '- keyLocations should be a semicolon-separated country list or null.',
     '- briefSummary should be 1 to 3 sentences for market review and should not overstate certainty.',
@@ -675,6 +709,7 @@ function mergeAiDraftIntoNormalizedTrial(
     sponsorTicker: nullableOrFallback(aiDraft.sponsorTicker, baseline.sponsorTicker),
     exactPhase: nonEmptyOrFallback(aiDraft.exactPhase, baseline.exactPhase),
     indication: nonEmptyOrFallback(aiDraft.indication, baseline.indication),
+    therapeuticArea: normalizeOptionalTherapeuticArea(aiDraft.therapeuticArea) ?? baseline.therapeuticArea,
     intervention: nonEmptyOrFallback(aiDraft.intervention, baseline.intervention),
     primaryEndpoint: nonEmptyOrFallback(aiDraft.primaryEndpoint, baseline.primaryEndpoint),
     currentStatus: nonEmptyOrFallback(aiDraft.currentStatus, baseline.currentStatus),
@@ -775,10 +810,13 @@ async function previewManualTrialIntakeInternal(
     suggestedProbability?: number | null
     suggestedSource?: ManualTrialOpeningLineSource
     openingLineError?: string | null
+    requireTherapeuticArea?: boolean
   } = {},
 ): Promise<ManualTrialPreview> {
   const requestId = createRequestId()
-  const { normalizedTrial, openingProbabilityOverride } = normalizeManualTrialInput(input)
+  const { normalizedTrial, openingProbabilityOverride } = normalizeManualTrialInput(input, {
+    requireTherapeuticArea: options.requireTherapeuticArea,
+  })
   await assertNctAvailable(normalizedTrial.nctNumber)
 
   const definition = TRIAL_QUESTION_DEFINITIONS[0]
@@ -892,9 +930,13 @@ export async function publishManualTrialIntake(
     suggestedProbability?: number | null
     suggestedSource?: ManualTrialOpeningLineSource
     openingLineError?: string | null
+    requireTherapeuticArea?: boolean
   } = {},
 ) {
-  const preview = await previewManualTrialIntakeInternal(input, options)
+  const preview = await previewManualTrialIntakeInternal(input, {
+    ...options,
+    requireTherapeuticArea: true,
+  })
   const definition = TRIAL_QUESTION_DEFINITIONS[0]
   if (!definition) {
     throw new ValidationError('No supported trial question definition is configured')

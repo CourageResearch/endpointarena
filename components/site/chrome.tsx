@@ -22,20 +22,34 @@ const DOTS = [
 ]
 
 const DIVIDER_SQUARES = [BRAND_DOT_COLORS.coral, BRAND_DOT_COLORS.green, BRAND_DOT_COLORS.gold, BRAND_DOT_COLORS.blue]
-const FOOTER_COLUMNS: Array<Array<{ href: string; label: string }>> = [
+type FooterLink = {
+  href: string
+  label: string
+  className?: string
+  external?: boolean
+  icon?: 'x'
+}
+
+const FOOTER_COLUMNS: Array<Array<FooterLink>> = [
   [
     { href: '/', label: 'home' },
     { href: '/leaderboard', label: 'leaderboard' },
     { href: '/method', label: 'methodology' },
   ],
   [
-    { href: '/suggest', label: 'suggest a market' },
+    { href: '/signup', label: 'sign up' },
+    { href: '/login', label: 'sign in' },
     { href: '/waitlist', label: 'waitlist' },
-    { href: '/contact', label: 'contact' },
   ],
   [
+    { href: '/suggest', label: 'pitch trials' },
+    { href: '/poll', label: 'rank trials' },
     { href: '/glossary', label: 'glossary' },
+  ],
+  [
+    { href: '/contact', label: 'contact' },
     { href: '/brand', label: 'brand kit' },
+    { href: 'https://x.com/endpointarena', label: 'Endpoint Arena on X', external: true, icon: 'x' },
   ],
 ]
 
@@ -107,24 +121,60 @@ function GradientHairline({ className }: { className?: string }) {
   )
 }
 
+function XLogoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
 export function FooterGradientRule({ className }: { className?: string }) {
   return (
     <footer className={cn('w-full', className)}>
       <div className="w-full">
         <GradientHairline />
         <div className="py-5 sm:py-6">
-          <nav className="ml-auto flex w-full max-w-[620px] flex-wrap justify-end gap-x-12 gap-y-4">
+          <nav className="ml-auto flex w-full max-w-[780px] flex-wrap justify-end gap-x-16 gap-y-8">
             {FOOTER_COLUMNS.map((column, index) => (
               <div key={`footer-col-${index}`} className="flex min-w-[140px] flex-col items-end gap-2">
-                {column.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="text-right text-sm text-[#8a8075] underline-offset-4 decoration-[#d7cab8] transition-colors hover:text-[#1a1a1a] hover:underline"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+                {column.map((item) => {
+                  const linkClassName = cn(
+                    'text-right text-sm text-[#8a8075] underline-offset-4 decoration-[#d7cab8] transition-colors hover:text-[#1a1a1a] hover:underline',
+                    item.icon ? 'inline-flex h-5 w-5 items-center justify-end' : null,
+                    item.className,
+                  )
+                  const linkContent = item.icon === 'x'
+                    ? <XLogoIcon className="h-4 w-4 fill-current" />
+                    : item.label
+
+                  return item.external ? (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={item.label}
+                      title={item.label}
+                      className={linkClassName}
+                    >
+                      {linkContent}
+                    </a>
+                  ) : (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={linkClassName}
+                    >
+                      {linkContent}
+                    </Link>
+                  )
+                })}
               </div>
             ))}
           </nav>

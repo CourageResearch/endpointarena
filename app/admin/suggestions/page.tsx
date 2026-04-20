@@ -12,6 +12,10 @@ import { LocalDateTime } from '@/components/ui/local-date-time'
 
 export const dynamic = 'force-dynamic'
 
+function getXProfileUrl(xHandle: string): string {
+  return `https://x.com/${encodeURIComponent(xHandle.replace(/^@/, ''))}`
+}
+
 async function deleteSuggestionItem(formData: FormData) {
   'use server'
 
@@ -74,14 +78,15 @@ export default async function AdminSuggestionsPage() {
         {suggestions.length === 0 ? (
           <p className="mt-4 text-sm text-[#8a8075]">No market suggestions yet.</p>
         ) : (
-          <div className="mt-4">
-            <table className="w-full table-fixed text-sm">
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[960px] table-fixed text-sm">
               <thead>
                 <tr className="border-b border-[#e8ddd0]">
-                  <th className="w-[19%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Received</th>
+                  <th className="w-[16%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Received</th>
                   <th className="w-[7%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">NCT</th>
-                  <th className="w-[14%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
-                  <th className="w-[20%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
+                  <th className="w-[12%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Name</th>
+                  <th className="w-[18%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Email</th>
+                  <th className="w-[12%] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">X Handle</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Notes</th>
                   <th className="w-[10%] px-3 py-2 text-right text-[10px] font-medium uppercase tracking-[0.2em] text-[#b5aa9e]">Actions</th>
                 </tr>
@@ -92,6 +97,7 @@ export default async function AdminSuggestionsPage() {
                   const notes = suggestion.parsed?.details
                   const displayName = suggestion.name.trim() || 'Anonymous'
                   const displayEmail = suggestion.email.trim()
+                  const displayXHandle = suggestion.xHandle?.trim() ?? ''
 
                   return (
                     <tr key={suggestion.id} className="border-b border-[#e8ddd0] align-top hover:bg-[#f3ebe0]/30">
@@ -123,6 +129,20 @@ export default async function AdminSuggestionsPage() {
                           </a>
                         ) : (
                           <span className="text-[#8a8075]">No email provided</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 break-all">
+                        {displayXHandle ? (
+                          <a
+                            href={getXProfileUrl(displayXHandle)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#8a8075] underline decoration-[#d8ccb9] underline-offset-2 hover:text-[#1a1a1a]"
+                          >
+                            {displayXHandle}
+                          </a>
+                        ) : (
+                          <span className="text-[#8a8075]">Not provided</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-[#1a1a1a]">

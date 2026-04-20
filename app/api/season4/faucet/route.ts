@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       userId: user.id,
       walletAddress,
     })
-    if (claimState.hasClaimed) {
+    if (config.target !== 'toy' && claimState.hasClaimed) {
       throw new ConflictError('This account has already claimed the Season 4 faucet')
     }
 
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
         args: [walletAddress as `0x${string}`],
       }) as Promise<boolean>,
     ])
-    if (lastClaimedAt > BigInt(0)) {
+    if (config.target !== 'toy' && lastClaimedAt > BigInt(0)) {
       throw new ConflictError('That wallet has already claimed the Season 4 faucet')
     }
     if (!canClaim) {

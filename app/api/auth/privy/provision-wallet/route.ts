@@ -3,20 +3,13 @@ import { createRequestId, errorResponse, successResponse } from '@/lib/api-respo
 import { getSession, serializeSessionUser } from '@/lib/auth/session'
 import { ConfigurationError, UnauthorizedError } from '@/lib/errors'
 import {
+  ensurePrivyEmbeddedEthereumWallet,
   extractPrivyAccessToken,
   getPrivyClient,
   setPrivyAccessTokenCookie,
   setPrivyAppSessionCookie,
   syncPrivyUserToLocalUser,
 } from '@/lib/privy'
-
-function hasEmbeddedEthereumWallet(linkedAccounts: Array<{ type?: string; chain_type?: string; connector_type?: string }>): boolean {
-  return linkedAccounts.some((account) => (
-    account.type === 'wallet'
-    && account.chain_type === 'ethereum'
-    && account.connector_type === 'embedded'
-  ))
-}
 
 export async function POST() {
   const requestId = createRequestId()
@@ -34,13 +27,7 @@ export async function POST() {
       throw new ConfigurationError('Privy is not configured for this environment')
     }
 
-    let privyUser = await privyClient.users()._get(session.user.privyUserId)
-    if (!hasEmbeddedEthereumWallet(privyUser.linked_accounts)) {
-      privyUser = await privyClient.users().pregenerateWallets(session.user.privyUserId, {
-        wallets: [{ chain_type: 'ethereum' }],
-      })
-    }
-
+    const privyUser = await ensurePrivyEmbeddedEthereumWallet(session.user.privyUserId)
     const syncedUser = await syncPrivyUserToLocalUser(privyUser)
 
     const response = successResponse({

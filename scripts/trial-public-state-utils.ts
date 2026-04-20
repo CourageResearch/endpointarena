@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-export const TRIAL_PUBLIC_STATE_SCHEMA_VERSION = 3
+export const TRIAL_PUBLIC_STATE_SCHEMA_VERSION = 4
 
 export type TrialPublicStateCounts = {
   trials: number
@@ -63,6 +63,7 @@ export type TrialBundleRow = {
   sponsor_name: string
   sponsor_ticker: string | null
   indication: string
+  therapeutic_area: string | null
   exact_phase: string
   intervention: string
   primary_endpoint: string

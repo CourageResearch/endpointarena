@@ -1,8 +1,13 @@
 import { cookies, headers } from 'next/headers'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { getSession } from '@/lib/auth/session'
-import { UnauthorizedError } from '@/lib/errors'
-import { extractPrivyAccessToken, setPrivyAccessTokenCookie, setPrivyAppSessionCookie } from '@/lib/privy'
+import { ConfigurationError, UnauthorizedError } from '@/lib/errors'
+import {
+  extractPrivyAccessToken,
+  isPrivyConfigured,
+  setPrivyAccessTokenCookie,
+  setPrivyAppSessionCookie,
+} from '@/lib/privy'
 
 export async function POST() {
   const requestId = createRequestId()
@@ -10,6 +15,11 @@ export async function POST() {
   try {
     const [headerStore, cookieStore] = await Promise.all([headers(), cookies()])
     const accessToken = extractPrivyAccessToken(headerStore, cookieStore)
+
+    if (!isPrivyConfigured()) {
+      throw new ConfigurationError('Privy server credentials are missing. Add PRIVY_APP_SECRET to .env.local and restart the dev server.')
+    }
+
     const session = await getSession()
     if (!session) {
       throw new UnauthorizedError('Privy authentication is required')

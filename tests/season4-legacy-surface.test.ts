@@ -5,6 +5,7 @@ import { buildSeason4AccountBalancePayload } from '../app/api/account/balance/ro
 import { POST as postAdminMarketsCancelRun } from '../app/api/admin/markets/cancel-run/route'
 import { GET as getMarketsDailyRun, POST as postMarketsDailyRun } from '../app/api/markets/run-daily/route'
 import { GET as getTrialsDailyRun, POST as postTrialsDailyRun } from '../app/api/trials/run-daily/route'
+import { TRIAL_THERAPEUTIC_AREAS } from '../lib/trial-therapeutic-areas'
 
 async function readRepoFile(path: string): Promise<string> {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -100,13 +101,28 @@ test('admin runtime settings no longer expose live offchain opening LMSR control
 test('season 4 market creation defaults to the saved liquidity B config', async () => {
   const opsSource = await readRepoFile('lib/season4-ops.ts')
   const apiSource = await readRepoFile('app/api/admin/trial-config/route.ts')
+  const runtimeConfigSource = await readRepoFile('lib/markets/runtime-config.ts')
   const migrationSource = await readRepoFile('drizzle/0026_season4_market_liquidity_b.sql')
+  const defaultMigrationSource = await readRepoFile('drizzle/0033_default_season4_liquidity_b_1000.sql')
+  const humanBankrollMigrationSource = await readRepoFile('drizzle/0031_default_human_bankroll_100.sql')
+  const toyTrialCountMigrationSource = await readRepoFile('drizzle/0032_default_toy_trial_count_0.sql')
 
   assert.match(opsSource, /getDefaultMarketLiquidityB/)
   assert.match(opsSource, /season4MarketLiquidityBDisplay/)
   assert.match(apiSource, /season4MarketLiquidityBDisplay/)
   assert.match(apiSource, /parseDatabaseTarget/)
+  assert.match(apiSource, /if \(body\.season4HumanStartingBankrollDisplay !== undefined\)/)
+  assert.doesNotMatch(apiSource, /previousConfig/)
+  assert.match(runtimeConfigSource, /DEFAULT_TOY_TRIAL_COUNT = 0/)
+  assert.match(runtimeConfigSource, /DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY = 1_000/)
+  assert.match(runtimeConfigSource, /DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY = 100/)
   assert.match(migrationSource, /season4_market_liquidity_b_display/)
+  assert.match(defaultMigrationSource, /SET DEFAULT 1000/)
+  assert.match(defaultMigrationSource, /season4_market_liquidity_b_display" = 1000/)
+  assert.match(humanBankrollMigrationSource, /SET DEFAULT 100/)
+  assert.match(humanBankrollMigrationSource, /season4_human_starting_bankroll_display" = 100/)
+  assert.match(toyTrialCountMigrationSource, /SET DEFAULT 0/)
+  assert.match(toyTrialCountMigrationSource, /"toy_trial_count" = 0/)
 })
 
 test('season 4 faucet ABI exposes the deployed claimAmount view', async () => {
@@ -116,6 +132,13 @@ test('season 4 faucet ABI exposes the deployed claimAmount view', async () => {
   assert.match(source, /name: 'claimCooldownSeconds'/)
   assert.match(source, /name: 'setClaimCooldownSeconds'/)
   assert.match(source, /name: 'lastClaimedAt'/)
+})
+
+test('season 4 mock USDC ABI exposes owner mint and burn helpers', async () => {
+  const source = await readRepoFile('lib/onchain/abi.ts')
+
+  assert.match(source, /name: 'mint'/)
+  assert.match(source, /name: 'burn'/)
 })
 
 test('season 4 human faucet no longer gives users Base Sepolia ETH', async () => {
@@ -137,6 +160,7 @@ test('season 4 human faucet is one claim per account or wallet', async () => {
   const marketDataSource = await readRepoFile('lib/season4-market-data.ts')
   const eligibilitySource = await readRepoFile('lib/season4-faucet-eligibility.ts')
   const actionSource = await readRepoFile('components/season4/Season4ProfileActions.tsx')
+  const profileSource = await readRepoFile('app/profile/page.tsx')
 
   assert.match(eligibilitySource, /CLAIMED_FAUCET_STATUSES = \['requested', 'submitted', 'confirmed'\]/)
   assert.match(eligibilitySource, /eq\(onchainFaucetClaims\.userId, args\.userId\)/)
@@ -145,12 +169,18 @@ test('season 4 human faucet is one claim per account or wallet', async () => {
   assert.match(routeSource, /getSeason4FaucetClaimState/)
   assert.match(routeSource, /This account has already claimed the Season 4 faucet/)
   assert.match(routeSource, /That wallet has already claimed the Season 4 faucet/)
+  assert.match(routeSource, /config\.target !== 'toy' && claimState\.hasClaimed/)
+  assert.match(routeSource, /config\.target !== 'toy' && lastClaimedAt > BigInt\(0\)/)
   assert.match(routeSource, /lastClaimedAt > BigInt\(0\)/)
   assert.match(profileDataSource, /!faucetClaimState\.hasClaimed/)
   assert.match(profileDataSource, /lastClaimedAt === BigInt\(0\)/)
+  assert.match(profileDataSource, /functionName: 'claimAmount'/)
+  assert.match(profileDataSource, /config\.target === 'toy'/)
   assert.match(marketDataSource, /!faucetClaimState\.hasClaimed/)
   assert.match(marketDataSource, /lastClaimedAt === BigInt\(0\)/)
-  assert.match(actionSource, /Each account can claim the Season 4 faucet once/)
+  assert.match(marketDataSource, /config\.target === 'toy'/)
+  assert.match(profileSource, /profile\.viewer\.faucetClaimAmountLabel/)
+  assert.match(actionSource, /return null/)
   assert.doesNotMatch(actionSource, /cooling down|come back later/)
 })
 
@@ -190,6 +220,8 @@ test('season 4 live AI snapshots have model-key identity without requiring marke
   assert.match(snapshotSource, /modelKey: args\.snapshotArgs\.modelId/)
   assert.match(snapshotSource, /storageMarketId === null \? null/)
   assert.match(adminAiSource, /input\.dataset === 'live'\s*\?\s*new Map/)
+  assert.match(adminAiSource, /assertLiveModelWalletsConfigured\(modelIds\)/)
+  assert.match(adminAiSource, /Live AI batch cannot run until model wallets are configured/)
   assert.doesNotMatch(adminAiSource, /const actorIdByModelId = await getModelActorIds/)
 })
 
@@ -208,6 +240,32 @@ test('season 4 reset preserves wallets and balances by default', async () => {
   assert.match(source, /ALLOW_SEASON4_ONCHAIN_RESET=destroy-onchain-state/)
   assert.doesNotMatch(source, /wallet_provisioning_status = 'not_started'/)
   assert.doesNotMatch(source, /embedded_wallet_address = null/)
+})
+
+test('toy database compatibility repairs season 4 local schema drift', async () => {
+  const source = await readRepoFile('lib/toy-database.ts')
+
+  assert.match(source, /ensureToyUserSchemaCompatibility/)
+  assert.match(source, /"privy_user_id"/)
+  assert.match(source, /"wallet_provisioning_status"/)
+  assert.match(source, /ensureToyOnchainSchemaCompatibility/)
+  assert.match(source, /"onchain_model_wallets"/)
+  assert.match(source, /delete\(onchainUserWallets\)/)
+  assert.match(source, /No Toy model wallet addresses are configured/)
+  assert.match(source, /runtimeConfig\.season4HumanStartingBankrollDisplay/)
+  assert.match(source, /modelTargetCollateral/)
+  assert.match(source, /runtimeConfig\.season4StartingBankrollDisplay/)
+  assert.match(source, /functionName: 'mint'/)
+  assert.match(source, /functionName: 'burn'/)
+  assert.doesNotMatch(source, /functionName: 'claimTo'/)
+  assert.match(source, /toySeedTrialColumns/)
+  assert.match(source, /"therapeutic_area"/)
+  assert.match(source, /trials_therapeutic_area_check/)
+  assert.match(source, /ensureToyDecisionSnapshotSchemaCompatibility/)
+  assert.match(source, /"model_decision_snapshots"/)
+  assert.match(source, /"model_key"/)
+  assert.match(source, /model_decision_snapshots_question_model_key_created_idx/)
+  assert.doesNotMatch(source, /trial:\s*true/)
 })
 
 test('legacy model decision stream route is retired for season 4', async () => {
@@ -355,18 +413,83 @@ test('database target switching is limited to settings and AI obeys the active t
   }
 })
 
-test('manual trial intake AI review keeps before and suggestion while final values stay editable', async () => {
+test('manual trial intake renders ClinicalTrials.gov, AI, and final saved columns', async () => {
   const source = await readRepoFile('components/AdminManualTrialIntake.tsx')
 
-  assert.match(source, /AI Field Review/)
-  assert.match(source, /Before AI/)
+  assert.match(source, /clinicalDraft/)
+  assert.match(source, /aiSuggestion/)
+  assert.match(source, /finalForm/)
+  assert.match(source, /ClinicalTrials\.gov/)
   assert.match(source, /AI Suggestion/)
   assert.match(source, /Final Saved Value/)
-  assert.match(source, /Use AI/)
-  assert.match(source, /resetFieldToAiSuggestion/)
-  assert.match(source, /Final Trial Data/)
-  assert.match(source, /Those edits will be saved/)
-  assert.match(source, /disabled=\{isBusy \|\| !hasCalculation\}/)
-  assert.doesNotMatch(source, /disabled=\{isBusy \|\| !hasCalculation \|\| isPreviewStale\}/)
+  assert.match(source, /setFinalForm\(nextFinalForm\)/)
+  assert.match(source, /openingProbabilityOverride:\s*formatProbabilityInput\(nextPreview\.openingLine\.suggestedProbability\)/)
+  assert.match(source, /Save is locked until AI returns a usable draft and opening probability/)
+  assert.match(source, /disabled=\{!canSave\}/)
+  assert.doesNotMatch(source, /Before AI/)
+  assert.doesNotMatch(source, /Final Trial Data/)
   assert.doesNotMatch(source, /Run AI calculations again after editing the form so approval uses the latest values/)
+})
+
+test('manual trial intake starts AI calculations after draft load', async () => {
+  const source = await readRepoFile('components/AdminManualTrialIntake.tsx')
+
+  assert.match(source, /void runAiCalculations\(nextDraft\.form,\s*\{\s*allowWithoutDraft:\s*true\s*\}\)/)
+  assert.match(source, /const runAiCalculations = async \(\s*calculationForm\?: ManualTrialFormState,/)
+  assert.match(source, /body:\s*JSON\.stringify\(formForCalculation\)/)
+  assert.match(source, /AI suggestions fill in next/)
+  assert.doesNotMatch(source, />Run AI Calculations</)
+})
+
+test('manual trial intake blocks save for failed or fallback AI output', async () => {
+  const componentSource = await readRepoFile('components/AdminManualTrialIntake.tsx')
+  const publishRouteSource = await readRepoFile('app/api/admin/trials/publish/route.ts')
+
+  assert.match(componentSource, /function isAiCalculationSaveable/)
+  assert.match(componentSource, /source\?\.usedAi/)
+  assert.match(componentSource, /!source\.aiError/)
+  assert.match(componentSource, /preview\.openingLine\.suggestedSource === 'draft_ai'/)
+  assert.match(componentSource, /const canSave = Boolean\(finalForm && hasSaveableAiCalculation && !isBusy\)/)
+  assert.match(componentSource, /Retry AI Calculations/)
+  assert.match(publishRouteSource, /assertPublishCalculationIsAiBacked/)
+  assert.match(publishRouteSource, /suggestedSource !== 'draft_ai'/)
+  assert.match(publishRouteSource, /openingLineError/)
+  assert.match(publishRouteSource, /Successful AI calculation is required before publishing manual trial intake/)
+})
+
+test('manual trial intake classification is constrained to the approved therapeutic areas', async () => {
+  const intakeSource = await readRepoFile('lib/manual-trial-intake.ts')
+  const componentSource = await readRepoFile('components/AdminManualTrialIntake.tsx')
+  const schemaSource = await readRepoFile('lib/schema.ts')
+
+  assert.deepEqual(TRIAL_THERAPEUTIC_AREAS, [
+    'Oncology',
+    'Cardiovascular',
+    'Neurology',
+    'Psychiatry',
+    'Infectious disease',
+    'Endocrinology',
+    'Metabolic',
+    'Rare disease',
+    'Autoimmune',
+    'Respiratory',
+    'Gastroenterology',
+    'Hepatology',
+    'Nephrology',
+    'Hematology',
+    'Vaccines',
+    'Dermatology',
+    'Ophthalmology',
+    "Women's health",
+    'Urology',
+    'Musculoskeletal',
+    'Pain',
+    'Critical care',
+    'Devices',
+  ])
+  assert.match(intakeSource, /therapeuticArea:\s*\{\s*type:\s*'string',\s*enum:\s*TRIAL_THERAPEUTIC_AREAS\s*\}/)
+  assert.match(intakeSource, /Set therapeuticArea to exactly one of these labels/)
+  assert.match(intakeSource, /requireTherapeuticArea:\s*true/)
+  assert.match(componentSource, /type:\s*'select',\s*options:\s*TRIAL_THERAPEUTIC_AREAS/)
+  assert.match(schemaSource, /trials_therapeutic_area_check/)
 })
