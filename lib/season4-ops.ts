@@ -226,6 +226,7 @@ export type Season4ModelCycleSummary = {
 export type RunSeason4ModelCycleOptions = {
   modelKeys?: ModelId[]
   marketSlugs?: string[]
+  maxMarketsPerCycle?: number
   requireProvidedDecisions?: boolean
   decisions?: Array<{
     modelKey: ModelId
@@ -405,6 +406,18 @@ function parseMaxMarketsPerCycle(): number {
     throw new ConfigurationError('SEASON4_MODEL_MAX_MARKETS_PER_CYCLE must be a positive integer')
   }
   return parsed
+}
+
+export function resolveSeason4ModelCycleMaxMarketsPerCycle(options: Pick<RunSeason4ModelCycleOptions, 'maxMarketsPerCycle'> = {}): number {
+  if (options.maxMarketsPerCycle == null) {
+    return parseMaxMarketsPerCycle()
+  }
+
+  if (!Number.isInteger(options.maxMarketsPerCycle) || options.maxMarketsPerCycle <= 0) {
+    throw new ConfigurationError('maxMarketsPerCycle must be a positive integer')
+  }
+
+  return options.maxMarketsPerCycle
 }
 
 export function parseIndexerIntervalSeconds(): number {
@@ -1351,7 +1364,7 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
 async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions = {}): Promise<Season4ModelCycleSummary> {
   const config = requireSeason4OnchainConfig()
   const privateKeys = parseEnvModelPrivateKeys()
-  const maxMarketsPerCycle = parseMaxMarketsPerCycle()
+  const maxMarketsPerCycle = resolveSeason4ModelCycleMaxMarketsPerCycle(options)
   const tradeSlippageBps = parseModelTradeSlippageBps()
   const initialIndexSummary = await syncSeason4OnchainIndex()
   const scopedModelKeys = new Set(options.modelKeys ?? [])
@@ -1432,14 +1445,44 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
 
   for (const row of scopedMarketRows) {
     if (activeMarkets.length >= maxMarketsPerCycle) {
+      if (scopedMarketSlugs.size > 0) {
+        preflightSkipped.push({
+          modelKey: 'all',
+          marketSlug: row.marketSlug,
+          reason: `Skipped because this model cycle is capped at ${maxMarketsPerCycle.toLocaleString('en-US')} market${maxMarketsPerCycle === 1 ? '' : 's'}.`,
+        })
+        continue
+      }
+
       break
     }
 
     const marketId = trimOrNull(row.onchainMarketId)
     const contractState = marketId ? contractStateMap.get(marketId) : null
-    if (!marketId) continue
-    if (!contractState) continue
-    if (row.closeTime && row.closeTime.getTime() <= Date.now()) continue
+    if (!marketId) {
+      preflightSkipped.push({
+        modelKey: 'all',
+        marketSlug: row.marketSlug,
+        reason: 'No onchain market id is stored for this market.',
+      })
+      continue
+    }
+    if (!contractState) {
+      preflightSkipped.push({
+        modelKey: 'all',
+        marketSlug: row.marketSlug,
+        reason: 'Could not load current onchain market state.',
+      })
+      continue
+    }
+    if (row.closeTime && row.closeTime.getTime() <= Date.now()) {
+      preflightSkipped.push({
+        modelKey: 'all',
+        marketSlug: row.marketSlug,
+        reason: 'Market close time has passed.',
+      })
+      continue
+    }
 
     const trial = buildSeason4TrialFacts({
       marketSlug: row.marketSlug,
@@ -1483,6 +1526,19 @@ async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions
       priceYes: contractState.priceYes,
       trial: trial.trial,
     })
+  }
+
+  if (scopedMarketSlugs.size > 0) {
+    const seenMarketSlugs = new Set(scopedMarketRows.map((row) => row.marketSlug))
+    const reportedMarketSlugs = new Set(preflightSkipped.map((entry) => entry.marketSlug).filter((value): value is string => Boolean(value)))
+    for (const marketSlug of scopedMarketSlugs) {
+      if (seenMarketSlugs.has(marketSlug) || reportedMarketSlugs.has(marketSlug)) continue
+      preflightSkipped.push({
+        modelKey: 'all',
+        marketSlug,
+        reason: 'Market is not deployed for the current Season 4 manager.',
+      })
+    }
   }
 
   const summary: Season4ModelCycleSummary = {

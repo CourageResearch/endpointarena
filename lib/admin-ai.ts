@@ -1987,9 +1987,11 @@ async function runLiveBatchModelCycle(batchId: string): Promise<void> {
   }))
 
   try {
+    const selectedMarketSlugs = Array.from(new Set(state.trials.map((trial) => trial.marketId)))
     const summary = await runSeason4ModelCycle({
       modelKeys: state.enabledModelIds,
-      marketSlugs: state.trials.map((trial) => trial.marketId),
+      marketSlugs: selectedMarketSlugs,
+      maxMarketsPerCycle: Math.max(1, selectedMarketSlugs.length),
       requireProvidedDecisions: true,
       decisions: state.tasks.flatMap((task) => (
         task.decision
