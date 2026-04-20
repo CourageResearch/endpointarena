@@ -1920,6 +1920,91 @@ async function clearBatch(batchId: string): Promise<void> {
   }))
 }
 
+async function runLiveBatchModelCycle(batchId: string): Promise<void> {
+  const row = await getBatchRowById(batchId)
+  if (!row) {
+    throw new NotFoundError('Batch not found')
+  }
+
+  const state = parseBatchState(row)
+  if (state.dataset !== 'live') {
+    throw new ConflictError('Only live batches can run a Season 4 model cycle.')
+  }
+  if (!state.runStartedAt) {
+    throw new ConflictError('Run the batch before starting the model cycle.')
+  }
+  if (state.status === 'cleared' || state.status === 'reset') {
+    throw new ConflictError('This batch is already closed.')
+  }
+  if (state.status === 'failed') {
+    throw new ConflictError('Resolve the failed batch before starting the model cycle.')
+  }
+  if (state.status === 'clearing') {
+    throw new ConflictError('The model cycle is already running.')
+  }
+  if (state.status !== 'ready') {
+    throw new ConflictError('Batch is not ready for a manual model cycle yet.')
+  }
+  const notReady = state.tasks.find((task) => task.status !== 'ready' && task.status !== 'cleared')
+  if (notReady) {
+    throw new ConflictError('Batch cannot run a model cycle until every enabled model has returned.')
+  }
+
+  await mutateBatchState(batchId, (current) => ({
+    ...current,
+    status: 'clearing',
+    logs: current.logs.some((entry) => entry.message === 'Admin started the Season 4 model cycle.')
+      ? current.logs
+      : [...current.logs, buildLog('Admin started the Season 4 model cycle.', 'warning')],
+  }))
+
+  try {
+    const summary = await runSeason4ModelCycle({
+      modelKeys: state.enabledModelIds,
+      marketSlugs: state.trials.map((trial) => trial.marketId),
+      decisions: state.tasks.flatMap((task) => (
+        task.decision
+          ? [{
+              modelKey: task.modelId,
+              marketSlug: task.marketId,
+              decision: task.decision,
+            }]
+          : []
+      )),
+    })
+    revalidateSeason4Routes()
+
+    await mutateBatchState(batchId, async (currentState) => hydratePortfolioStates({
+      ...currentState,
+      status: 'cleared',
+      tasks: currentState.tasks.map((task) => (
+        task.status === 'ready'
+          ? {
+              ...task,
+              status: 'cleared',
+            }
+          : task
+      )),
+      logs: [
+        ...currentState.logs,
+        buildLog(
+          `Season 4 model cycle complete. ${summary.tradesExecuted.toLocaleString('en-US')} trade${summary.tradesExecuted === 1 ? '' : 's'} executed.`,
+          summary.tradesExecuted > 0 ? 'success' : 'warning',
+        ),
+      ],
+    }))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Season 4 model cycle failed.'
+    await mutateBatchState(batchId, (currentState) => ({
+      ...currentState,
+      status: 'failed',
+      failureMessage: message,
+      logs: [...currentState.logs, buildLog(`Season 4 model cycle failed: ${message}`, 'error')],
+    }))
+    throw error
+  }
+}
+
 async function continueBatchProcessing(batchId: string): Promise<void> {
   if (ai2Workers.has(batchId)) return
 
@@ -1930,6 +2015,7 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
     let state = parseBatchState(row)
     if (!state.runStartedAt) return
     if (state.status === 'reset' || state.status === 'cleared') return
+    if (state.dataset === 'live' && (state.status === 'ready' || state.status === 'clearing')) return
 
     const recoveredTaskKeys = await recoverStaleRunningTasks(batchId)
     if (recoveredTaskKeys.length > 0) {
@@ -1980,58 +2066,13 @@ async function continueBatchProcessing(batchId: string): Promise<void> {
 
     if (readyToClear) {
       if (refreshed.dataset === 'live') {
-        if (refreshed.status !== 'clearing') {
+        if (refreshed.status !== 'ready') {
           await mutateBatchState(batchId, (current) => ({
             ...current,
-            status: 'clearing',
-            logs: current.logs.some((entry) => entry.message === 'All model decisions are in. Running the season 4 model cycle now.')
+            status: 'ready',
+            logs: current.logs.some((entry) => entry.message === 'All model decisions are in. Run the Season 4 model cycle manually from the admin panel.')
               ? current.logs
-              : [...current.logs, buildLog('All model decisions are in. Running the season 4 model cycle now.', 'success')],
-          }))
-        }
-
-        try {
-          const summary = await runSeason4ModelCycle({
-            modelKeys: refreshed.enabledModelIds,
-            marketSlugs: refreshed.trials.map((trial) => trial.marketId),
-            decisions: refreshed.tasks.flatMap((task) => (
-              task.decision
-                ? [{
-                    modelKey: task.modelId,
-                    marketSlug: task.marketId,
-                    decision: task.decision,
-                  }]
-                : []
-            )),
-          })
-          revalidateSeason4Routes()
-
-          await mutateBatchState(batchId, async (currentState) => hydratePortfolioStates({
-            ...currentState,
-            status: 'cleared',
-            tasks: currentState.tasks.map((task) => (
-              task.status === 'ready'
-                ? {
-                    ...task,
-                    status: 'cleared',
-                  }
-                : task
-            )),
-            logs: [
-              ...currentState.logs,
-              buildLog(
-                `Season 4 model cycle complete. ${summary.tradesExecuted.toLocaleString('en-US')} trade${summary.tradesExecuted === 1 ? '' : 's'} executed.`,
-                summary.tradesExecuted > 0 ? 'success' : 'warning',
-              ),
-            ],
-          }))
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Season 4 model cycle failed.'
-          await mutateBatchState(batchId, (currentState) => ({
-            ...currentState,
-            status: 'failed',
-            failureMessage: message,
-            logs: [...currentState.logs, buildLog(`Season 4 model cycle failed: ${message}`, 'error')],
+              : [...current.logs, buildLog('All model decisions are in. Run the Season 4 model cycle manually from the admin panel.', 'success')],
           }))
         }
         return
@@ -2454,7 +2495,7 @@ export async function runAiBatchNow(batchId: string): Promise<AiBatchState> {
         ...state.logs,
         buildLog(
           batch.dataset === 'live'
-            ? 'Batch collection started by admin. API models can now execute while subscription imports continue, and the season 4 model cycle will run automatically once every lane is ready.'
+            ? 'Batch collection started by admin. API models can now execute while subscription imports continue; run the season 4 model cycle manually once every lane is ready.'
             : 'Batch collection started by admin. API models can now execute while subscription imports continue, and the shared AMM will clear once every lane is ready.',
           'warning',
         ),
@@ -2551,7 +2592,11 @@ export async function clearAiBatchNow(batchId: string): Promise<AiBatchState> {
     throw new ConflictError('Batch cannot clear until every enabled model has returned.')
   }
 
-  await clearBatch(batchId)
+  if (batch.dataset === 'live') {
+    await runLiveBatchModelCycle(batchId)
+  } else {
+    await clearBatch(batchId)
+  }
   const refreshed = await getBatchRowById(batchId)
   if (!refreshed) {
     throw new NotFoundError('Batch not found after clearing')

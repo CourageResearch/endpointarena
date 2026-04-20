@@ -78,6 +78,40 @@ test('legacy daily run routes are disabled for season 4', async () => {
   assert.match(cancelPayload.error?.message ?? '', /Legacy offchain daily trial run controls are retired in season 4/)
 })
 
+test('season 4 model cycles are manual-only from admin surfaces', async () => {
+  const workerSource = await readRepoFile('scripts/season4-model-cycle-worker.ts')
+  const opsSource = await readRepoFile('lib/season4-ops.ts')
+  const adminAiSource = await readRepoFile('lib/admin-ai.ts')
+  const adminAiDeskSource = await readRepoFile('components/admin-ai/AdminAiDesk.tsx')
+  const adminDeskSource = await readRepoFile('components/admin/Season4AdminDesk.tsx')
+  const baseDeskSource = await readRepoFile('components/admin/Season4BaseDesk.tsx')
+  const docsSource = await readRepoFile('docs/deploy-railway.md')
+
+  assert.match(workerSource, /manual-only from the admin panel/)
+  assert.doesNotMatch(workerSource, /runSeason4ModelCycle|parseModelCycleIntervalSeconds|SEASON4_MODEL_CYCLE_INTERVAL_SECONDS/)
+
+  assert.doesNotMatch(opsSource, /parseModelCycleIntervalSeconds|modelCycleIntervalSeconds|SEASON4_MODEL_CYCLE_INTERVAL_SECONDS/)
+
+  assert.match(adminAiSource, /runLiveBatchModelCycle/)
+  assert.match(adminAiSource, /Run the Season 4 model cycle manually from the admin panel/)
+  assert.doesNotMatch(adminAiSource, /will run automatically|Running the season 4 model cycle now|run automatically once/)
+
+  assert.match(adminAiDeskSource, /Run Model Cycle/)
+  assert.match(adminAiDeskSource, /Run the model cycle manually from the admin panel/)
+  assert.doesNotMatch(adminAiDeskSource, /Starting the season 4 model cycle automatically|will run automatically/)
+
+  assert.match(adminDeskSource, /Run model cycle now/)
+  assert.match(adminDeskSource, /Model cycles are manual-only/)
+  assert.doesNotMatch(adminDeskSource, /run model cycles every|season4:model-cycle:worker|automatically runs a model cycle/)
+
+  assert.match(baseDeskSource, /Run model cycle now/)
+  assert.match(baseDeskSource, /Model cycles are manual-only/)
+  assert.doesNotMatch(baseDeskSource, /season4:model-cycle:worker|automatically runs a model cycle/)
+
+  assert.match(docsSource, /manual-only from the admin panel/)
+  assert.doesNotMatch(docsSource, /SEASON4_MODEL_CYCLE_INTERVAL_SECONDS|trading onchain on a cadence|model-cycle automation/)
+})
+
 test('admin runtime settings no longer expose live offchain opening LMSR controls', async () => {
   const componentSource = await readRepoFile('components/AdminRuntimeSettingsColumns.tsx')
   const databaseTargetManagerSource = await readRepoFile('components/AdminDatabaseTargetManager.tsx')

@@ -116,7 +116,6 @@ export type Season4OpsDashboardData = {
   }
   automation: {
     indexerIntervalSeconds: number
-    modelCycleIntervalSeconds: number
     tradeAmountDisplay: number
     maxMarketsPerCycle: number
   }
@@ -398,16 +397,6 @@ export function parseIndexerIntervalSeconds(): number {
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new ConfigurationError('SEASON4_INDEXER_INTERVAL_SECONDS must be a positive integer')
-  }
-  return parsed
-}
-
-export function parseModelCycleIntervalSeconds(): number {
-  const raw = trimOrNull(process.env.SEASON4_MODEL_CYCLE_INTERVAL_SECONDS)
-  if (!raw) return 300
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new ConfigurationError('SEASON4_MODEL_CYCLE_INTERVAL_SECONDS must be a positive integer')
   }
   return parsed
 }
@@ -873,7 +862,6 @@ export async function getSeason4OpsDashboardData(options: { sync?: boolean } = {
     },
     automation: {
       indexerIntervalSeconds: parseIndexerIntervalSeconds(),
-      modelCycleIntervalSeconds: parseModelCycleIntervalSeconds(),
       tradeAmountDisplay: parseModelTradeAmountDisplay(),
       maxMarketsPerCycle: parseMaxMarketsPerCycle(),
     },

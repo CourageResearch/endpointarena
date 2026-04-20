@@ -179,7 +179,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
         <article className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Base operations</h2>
           <p className="mt-1 text-sm text-[#6f665b]">
-            Handle model-wallet funding, gas top-ups, and indexing from one place.
+            Handle model-wallet funding, gas top-ups, indexing, and manual model-cycle execution from one place.
           </p>
 
           <div className="mt-4 grid gap-2">
@@ -195,6 +195,20 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
               className="rounded-none border border-[#D39D2E]/25 bg-[#fff8e8] px-4 py-2 text-left text-sm font-medium text-[#9a6e12] transition-colors hover:bg-[#fff3d5] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {pendingAction === 'sync-indexer' ? 'Syncing indexer...' : 'Sync indexer now'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void runAdminAction<{ summary: { tradesExecuted: number } }>({
+                key: 'run-model-cycle',
+                url: '/api/admin/season4/model-cycle/run',
+                fallbackMessage: 'Failed to run the season 4 model cycle',
+                successMessage: (result) => `Model cycle complete. ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'} executed.`,
+              })}
+              disabled={pendingAction !== null || !initialData.chain.enabled}
+              className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pendingAction === 'run-model-cycle' ? 'Running model cycle...' : 'Run model cycle now'}
             </button>
 
             <button
@@ -231,7 +245,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
         <article className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Railway workers</h2>
           <p className="mt-1 text-sm text-[#6f665b]">
-            These are the recurring jobs that keep Base Sepolia state mirrored and models trading.
+            The recurring Railway job mirrors Base Sepolia state. Model cycles are manual-only.
           </p>
 
           <div className="mt-4 rounded-none border border-[#e8ddd0] bg-[#fcfaf7] p-3 text-sm text-[#5b5148]">
@@ -239,11 +253,8 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
             <code className="mt-2 block rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-xs text-[#1a1a1a]">
               npm run season4:indexer:worker
             </code>
-            <code className="mt-2 block rounded-none border border-[#e8ddd0] bg-white px-3 py-2 text-xs text-[#1a1a1a]">
-              npm run season4:model-cycle:worker
-            </code>
             <p className="mt-3 text-xs text-[#6f665b]">
-              The AI batch flow automatically runs a model cycle after live decisions are ready. Each cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
+              The model-cycle worker command is intentionally disabled for production. Each admin-started cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
             </p>
           </div>
         </article>
