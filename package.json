@@ -69,6 +69,7 @@
     "season4:claim-cdp-faucet": "node scripts/run-with-env.js .env.local -- npx tsx scripts/claim-season4-cdp-faucet.ts",
     "season4:deploy-contracts": "node scripts/run-with-env.js .env.local -- npx tsx scripts/deploy-season4-contracts.ts",
     "season4:deploy-contracts:toy": "node scripts/run-with-env.js .env.local -- npx tsx scripts/deploy-season4-contracts.ts --target=toy",
+    "season4:purge-deprecated-manager": "npx tsx scripts/purge-season4-deprecated-manager.ts",
     "season4:fund-model-wallets": "node scripts/run-with-env.js .env.local -- npx tsx scripts/fund-season4-model-wallets.ts",
     "season4:index-onchain": "node scripts/run-with-env.js .env.local -- npx tsx scripts/index-season4-onchain.ts",
     "season4:indexer:worker": "npx tsx scripts/season4-indexer-worker.ts",
