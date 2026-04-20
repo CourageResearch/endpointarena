@@ -8,6 +8,27 @@ import {
   calculateSeason4TradeCaps,
   capSeason4TradeDecision,
 } from '../lib/season4-model-decisions'
+import { resolveSeason4ModelCycleMaxMarketsPerCycle } from '../lib/season4-ops'
+
+test('season 4 model cycle allows manual batches to override the default market cap', () => {
+  const previous = process.env.SEASON4_MODEL_MAX_MARKETS_PER_CYCLE
+  try {
+    process.env.SEASON4_MODEL_MAX_MARKETS_PER_CYCLE = '1'
+
+    assert.equal(resolveSeason4ModelCycleMaxMarketsPerCycle(), 1)
+    assert.equal(resolveSeason4ModelCycleMaxMarketsPerCycle({ maxMarketsPerCycle: 3 }), 3)
+    assert.throws(
+      () => resolveSeason4ModelCycleMaxMarketsPerCycle({ maxMarketsPerCycle: 0 }),
+      /maxMarketsPerCycle must be a positive integer/,
+    )
+  } finally {
+    if (previous == null) {
+      delete process.env.SEASON4_MODEL_MAX_MARKETS_PER_CYCLE
+    } else {
+      process.env.SEASON4_MODEL_MAX_MARKETS_PER_CYCLE = previous
+    }
+  }
+})
 
 test('season 4 trade caps respect cash, holdings, and price', () => {
   const caps = calculateSeason4TradeCaps({
