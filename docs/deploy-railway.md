@@ -121,20 +121,19 @@ The current season 4 plan assumes:
 
 ### Season 4 Railway workers
 
-Testnet ops should run two long-lived Railway worker services in addition to the web app:
+Testnet ops should run one recurring Railway worker service in addition to the web app:
 
 - `season4-indexer-worker`:
   Run `npm run season4:indexer:worker` to keep the Base Sepolia read model fresh.
 - `season4-model-cycle-worker`:
-  Run `npm run season4:model-cycle:worker` to keep funded model wallets trading onchain on a cadence.
+  The command is intentionally disabled/no-op in production. Season 4 model cycles are manual-only from the admin panel.
 
 The current worker env knobs are:
 
 - `SEASON4_INDEXER_INTERVAL_SECONDS` defaults to `30`
-- `SEASON4_MODEL_CYCLE_INTERVAL_SECONDS` defaults to `300`
 - `SEASON4_MODEL_TRADE_AMOUNT_DISPLAY` defaults to `5`
 - `SEASON4_MODEL_MAX_MARKETS_PER_CYCLE` defaults to `1`
-- `SEASON4_MODEL_PRIVATE_KEYS_JSON` must map each funded model id to the corresponding Base Sepolia private key before model-cycle automation can trade
+- `SEASON4_MODEL_PRIVATE_KEYS_JSON` must map each funded model id to the corresponding Base Sepolia private key before a manually started model cycle can trade
 
 ### What changes for real money
 

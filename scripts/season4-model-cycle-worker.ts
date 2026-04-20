@@ -1,34 +1,19 @@
 import dotenv from 'dotenv'
-import { parseModelCycleIntervalSeconds, runSeason4ModelCycle } from '@/lib/season4-ops'
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
+
+const IDLE_SLEEP_MS = 60 * 60 * 1000
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function main() {
-  const intervalSeconds = parseModelCycleIntervalSeconds()
-  console.log(`[season4-model-cycle-worker] starting with ${intervalSeconds}s interval`)
+  console.log('[season4-model-cycle-worker] disabled: Season 4 model cycles are manual-only from the admin panel.')
 
   while (true) {
-    const startedAt = new Date().toISOString()
-    try {
-      const summary = await runSeason4ModelCycle()
-      console.log(JSON.stringify({
-        worker: 'season4-model-cycle-worker',
-        startedAt,
-        completedAt: new Date().toISOString(),
-        intervalSeconds,
-        summary,
-      }))
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error(`[season4-model-cycle-worker] ${startedAt} ${message}`)
-    }
-
-    await sleep(intervalSeconds * 1000)
+    await sleep(IDLE_SLEEP_MS)
   }
 }
 

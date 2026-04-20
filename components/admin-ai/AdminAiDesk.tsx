@@ -199,19 +199,19 @@ function getDeskStatusDetail(batch: AiBatchState | null, progress: AiBatchProgre
 
   if (status === 'ready') {
     return batch.dataset === 'live'
-      ? 'All model decisions are in. The season 4 model cycle will run automatically.'
+      ? 'All model decisions are in. Run the model cycle manually from the admin panel.'
       : 'All model decisions are in. The batch is ready to clear.'
   }
 
   if (status === 'clearing') {
     return batch.dataset === 'live'
-      ? 'The season 4 model cycle is executing onchain now.'
+      ? 'The admin-started season 4 model cycle is executing onchain now.'
       : 'The batch is executing against the shared AMM now.'
   }
 
   if (status === 'cleared') {
     return batch.dataset === 'live'
-      ? 'All model decisions are in, the season 4 model cycle ran, and this batch is final.'
+      ? 'All model decisions are in, the manual season 4 model cycle ran, and this batch is final.'
       : 'All model decisions are in, the AMM trades were executed, and this batch is final.'
   }
 
@@ -601,6 +601,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
   ), [batch, apiModels])
   const hasEnabledApiLane = apiLaneTasks.length > 0
   const canRunBatch = Boolean(batch && !batch.runStartedAt && pendingSubscriptionImports === 0 && !isTerminal(batch.status))
+  const canRunLiveModelCycle = Boolean(batch && batch.dataset === 'live' && batch.runStartedAt && batch.status === 'ready')
   const canStartApiLaneEarly = Boolean(batch && hasEnabledApiLane && !batch.runStartedAt && pendingSubscriptionImports > 0 && !isTerminal(batch.status))
   const successfulFillCount = useMemo(() => (
     batch?.fills.filter((fill) => fill.status === 'ok').length ?? 0
@@ -853,6 +854,22 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
     }
   }
 
+  async function runLiveModelCycleNow() {
+    if (!batch) return
+    setBusyKey('model-cycle')
+    setUiError(null)
+    try {
+      const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/clear`, {
+        method: 'POST',
+      })
+      replaceBatch(payload.batch)
+    } catch (error) {
+      setUiError(error instanceof Error ? error.message : 'Failed to run model cycle')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
   async function retryTask(taskKey: string) {
     if (!batch) return
     setBusyKey(`retry:${taskKey}`)
@@ -1011,6 +1028,16 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 {busyKey === 'run' ? 'Running...' : 'Run Batch'}
               </button>
             ) : null}
+            {canRunLiveModelCycle ? (
+              <button
+                type="button"
+                onClick={() => void runLiveModelCycleNow()}
+                disabled={busyKey != null}
+                className="border border-[#5BA5ED] bg-[#5BA5ED] px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busyKey === 'model-cycle' ? 'Running model cycle...' : 'Run Model Cycle'}
+              </button>
+            ) : null}
           </div>
           <div className="border border-[#d8ccb9] bg-white/80 p-3">
             <p className="text-[11px] uppercase tracking-[0.08em] text-[#8a8075]">Desk Status</p>
@@ -1042,7 +1069,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                     : `The API lane is done. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} before the shared AMM can clear.`
                   : `The API lane is live. Import ${livePendingSubscriptionImports} remaining subscription task${livePendingSubscriptionImports === 1 ? '' : 's'} while decisions continue to collect.`
                 : batch.status === 'ready' && batch.dataset === 'live'
-                  ? 'All model decisions are in. Starting the season 4 model cycle automatically.'
+                  ? 'All model decisions are in. Use Run Model Cycle when ready.'
                   : `Run is live. Decisions are collecting with API parallelization locked at ${batch.apiConcurrency}, and the detailed matrix now refreshes automatically as tasks finish.`}
             </div>
           ) : null}
@@ -1059,7 +1086,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
           {batch?.status === 'cleared' ? (
             <div className="border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-3 py-2 text-sm text-[#2f6f24]">
               {batch.dataset === 'live'
-                ? 'Batch complete. All selected models have finished, and the season 4 model cycle is final.'
+                ? 'Batch complete. All selected models have finished, and the manual season 4 model cycle is final.'
                 : 'Batch complete. All selected models have finished, and the AMM clearing tape is final.'}
             </div>
           ) : null}
@@ -1783,7 +1810,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 )) : (
                   <div className="border border-dashed border-[#d8ccb9] bg-[#fdfbf8] px-4 py-6 text-sm text-[#8a8075]">
                     {dataset === 'live'
-                      ? 'Fills will appear here as the Season 4 model cycle executes.'
+                      ? 'Fills will appear here after an admin runs the Season 4 model cycle.'
                       : 'Fills will appear here as the shared AMM clears each task.'}
                   </div>
                 )}
