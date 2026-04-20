@@ -56,7 +56,6 @@ type DatabaseClient = typeof db
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const MARKET_RUNTIME_CONFIG_ID = 'default'
-const DEFAULT_OPENING_LMSR_B = 100000
 const MOCK_USDC_DISPLAY_DIVISOR = 1_000_000
 const DEFAULT_MODEL_ETH_TOP_UP_WEI = BigInt(20_000_000_000_000)
 const MIN_MODEL_ETH_BALANCE_WEI = BigInt(10_000_000_000_000)
@@ -327,7 +326,6 @@ async function ensureToyRuntimeConfig(dbClient: DatabaseClient): Promise<void> {
   await dbClient.insert(marketRuntimeConfigs)
     .values({
       id: MARKET_RUNTIME_CONFIG_ID,
-      openingLmsrB: mainConfig?.openingLmsrB ?? DEFAULT_OPENING_LMSR_B,
       toyTrialCount: mainConfig?.toyTrialCount ?? 0,
       season4MarketLiquidityBDisplay: mainConfig?.season4MarketLiquidityBDisplay ?? DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY,
       season4HumanStartingBankrollDisplay: mainConfig?.season4HumanStartingBankrollDisplay ?? DEFAULT_SEASON4_HUMAN_STARTING_BANKROLL_DISPLAY,
@@ -343,7 +341,6 @@ async function ensureToyRuntimeConfigSchema(dbClient: DatabaseClient): Promise<v
   await dbClient.execute(sql`
     create table if not exists "market_runtime_configs" (
       "id" text primary key,
-      "opening_lmsr_b" real not null default 100000,
       "toy_trial_count" integer not null default 0,
       "season4_market_liquidity_b_display" real not null default 1000,
       "season4_human_starting_bankroll_display" real not null default 100,
@@ -355,7 +352,6 @@ async function ensureToyRuntimeConfigSchema(dbClient: DatabaseClient): Promise<v
 
   await dbClient.execute(sql`
     alter table "market_runtime_configs"
-      add column if not exists "opening_lmsr_b" real not null default 100000,
       add column if not exists "toy_trial_count" integer not null default 0,
       add column if not exists "season4_market_liquidity_b_display" real not null default 1000,
       add column if not exists "season4_starting_bankroll_display" real not null default 1000,
@@ -398,7 +394,6 @@ async function ensureToyRuntimeConfigSchema(dbClient: DatabaseClient): Promise<v
 
   await dbClient.execute(sql`
     alter table "market_runtime_configs"
-      alter column "opening_lmsr_b" set default 100000,
       alter column "toy_trial_count" set default 0,
       alter column "season4_market_liquidity_b_display" set default 1000,
       alter column "season4_human_starting_bankroll_display" set default 100,
@@ -418,11 +413,13 @@ async function ensureToyRuntimeConfigSchema(dbClient: DatabaseClient): Promise<v
       drop column if exists "steady_max_trade_usd",
       drop column if exists "steady_buy_cash_fraction",
       drop column if exists "signup_user_limit",
-      drop column if exists "max_position_per_side_shares"
+      drop column if exists "max_position_per_side_shares",
+      drop column if exists "opening_lmsr_b"
   `)
 
   await dbClient.execute(sql`
     alter table "market_runtime_configs"
+      drop constraint if exists "market_runtime_configs_opening_lmsr_b_check",
       drop constraint if exists "market_runtime_configs_max_position_per_side_shares_check",
       drop constraint if exists "market_runtime_configs_season4_human_starting_bankroll_display_"
   `)
@@ -430,17 +427,6 @@ async function ensureToyRuntimeConfigSchema(dbClient: DatabaseClient): Promise<v
   await dbClient.execute(sql`
     do $$
     begin
-      if not exists (
-        select 1
-        from pg_constraint
-        where conrelid = 'public.market_runtime_configs'::regclass
-          and conname = 'market_runtime_configs_opening_lmsr_b_check'
-      ) then
-        alter table "market_runtime_configs"
-          add constraint "market_runtime_configs_opening_lmsr_b_check"
-          check ("market_runtime_configs"."opening_lmsr_b" > 0 and "market_runtime_configs"."opening_lmsr_b" <= 10000000);
-      end if;
-
       if not exists (
         select 1
         from pg_constraint
@@ -1063,7 +1049,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
       "title" text not null,
       "metadata_uri" text,
       "collateral_token_address" text,
-      "execution_mode" text default 'onchain_lmsr' not null,
+      "execution_mode" text default 'collateralized_qb_v1' not null,
       "position_model" text default 'onchain_app_restricted' not null,
       "status" text default 'draft' not null,
       "close_time" timestamp with time zone,
@@ -1073,7 +1059,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
       "created_at" timestamp with time zone not null,
       "updated_at" timestamp with time zone not null,
       constraint "onchain_markets_chain_id_check" check ("onchain_markets"."chain_id" > 0),
-      constraint "onchain_markets_execution_mode_check" check ("onchain_markets"."execution_mode" = 'onchain_lmsr'),
+      constraint "onchain_markets_execution_mode_check" check ("onchain_markets"."execution_mode" = 'collateralized_qb_v1'),
       constraint "onchain_markets_position_model_check" check ("onchain_markets"."position_model" = 'onchain_app_restricted'),
       constraint "onchain_markets_status_check"
         check ("onchain_markets"."status" in ('draft', 'deployed', 'closed', 'resolved', 'archived')),

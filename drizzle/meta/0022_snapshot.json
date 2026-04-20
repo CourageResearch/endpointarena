@@ -1972,13 +1972,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "opening_lmsr_b": {
-          "name": "opening_lmsr_b",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 100000
-        },
         "toy_trial_count": {
           "name": "toy_trial_count",
           "type": "integer",
@@ -2005,10 +1998,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "market_runtime_configs_opening_lmsr_b_check": {
-          "name": "market_runtime_configs_opening_lmsr_b_check",
-          "value": "\"market_runtime_configs\".\"opening_lmsr_b\" > 0 AND \"market_runtime_configs\".\"opening_lmsr_b\" <= 10000000"
-        },
         "market_runtime_configs_toy_trial_count_check": {
           "name": "market_runtime_configs_toy_trial_count_check",
           "value": "\"market_runtime_configs\".\"toy_trial_count\" >= 0"
@@ -3160,7 +3149,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'onchain_lmsr'"
+          "default": "'collateralized_qb_v1'"
         },
         "position_model": {
           "name": "position_model",
@@ -3282,7 +3271,7 @@
         },
         "onchain_markets_execution_mode_check": {
           "name": "onchain_markets_execution_mode_check",
-          "value": "\"onchain_markets\".\"execution_mode\" = 'onchain_lmsr'"
+          "value": "\"onchain_markets\".\"execution_mode\" = 'collateralized_qb_v1'"
         },
         "onchain_markets_position_model_check": {
           "name": "onchain_markets_position_model_check",

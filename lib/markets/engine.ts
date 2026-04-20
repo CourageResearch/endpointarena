@@ -13,7 +13,7 @@ import { MODEL_IDS, type ModelId } from '@/lib/constants'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   DEFAULT_BINARY_MARKET_BASELINE,
-  DEFAULT_LMSR_B,
+  DEFAULT_MARKET_LIQUIDITY_B,
   MARKET_STARTING_CASH,
   OPENING_PROBABILITY_CEIL,
   OPENING_PROBABILITY_FLOOR,
@@ -165,40 +165,45 @@ function clampProbability(probability: number): number {
   return Math.max(OPENING_PROBABILITY_FLOOR, Math.min(OPENING_PROBABILITY_CEIL, probability))
 }
 
-function logSumExp(a: number, b: number): number {
-  const m = Math.max(a, b)
-  return m + Math.log(Math.exp(a - m) + Math.exp(b - m))
-}
-
-function logSubExp(x: number, y: number): number {
-  if (x <= y) {
-    throw new Error('Invalid logSubExp arguments: x must be greater than y')
+function qPlusBPriceYes({ qYes, qNo, b }: MarketState): number {
+  if (![qYes, qNo, b].every(Number.isFinite) || b <= 0) {
+    return 0.5
   }
-  return x + Math.log1p(-Math.exp(y - x))
+
+  const denominator = qYes + qNo + (2 * b)
+  if (denominator <= 0) {
+    return 0.5
+  }
+
+  return clampProbability((qYes + b) / denominator)
 }
 
-function lmsrCost({ qYes, qNo, b }: MarketState): number {
-  return b * logSumExp(qYes / b, qNo / b)
-}
-
-function lmsrPriceYes({ qYes, qNo, b }: MarketState): number {
-  const z = (qNo - qYes) / b
-  if (z > 40) return 0
-  if (z < -40) return 1
-  return 1 / (1 + Math.exp(z))
-}
-
-function createInitialMarketState(openingProbability: number, b: number = DEFAULT_LMSR_B): MarketState {
+function createInitialMarketState(openingProbability: number, b: number = DEFAULT_MARKET_LIQUIDITY_B): MarketState {
   const p = clampProbability(openingProbability)
-  const delta = b * Math.log(p / (1 - p))
+  if (p === 0.5) {
+    return {
+      qYes: 0,
+      qNo: 0,
+      b,
+    }
+  }
+
+  if (p > 0.5) {
+    return {
+      qYes: (b * ((2 * p) - 1)) / (1 - p),
+      qNo: 0,
+      b,
+    }
+  }
+
   return {
-    qYes: delta / 2,
-    qNo: -delta / 2,
+    qYes: 0,
+    qNo: (b * (1 - (2 * p))) / p,
     b,
   }
 }
 
-function executeLmsrBudgetTrade(
+function executeCollateralizedBudgetTrade(
   state: MarketState,
   side: BuyMarketAction,
   budgetUsd: number
@@ -210,35 +215,21 @@ function executeLmsrBudgetTrade(
   priceAfter: number
 } {
   const budget = Math.max(0, budgetUsd)
+  const priceBefore = qPlusBPriceYes(state)
   if (budget <= 0) {
-    const samePrice = lmsrPriceYes(state)
     return {
       qYes: state.qYes,
       qNo: state.qNo,
       shares: 0,
-      priceBefore: samePrice,
-      priceAfter: samePrice,
+      priceBefore,
+      priceAfter: priceBefore,
     }
   }
 
-  const { qYes, qNo, b } = state
-  const priceBefore = lmsrPriceYes(state)
-  const baseLog = logSumExp(qYes / b, qNo / b)
-  const targetLog = baseLog + budget / b
-
-  let nextQYes = qYes
-  let nextQNo = qNo
-
-  if (side === 'BUY_YES') {
-    const next = b * logSubExp(targetLog, qNo / b)
-    nextQYes = next
-  } else {
-    const next = b * logSubExp(targetLog, qYes / b)
-    nextQNo = next
-  }
-
-  const shares = side === 'BUY_YES' ? nextQYes - qYes : nextQNo - qNo
-  const priceAfter = lmsrPriceYes({ qYes: nextQYes, qNo: nextQNo, b })
+  const shares = budget
+  const nextQYes = side === 'BUY_YES' ? state.qYes + shares : state.qYes
+  const nextQNo = side === 'BUY_NO' ? state.qNo + shares : state.qNo
+  const priceAfter = qPlusBPriceYes({ qYes: nextQYes, qNo: nextQNo, b: state.b })
 
   return {
     qYes: nextQYes,
@@ -260,8 +251,8 @@ export function calculateExecutableTradeCaps(args: {
   const noSharesHeld = Math.max(0, args.noSharesHeld)
   const maxBuyYesUsd = cashCapUsd
   const maxBuyNoUsd = cashCapUsd
-  const maxSellYesUsd = Math.max(0, executeLmsrShareSale(args.state, 'SELL_YES', yesSharesHeld).proceeds)
-  const maxSellNoUsd = Math.max(0, executeLmsrShareSale(args.state, 'SELL_NO', noSharesHeld).proceeds)
+  const maxSellYesUsd = Math.max(0, executeCollateralizedShareSale(args.state, 'SELL_YES', yesSharesHeld).proceeds)
+  const maxSellNoUsd = Math.max(0, executeCollateralizedShareSale(args.state, 'SELL_NO', noSharesHeld).proceeds)
 
   return {
     maxBuyUsd: Math.max(maxBuyYesUsd, maxBuyNoUsd),
@@ -294,11 +285,11 @@ export function previewTradeTransition(args: {
   const yesSharesHeld = Math.max(0, args.yesSharesHeld)
   const noSharesHeld = Math.max(0, args.noSharesHeld)
   const requestedUsd = Math.max(0, args.requestedUsd)
-  const priceBefore = lmsrPriceYes(args.state)
+  const priceBefore = qPlusBPriceYes(args.state)
 
   if (args.side === 'BUY_YES' || args.side === 'BUY_NO') {
     const executedUsd = Math.max(0, Math.min(requestedUsd, accountCash))
-    const buy = executeLmsrBudgetTrade(args.state, args.side, executedUsd)
+    const buy = executeCollateralizedBudgetTrade(args.state, args.side, executedUsd)
 
     return {
       qYes: buy.qYes,
@@ -314,7 +305,7 @@ export function previewTradeTransition(args: {
   }
 
   const heldShares = args.side === 'SELL_YES' ? yesSharesHeld : noSharesHeld
-  const maxSale = executeLmsrShareSale(args.state, args.side, heldShares)
+  const maxSale = executeCollateralizedShareSale(args.state, args.side, heldShares)
   const executedUsd = Math.max(0, Math.min(requestedUsd, maxSale.proceeds))
   const sale = solveConstrainedSaleForProceeds(args.state, args.side, heldShares, executedUsd)
   const soldShares = Math.min(heldShares, Math.max(0, sale.shares))
@@ -333,7 +324,7 @@ export function previewTradeTransition(args: {
   }
 }
 
-function executeLmsrShareSale(
+function executeCollateralizedShareSale(
   state: MarketState,
   side: SellMarketAction,
   sharesToSell: number
@@ -346,7 +337,7 @@ function executeLmsrShareSale(
   priceAfter: number
 } {
   const shares = Math.max(0, sharesToSell)
-  const priceBefore = lmsrPriceYes(state)
+  const priceBefore = qPlusBPriceYes(state)
 
   if (shares <= 0) {
     return {
@@ -362,8 +353,9 @@ function executeLmsrShareSale(
   const nextQYes = side === 'SELL_YES' ? state.qYes - shares : state.qYes
   const nextQNo = side === 'SELL_NO' ? state.qNo - shares : state.qNo
   const nextState = { qYes: nextQYes, qNo: nextQNo, b: state.b }
-  const proceeds = Math.max(0, lmsrCost(state) - lmsrCost(nextState))
-  const priceAfter = lmsrPriceYes(nextState)
+  const sidePrice = side === 'SELL_YES' ? priceBefore : 1 - priceBefore
+  const proceeds = Math.max(0, shares * sidePrice)
+  const priceAfter = qPlusBPriceYes(nextState)
 
   return {
     qYes: nextQYes,
@@ -390,13 +382,13 @@ function solveConstrainedSaleForProceeds(
 } {
   const maxShares = Math.max(0, heldShares)
   const targetProceeds = Math.max(0, proceedsUsd)
-  const zeroSale = executeLmsrShareSale(state, side, 0)
+  const zeroSale = executeCollateralizedShareSale(state, side, 0)
 
   if (maxShares <= 0 || targetProceeds <= 0) {
     return zeroSale
   }
 
-  const maxSale = executeLmsrShareSale(state, side, maxShares)
+  const maxSale = executeCollateralizedShareSale(state, side, maxShares)
   if (maxSale.proceeds <= 0) {
     return zeroSale
   }
@@ -412,7 +404,7 @@ function solveConstrainedSaleForProceeds(
   // does not exceed the target proceeds and never exceeds held shares.
   for (let i = 0; i < 56; i++) {
     const midShares = (lowShares + highShares) / 2
-    const midSale = executeLmsrShareSale(state, side, midShares)
+    const midSale = executeCollateralizedShareSale(state, side, midShares)
     if (midSale.proceeds <= targetProceeds) {
       lowShares = midShares
       lowSale = midSale
@@ -624,7 +616,7 @@ export async function openMarketForTrialQuestion(
     ? null
     : (input.openedByUserId ?? null)
 
-  const initialLiquidityB = Math.max(1, runtimeConfig.openingLmsrB)
+  const initialLiquidityB = Math.max(1, runtimeConfig.season4MarketLiquidityBDisplay)
   const initialState = createInitialMarketState(openingProbability, initialLiquidityB)
 
   const [market] = await dbClient.insert(predictionMarkets)
@@ -638,7 +630,7 @@ export async function openMarketForTrialQuestion(
       b: initialLiquidityB,
       qYes: initialState.qYes,
       qNo: initialState.qNo,
-      priceYes: lmsrPriceYes(initialState),
+      priceYes: qPlusBPriceYes(initialState),
       openedAt: new Date(),
       updatedAt: new Date(),
     })
@@ -872,7 +864,7 @@ export async function runBuyAction({
       }
     }
 
-    const trade = executeLmsrBudgetTrade(
+    const trade = executeCollateralizedBudgetTrade(
       state,
       side,
       spent
@@ -1050,7 +1042,7 @@ export async function runSellAction({
       }
     }
 
-    const maxSale = executeLmsrShareSale(state, side, heldShares)
+    const maxSale = executeCollateralizedShareSale(state, side, heldShares)
     const proceeds = Math.max(0, Math.min(requestedProceeds, maxSale.proceeds))
 
     if (proceeds <= 0) {

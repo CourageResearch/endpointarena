@@ -1042,7 +1042,7 @@ export async function createSeason4Market(input: Season4MarketCreateInput) {
       title,
       metadataUri,
       onchainMarketId,
-      executionMode: 'onchain_lmsr',
+      executionMode: 'collateralized_qb_v1',
       positionModel: 'onchain_app_restricted',
       status: 'deployed',
       closeTime,

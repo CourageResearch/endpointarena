@@ -19,7 +19,6 @@ import { getDbForTarget } from '@/lib/db'
 type AdminTrialConfigPatchInput = {
   target?: unknown
   toyTrialCount?: unknown
-  openingLmsrB?: unknown
   season4MarketLiquidityBDisplay?: unknown
   season4HumanStartingBankrollDisplay?: unknown
   season4StartingBankrollDisplay?: unknown
@@ -40,12 +39,6 @@ function parseDatabaseTarget(value: unknown): DatabaseTarget | null {
   if (value === undefined || value === null || value === '') return null
   if (value === 'main' || value === 'toy') return value
   throw new ValidationError('target must be either main or toy')
-}
-
-function assertNoLiveLegacyConfigPatch(body: AdminTrialConfigPatchInput) {
-  if (body.openingLmsrB !== undefined) {
-    throw new ValidationError('Legacy offchain Opening LMSR b is retired in season 4. Season 4 live market liquidity is configured through the onchain market creation flow.')
-  }
 }
 
 function toFaucetAmountAtomic(displayAmount: number): bigint {
@@ -127,7 +120,6 @@ export async function PATCH(request: NextRequest) {
   try {
     await ensureAdmin()
     const body = await parseJsonBody<AdminTrialConfigPatchInput>(request)
-    assertNoLiveLegacyConfigPatch(body)
     const target = parseDatabaseTarget(body.target) ?? getActiveDatabaseTarget()
     const targetDb = getDbForTarget(target)
     const config = await updateTrialRuntimeConfig({

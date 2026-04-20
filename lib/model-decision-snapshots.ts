@@ -8,11 +8,6 @@ import {
   trials,
 } from '@/lib/db'
 import { type MarketRuntimeConfig } from '@/lib/markets/runtime-config'
-import {
-  calculateLegacyExecutableTradeCaps,
-  normalizeLegacyRunDate,
-  type LegacyExecutableTradeCaps,
-} from '@/lib/legacy-season3/market-math'
 import { type Prediction, type PredictionHistoryEntry } from '@/lib/types'
 import { isMockMarketSnapshotLike } from '@/lib/mock-market-data'
 import {
@@ -26,6 +21,34 @@ type DecisionRunSource = 'manual' | 'cycle'
 export type LeaderboardPredictionMode = 'first' | 'final'
 
 type UnifiedPredictionHistoryMap = Map<string, Map<string, PredictionHistoryEntry[]>>
+type SnapshotTradeCaps = {
+  maxBuyUsd: number
+  maxSellYesUsd: number
+  maxSellNoUsd: number
+}
+
+function normalizeDecisionRunDate(input: Date = new Date()): Date {
+  return new Date(Date.UTC(input.getUTCFullYear(), input.getUTCMonth(), input.getUTCDate()))
+}
+
+function calculateCollateralizedTradeCaps(args: {
+  priceYes: number
+  accountCash: number
+  yesSharesHeld: number
+  noSharesHeld: number
+}): SnapshotTradeCaps {
+  const priceYes = Number.isFinite(args.priceYes) ? Math.max(0, Math.min(1, args.priceYes)) : 0.5
+  const priceNo = 1 - priceYes
+  const maxBuyUsd = Math.max(0, args.accountCash)
+  const maxSellYesUsd = Math.max(0, args.yesSharesHeld * priceYes)
+  const maxSellNoUsd = Math.max(0, args.noSharesHeld * priceNo)
+
+  return {
+    maxBuyUsd,
+    maxSellYesUsd,
+    maxSellNoUsd,
+  }
+}
 
 function computeCorrectness(prediction: string, questionOutcome: string): boolean | null {
   if (questionOutcome !== 'YES' && questionOutcome !== 'NO') {
@@ -385,15 +408,11 @@ function buildModelDecisionSnapshotPrediction(args: {
 export function buildModelDecisionSnapshotInput(args: ModelDecisionSnapshotArgs): {
   input: ModelDecisionInput
   normalizedRunDate: Date
-  tradeCaps: Pick<LegacyExecutableTradeCaps, 'maxBuyUsd' | 'maxSellYesUsd' | 'maxSellNoUsd'>
+  tradeCaps: SnapshotTradeCaps
 } {
-  const normalizedRunDate = normalizeLegacyRunDate(args.runDate)
-  const tradeCaps = args.precomputedTradeCaps ?? calculateLegacyExecutableTradeCaps({
-    state: {
-      qYes: args.market.qYes,
-      qNo: args.market.qNo,
-      b: args.market.b,
-    },
+  const normalizedRunDate = normalizeDecisionRunDate(args.runDate)
+  const tradeCaps = args.precomputedTradeCaps ?? calculateCollateralizedTradeCaps({
+    priceYes: args.market.priceYes,
     accountCash: args.portfolio.cashAvailable,
     yesSharesHeld: args.portfolio.yesSharesHeld,
     noSharesHeld: args.portfolio.noSharesHeld,
@@ -465,9 +484,9 @@ async function insertStoredModelDecisionSnapshot(args: {
   durationMs: number | null
   usage: PersistedRunUsage
   input: ModelDecisionInput
-  tradeCaps: Pick<LegacyExecutableTradeCaps, 'maxBuyUsd' | 'maxSellYesUsd' | 'maxSellNoUsd'>
+  tradeCaps: SnapshotTradeCaps
 }): StoredDecisionSnapshotResult {
-  const normalizedRunDate = normalizeLegacyRunDate(args.snapshotArgs.runDate)
+  const normalizedRunDate = normalizeDecisionRunDate(args.snapshotArgs.runDate)
   const [snapshot] = await db.insert(modelDecisionSnapshots).values({
     runId: args.snapshotArgs.runSource === 'cycle' ? args.snapshotArgs.runId ?? null : null,
     runDate: normalizedRunDate,

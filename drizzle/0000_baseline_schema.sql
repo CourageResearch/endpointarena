@@ -360,12 +360,10 @@ CREATE TABLE "market_runs" (
 CREATE TABLE "market_runtime_configs" (
 	"id" text PRIMARY KEY NOT NULL,
 	"max_position_per_side_shares" real DEFAULT 10000 NOT NULL,
-	"opening_lmsr_b" real DEFAULT 100000 NOT NULL,
 	"signup_user_limit" integer DEFAULT 56 NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "market_runtime_configs_max_position_per_side_shares_check" CHECK ("market_runtime_configs"."max_position_per_side_shares" >= 0 AND "market_runtime_configs"."max_position_per_side_shares" <= 10000000),
-	CONSTRAINT "market_runtime_configs_opening_lmsr_b_check" CHECK ("market_runtime_configs"."opening_lmsr_b" > 0 AND "market_runtime_configs"."opening_lmsr_b" <= 10000000),
 	CONSTRAINT "market_runtime_configs_signup_user_limit_check" CHECK ("market_runtime_configs"."signup_user_limit" >= 0 AND "market_runtime_configs"."signup_user_limit" <= 10000000)
 );
 --> statement-breakpoint
