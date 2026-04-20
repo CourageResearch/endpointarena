@@ -179,7 +179,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
         <article className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Base operations</h2>
           <p className="mt-1 text-sm text-[#6f665b]">
-            Handle model-wallet funding, gas top-ups, indexing, and manual model-cycle execution from one place.
+            Handle model-wallet funding, gas top-ups, indexing, and Admin AI trade execution from one place.
           </p>
 
           <div className="mt-4 grid gap-2">
@@ -197,19 +197,12 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
               {pendingAction === 'sync-indexer' ? 'Syncing indexer...' : 'Sync indexer now'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => void runAdminAction<{ summary: { tradesExecuted: number } }>({
-                key: 'run-model-cycle',
-                url: '/api/admin/season4/model-cycle/run',
-                fallbackMessage: 'Failed to run the season 4 model cycle',
-                successMessage: (result) => `Model cycle complete. Executed ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'}.`,
-              })}
-              disabled={pendingAction !== null || !initialData.chain.enabled}
-              className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff] disabled:cursor-not-allowed disabled:opacity-50"
+            <Link
+              href="/admin/ai"
+              className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff]"
             >
-              {pendingAction === 'run-model-cycle' ? 'Running model cycle...' : 'Run model cycle now'}
-            </button>
+              Open Admin AI to execute trades
+            </Link>
 
             <button
               type="button"
@@ -254,7 +247,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
               npm run season4:indexer:worker
             </code>
             <p className="mt-3 text-xs text-[#6f665b]">
-              The model-cycle worker command is intentionally disabled for production. Run model cycles manually from the admin panel when ready. Each cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
+              Direct model-cycle execution is intentionally disabled for production. Stage a batch, collect/import decisions, then use Execute Trades from Admin AI when ready. Each execution covers up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}, and buy size is limited by each model wallet&apos;s available cash.
             </p>
           </div>
         </article>

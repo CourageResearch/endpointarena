@@ -1008,7 +1008,7 @@ export function Season4MarketPage({
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return
     void refreshDetail()
-  }, [refreshDetail, sessionStatus])
+  }, [sessionStatus])
 
   const pollForTradeIndex = async (txHash: string) => {
     for (let attempt = 0; attempt < 8; attempt += 1) {

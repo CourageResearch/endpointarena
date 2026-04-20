@@ -5,6 +5,8 @@ import { getAiBatchState } from '@/lib/admin-ai'
 import { assertAiBatchMatchesActiveDatabase } from '@/lib/admin-ai-active-dataset'
 import { NotFoundError } from '@/lib/errors'
 
+const AI_BATCH_STREAM_INTERVAL_MS = 5_000
+
 type RouteContext = {
   params: Promise<{
     id: string
@@ -58,7 +60,7 @@ export async function GET(_: Request, context: RouteContext) {
             controller.close()
             closed = true
           })
-        }, 1000)
+        }, AI_BATCH_STREAM_INTERVAL_MS)
       },
       cancel() {
         if (interval != null) {

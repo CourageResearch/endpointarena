@@ -2,7 +2,7 @@ import { createRequestId, errorResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 
 function buildLegacyDailyRunCancelError() {
-  return new ValidationError('Legacy offchain daily trial run controls are retired in season 4. Use the season 4 model-cycle controls from /admin/base instead.')
+  return new ValidationError('Legacy offchain daily trial run controls are retired in season 4. Use Admin AI to stage a batch, collect/import decisions, then Execute Trades from a ready batch.')
 }
 
 export async function POST() {

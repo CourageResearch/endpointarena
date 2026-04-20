@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
 import type { AppSession } from '@/lib/auth/types'
 
@@ -36,12 +36,26 @@ export function useAuth() {
   const privy = useOptionalPrivy()
   const [session, setSession] = useState<AppSession | null>(null)
   const [hydrated, setHydrated] = useState(!PRIVY_ENABLED)
+  const privyAuthRef = useRef({
+    authenticated: privy.authenticated,
+    getAccessToken: privy.getAccessToken,
+  })
+  const privyLogoutRef = useRef(privy.logout)
+
+  useEffect(() => {
+    privyAuthRef.current = {
+      authenticated: privy.authenticated,
+      getAccessToken: privy.getAccessToken,
+    }
+    privyLogoutRef.current = privy.logout
+  }, [privy.authenticated, privy.getAccessToken, privy.logout])
 
   const fetchWithAuth = useCallback(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const headers = new Headers(init.headers)
+    const { authenticated, getAccessToken } = privyAuthRef.current
 
-    if (privy.authenticated) {
-      const accessToken = await privy.getAccessToken()
+    if (authenticated) {
+      const accessToken = await getAccessToken()
       if (accessToken) {
         headers.set('Authorization', `Bearer ${accessToken}`)
       }
@@ -52,7 +66,7 @@ export function useAuth() {
       credentials: init.credentials ?? 'include',
       headers,
     })
-  }, [privy.authenticated, privy.getAccessToken])
+  }, [])
 
   useEffect(() => {
     if (!PRIVY_ENABLED) {
@@ -113,13 +127,13 @@ export function useAuth() {
   })()
 
   const signOut = useCallback(async (callbackUrl = '/') => {
-    await privy.logout()
+    await privyLogoutRef.current()
     await fetch('/api/auth/privy/logout', {
       method: 'POST',
       credentials: 'include',
     }).catch(() => undefined)
     window.location.assign(callbackUrl)
-  }, [privy.logout])
+  }, [])
 
   return {
     data: session,

@@ -9,18 +9,17 @@ import {
   capSeason4TradeDecision,
 } from '../lib/season4-model-decisions'
 
-test('season 4 trade caps respect cash, holdings, price, and the per-cycle ticket size', () => {
+test('season 4 trade caps respect cash, holdings, and price', () => {
   const caps = calculateSeason4TradeCaps({
     cashAvailable: 12,
     yesSharesHeld: 30,
     noSharesHeld: 10,
     priceYes: 0.6,
-    maxTradeUsd: 5,
   })
 
-  assert.equal(caps.maxBuyYesUsd, 5)
-  assert.equal(caps.maxBuyNoUsd, 5)
-  assert.equal(caps.maxSellYesUsd, 5)
+  assert.equal(caps.maxBuyYesUsd, 12)
+  assert.equal(caps.maxBuyNoUsd, 12)
+  assert.equal(caps.maxSellYesUsd, 18)
   assert.equal(caps.maxSellNoUsd, 4)
   assert.ok(caps.allowedActions.includes('BUY_YES'))
   assert.ok(caps.allowedActions.includes('SELL_YES'))
@@ -48,14 +47,13 @@ test('season 4 capped trade decisions clamp oversized requests to the current po
       yesSharesHeld: 0,
       noSharesHeld: 0,
       priceYes: 0.42,
-      maxTradeUsd: 5,
     }),
   })
 
   assert.equal(capped.requestedActionType, 'BUY_YES')
   assert.equal(capped.actionType, 'BUY_YES')
   assert.equal(capped.requestedAmountUsd, 50)
-  assert.equal(capped.executedAmountUsd, 5)
+  assert.equal(capped.executedAmountUsd, 8)
 })
 
 test('season 4 sell executions convert capped USD proceeds into share amounts using live price', () => {

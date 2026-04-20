@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await ensureAdmin()
-    throw new ValidationError('Manual decision reruns on the legacy snapshot stream are disabled in season 4. Use the season 4 admin model cycle and linked-market coverage tools instead.')
+    throw new ValidationError('Manual decision reruns on the legacy snapshot stream are disabled in season 4. Use Admin AI to stage a batch, collect/import decisions, then Execute Trades from a ready batch.')
   } catch (error) {
     return errorResponse(error, requestId, 'Failed to start streaming model decision')
   }

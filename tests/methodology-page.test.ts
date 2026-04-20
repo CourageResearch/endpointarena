@@ -3,7 +3,6 @@ import test from 'node:test'
 import {
   METHOD_PAGE_EXAMPLE_INPUT,
   METHOD_PAGE_EXAMPLE_RESPONSE_TEXT,
-  METHOD_PAGE_MAX_TRADE_LABEL,
   METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL,
   METHOD_PAGE_PROMPT_TEXT,
   METHOD_PAGE_SCHEMA,
@@ -13,7 +12,6 @@ import {
 import { MODEL_METHOD_BINDINGS } from '../lib/model-runtime-metadata'
 import { buildModelDecisionJsonSchema, buildModelDecisionPrompt } from '../lib/predictions/model-decision-prompt'
 import { getSeason4ModelStartingBankrollDisplay } from '../lib/season4-bankroll-config'
-import { getSeason4ModelTradeAmountDisplay } from '../lib/season4-model-trade-config'
 
 test('methodology helper prompt is generated from the runtime prompt builder', () => {
   assert.equal(METHOD_PAGE_PROMPT_TEXT, buildModelDecisionPrompt(METHOD_PAGE_EXAMPLE_INPUT))
@@ -38,25 +36,26 @@ test('methodology scoring note reflects the season 4 public leaderboard', () => 
   assert.match(METHOD_PAGE_SCORING_NOTE, /first\/final pre-outcome analysis/)
 })
 
-test('methodology example uses season 4 mock-USDC bankroll and trade cap', () => {
+test('methodology example uses season 4 mock-USDC bankroll as the buy cap', () => {
   const exampleResponse = JSON.parse(METHOD_PAGE_EXAMPLE_RESPONSE_TEXT) as {
     action?: {
       amountUsd?: unknown
     }
   }
-  const maxTradeUsd = getSeason4ModelTradeAmountDisplay()
+  const bankroll = getSeason4ModelStartingBankrollDisplay()
 
-  assert.equal(METHOD_PAGE_EXAMPLE_INPUT.portfolio.cashAvailable, getSeason4ModelStartingBankrollDisplay())
-  assert.equal(METHOD_PAGE_EXAMPLE_INPUT.portfolio.maxBuyUsd, maxTradeUsd)
-  assert.equal(exampleResponse.action?.amountUsd, maxTradeUsd)
+  assert.equal(METHOD_PAGE_EXAMPLE_INPUT.portfolio.cashAvailable, bankroll)
+  assert.equal(METHOD_PAGE_EXAMPLE_INPUT.portfolio.maxBuyUsd, bankroll)
+  assert.equal(typeof exampleResponse.action?.amountUsd, 'number')
+  assert.ok((exampleResponse.action?.amountUsd as number) <= bankroll)
 })
 
 test('methodology runtime note uses season 4 onchain defaults', () => {
   assert.equal(METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL, getSeason4ModelStartingBankrollDisplay().toLocaleString('en-US', { maximumFractionDigits: 6 }))
-  assert.equal(METHOD_PAGE_MAX_TRADE_LABEL, getSeason4ModelTradeAmountDisplay().toLocaleString('en-US', { maximumFractionDigits: 6 }))
   assert.match(METHOD_PAGE_SEASON4_RUNTIME_NOTE, /Base Sepolia/)
   assert.match(METHOD_PAGE_SEASON4_RUNTIME_NOTE, /Privy embedded wallets/)
   assert.match(METHOD_PAGE_SEASON4_RUNTIME_NOTE, /admin runtime config overrides the model bankroll/)
+  assert.match(METHOD_PAGE_SEASON4_RUNTIME_NOTE, /available cash/)
   assert.match(METHOD_PAGE_SEASON4_RUNTIME_NOTE, /human users start at 0/)
   assert.match(METHOD_PAGE_SEASON4_RUNTIME_NOTE, /configured mock-USDC faucet/)
 })

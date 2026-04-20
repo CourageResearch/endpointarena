@@ -56,7 +56,6 @@ export type Season4ModelDecisionContext = {
     yesSharesHeld: number
     noSharesHeld: number
   }
-  maxTradeUsd: number
   asOf: Date
   trial: Season4DecisionTrialFacts
 }
@@ -216,19 +215,17 @@ export function calculateSeason4TradeCaps(args: {
   yesSharesHeld: number
   noSharesHeld: number
   priceYes: number
-  maxTradeUsd: number
 }): Season4TradeCaps {
   const cashAvailable = Math.max(0, args.cashAvailable)
   const yesSharesHeld = Math.max(0, args.yesSharesHeld)
   const noSharesHeld = Math.max(0, args.noSharesHeld)
   const priceYes = clampProbability(args.priceYes)
   const priceNo = clampProbability(1 - priceYes)
-  const maxTradeUsd = Math.max(0, args.maxTradeUsd)
 
-  const maxBuyYesUsd = clampMoney(Math.min(cashAvailable, maxTradeUsd))
-  const maxBuyNoUsd = clampMoney(Math.min(cashAvailable, maxTradeUsd))
-  const maxSellYesUsd = clampMoney(Math.min(yesSharesHeld * priceYes, maxTradeUsd))
-  const maxSellNoUsd = clampMoney(Math.min(noSharesHeld * priceNo, maxTradeUsd))
+  const maxBuyYesUsd = clampMoney(cashAvailable)
+  const maxBuyNoUsd = clampMoney(cashAvailable)
+  const maxSellYesUsd = clampMoney(yesSharesHeld * priceYes)
+  const maxSellNoUsd = clampMoney(noSharesHeld * priceNo)
 
   const allowedActions: MarketActionType[] = ['HOLD']
   if (maxBuyYesUsd > 0 && priceYes > 0) allowedActions.unshift('BUY_YES')
@@ -255,7 +252,6 @@ export function buildSeason4ModelDecisionInput(context: Season4ModelDecisionCont
     yesSharesHeld: context.portfolio.yesSharesHeld,
     noSharesHeld: context.portfolio.noSharesHeld,
     priceYes: context.priceYes,
-    maxTradeUsd: context.maxTradeUsd,
   })
 
   const input: ModelDecisionInput = {

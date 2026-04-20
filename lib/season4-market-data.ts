@@ -169,7 +169,7 @@ async function syncIfEnabled() {
 async function loadTradeStats(marketIds: string[]): Promise<Map<string, { totalTrades: number; totalVolumeDisplay: number; lastTradeAt: string | null }>> {
   if (marketIds.length === 0) return new Map()
 
-  const marketRefs = marketIds.map((marketId) => `market:${marketId}`)
+  const marketRefs = marketIds.flatMap((marketId) => [marketId, `market:${marketId}`])
 
   const tradeRows = await db.select({
     marketRef: onchainEvents.marketRef,
@@ -501,7 +501,7 @@ export async function getSeason4MarketDetail(
         })
           .from(onchainEvents)
           .where(and(
-            eq(onchainEvents.marketRef, `market:${marketId}`),
+            inArray(onchainEvents.marketRef, [marketId, `market:${marketId}`]),
             eq(onchainEvents.eventName, 'TradeExecuted'),
           ))
           .orderBy(desc(onchainEvents.createdAt))

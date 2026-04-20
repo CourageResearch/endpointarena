@@ -102,7 +102,7 @@ export async function prepareDailyRunContext(
   options: DailyRunPreparationOptions = {},
 ): Promise<DailyRunPreparedContext> {
   if (getActiveDatabaseTarget() !== 'toy') {
-    throw new ValidationError('Legacy daily run is toy-only on season 4. Use the season 4 model cycle instead.')
+    throw new ValidationError('Legacy daily run is toy-only on season 4. Use Admin AI to stage a batch, collect/import decisions, then Execute Trades from a ready batch.')
   }
 
   const normalizedRunDate = normalizeRunDate(runDate)

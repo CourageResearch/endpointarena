@@ -2,7 +2,7 @@ import { createRequestId, errorResponse } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 
 function buildLegacyDailyRunError() {
-  return new ValidationError('Legacy offchain daily trial runs are retired in season 4. Use the season 4 model cycle from /admin/base or /api/admin/season4/model-cycle/run instead.')
+  return new ValidationError('Legacy offchain daily trial runs are retired in season 4. Use /admin/ai to stage a batch, collect/import decisions, then Execute Trades from a ready batch.')
 }
 
 export async function GET() {

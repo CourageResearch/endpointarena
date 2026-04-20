@@ -31,7 +31,6 @@ test('season 4 trade caps expose only HOLD with no cash and no holdings', () => 
     yesSharesHeld: 0,
     noSharesHeld: 0,
     priceYes: 0.6,
-    maxTradeUsd: 5,
   })
 
   assert.equal(caps.maxBuyUsd, 0)
@@ -42,19 +41,18 @@ test('season 4 trade caps expose only HOLD with no cash and no holdings', () => 
   assert.deepEqual(caps.allowedActions, ['HOLD'])
 })
 
-test('season 4 trade caps respect max ticket size and side holdings', () => {
+test('season 4 trade caps respect cash and side holdings', () => {
   const caps = calculateSeason4TradeCaps({
     cashAvailable: 8,
     yesSharesHeld: 2,
     noSharesHeld: 30,
     priceYes: 0.75,
-    maxTradeUsd: 5,
   })
 
-  assert.equal(caps.maxBuyYesUsd, 5)
-  assert.equal(caps.maxBuyNoUsd, 5)
+  assert.equal(caps.maxBuyYesUsd, 8)
+  assert.equal(caps.maxBuyNoUsd, 8)
   assert.equal(caps.maxSellYesUsd, 1.5)
-  assert.equal(caps.maxSellNoUsd, 5)
+  assert.equal(caps.maxSellNoUsd, 7.5)
   assert.ok(caps.allowedActions.includes('BUY_YES'))
   assert.ok(caps.allowedActions.includes('BUY_NO'))
   assert.ok(caps.allowedActions.includes('SELL_YES'))
@@ -69,7 +67,6 @@ test('season 4 capped decisions fall back to HOLD when requested side is unavail
       yesSharesHeld: 0,
       noSharesHeld: 0,
       priceYes: 0.5,
-      maxTradeUsd: 5,
     }),
   })
 
@@ -86,7 +83,6 @@ test('season 4 capped decisions clamp sell requests to held share value', () => 
       yesSharesHeld: 4,
       noSharesHeld: 0,
       priceYes: 0.6,
-      maxTradeUsd: 10,
     }),
   })
 

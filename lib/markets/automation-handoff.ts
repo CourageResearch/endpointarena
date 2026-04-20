@@ -39,7 +39,7 @@ type ParsedAutomationImport = {
 
 function assertToyAutomationMode(): void {
   if (getActiveDatabaseTarget() !== 'toy') {
-    throw new ValidationError('Legacy automation handoff is toy-only on season 4. Use the season 4 admin AI desk or model cycle instead.')
+    throw new ValidationError('Legacy automation handoff is toy-only on season 4. Use Admin AI to stage a batch, collect/import decisions, then Execute Trades from a ready batch.')
   }
 }
 

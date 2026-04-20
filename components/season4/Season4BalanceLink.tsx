@@ -79,7 +79,7 @@ export function Season4BalanceLink({
 
   useEffect(() => {
     void refreshBalance()
-  }, [pathname, refreshBalance])
+  }, [pathname])
 
   useEffect(() => {
     const handleFocus = () => {
@@ -112,7 +112,7 @@ export function Season4BalanceLink({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, handleBalanceUpdated as EventListener)
     }
-  }, [refreshBalance])
+  }, [])
 
   const balanceLabel = formatNavbarBalance(cashBalance)
   const isLoadingInitialBalance = !hasLoadedBalance && balanceLabel === null

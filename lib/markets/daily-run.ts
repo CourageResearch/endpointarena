@@ -242,7 +242,7 @@ export async function executeDailyRun(
   options: DailyRunExecutionOptions = {},
 ): Promise<DailyRunPayload> {
   if (getActiveDatabaseTarget() !== 'toy') {
-    throw new ConflictError('Legacy daily run is toy-only on season 4. Use /api/admin/season4/model-cycle/run for live season 4 execution.')
+    throw new ConflictError('Legacy daily run is toy-only on season 4. Use /admin/ai to stage a batch, collect/import decisions, then Execute Trades from a ready batch.')
   }
 
   const {

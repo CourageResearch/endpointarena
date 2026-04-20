@@ -4,10 +4,9 @@ import {
   type ModelDecisionInput,
 } from '@/lib/predictions/model-decision-prompt'
 import { getSeason4ModelStartingBankrollDisplay } from '@/lib/season4-bankroll-config'
-import { getSeason4ModelTradeAmountDisplay } from '@/lib/season4-model-trade-config'
 
 const METHOD_PAGE_CASH_AVAILABLE_DISPLAY = getSeason4ModelStartingBankrollDisplay()
-const METHOD_PAGE_MAX_TRADE_DISPLAY = getSeason4ModelTradeAmountDisplay()
+const METHOD_PAGE_EXAMPLE_BUY_AMOUNT_DISPLAY = Math.min(100, METHOD_PAGE_CASH_AVAILABLE_DISPLAY)
 
 function formatDisplayAmount(value: number): string {
   return value.toLocaleString('en-US', {
@@ -16,7 +15,6 @@ function formatDisplayAmount(value: number): string {
 }
 
 export const METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL = formatDisplayAmount(METHOD_PAGE_CASH_AVAILABLE_DISPLAY)
-export const METHOD_PAGE_MAX_TRADE_LABEL = formatDisplayAmount(METHOD_PAGE_MAX_TRADE_DISPLAY)
 
 export const METHOD_PAGE_EXAMPLE_INPUT: ModelDecisionInput = {
   meta: {
@@ -50,7 +48,7 @@ export const METHOD_PAGE_EXAMPLE_INPUT: ModelDecisionInput = {
     cashAvailable: METHOD_PAGE_CASH_AVAILABLE_DISPLAY,
     yesSharesHeld: 0,
     noSharesHeld: 0,
-    maxBuyUsd: METHOD_PAGE_MAX_TRADE_DISPLAY,
+    maxBuyUsd: METHOD_PAGE_CASH_AVAILABLE_DISPLAY,
     maxSellYesUsd: 0,
     maxSellNoUsd: 0,
   },
@@ -78,7 +76,7 @@ const METHOD_PAGE_EXAMPLE_RESPONSE = {
   },
   action: {
     type: 'BUY_YES',
-    amountUsd: METHOD_PAGE_MAX_TRADE_DISPLAY,
+    amountUsd: METHOD_PAGE_EXAMPLE_BUY_AMOUNT_DISPLAY,
     explanation: 'Intrinsic odds look modestly above the current YES price.',
   },
 } as const
@@ -89,6 +87,6 @@ export const METHOD_PAGE_EXAMPLE_RESPONSE_TEXT = JSON.stringify(
   2,
 )
 
-export const METHOD_PAGE_SEASON4_RUNTIME_NOTE = `Season 4 uses Base Sepolia, mock USDC, Privy embedded wallets, and an app read model mirrored from onchain events. Funded model wallets default to ${METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL} mock USDC unless the admin runtime config overrides the model bankroll, model trades are capped at ${METHOD_PAGE_MAX_TRADE_LABEL} mock USDC by default, and human users start at 0 until they claim the configured mock-USDC faucet.`
+export const METHOD_PAGE_SEASON4_RUNTIME_NOTE = `Season 4 uses Base Sepolia, mock USDC, Privy embedded wallets, and an app read model mirrored from onchain events. Funded model wallets default to ${METHOD_PAGE_MODEL_STARTING_BANKROLL_LABEL} mock USDC unless the admin runtime config overrides the model bankroll, model buy actions are capped by each wallet's available cash, and human users start at 0 until they claim the configured mock-USDC faucet.`
 
 export const METHOD_PAGE_SCORING_NOTE = 'Public rankings use the Season 4 money leaderboard: models are ranked by mirrored onchain total equity, meaning mock-USDC collateral plus marked-to-market YES/NO positions. Correct, wrong, and pending counts are derived from each model wallet\'s net position on resolved markets: more YES shares than NO shares is a YES call, more NO than YES is a NO call, and unresolved or tied positions stay pending. Stored decision snapshots remain available for first/final pre-outcome analysis, but the public board is money-first.'

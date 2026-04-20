@@ -28,6 +28,12 @@ function trimOrNull(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function normalizeMarketEventRef(value: string | null | undefined): string | null {
+  const trimmed = trimOrNull(value)
+  if (!trimmed) return null
+  return trimmed.startsWith('market:') ? trimOrNull(trimmed.slice('market:'.length)) : trimmed
+}
+
 function normalizeWalletAddress(value: string | null | undefined): string | null {
   return trimOrNull(value)?.toLowerCase() ?? null
 }
@@ -135,6 +141,7 @@ export async function getSeason4TrialsOverviewData(input: {
     .map((market) => trimOrNull(market.onchainMarketId))
     .filter((value): value is string => Boolean(value))
   const marketRefs = marketIds.map((marketId) => `market:${marketId}`)
+  const marketEventRefs = marketIds.flatMap((marketId) => [marketId, `market:${marketId}`])
 
   const [rawQuestions, snapshotRows, modelWalletRows, balanceRows, acceptedCandidates, tradeEvents] = await Promise.all([
     trialQuestionIds.length > 0
@@ -184,7 +191,7 @@ export async function getSeason4TrialsOverviewData(input: {
           orderBy: [desc(trialOutcomeCandidates.reviewedAt), desc(trialOutcomeCandidates.createdAt)],
         })
       : Promise.resolve([]),
-    marketIds.length > 0
+    marketEventRefs.length > 0
       ? db.select({
           marketRef: onchainEvents.marketRef,
           walletAddress: onchainEvents.walletAddress,
@@ -193,7 +200,7 @@ export async function getSeason4TrialsOverviewData(input: {
         })
           .from(onchainEvents)
           .where(and(
-            inArray(onchainEvents.marketRef, marketIds),
+            inArray(onchainEvents.marketRef, marketEventRefs),
             eq(onchainEvents.eventName, 'TradeExecuted'),
           ))
           .orderBy(desc(onchainEvents.createdAt))
@@ -259,7 +266,7 @@ export async function getSeason4TrialsOverviewData(input: {
   const costBasisByMarketModel = new Map<string, number>()
   const priceHistoryByMarketId = new Map<string, Array<{ snapshotDate: string; priceYes: number }>>()
   for (const event of tradeEvents) {
-    const marketId = trimOrNull(event.marketRef)
+    const marketId = normalizeMarketEventRef(event.marketRef)
     const payload = event.payload as Record<string, unknown>
     const priceYesRaw = typeof payload.priceYesE18 === 'string' || typeof payload.priceYesE18 === 'number'
       ? Number(payload.priceYesE18)
