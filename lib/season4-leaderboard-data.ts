@@ -1,11 +1,11 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { createPublicClient, http } from 'viem'
-import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
 import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
 import { getGeneratedDisplayName, normalizeDisplayName } from '@/lib/display-name'
 import { PREDICTION_MARKET_MANAGER_ABI } from '@/lib/onchain/abi'
 import { getSeason4OnchainConfig } from '@/lib/onchain/config'
+import { SEASON4_CHAIN } from '@/lib/onchain/constants'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import {
   onchainBalances,
@@ -242,7 +242,7 @@ async function loadLivePriceMap(marketIds: string[]): Promise<Map<string, number
   }
 
   const client = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl ?? undefined),
   })
 

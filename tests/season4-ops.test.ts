@@ -86,12 +86,12 @@ test('season 4 trade transitions update shares, cash, and market price in the ex
     noSharesHeld: 0,
     actionType: 'BUY_YES',
     executedAmountUsd: 5,
-    shareAmountDisplay: 10,
+    shareAmountDisplay: 5,
   })
 
   assert.equal(initialPrice, 0.5)
   assert.equal(next.collateralBalanceDisplay, 15)
-  assert.equal(next.yesSharesHeld, 10)
+  assert.equal(next.yesSharesHeld, 5)
   assert.ok(next.priceYes > initialPrice)
 })
 

@@ -12,7 +12,6 @@ const REQUIRED_TABLES = [
   'market_actions',
   'model_decision_snapshots',
   'market_price_snapshots',
-  'market_daily_snapshots',
   'market_runtime_configs',
   'trials',
   'trial_questions',

@@ -592,6 +592,10 @@ export function AdminManualTrialIntake() {
   }
 
   const publishIntake = async () => {
+    if (isPublishing) {
+      return
+    }
+
     if (!hasDraft) {
       setError(buildErrorNotice('Save blocked', 'Load the ClinicalTrials.gov data before saving.'))
       return
@@ -605,6 +609,7 @@ export function AdminManualTrialIntake() {
     setIsPublishing(true)
     setError(null)
     setSuccessMessage(null)
+    let shouldUnlockPublishing = true
 
     try {
       const response = await fetch('/api/admin/trials/publish', {
@@ -636,6 +641,7 @@ export function AdminManualTrialIntake() {
 
       setPreview(result.preview)
       window.location.assign(`/trials/${result.market.marketSlug}`)
+      shouldUnlockPublishing = false
       return
     } catch (publishError) {
       setError(buildErrorNotice(
@@ -644,7 +650,9 @@ export function AdminManualTrialIntake() {
         ['The request did not complete. Check the browser network tab and Railway logs if this persists.'],
       ))
     } finally {
-      setIsPublishing(false)
+      if (shouldUnlockPublishing) {
+        setIsPublishing(false)
+      }
     }
   }
 

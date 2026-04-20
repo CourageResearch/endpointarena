@@ -119,20 +119,24 @@ The current season 4 plan assumes:
 - App-restricted YES/NO positions that are not freely transferable between wallets.
 - No season 3 bankroll carryover into season 4.
 
+Any change to `contracts/src/PredictionMarketManager.sol` or app-side Season 4 share accounting is not an app-only deploy. Follow `docs/season4-contract-economics-redeploy.md` before shipping contract/economics changes to Railway production.
+
 ### Season 4 Railway workers
 
-Testnet ops should run one recurring Railway worker service in addition to the web app:
+Testnet ops should run only the recurring indexer worker in addition to the web app:
 
 - `season4-indexer-worker`:
   Run `npm run season4:indexer:worker` to keep the Base Sepolia read model fresh.
 - `season4-model-cycle-worker`:
-  The command is intentionally disabled/no-op in production. Season 4 model cycles are manual-only from the admin panel.
+  This command is intentionally disabled/no-op. Season 4 model cycles are manual-only from the admin panel.
 
 The current worker env knobs are:
 
 - `SEASON4_INDEXER_INTERVAL_SECONDS` defaults to `30`
 - `SEASON4_MODEL_TRADE_AMOUNT_DISPLAY` defaults to `5`
 - `SEASON4_MODEL_MAX_MARKETS_PER_CYCLE` defaults to `1`
+- `SEASON4_INDEXER_CONFIRMATIONS` defaults to `3` blocks before mirroring events
+- `SEASON4_TRADE_SLIPPAGE_BPS` defaults to `100` bps for model-cycle and UI trade limits
 - `SEASON4_MODEL_PRIVATE_KEYS_JSON` must map each funded model id to the corresponding Base Sepolia private key before a manually started model cycle can trade
 
 ### What changes for real money

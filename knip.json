@@ -31,6 +31,7 @@
     "lib/markets/daily-run.ts",
     "lib/markets/run-control.ts",
     "lib/markets/types.ts",
+    "lib/privy-farcaster-solana-stub.js",
     "lib/season4-home-overview.ts",
     "lib/trial-detail-tabs.ts",
     "lib/trial-overview-payload.ts",

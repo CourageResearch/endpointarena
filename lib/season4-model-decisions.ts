@@ -9,10 +9,10 @@ import {
   type ModelDecisionGeneration,
 } from '@/lib/predictions/model-decision-generators'
 import type { ModelDecisionInput, ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
+import { MOCK_USDC_DISPLAY_SCALE } from '@/lib/onchain/constants'
 import { normalizeTrialQuestionPrompt } from '@/lib/trial-questions'
 
-const COLLATERAL_DECIMALS = 6
-const DISPLAY_DECIMALS = 1_000_000
+const DISPLAY_DECIMALS = MOCK_USDC_DISPLAY_SCALE
 
 export type Season4DecisionTrialFacts = {
   trialQuestionId: string
@@ -390,17 +390,19 @@ export function buildSeason4TradeExecution(args: {
   }
 
   if (args.actionType === 'BUY_YES') {
+    const amountAtomic = season4DisplayToAtomic(executedAmountUsd)
     return {
       contractFunctionName: 'buyYes',
-      amountAtomic: parseDisplayToAtomic(executedAmountUsd),
+      amountAtomic,
       shareAmountDisplay: clampMoney(executedAmountUsd),
     }
   }
 
   if (args.actionType === 'BUY_NO') {
+    const amountAtomic = season4DisplayToAtomic(executedAmountUsd)
     return {
       contractFunctionName: 'buyNo',
-      amountAtomic: parseDisplayToAtomic(executedAmountUsd),
+      amountAtomic,
       shareAmountDisplay: clampMoney(executedAmountUsd),
     }
   }
@@ -409,7 +411,7 @@ export function buildSeason4TradeExecution(args: {
     const shareAmountDisplay = clampMoney(executedAmountUsd / Math.max(priceYes, Number.EPSILON))
     return {
       contractFunctionName: 'sellYes',
-      amountAtomic: parseDisplayToAtomic(shareAmountDisplay),
+      amountAtomic: season4DisplayToAtomic(shareAmountDisplay),
       shareAmountDisplay,
     }
   }
@@ -417,7 +419,7 @@ export function buildSeason4TradeExecution(args: {
   const shareAmountDisplay = clampMoney(executedAmountUsd / Math.max(priceNo, Number.EPSILON))
   return {
     contractFunctionName: 'sellNo',
-    amountAtomic: parseDisplayToAtomic(shareAmountDisplay),
+    amountAtomic: season4DisplayToAtomic(shareAmountDisplay),
     shareAmountDisplay,
   }
 }
@@ -487,7 +489,7 @@ export function applySeason4TradeToState(args: {
   }
 }
 
-function parseDisplayToAtomic(value: number): bigint {
+export function season4DisplayToAtomic(value: number): bigint {
   const normalized = clampMoney(value)
   return BigInt(Math.round(normalized * DISPLAY_DECIMALS))
 }

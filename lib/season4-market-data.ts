@@ -1,10 +1,10 @@
 import { and, desc, eq, inArray, or } from 'drizzle-orm'
 import { createPublicClient, formatEther, http } from 'viem'
-import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
 import { NotFoundError } from '@/lib/errors'
 import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4OnchainConfig, requireSeason4OnchainConfig } from '@/lib/onchain/config'
+import { MOCK_USDC_DISPLAY_SCALE, SEASON4_CHAIN } from '@/lib/onchain/constants'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import { normalizeWalletAddress } from '@/lib/onchain/wallet-link'
 import { getSeason4FaucetClaimState } from '@/lib/season4-faucet-eligibility'
@@ -18,7 +18,7 @@ import {
   users,
 } from '@/lib/schema'
 
-const MARKET_DECIMALS = 1_000_000
+const MARKET_DECIMALS = MOCK_USDC_DISPLAY_SCALE
 
 export type Season4MarketSummary = {
   id: string
@@ -156,7 +156,7 @@ function formatTradeAddress(address: string | null | undefined): string {
 function createSeason4PublicClient() {
   const config = requireSeason4OnchainConfig()
   return createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
 }

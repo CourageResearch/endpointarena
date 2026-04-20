@@ -86,11 +86,12 @@ test('season 4 model cycles are manual-only from admin surfaces', async () => {
 
   assert.match(workerSource, /manual-only from the admin panel/)
   assert.doesNotMatch(workerSource, /runSeason4ModelCycle|parseModelCycleIntervalSeconds/)
-
   assert.doesNotMatch(opsSource, /parseModelCycleIntervalSeconds|modelCycleIntervalSeconds/)
+  assert.doesNotMatch(opsSource, /DEFAULT_SEASON4_MODEL_CYCLE_INTERVAL_SECONDS/)
 
   assert.match(adminAiSource, /runLiveBatchModelCycle/)
   assert.match(adminAiSource, /Run the Season 4 model cycle manually from the admin panel/)
+  assert.match(adminAiSource, /Admin started the Season 4 model cycle/)
   assert.doesNotMatch(adminAiSource, /will run automatically|Running the season 4 model cycle now|run automatically once/)
 
   assert.match(adminAiDeskSource, /Run Model Cycle/)
@@ -106,7 +107,7 @@ test('season 4 model cycles are manual-only from admin surfaces', async () => {
   assert.doesNotMatch(baseDeskSource, /season4:model-cycle:worker|automatically runs a model cycle/)
 
   assert.match(docsSource, /manual-only from the admin panel/)
-  assert.doesNotMatch(docsSource, /trading onchain on a cadence|model-cycle automation/)
+  assert.doesNotMatch(docsSource, /SEASON4_MODEL_CYCLE_INTERVAL_SECONDS|trading onchain on a cadence|model-cycle automation|keep funded model wallets trading onchain on a cadence/)
 })
 
 test('admin runtime settings only expose current season 4 controls', async () => {
@@ -151,6 +152,34 @@ test('season 4 market creation defaults to the saved liquidity B config', async 
   assert.match(humanBankrollMigrationSource, /season4_human_starting_bankroll_display" = 100/)
   assert.match(toyTrialCountMigrationSource, /SET DEFAULT 0/)
   assert.match(toyTrialCountMigrationSource, /"toy_trial_count" = 0/)
+})
+
+test('onchain balance numeric migration is registered in Drizzle metadata', async () => {
+  const migrationSource = await readRepoFile('drizzle/0035_onchain_balance_numeric.sql')
+  const schemaSource = await readRepoFile('lib/schema.ts')
+  const journal = JSON.parse(await readRepoFile('drizzle/meta/_journal.json')) as {
+    entries: Array<{
+      idx: number
+      tag: string
+      version: string
+    }>
+  }
+
+  const lastEntry = journal.entries.at(-1)
+  assert.equal(lastEntry?.idx, 36)
+  assert.equal(lastEntry?.version, '7')
+  assert.equal(lastEntry?.tag, '0036_drop_market_daily_snapshots')
+  assert(journal.entries.some((entry) => entry.idx === 34 && entry.tag === '0034_remove_legacy_amm_labels'))
+  assert(journal.entries.some((entry) => entry.idx === 35 && entry.tag === '0035_onchain_balance_numeric'))
+
+  assert.match(migrationSource, /ALTER TABLE "onchain_balances"/)
+  assert.match(migrationSource, /"collateral_display" TYPE numeric\(24, 6\)/)
+  assert.match(migrationSource, /"yes_shares" TYPE numeric\(24, 6\)/)
+  assert.match(migrationSource, /"no_shares" TYPE numeric\(24, 6\)/)
+
+  assert.match(schemaSource, /collateralDisplay: numeric\('collateral_display', \{ precision: 24, scale: 6/)
+  assert.match(schemaSource, /yesShares: numeric\('yes_shares', \{ precision: 24, scale: 6/)
+  assert.match(schemaSource, /noShares: numeric\('no_shares', \{ precision: 24, scale: 6/)
 })
 
 test('season 4 faucet ABI exposes the deployed claimAmount view', async () => {
@@ -454,6 +483,9 @@ test('manual trial intake renders ClinicalTrials.gov, AI, and final saved column
   assert.match(source, /openingProbabilityOverride:\s*formatProbabilityInput\(nextPreview\.openingLine\.suggestedProbability\)/)
   assert.match(source, /Save is locked until AI returns a usable draft and opening probability/)
   assert.match(source, /disabled=\{!canSave\}/)
+  assert.match(source, /if \(isPublishing\) \{\s*return\s*\}/)
+  assert.match(source, /let shouldUnlockPublishing = true/)
+  assert.match(source, /if \(shouldUnlockPublishing\) \{\s*setIsPublishing\(false\)\s*\}/)
   assert.doesNotMatch(source, /Before AI/)
   assert.doesNotMatch(source, /Final Trial Data/)
   assert.doesNotMatch(source, /Run AI calculations again after editing the form so approval uses the latest values/)

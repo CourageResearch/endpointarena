@@ -1865,7 +1865,7 @@ async function insertTrialMarketPositions(
   }
 }
 
-async function refreshCurrentDaySnapshots(tx: postgres.Sql): Promise<string> {
+async function refreshCurrentDayPriceSnapshots(tx: postgres.Sql): Promise<string> {
   const snapshotDate = new Date().toISOString().slice(0, 10)
 
   const openTrialMarkets = await tx<{
@@ -1906,79 +1906,6 @@ async function refreshCurrentDaySnapshots(tx: postgres.Sql): Promise<string> {
         price_yes = excluded.price_yes,
         q_yes = excluded.q_yes,
         q_no = excluded.q_no
-    `
-  }
-
-  const accountRows = await tx<ModelAccountRow[]>`
-    select
-      actor.id as actor_id,
-      actor.model_key,
-      account.cash_balance,
-      account.starting_cash
-    from market_accounts account
-    join market_actors actor on actor.id = account.actor_id
-    where actor.actor_type = 'model'
-      and actor.model_key is not null
-    order by actor.model_key
-  `
-
-  const openPositionRows = await tx<{
-    actor_id: string
-    market_id: string
-    yes_shares: number | string
-    no_shares: number | string
-    price_yes: number | string
-  }[]>`
-    select
-      mp.actor_id,
-      mp.market_id,
-      mp.yes_shares,
-      mp.no_shares,
-      pm.price_yes
-    from market_positions mp
-    join prediction_markets pm on pm.id = mp.market_id
-    join market_actors actor on actor.id = mp.actor_id
-    where pm.status = 'OPEN'
-      and actor.actor_type = 'model'
-  `
-
-  const positionValueByActorId = new Map<string, number>()
-  for (const row of openPositionRows) {
-    const yesShares = toNumber(row.yes_shares)
-    const noShares = toNumber(row.no_shares)
-    const priceYes = toNumber(row.price_yes)
-    const current = positionValueByActorId.get(row.actor_id) ?? 0
-    const next = current + (yesShares * priceYes) + (noShares * (1 - priceYes))
-    positionValueByActorId.set(row.actor_id, roundCash(next))
-  }
-
-  for (const account of accountRows) {
-    const positionsValue = roundCash(positionValueByActorId.get(account.actor_id) ?? 0)
-    const totalEquity = roundCash(account.cash_balance + positionsValue)
-    await tx`
-      insert into market_daily_snapshots (
-        id,
-        snapshot_date,
-        actor_id,
-        cash_balance,
-        positions_value,
-        total_equity,
-        created_at
-      )
-      values (
-        ${crypto.randomUUID()},
-        ${snapshotDate},
-        ${account.actor_id},
-        ${account.cash_balance},
-        ${positionsValue},
-        ${totalEquity},
-        ${new Date().toISOString()}
-      )
-      on conflict (actor_id, snapshot_date) do update
-      set
-        cash_balance = excluded.cash_balance,
-        positions_value = excluded.positions_value,
-        total_equity = excluded.total_equity
     `
   }
 
@@ -2249,14 +2176,14 @@ async function main(): Promise<void> {
         `
       }
 
-      const refreshedSnapshotDate = await refreshCurrentDaySnapshots(tx)
+      const refreshedPriceSnapshotDate = await refreshCurrentDayPriceSnapshots(tx)
 
       return {
         deletedTrialRunIds: targetTrialRunInfoBeforeDelete.trialRunIds,
         sharedTrialRunIds: targetTrialRunInfoBeforeDelete.sharedTrialRunIds,
         modelCashDeltas: cashDeltas,
         normalizedSnapshotCostSources,
-        refreshedSnapshotDate,
+        refreshedPriceSnapshotDate,
       }
     })
 
@@ -2288,7 +2215,7 @@ async function main(): Promise<void> {
       humanTrialStateBeforeApply: targetHumanTrialState,
       modelCashDeltas: applySummary.modelCashDeltas,
       normalizedSnapshotCostSources: applySummary.normalizedSnapshotCostSources,
-      refreshedSnapshotDate: applySummary.refreshedSnapshotDate,
+      refreshedPriceSnapshotDate: applySummary.refreshedPriceSnapshotDate,
       warnings,
     }), null, 2))
   } finally {

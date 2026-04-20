@@ -2,7 +2,6 @@ import {
   db,
   marketAccounts,
   marketActions,
-  marketDailySnapshots,
   marketPositions,
   marketPriceSnapshots,
   trials,
@@ -10,7 +9,7 @@ import {
   trialQuestions,
 } from '@/lib/db'
 import { MODEL_IDS, type ModelId } from '@/lib/constants'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import {
   DEFAULT_BINARY_MARKET_BASELINE,
   DEFAULT_MARKET_LIQUIDITY_B,
@@ -1189,55 +1188,6 @@ export async function upsertDailySnapshots(runDate: Date, dbClient: MarketDbClie
       })
   }
 
-  const marketIds = openMarkets.map((market) => market.id)
-
-  const allPositions = marketIds.length > 0
-    ? await dbClient.query.marketPositions.findMany({
-        where: inArray(marketPositions.marketId, marketIds),
-      })
-    : []
-
-  const marketPriceById = new Map(openMarkets.map((market) => [market.id, market.priceYes]))
-  const positionsByActor = new Map<string, typeof allPositions>()
-
-  for (const position of allPositions) {
-    const current = positionsByActor.get(position.actorId) || []
-    current.push(position)
-    positionsByActor.set(position.actorId, current)
-  }
-
-  const accounts = await dbClient.query.marketAccounts.findMany()
-
-  for (const account of accounts) {
-    const positions = positionsByActor.get(account.actorId) || []
-
-    let positionsValue = 0
-    for (const position of positions) {
-      const priceYes = marketPriceById.get(position.marketId)
-      if (priceYes === undefined) continue
-
-      positionsValue += (position.yesShares * priceYes) + (position.noShares * (1 - priceYes))
-    }
-
-    const totalEquity = account.cashBalance + positionsValue
-
-    await dbClient.insert(marketDailySnapshots)
-      .values({
-        snapshotDate: normalizedRunDate,
-        actorId: account.actorId,
-        cashBalance: account.cashBalance,
-        positionsValue,
-        totalEquity,
-      })
-      .onConflictDoUpdate({
-        target: [marketDailySnapshots.actorId, marketDailySnapshots.snapshotDate],
-        set: {
-          cashBalance: account.cashBalance,
-          positionsValue,
-          totalEquity,
-        },
-      })
-  }
 }
 
 function isYesResolvingOutcome(outcome: MarketOutcome): boolean {

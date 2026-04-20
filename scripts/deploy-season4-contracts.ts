@@ -12,8 +12,8 @@ import {
   type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import { DEFAULT_SEASON4_FAUCET_CLAIM_AMOUNT_ATOMIC } from '@/lib/season4-faucet-config'
+import { SEASON4_CHAIN } from '@/lib/onchain/constants'
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
@@ -170,12 +170,12 @@ async function deployContracts(target: DeploymentTarget): Promise<DeploymentSumm
   const account = privateKeyToAccount(privateKey)
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(rpcUrl),
   })
   const walletClient = createWalletClient({
     account,
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(rpcUrl),
   })
 

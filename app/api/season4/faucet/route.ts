@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { createPublicClient, createWalletClient, formatUnits, http, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import { createRequestId, errorResponse, successResponse } from '@/lib/api-response'
 import { db } from '@/lib/db'
 import { ConfigurationError, ConflictError, ValidationError } from '@/lib/errors'
 import { SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
+import { MOCK_USDC_DECIMAL_PLACES, SEASON4_CHAIN } from '@/lib/onchain/constants'
 import { getSeason4FaucetClaimState } from '@/lib/season4-faucet-eligibility'
 import { formatSeason4FaucetUsdcAmount } from '@/lib/season4-faucet-config'
 import { getSeason4DeployerPrivateKey, requireSeason4OnchainConfig } from '@/lib/onchain/config'
@@ -47,7 +47,7 @@ async function upsertSubmittedClaim(args: {
     walletAddress: args.walletAddress,
     chainId: args.chainId,
     amountAtomic: args.amountAtomic.toString(),
-    amountDisplay: Number(formatUnits(args.amountAtomic, 6)),
+    amountDisplay: Number(formatUnits(args.amountAtomic, MOCK_USDC_DECIMAL_PLACES)),
     status: 'submitted' as const,
     txHash: args.txHash,
     requestedAt: new Date(),
@@ -108,12 +108,12 @@ export async function POST(request: Request) {
 
     const deployer = privateKeyToAccount(getDeployerPrivateKey(config.target))
     const publicClient = createPublicClient({
-      chain: baseSepolia,
+      chain: SEASON4_CHAIN,
       transport: http(config.rpcUrl),
     })
     const walletClient = createWalletClient({
       account: deployer,
-      chain: baseSepolia,
+      chain: SEASON4_CHAIN,
       transport: http(config.rpcUrl),
     })
 
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
       walletAddress,
       claimTxHash,
       claimAmountAtomic: claimedAmountAtomic.toString(),
-      claimAmountDisplay: Number(formatUnits(claimedAmountAtomic, 6)),
+      claimAmountDisplay: Number(formatUnits(claimedAmountAtomic, MOCK_USDC_DECIMAL_PLACES)),
       claimAmountLabel: formatSeason4FaucetUsdcAmount(claimedAmountAtomic),
       viewer: detail?.viewer ?? null,
     }, {

@@ -106,7 +106,6 @@ async function loadSummary(sql: postgres.Sql, options: { destroyOnchainState: bo
       (select count(*)::int from market_run_logs) as "marketRunLogs",
       (select count(*)::int from model_decision_snapshots) as "modelDecisionSnapshots",
       (select count(*)::int from market_price_snapshots) as "marketPriceSnapshots",
-      (select count(*)::int from market_daily_snapshots) as "marketDailySnapshots",
       (select count(*)::int from trial_monitor_runs) as "trialMonitorRuns",
       (select count(*)::int from trial_sync_runs) as "trialSyncRuns",
       (select count(*)::int from trial_sync_run_items) as "trialSyncRunItems",
@@ -150,7 +149,6 @@ async function loadSummary(sql: postgres.Sql, options: { destroyOnchainState: bo
       marketRunLogs: counts?.marketRunLogs ?? 0,
       modelDecisionSnapshots: counts?.modelDecisionSnapshots ?? 0,
       marketPriceSnapshots: counts?.marketPriceSnapshots ?? 0,
-      marketDailySnapshots: counts?.marketDailySnapshots ?? 0,
       trialMonitorRuns: counts?.trialMonitorRuns ?? 0,
       trialSyncRuns: counts?.trialSyncRuns ?? 0,
       trialSyncRunItems: counts?.trialSyncRunItems ?? 0,
@@ -193,7 +191,6 @@ async function executeReset(sql: postgres.Sql, options: { destroyOnchainState: b
         : [
             'delete from onchain_markets',
           ]),
-      'delete from market_daily_snapshots',
       'delete from market_price_snapshots',
       'delete from model_decision_snapshots',
       'delete from market_run_logs',

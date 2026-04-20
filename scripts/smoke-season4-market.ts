@@ -10,12 +10,20 @@ import {
   type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import { closeDbConnections, db } from '@/lib/db'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import { getSeason4DeployerPrivateKey, requireSeason4OnchainConfig } from '@/lib/onchain/config'
 import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { DEFAULT_SEASON4_FAUCET_CLAIM_AMOUNT_ATOMIC } from '@/lib/season4-faucet-config'
+import {
+  DEFAULT_INITIAL_PRICE_YES_E18,
+  DEFAULT_SEASON4_TRADE_SLIPPAGE_BPS,
+  MOCK_USDC_DECIMAL_PLACES,
+  SEASON4_CHAIN,
+  SEASON4_RPC_BLOCK_POLL_ATTEMPTS,
+  SEASON4_RPC_BLOCK_POLL_DELAY_MS,
+  SEASON4_TRADE_TX_GAS_LIMIT,
+} from '@/lib/onchain/constants'
 import {
   onchainBalances,
   onchainFaucetClaims,
@@ -29,16 +37,11 @@ import {
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
 
-const MOCK_USDC_DECIMALS = 6
 const DEFAULT_LIQUIDITY_B = BigInt(1_000_000_000)
 const DEFAULT_TRADE_AMOUNT = BigInt(10_000_000)
 const DEFAULT_CLAIM_AMOUNT = DEFAULT_SEASON4_FAUCET_CLAIM_AMOUNT_ATOMIC
-const DEFAULT_INITIAL_PRICE_YES_E18 = BigInt('500000000000000000')
 const SMOKE_USER_EMAIL = 'season4-smoke@local.test'
 const SMOKE_USER_NAME = 'season4smoke'
-const BUY_TX_GAS_LIMIT = BigInt(500_000)
-const RPC_BLOCK_POLL_DELAY_MS = 1_000
-const RPC_BLOCK_POLL_ATTEMPTS = 10
 const DEFAULT_SMOKE_TRIAL_NCT_NUMBER = 'NCT09990001'
 const DEFAULT_SMOKE_TRIAL_QUESTION_SLUG = 'primary_endpoint_met'
 
@@ -261,7 +264,7 @@ async function ensureSmokeUser(walletAddress: Address): Promise<{ userId: string
     await db.insert(onchainUserWallets).values({
       userId,
       privyUserId: null,
-      chainId: baseSepolia.id,
+      chainId: SEASON4_CHAIN.id,
       walletAddress: normalizedWalletAddress,
       provisioningStatus: 'ready',
       createdAt: new Date(),
@@ -289,9 +292,9 @@ async function upsertFaucetClaim(args: {
   const values = {
     userId: args.userId,
     walletAddress: args.walletAddress.toLowerCase(),
-    chainId: baseSepolia.id,
+    chainId: SEASON4_CHAIN.id,
     amountAtomic: args.amountAtomic.toString(),
-    amountDisplay: Number(formatUnits(args.amountAtomic, MOCK_USDC_DECIMALS)),
+    amountDisplay: Number(formatUnits(args.amountAtomic, MOCK_USDC_DECIMAL_PLACES)),
     status: 'submitted' as const,
     txHash: args.txHash,
     requestedAt: new Date(),
@@ -316,10 +319,10 @@ async function waitForRpcBlock(
   getLatestBlock: () => Promise<bigint>,
   targetBlock: bigint,
 ): Promise<void> {
-  for (let attempt = 0; attempt < RPC_BLOCK_POLL_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < SEASON4_RPC_BLOCK_POLL_ATTEMPTS; attempt += 1) {
     const latestBlock = await getLatestBlock()
     if (latestBlock >= targetBlock) return
-    await sleep(RPC_BLOCK_POLL_DELAY_MS)
+    await sleep(SEASON4_RPC_BLOCK_POLL_DELAY_MS)
   }
 }
 
@@ -350,12 +353,12 @@ async function main() {
   const claimAmount = parsePositiveBigInt(process.env.SEASON4_SMOKE_CLAIM_AMOUNT_ATOMIC, DEFAULT_CLAIM_AMOUNT)
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const walletClient = createWalletClient({
     account: deployer,
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
 
@@ -482,9 +485,13 @@ async function main() {
     address: config.managerAddress,
     abi: PREDICTION_MARKET_MANAGER_ABI,
     functionName: 'buyYes',
-    args: [BigInt(marketId), tradeAmount, BigInt(0)],
+    args: [
+      BigInt(marketId),
+      tradeAmount,
+      (tradeAmount * BigInt(10_000 - DEFAULT_SEASON4_TRADE_SLIPPAGE_BPS)) / BigInt(10_000),
+    ],
     account: deployer,
-    gas: BUY_TX_GAS_LIMIT,
+    gas: SEASON4_TRADE_TX_GAS_LIMIT,
   })
   const buyReceipt = await publicClient.waitForTransactionReceipt({ hash: buyHash })
   await waitForRpcBlock(() => publicClient.getBlockNumber(), buyReceipt.blockNumber)

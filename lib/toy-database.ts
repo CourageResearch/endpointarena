@@ -4,14 +4,12 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import { createPublicClient, createWalletClient, formatEther, http, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import {
   accounts,
   aiBatches,
   db,
   getDbForTarget,
   marketAccounts,
-  marketDailySnapshots,
   marketPriceSnapshots,
   marketRuntimeConfigs,
   marketRunLogs,
@@ -47,6 +45,13 @@ import {
 } from '@/lib/markets/runtime-config'
 import { MOCK_USDC_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4DeployerPrivateKey, getSeason4OnchainConfig } from '@/lib/onchain/config'
+import {
+  DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
+  MIN_SEASON4_MODEL_ETH_BALANCE_WEI,
+  MOCK_USDC_DISPLAY_SCALE,
+  SEASON4_CHAIN,
+  SEASON4_CHAIN_ID,
+} from '@/lib/onchain/constants'
 import { getSeason4ModelName } from '@/lib/season4-model-labels'
 import { filterSupportedTrialQuestions, TRIAL_QUESTION_DEFINITIONS } from '@/lib/trial-questions'
 import { TRIAL_THERAPEUTIC_AREAS } from '@/lib/trial-therapeutic-areas'
@@ -56,9 +61,7 @@ type DatabaseClient = typeof db
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const MARKET_RUNTIME_CONFIG_ID = 'default'
-const MOCK_USDC_DISPLAY_DIVISOR = 1_000_000
-const DEFAULT_MODEL_ETH_TOP_UP_WEI = BigInt(20_000_000_000_000)
-const MIN_MODEL_ETH_BALANCE_WEI = BigInt(10_000_000_000_000)
+const MOCK_USDC_DISPLAY_DIVISOR = MOCK_USDC_DISPLAY_SCALE
 const trialTherapeuticAreaSqlList = TRIAL_THERAPEUTIC_AREAS.map((area) => `'${area.replace(/'/g, "''")}'`).join(', ')
 
 const toySeedTrialColumns = {
@@ -1006,7 +1009,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
       "id" text primary key not null,
       "user_id" text not null references "public"."users"("id") on delete cascade on update no action,
       "privy_user_id" text,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "wallet_address" text,
       "provisioning_status" text default 'pending' not null,
       "first_claimed_at" timestamp with time zone,
@@ -1023,7 +1026,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
       "id" text primary key not null,
       "model_key" text not null,
       "display_name" text not null,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "wallet_address" text,
       "funding_status" text default 'pending' not null,
       "bankroll_display" real default 0 not null,
@@ -1043,7 +1046,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
       "id" text primary key not null,
       "trial_question_id" text references "public"."trial_questions"("id") on delete set null on update no action,
       "market_slug" text not null,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "manager_address" text not null,
       "onchain_market_id" text,
       "title" text not null,
@@ -1073,7 +1076,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
       "id" text primary key not null,
       "user_id" text references "public"."users"("id") on delete set null on update no action,
       "wallet_address" text not null,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "amount_atomic" text not null,
       "amount_display" real not null,
       "status" text default 'requested' not null,
@@ -1092,7 +1095,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
   await dbClient.execute(sql`
     create table if not exists "onchain_indexer_cursors" (
       "id" text primary key not null,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "contract_address" text not null,
       "last_synced_block" text default '0' not null,
       "latest_seen_block" text default '0' not null,
@@ -1104,7 +1107,7 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
   await dbClient.execute(sql`
     create table if not exists "onchain_events" (
       "id" text primary key not null,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "contract_address" text not null,
       "tx_hash" text not null,
       "block_hash" text,
@@ -1123,14 +1126,14 @@ async function ensureToyOnchainSchemaCompatibility(dbClient: DatabaseClient): Pr
   await dbClient.execute(sql`
     create table if not exists "onchain_balances" (
       "id" text primary key not null,
-      "chain_id" integer default 84532 not null,
+      "chain_id" integer default ${SEASON4_CHAIN_ID} not null,
       "market_ref" text default 'collateral' not null,
       "wallet_address" text not null,
       "user_id" text references "public"."users"("id") on delete set null on update no action,
       "model_key" text,
-      "collateral_display" real default 0 not null,
-      "yes_shares" real default 0 not null,
-      "no_shares" real default 0 not null,
+      "collateral_display" numeric(24, 6) default 0 not null,
+      "yes_shares" numeric(24, 6) default 0 not null,
+      "no_shares" numeric(24, 6) default 0 not null,
       "last_indexed_block" text default '0' not null,
       "updated_at" timestamp with time zone not null,
       constraint "onchain_balances_collateral_display_check" check ("onchain_balances"."collateral_display" >= 0),
@@ -1337,7 +1340,6 @@ async function resetToyRuntimeState(dbClient: DatabaseClient): Promise<void> {
     await tx.delete(marketRunLogs)
     await tx.delete(marketRuns)
     await tx.delete(marketPriceSnapshots)
-    await tx.delete(marketDailySnapshots)
     await tx.delete(predictionMarkets)
     await tx.delete(trialQuestions)
     await tx.delete(trials)
@@ -1352,7 +1354,7 @@ async function resetToyOnchainIndexerCursors(dbClient: DatabaseClient): Promise<
   }
 
   const client = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const latestBlock = await client.getBlockNumber()
@@ -1504,12 +1506,12 @@ async function fundToyModelWallets(
 
   const deployer = privateKeyToAccount(privateKey)
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const walletClient = createWalletClient({
     account: deployer,
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const funded: ToyModelWalletFunding[] = []
@@ -1577,18 +1579,18 @@ async function fundToyModelWallets(
       }
 
       const gasBalance = await publicClient.getBalance({ address: walletAddress })
-      if (gasBalance < MIN_MODEL_ETH_BALANCE_WEI) {
+      if (gasBalance < MIN_SEASON4_MODEL_ETH_BALANCE_WEI) {
         const deployerBalance = await publicClient.getBalance({ address: deployer.address })
-        if (deployerBalance < DEFAULT_MODEL_ETH_TOP_UP_WEI) {
+        if (deployerBalance < DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI) {
           warnings.push(
-            `Skipped gas top-up for ${model.modelKey}: deployer ${deployer.address} has ${formatEther(deployerBalance)} ETH and needs at least ${formatEther(DEFAULT_MODEL_ETH_TOP_UP_WEI)} ETH.`,
+            `Skipped gas top-up for ${model.modelKey}: deployer ${deployer.address} has ${formatEther(deployerBalance)} ETH and needs at least ${formatEther(DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI)} ETH.`,
           )
         } else {
           gasTopUpTxHash = await walletClient.sendTransaction({
             account: deployer,
             to: walletAddress,
-            value: DEFAULT_MODEL_ETH_TOP_UP_WEI,
-            chain: baseSepolia,
+            value: DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
+            chain: SEASON4_CHAIN,
           })
           await publicClient.waitForTransactionReceipt({ hash: gasTopUpTxHash })
         }

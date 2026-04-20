@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 import { createPublicClient, formatEther, http } from 'viem'
-import { baseSepolia } from 'viem/chains'
+import { SEASON4_CHAIN } from '@/lib/onchain/constants'
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
@@ -20,7 +20,7 @@ async function main() {
   const rpcUrl = trimOrNull(process.env.BASE_SEPOLIA_RPC_URL) ?? 'https://sepolia.base.org'
 
   const client = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(rpcUrl),
   })
 
@@ -30,8 +30,8 @@ async function main() {
   ])
 
   console.log(JSON.stringify({
-    chainId: baseSepolia.id,
-    chainName: baseSepolia.name,
+    chainId: SEASON4_CHAIN.id,
+    chainName: SEASON4_CHAIN.name,
     address,
     balanceWei: balance.toString(),
     balanceEth: formatEther(balance),

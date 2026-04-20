@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createPublicClient, createWalletClient, http, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import { ensureAdmin } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import {
@@ -12,7 +11,7 @@ import {
 import { ValidationError } from '@/lib/errors'
 import { SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4DeployerPrivateKey, getSeason4OnchainConfig } from '@/lib/onchain/config'
-import { MOCK_USDC_DECIMALS } from '@/lib/season4-faucet-config'
+import { MOCK_USDC_DISPLAY_SCALE, SEASON4_CHAIN } from '@/lib/onchain/constants'
 import { getActiveDatabaseTarget, type DatabaseTarget } from '@/lib/database-target'
 import { getDbForTarget } from '@/lib/db'
 
@@ -42,7 +41,7 @@ function parseDatabaseTarget(value: unknown): DatabaseTarget | null {
 }
 
 function toFaucetAmountAtomic(displayAmount: number): bigint {
-  return BigInt(Math.round(displayAmount * MOCK_USDC_DECIMALS))
+  return BigInt(Math.round(displayAmount * MOCK_USDC_DISPLAY_SCALE))
 }
 
 async function syncSeason4FaucetClaimAmount(displayAmount: number, target: DatabaseTarget): Promise<{
@@ -64,12 +63,12 @@ async function syncSeason4FaucetClaimAmount(displayAmount: number, target: Datab
 
   const account = privateKeyToAccount(privateKey)
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const walletClient = createWalletClient({
     account,
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const nextAmount = toFaucetAmountAtomic(displayAmount)
