@@ -517,17 +517,24 @@ async function assertSeason4MarketDeploymentReady(input: {
   return clients
 }
 
-async function loadTradeCounts(): Promise<Map<string, number>> {
+async function loadTradeCounts(managerAddress: string | null): Promise<Map<string, number>> {
+  if (!managerAddress) return new Map()
+
   const rows = await db.select({
     marketRef: onchainEvents.marketRef,
     count: sql<number>`count(*)::int`,
   })
     .from(onchainEvents)
-    .where(eq(onchainEvents.eventName, 'TradeExecuted'))
+    .where(and(
+      eq(onchainEvents.contractAddress, managerAddress),
+      eq(onchainEvents.eventName, 'TradeExecuted'),
+    ))
     .groupBy(onchainEvents.marketRef)
 
   return new Map(rows.flatMap((row) => {
-    const marketId = trimOrNull(row.marketRef)
+    const marketId = row.marketRef?.startsWith('market:')
+      ? trimOrNull(row.marketRef.slice('market:'.length))
+      : trimOrNull(row.marketRef)
     return marketId ? [[marketId, row.count ?? 0] as const] : []
   }))
 }
@@ -732,6 +739,9 @@ export async function getSeason4OpsDashboardData(options: { sync?: boolean } = {
   }
 
   const config = getSeason4OnchainConfig()
+  const currentManagerFilter = config.managerAddress
+    ? eq(onchainMarkets.managerAddress, config.managerAddress)
+    : sql`false`
   const modelPrivateKeys = parseEnvModelPrivateKeys()
   const modelWalletMap = parseEnvWalletMap()
 
@@ -750,8 +760,9 @@ export async function getSeason4OpsDashboardData(options: { sync?: boolean } = {
       updatedAt: onchainMarkets.updatedAt,
     })
       .from(onchainMarkets)
+      .where(currentManagerFilter)
       .orderBy(desc(onchainMarkets.updatedAt), desc(onchainMarkets.createdAt)),
-    loadTradeCounts(),
+    loadTradeCounts(config.managerAddress),
     db.select({
       id: onchainModelWallets.id,
       modelKey: onchainModelWallets.modelKey,
@@ -773,12 +784,18 @@ export async function getSeason4OpsDashboardData(options: { sync?: boolean } = {
       .from(onchainIndexerCursors)
       .orderBy(onchainIndexerCursors.id),
     Promise.all([
-      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets),
+      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets).where(currentManagerFilter),
       db.select({ count: sql<number>`count(*)::int` }).from(onchainEvents),
       db.select({ count: sql<number>`count(*)::int` }).from(onchainBalances),
       db.select({ count: sql<number>`count(*)::int` }).from(onchainModelWallets).where(eq(onchainModelWallets.fundingStatus, 'funded')),
-      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets).where(inArray(onchainMarkets.status, ['deployed', 'closed'])),
-      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets).where(eq(onchainMarkets.status, 'resolved')),
+      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets).where(and(
+        currentManagerFilter,
+        inArray(onchainMarkets.status, ['deployed', 'closed']),
+      )),
+      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets).where(and(
+        currentManagerFilter,
+        eq(onchainMarkets.status, 'resolved'),
+      )),
     ]),
   ])
 
@@ -1051,6 +1068,7 @@ export async function resolveSeason4Market(input: Season4MarketResolveInput) {
     throw new ValidationError('Market identifier is required')
   }
 
+  const { config, account, publicClient, walletClient } = createOpsClients()
   const market = await db.query.onchainMarkets.findFirst({
     columns: {
       id: true,
@@ -1058,9 +1076,12 @@ export async function resolveSeason4Market(input: Season4MarketResolveInput) {
       onchainMarketId: true,
       status: true,
     },
-    where: or(
-      eq(onchainMarkets.marketSlug, identifier),
-      eq(onchainMarkets.onchainMarketId, identifier),
+    where: and(
+      eq(onchainMarkets.managerAddress, config.managerAddress),
+      or(
+        eq(onchainMarkets.marketSlug, identifier),
+        eq(onchainMarkets.onchainMarketId, identifier),
+      ),
     ),
   })
 
@@ -1071,7 +1092,6 @@ export async function resolveSeason4Market(input: Season4MarketResolveInput) {
     throw new ValidationError('That market is already resolved')
   }
 
-  const { config, account, publicClient, walletClient } = createOpsClients()
   const resolveTxHash = await walletClient.writeContract({
     address: config.managerAddress,
     abi: PREDICTION_MARKET_MANAGER_ABI,
@@ -1259,7 +1279,10 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
       .from(onchainMarkets)
       .leftJoin(trialQuestions, eq(onchainMarkets.trialQuestionId, trialQuestions.id))
       .leftJoin(trials, eq(trialQuestions.trialId, trials.id))
-      .where(eq(onchainMarkets.status, 'deployed'))
+      .where(and(
+        eq(onchainMarkets.managerAddress, config.managerAddress),
+        eq(onchainMarkets.status, 'deployed'),
+      ))
       .orderBy(desc(onchainMarkets.createdAt)),
     db.select({
       modelKey: onchainModelWallets.modelKey,

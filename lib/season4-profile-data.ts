@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { createPublicClient, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
@@ -180,6 +180,7 @@ export async function getSeason4ProfileData(
     throw new NotFoundError('Season 4 user not found')
   }
 
+  const config = getSeason4OnchainConfig()
   const [walletLink, primaryMarket] = await Promise.all([
     db.select({
       walletAddress: onchainUserWallets.walletAddress,
@@ -194,17 +195,24 @@ export async function getSeason4ProfileData(
       marketSlug: onchainMarkets.marketSlug,
     })
       .from(onchainMarkets)
+      .where(config.managerAddress
+        ? eq(onchainMarkets.managerAddress, config.managerAddress)
+        : eq(onchainMarkets.managerAddress, '')
+      )
       .orderBy(desc(onchainMarkets.createdAt))
       .limit(1)
       .then((rows) => rows[0] ?? null),
   ])
 
   const walletAddress = walletLink?.walletAddress ?? normalizeWalletAddress(user.embeddedWalletAddress)
-  const config = getSeason4OnchainConfig()
   const faucetClaimState = await getSeason4FaucetClaimState({
     userId: user.id,
     walletAddress,
   })
+  const eventContractAddresses = [
+    config.managerAddress,
+    config.faucetAddress,
+  ].filter((value): value is NonNullable<typeof value> => Boolean(value))
 
   const [balanceRows, activityRows] = walletAddress
     ? await Promise.all([
@@ -216,17 +224,22 @@ export async function getSeason4ProfileData(
         })
           .from(onchainBalances)
           .where(eq(onchainBalances.walletAddress, walletAddress)),
-        db.select({
-          txHash: onchainEvents.txHash,
-          createdAt: onchainEvents.createdAt,
-          eventName: onchainEvents.eventName,
-          marketRef: onchainEvents.marketRef,
-          payload: onchainEvents.payload,
-        })
-          .from(onchainEvents)
-          .where(eq(onchainEvents.walletAddress, walletAddress))
-          .orderBy(desc(onchainEvents.createdAt))
-          .limit(25),
+        eventContractAddresses.length > 0
+          ? db.select({
+              txHash: onchainEvents.txHash,
+              createdAt: onchainEvents.createdAt,
+              eventName: onchainEvents.eventName,
+              marketRef: onchainEvents.marketRef,
+              payload: onchainEvents.payload,
+            })
+              .from(onchainEvents)
+              .where(and(
+                eq(onchainEvents.walletAddress, walletAddress),
+                inArray(onchainEvents.contractAddress, eventContractAddresses),
+              ))
+              .orderBy(desc(onchainEvents.createdAt))
+              .limit(25)
+          : Promise.resolve([]),
       ])
     : [[], []]
 
@@ -254,7 +267,7 @@ export async function getSeason4ProfileData(
     ...activityRows.map((row) => extractMarketId(row.marketRef)),
   ].filter((value): value is string => Boolean(value))))
 
-  const markets = marketIds.length > 0
+  const markets = marketIds.length > 0 && config.managerAddress
     ? await db.select({
         onchainMarketId: onchainMarkets.onchainMarketId,
         marketSlug: onchainMarkets.marketSlug,
@@ -264,7 +277,10 @@ export async function getSeason4ProfileData(
         resolvedOutcome: onchainMarkets.resolvedOutcome,
       })
         .from(onchainMarkets)
-        .where(inArray(onchainMarkets.onchainMarketId, marketIds))
+        .where(and(
+          eq(onchainMarkets.managerAddress, config.managerAddress),
+          inArray(onchainMarkets.onchainMarketId, marketIds),
+        ))
     : []
 
   const marketById = new Map(markets
@@ -326,6 +342,7 @@ export async function getSeason4ProfileData(
     const market = marketId ? marketById.get(marketId) : null
 
     if (row.eventName === 'TradeExecuted') {
+      if (marketId && !market) return items
       const isBuy = payload.isBuy === true
       const isYes = payload.isYes === true
       const approvalTxHash = typeof payload.approvalTxHash === 'string'
@@ -348,6 +365,7 @@ export async function getSeason4ProfileData(
     }
 
     if (row.eventName === 'WinningsRedeemed') {
+      if (marketId && !market) return items
       items.push({
         txHash: row.txHash,
         approvalTxHash: null,

@@ -393,7 +393,7 @@ export function buildSeason4TradeExecution(args: {
     return {
       contractFunctionName: 'buyYes',
       amountAtomic: parseDisplayToAtomic(executedAmountUsd),
-      shareAmountDisplay: clampMoney(executedAmountUsd / Math.max(priceYes, Number.EPSILON)),
+      shareAmountDisplay: clampMoney(executedAmountUsd),
     }
   }
 
@@ -401,7 +401,7 @@ export function buildSeason4TradeExecution(args: {
     return {
       contractFunctionName: 'buyNo',
       amountAtomic: parseDisplayToAtomic(executedAmountUsd),
-      shareAmountDisplay: clampMoney(executedAmountUsd / Math.max(priceNo, Number.EPSILON)),
+      shareAmountDisplay: clampMoney(executedAmountUsd),
     }
   }
 

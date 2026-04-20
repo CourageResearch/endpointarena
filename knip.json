@@ -5,6 +5,7 @@
     "scripts/check-season4-deployer.ts",
     "scripts/claim-season4-cdp-faucet.ts",
     "scripts/deploy-season4-contracts.ts",
+    "scripts/deploy-season4-manager.ts",
     "scripts/fund-season4-model-wallets.ts",
     "scripts/index-season4-onchain.ts",
     "scripts/reset-season4.ts",

@@ -166,8 +166,10 @@ async function syncIfEnabled() {
   await syncSeason4OnchainIndex()
 }
 
-async function loadTradeStats(marketRefs: string[]): Promise<Map<string, { totalTrades: number; totalVolumeDisplay: number; lastTradeAt: string | null }>> {
-  if (marketRefs.length === 0) return new Map()
+async function loadTradeStats(marketIds: string[]): Promise<Map<string, { totalTrades: number; totalVolumeDisplay: number; lastTradeAt: string | null }>> {
+  if (marketIds.length === 0) return new Map()
+
+  const marketRefs = marketIds.map((marketId) => `market:${marketId}`)
 
   const tradeRows = await db.select({
     marketRef: onchainEvents.marketRef,
@@ -182,7 +184,9 @@ async function loadTradeStats(marketRefs: string[]): Promise<Map<string, { total
 
   const stats = new Map<string, { totalTrades: number; totalVolumeDisplay: number; lastTradeAt: string | null }>()
   for (const row of tradeRows) {
-    const marketRef = row.marketRef
+    const marketRef = row.marketRef?.startsWith('market:')
+      ? row.marketRef.slice('market:'.length)
+      : row.marketRef
     if (!marketRef) continue
 
     const existing = stats.get(marketRef) ?? { totalTrades: 0, totalVolumeDisplay: 0, lastTradeAt: null }
@@ -337,6 +341,9 @@ export async function getSeason4MarketSummaries(options: { sync?: boolean } = {}
     await syncIfEnabled()
   }
 
+  const config = getSeason4OnchainConfig()
+  if (!config.managerAddress) return []
+
   const markets = await db.select({
     id: onchainMarkets.id,
     marketSlug: onchainMarkets.marketSlug,
@@ -364,16 +371,17 @@ export async function getSeason4MarketSummaries(options: { sync?: boolean } = {}
     .from(onchainMarkets)
     .leftJoin(trialQuestions, eq(onchainMarkets.trialQuestionId, trialQuestions.id))
     .leftJoin(trials, eq(trialQuestions.trialId, trials.id))
-    .where(inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']))
+    .where(and(
+      eq(onchainMarkets.managerAddress, config.managerAddress),
+      inArray(onchainMarkets.status, ['deployed', 'closed', 'resolved']),
+    ))
     .orderBy(desc(onchainMarkets.createdAt))
 
   const marketIds = markets
     .map((market) => trimOrNull(market.onchainMarketId))
     .filter((value): value is string => Boolean(value))
-  const marketRefs = marketIds.map((marketId) => marketId)
-
   const [tradeStats, priceMap] = await Promise.all([
-    loadTradeStats(marketRefs),
+    loadTradeStats(marketIds),
     loadMarketPrices(marketIds),
   ])
 
@@ -429,6 +437,10 @@ export async function getSeason4MarketDetail(
   if (!trimmedIdentifier) {
     throw new NotFoundError('Season 4 market not found')
   }
+  const config = getSeason4OnchainConfig()
+  if (!config.managerAddress) {
+    throw new NotFoundError('Season 4 market not found')
+  }
 
   const [market] = await db.select({
     id: onchainMarkets.id,
@@ -463,9 +475,12 @@ export async function getSeason4MarketDetail(
     .from(onchainMarkets)
     .leftJoin(trialQuestions, eq(onchainMarkets.trialQuestionId, trialQuestions.id))
     .leftJoin(trials, eq(trialQuestions.trialId, trials.id))
-    .where(or(
-      eq(onchainMarkets.marketSlug, trimmedIdentifier),
-      eq(onchainMarkets.onchainMarketId, trimmedIdentifier),
+    .where(and(
+      eq(onchainMarkets.managerAddress, config.managerAddress),
+      or(
+        eq(onchainMarkets.marketSlug, trimmedIdentifier),
+        eq(onchainMarkets.onchainMarketId, trimmedIdentifier),
+      ),
     ))
     .limit(1)
 
@@ -486,7 +501,7 @@ export async function getSeason4MarketDetail(
         })
           .from(onchainEvents)
           .where(and(
-            eq(onchainEvents.marketRef, marketId),
+            eq(onchainEvents.marketRef, `market:${marketId}`),
             eq(onchainEvents.eventName, 'TradeExecuted'),
           ))
           .orderBy(desc(onchainEvents.createdAt))
@@ -601,8 +616,6 @@ export async function getSeason4MarketDetail(
       })
     }
   }
-
-  const config = getSeason4OnchainConfig()
 
   return {
     market: summary,

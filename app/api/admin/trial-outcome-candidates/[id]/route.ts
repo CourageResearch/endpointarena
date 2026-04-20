@@ -1,10 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { requireAdminSession } from '@/lib/admin-auth'
 import { createRequestId, errorResponse, parseJsonBody, successResponse } from '@/lib/api-response'
 import { db, onchainMarkets, trialOutcomeCandidates } from '@/lib/db'
 import { ValidationError } from '@/lib/errors'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
 import { reviewTrialOutcomeCandidate } from '@/lib/trial-monitor'
 
@@ -64,12 +65,18 @@ export async function PATCH(
     revalidateSeason4Routes()
 
     if (body.action === 'accept' && existingCandidate?.trialQuestionId) {
-      const linkedSeason4Markets = await db.query.onchainMarkets.findMany({
-        where: eq(onchainMarkets.trialQuestionId, existingCandidate.trialQuestionId),
-        columns: {
-          marketSlug: true,
-        },
-      })
+      const config = getSeason4OnchainConfig()
+      const linkedSeason4Markets = config.managerAddress
+        ? await db.query.onchainMarkets.findMany({
+            where: and(
+              eq(onchainMarkets.managerAddress, config.managerAddress),
+              eq(onchainMarkets.trialQuestionId, existingCandidate.trialQuestionId),
+            ),
+            columns: {
+              marketSlug: true,
+            },
+          })
+        : []
 
       for (const market of linkedSeason4Markets) {
         revalidateSeason4Routes({ marketSlug: market.marketSlug })

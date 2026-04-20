@@ -62,6 +62,7 @@ import { buildModelDecisionSnapshotInput, generateAndStoreModelDecisionSnapshot,
 import { predictionMarketColumns } from '@/lib/markets/query-shapes'
 import { getMarketModelResponseTimeoutMs } from '@/lib/markets/run-health'
 import { buildSeason4ModelDecisionInput, calculateSeason4TradeCaps } from '@/lib/season4-model-decisions'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import { loadContractMarketStates, loadLiveModelWalletPortfolioBalances, parseModelTradeAmountDisplay, runSeason4ModelCycle } from '@/lib/season4-ops'
 import { revalidateSeason4Routes } from '@/lib/season4-revalidate'
@@ -328,6 +329,9 @@ async function listToyOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
 }
 
 async function listLiveOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
+  const config = getSeason4OnchainConfig()
+  if (!config.managerAddress) return []
+
   const linkedMarkets = await db.query.onchainMarkets.findMany({
     columns: {
       marketSlug: true,
@@ -337,6 +341,7 @@ async function listLiveOpenTrialCandidates(): Promise<OpenTrialCandidate[]> {
       trialQuestionId: true,
     },
     where: and(
+      eq(onchainMarkets.managerAddress, config.managerAddress),
       eq(onchainMarkets.status, 'deployed'),
       isNotNull(onchainMarkets.trialQuestionId),
     ),
@@ -833,15 +838,21 @@ async function readFreshLiveBatchPortfolioState(
   }
 
   const marketSlugs = Array.from(new Set(refreshableTasks.map((task) => task.marketId)))
+  const config = getSeason4OnchainConfig()
   const linkedMarkets = marketSlugs.length === 0
     ? []
-    : await db.query.onchainMarkets.findMany({
-        columns: {
-          marketSlug: true,
-          onchainMarketId: true,
-        },
-        where: inArray(onchainMarkets.marketSlug, marketSlugs),
-      })
+    : !config.managerAddress
+      ? []
+      : await db.query.onchainMarkets.findMany({
+          columns: {
+            marketSlug: true,
+            onchainMarketId: true,
+          },
+          where: and(
+            eq(onchainMarkets.managerAddress, config.managerAddress),
+            inArray(onchainMarkets.marketSlug, marketSlugs),
+          ),
+        })
 
   const marketRefBySlug = new Map<string, string>()
   const onchainMarketIdBySlug = new Map<string, string>()

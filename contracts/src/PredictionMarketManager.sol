@@ -68,8 +68,10 @@ contract PredictionMarketManager {
         _;
     }
 
-    constructor() {
+    constructor(uint256 initialNextMarketId) {
+        require(initialNextMarketId > 0, "INVALID_INITIAL_MARKET_ID");
         owner = msg.sender;
+        nextMarketId = initialNextMarketId;
         emit OwnershipTransferred(address(0), msg.sender);
     }
 
@@ -148,8 +150,10 @@ contract PredictionMarketManager {
     }
 
     // This Base Sepolia v1 draft keeps qYes/qNo/liquidityB onchain and emits
-    // deterministic trade events for the app indexer. Before any real-money use,
-    // replace the marginal-price quote path below with a fully audited LMSR integral.
+    // deterministic trade events for the app indexer. Buys mint one collateral
+    // unit of shares per collateral unit deposited so every resolved share is
+    // backed. Before any real-money use, replace the quote path below with a
+    // fully audited LMSR integral or another collateralized market maker.
     function buyYes(uint256 marketId, uint256 collateralAmount, uint256 minSharesOut) external onlyOpenMarket(marketId) {
         _trade(marketId, collateralAmount, minSharesOut, true, true);
     }
@@ -214,7 +218,7 @@ contract PredictionMarketManager {
         require(sidePrice > 0, "INVALID_PRICE");
 
         if (isBuy) {
-            uint256 shareDelta = (amount * 1e18) / sidePrice;
+            uint256 shareDelta = amount;
             require(shareDelta >= limit, "SLIPPAGE");
             require(
                 IERC20Collateral(market.collateralToken).transferFrom(msg.sender, address(this), amount),

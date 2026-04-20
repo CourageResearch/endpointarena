@@ -2,7 +2,7 @@ import { createRequestId, errorResponse, successResponse } from '@/lib/api-respo
 import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { db } from '@/lib/db'
 import { onchainEvents, onchainMarkets, onchainModelWallets, onchainUserWallets } from '@/lib/schema'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 export async function GET() {
   const requestId = createRequestId()
@@ -12,8 +12,12 @@ export async function GET() {
     const [walletCount, modelWalletCount, marketCount, eventCount] = await Promise.all([
       db.select({ count: sql<number>`count(*)::int` }).from(onchainUserWallets),
       db.select({ count: sql<number>`count(*)::int` }).from(onchainModelWallets),
-      db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets),
-      db.select({ count: sql<number>`count(*)::int` }).from(onchainEvents),
+      config.managerAddress
+        ? db.select({ count: sql<number>`count(*)::int` }).from(onchainMarkets).where(eq(onchainMarkets.managerAddress, config.managerAddress))
+        : Promise.resolve([{ count: 0 }]),
+      config.managerAddress
+        ? db.select({ count: sql<number>`count(*)::int` }).from(onchainEvents).where(eq(onchainEvents.contractAddress, config.managerAddress))
+        : Promise.resolve([{ count: 0 }]),
     ])
 
     return successResponse({

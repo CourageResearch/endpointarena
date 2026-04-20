@@ -1,8 +1,10 @@
 import { AdminConsoleLayout } from '@/components/AdminConsoleLayout'
 import { AdminTrialOutcomeReview } from '@/components/AdminTrialOutcomeReview'
 import { Season4TrialMarketsPanel } from '@/components/admin/Season4TrialMarketsPanel'
+import { eq } from 'drizzle-orm'
 import { redirectIfNotAdmin } from '@/lib/admin-auth'
-import { db } from '@/lib/db'
+import { db, onchainMarkets } from '@/lib/db'
+import { getSeason4OnchainConfig } from '@/lib/onchain/config'
 import { getSeason4OpsDashboardData } from '@/lib/season4-ops'
 import { getTrialMonitorConfig } from '@/lib/trial-monitor-config'
 import {
@@ -124,6 +126,7 @@ export default async function AdminOraclePage({
   const autoRunScopedNctNumber = initialScopedNctNumber && parseBooleanSearchParam(resolvedSearchParams.autorun)
     ? initialScopedNctNumber
     : null
+  const onchainConfig = getSeason4OnchainConfig()
 
   const [config, candidates, recentRuns, openQuestions, historyEntries, season4Dashboard, linkedSeason4Markets] = await Promise.all([
     getTrialMonitorConfig(),
@@ -138,6 +141,9 @@ export default async function AdminOraclePage({
         marketSlug: true,
         createdAt: true,
       },
+      where: onchainConfig.managerAddress
+        ? eq(onchainMarkets.managerAddress, onchainConfig.managerAddress)
+        : eq(onchainMarkets.managerAddress, ''),
     }),
   ])
   const season4MarketSlugByQuestionId = new Map<string, string>()
