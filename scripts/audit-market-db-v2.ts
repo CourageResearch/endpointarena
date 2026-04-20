@@ -154,16 +154,6 @@ const CHECKS: Check[] = [
     `,
   },
   {
-    id: 'orphan_daily_snapshots_actor',
-    severity: 'error',
-    sql: `
-      select count(*)::int as value
-      from market_daily_snapshots s
-      left join market_actors a on a.id = s.actor_id
-      where a.id is null
-    `,
-  },
-  {
     id: 'trade_pairs_missing_positions',
     severity: 'error',
     sql: `
@@ -189,46 +179,6 @@ const CHECKS: Check[] = [
       from market_positions
       where yes_shares < -0.000001
          or no_shares < -0.000001
-    `,
-  },
-  {
-    id: 'daily_snapshot_equity_drift',
-    severity: 'warn',
-    sql: `
-      select count(*)::int as value
-      from market_daily_snapshots
-      where abs(total_equity - (cash_balance + positions_value)) > 0.05
-    `,
-  },
-  {
-    id: 'daily_snapshot_missing_for_accounts',
-    severity: 'warn',
-    sql: `
-      with latest_snapshot_date as (
-        select max(snapshot_date) as snapshot_date
-        from market_daily_snapshots
-      )
-      select count(*)::int as value
-      from market_accounts a
-      cross join latest_snapshot_date lsd
-      left join market_daily_snapshots s
-        on s.actor_id = a.actor_id
-       and s.snapshot_date = lsd.snapshot_date
-      where lsd.snapshot_date is not null
-        and s.actor_id is null
-    `,
-  },
-  {
-    id: 'duplicate_daily_snapshots',
-    severity: 'error',
-    sql: `
-      with dupes as (
-        select actor_id, snapshot_date, count(*) c
-        from market_daily_snapshots
-        group by actor_id, snapshot_date
-        having count(*) > 1
-      )
-      select count(*)::int as value from dupes
     `,
   },
   {

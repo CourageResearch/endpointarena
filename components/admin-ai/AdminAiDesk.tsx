@@ -856,7 +856,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
 
   async function runLiveModelCycleNow() {
     if (!batch) return
-    setBusyKey('model-cycle')
+    setBusyKey('run-model-cycle')
     setUiError(null)
     try {
       const payload = await fetchJson<{ batch: AiBatchState }>(`/api/admin/ai/batches/${encodeURIComponent(batch.id)}/clear`, {
@@ -1033,9 +1033,9 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
                 type="button"
                 onClick={() => void runLiveModelCycleNow()}
                 disabled={busyKey != null}
-                className="border border-[#5BA5ED] bg-[#5BA5ED] px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="border border-[#3a8a2e] bg-[#3a8a2e] px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {busyKey === 'model-cycle' ? 'Running model cycle...' : 'Run Model Cycle'}
+                {busyKey === 'run-model-cycle' ? 'Running model cycle...' : 'Run Model Cycle'}
               </button>
             ) : null}
           </div>
@@ -1086,7 +1086,7 @@ export function AdminAiDesk({ initialState, initialProgress, activeDatabaseTarge
           {batch?.status === 'cleared' ? (
             <div className="border border-[#3a8a2e]/30 bg-[#3a8a2e]/10 px-3 py-2 text-sm text-[#2f6f24]">
               {batch.dataset === 'live'
-                ? 'Batch complete. All selected models have finished, and the manual season 4 model cycle is final.'
+                ? 'Batch complete. All selected models have finished, and the manually triggered season 4 model cycle is final.'
                 : 'Batch complete. All selected models have finished, and the AMM clearing tape is final.'}
             </div>
           ) : null}

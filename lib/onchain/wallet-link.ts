@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { SEASON4_CHAIN_ID } from '@/lib/onchain/constants'
 import { onchainUserWallets } from '@/lib/schema'
 
 function trimOrNull(value: string | null | undefined): string | null {
@@ -28,7 +29,7 @@ export async function ensureOnchainUserWalletLink(args: {
     throw new Error('A wallet address is required to create a season 4 wallet link')
   }
 
-  const chainId = args.chainId ?? 84532
+  const chainId = args.chainId ?? SEASON4_CHAIN_ID
   const [existingByUserId, existingByWallet] = await Promise.all([
     db.select({
       id: onchainUserWallets.id,

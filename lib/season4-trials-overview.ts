@@ -8,6 +8,7 @@ import {
   type OpenMarketRow,
   type OverviewResponse,
 } from '@/lib/markets/overview-shared'
+import { MOCK_USDC_DISPLAY_SCALE } from '@/lib/onchain/constants'
 import { getSeason4MarketSummaries } from '@/lib/season4-market-data'
 import { normalizeTrialQuestionPrompt, filterSupportedTrialQuestions } from '@/lib/trial-questions'
 import type { ModelDecisionSnapshot } from '@/lib/types'
@@ -36,7 +37,7 @@ function atomicToDisplay(value: unknown): number {
     ? Number(value)
     : Number.NaN
   if (!Number.isFinite(numeric)) return 0
-  return numeric / 1_000_000
+  return numeric / MOCK_USDC_DISPLAY_SCALE
 }
 
 function toIsoString(value: Date | null | undefined): string | null {

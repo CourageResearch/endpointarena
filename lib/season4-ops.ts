@@ -10,11 +10,26 @@ import {
   type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
 import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
 import { ConfigurationError, ExternalServiceError, ValidationError } from '@/lib/errors'
 import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
+import {
+  DEFAULT_INITIAL_PRICE_YES_E18,
+  DEFAULT_SEASON4_INDEXER_INTERVAL_SECONDS,
+  DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
+  DEFAULT_SEASON4_MODEL_MAX_MARKETS_PER_CYCLE,
+  DEFAULT_SEASON4_TRADE_SLIPPAGE_BPS,
+  MAX_SEASON4_TRADE_SLIPPAGE_BPS,
+  MIN_SEASON4_MODEL_ETH_BALANCE_WEI,
+  MOCK_USDC_DISPLAY_SCALE,
+  PRICE_E18,
+  PRICE_INPUT_SCALE,
+  SEASON4_CHAIN,
+  SEASON4_MODEL_CYCLE_ADVISORY_LOCK_KEY,
+  SEASON4_RPC_BLOCK_POLL_ATTEMPTS,
+  SEASON4_RPC_BLOCK_POLL_DELAY_MS,
+} from '@/lib/onchain/constants'
 import {
   getSeason4DeployerPrivateKey,
   requireSeason4OnchainConfig,
@@ -23,7 +38,6 @@ import {
 import { syncSeason4OnchainIndex, type Season4IndexerSummary } from '@/lib/onchain/indexer'
 import { getModelDecisionGeneratorDisabledReason, MODEL_DECISION_GENERATORS } from '@/lib/predictions/model-decision-generators'
 import { getSeason4ModelStartingBankrollDisplay } from '@/lib/season4-bankroll-config'
-import { MOCK_USDC_DECIMALS } from '@/lib/season4-faucet-config'
 import { getSeason4ModelName } from '@/lib/season4-model-labels'
 import {
   DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY,
@@ -38,6 +52,7 @@ import {
   calculateSeason4PriceYes,
   generateSeason4ModelDecision,
   season4AtomicToDisplay,
+  season4DisplayToAtomic,
   type Season4DecisionTrialFacts,
 } from '@/lib/season4-model-decisions'
 import type { ModelDecisionResult } from '@/lib/predictions/model-decision-prompt'
@@ -53,14 +68,6 @@ import {
 import { getSeason4ModelTradeAmountDisplay } from '@/lib/season4-model-trade-config'
 
 const DEFAULT_MARKET_LIQUIDITY_B = season4LiquidityBDisplayToAtomic(DEFAULT_SEASON4_MARKET_LIQUIDITY_B_DISPLAY)
-const DEFAULT_MAX_MARKETS_PER_CYCLE = 1
-const DEFAULT_MODEL_ETH_TOP_UP_WEI = BigInt(20_000_000_000_000)
-const MIN_MODEL_ETH_BALANCE_WEI = BigInt(10_000_000_000_000)
-const PRICE_E18 = BigInt('1000000000000000000')
-const PRICE_INPUT_SCALE = BigInt(1_000_000)
-const DEFAULT_INITIAL_PRICE_YES_E18 = PRICE_E18 / BigInt(2)
-const RPC_BLOCK_POLL_ATTEMPTS = 10
-const RPC_BLOCK_POLL_DELAY_MS = 1_000
 const CONTRACT_OWNER_ABI = [
   {
     type: 'function',
@@ -118,6 +125,7 @@ export type Season4OpsDashboardData = {
     indexerIntervalSeconds: number
     tradeAmountDisplay: number
     maxMarketsPerCycle: number
+    tradeSlippageBps: number
   }
   counts: {
     markets: number
@@ -184,6 +192,7 @@ export type Season4ModelCycleSummary = {
   chainId: number
   tradeAmountDisplay: number
   maxMarketsPerCycle: number
+  tradeSlippageBps: number
   configuredModels: number
   configuredMarkets: number
   tradesExecuted: number
@@ -291,10 +300,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function waitForRpcBlock(getLatestBlock: () => Promise<bigint>, targetBlock: bigint): Promise<void> {
-  for (let attempt = 0; attempt < RPC_BLOCK_POLL_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < SEASON4_RPC_BLOCK_POLL_ATTEMPTS; attempt += 1) {
     const latestBlock = await getLatestBlock()
     if (latestBlock >= targetBlock) return
-    await sleep(RPC_BLOCK_POLL_DELAY_MS)
+    await sleep(SEASON4_RPC_BLOCK_POLL_DELAY_MS)
   }
 }
 
@@ -303,7 +312,7 @@ function season4LiquidityBDisplayToAtomic(value: number): bigint {
     throw new ValidationError('Season 4 liquidity B must be greater than zero')
   }
 
-  const atomic = Math.round(value * MOCK_USDC_DECIMALS)
+  const atomic = Math.round(value * MOCK_USDC_DISPLAY_SCALE)
   if (!Number.isSafeInteger(atomic) || atomic <= 0) {
     throw new ValidationError('Season 4 liquidity B is outside the supported mock USDC range')
   }
@@ -383,7 +392,7 @@ export function parseModelTradeAmountDisplay(): number {
 
 function parseMaxMarketsPerCycle(): number {
   const raw = trimOrNull(process.env.SEASON4_MODEL_MAX_MARKETS_PER_CYCLE)
-  if (!raw) return DEFAULT_MAX_MARKETS_PER_CYCLE
+  if (!raw) return DEFAULT_SEASON4_MODEL_MAX_MARKETS_PER_CYCLE
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new ConfigurationError('SEASON4_MODEL_MAX_MARKETS_PER_CYCLE must be a positive integer')
@@ -393,12 +402,36 @@ function parseMaxMarketsPerCycle(): number {
 
 export function parseIndexerIntervalSeconds(): number {
   const raw = trimOrNull(process.env.SEASON4_INDEXER_INTERVAL_SECONDS)
-  if (!raw) return 30
+  if (!raw) return DEFAULT_SEASON4_INDEXER_INTERVAL_SECONDS
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new ConfigurationError('SEASON4_INDEXER_INTERVAL_SECONDS must be a positive integer')
   }
   return parsed
+}
+
+function parseModelTradeSlippageBps(): number {
+  const raw = trimOrNull(process.env.SEASON4_TRADE_SLIPPAGE_BPS)
+  if (!raw) return DEFAULT_SEASON4_TRADE_SLIPPAGE_BPS
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_SEASON4_TRADE_SLIPPAGE_BPS) {
+    throw new ConfigurationError(`SEASON4_TRADE_SLIPPAGE_BPS must be between 0 and ${MAX_SEASON4_TRADE_SLIPPAGE_BPS}`)
+  }
+  return parsed
+}
+
+function applySlippageLimit(expectedOutputAtomic: bigint, slippageBps: number): bigint {
+  const clampedBps = Math.max(0, Math.min(MAX_SEASON4_TRADE_SLIPPAGE_BPS, Math.trunc(slippageBps)))
+  return (expectedOutputAtomic * BigInt(10_000 - clampedBps)) / BigInt(10_000)
+}
+
+async function withModelCycleLock<T>(work: () => Promise<T>): Promise<T> {
+  await db.execute(sql`select pg_advisory_lock(${SEASON4_MODEL_CYCLE_ADVISORY_LOCK_KEY})`)
+  try {
+    return await work()
+  } finally {
+    await db.execute(sql`select pg_advisory_unlock(${SEASON4_MODEL_CYCLE_ADVISORY_LOCK_KEY})`)
+  }
 }
 
 function getSiteUrl(): string {
@@ -420,12 +453,12 @@ function createOpsClients() {
 
   const account = privateKeyToAccount(privateKey)
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const walletClient = createWalletClient({
     account,
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
 
@@ -559,7 +592,7 @@ async function loadLiveModelWalletCollateralBalances(walletAddresses: string[]):
   }
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl ?? undefined),
   })
 
@@ -618,7 +651,7 @@ export async function loadLiveModelWalletPortfolioBalances(input: {
     .where(inArray(onchainModelWallets.modelKey, modelKeys))
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl ?? undefined),
   })
 
@@ -693,7 +726,7 @@ export async function loadContractMarketStates(marketIds: string[]): Promise<Map
   if (!config.enabled || !config.managerAddress || marketIds.length === 0) return states
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl ?? undefined),
   })
 
@@ -881,6 +914,7 @@ export async function getSeason4OpsDashboardData(options: { sync?: boolean } = {
       indexerIntervalSeconds: parseIndexerIntervalSeconds(),
       tradeAmountDisplay: parseModelTradeAmountDisplay(),
       maxMarketsPerCycle: parseMaxMarketsPerCycle(),
+      tradeSlippageBps: parseModelTradeSlippageBps(),
     },
     counts: {
       markets: marketCount[0]?.count ?? 0,
@@ -1205,19 +1239,19 @@ export async function fundSeason4ModelWallets(): Promise<Season4ModelWalletFundi
     }
 
     const gasBalance = await publicClient.getBalance({ address: walletAddress })
-    if (gasBalance < MIN_MODEL_ETH_BALANCE_WEI) {
+    if (gasBalance < MIN_SEASON4_MODEL_ETH_BALANCE_WEI) {
       const deployerBalance = await publicClient.getBalance({ address: deployer.address })
-      if (deployerBalance < DEFAULT_MODEL_ETH_TOP_UP_WEI) {
+      if (deployerBalance < DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI) {
         throw new ValidationError(
-          `Deployer ${deployer.address} is out of Base Sepolia ETH for model-wallet gas top-ups. It has ${formatEther(deployerBalance)} ETH and needs at least ${formatEther(DEFAULT_MODEL_ETH_TOP_UP_WEI)} ETH to top up ${walletAddress}. Fund the deployer, then retry "Fund model wallets".`,
+          `Deployer ${deployer.address} is out of Base Sepolia ETH for model-wallet gas top-ups. It has ${formatEther(deployerBalance)} ETH and needs at least ${formatEther(DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI)} ETH to top up ${walletAddress}. Fund the deployer, then retry "Fund model wallets".`,
         )
       }
 
       gasTopUpTxHash = await walletClient.sendTransaction({
         account: deployer,
         to: walletAddress,
-        value: DEFAULT_MODEL_ETH_TOP_UP_WEI,
-        chain: baseSepolia,
+        value: DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
+        chain: SEASON4_CHAIN,
       })
       await publicClient.waitForTransactionReceipt({ hash: gasTopUpTxHash })
     }
@@ -1242,10 +1276,16 @@ export async function fundSeason4ModelWallets(): Promise<Season4ModelWalletFundi
 }
 
 export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions = {}): Promise<Season4ModelCycleSummary> {
+  return withModelCycleLock(() => runSeason4ModelCycleUnlocked(options))
+}
+
+async function runSeason4ModelCycleUnlocked(options: RunSeason4ModelCycleOptions = {}): Promise<Season4ModelCycleSummary> {
   const config = requireSeason4OnchainConfig()
   const privateKeys = parseEnvModelPrivateKeys()
   const tradeAmountDisplay = parseModelTradeAmountDisplay()
   const maxMarketsPerCycle = parseMaxMarketsPerCycle()
+  const tradeSlippageBps = parseModelTradeSlippageBps()
+  const initialIndexSummary = await syncSeason4OnchainIndex()
   const scopedModelKeys = new Set(options.modelKeys ?? [])
   const scopedMarketSlugs = new Set(options.marketSlugs ?? [])
   const providedDecisionByModelMarket = new Map<string, ModelDecisionResult>(
@@ -1381,12 +1421,13 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
     chainId: config.chainId,
     tradeAmountDisplay,
     maxMarketsPerCycle,
+    tradeSlippageBps,
     configuredModels: 0,
     configuredMarkets: activeMarkets.length,
     tradesExecuted: 0,
     trades: [],
     skipped: preflightSkipped,
-    indexSummary: null,
+    indexSummary: initialIndexSummary,
   }
 
   if (activeMarkets.length === 0) {
@@ -1397,7 +1438,7 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
   }
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const marketStateById = new Map(activeMarkets.map((market) => [market.onchainMarketId, {
@@ -1433,7 +1474,7 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
 
     const walletClient = createWalletClient({
       account,
-      chain: baseSepolia,
+      chain: SEASON4_CHAIN,
       transport: http(config.rpcUrl),
     })
 
@@ -1482,12 +1523,43 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
     }))
 
     for (const market of activeMarkets) {
-      const liveMarket = marketStateById.get(market.onchainMarketId)
+      const latestState = (await loadContractMarketStates([market.onchainMarketId])).get(market.onchainMarketId)
+      if (latestState) {
+        marketStateById.set(market.onchainMarketId, {
+          ...market,
+          ...latestState,
+        })
+      }
+
+      let liveMarket = marketStateById.get(market.onchainMarketId)
       if (!liveMarket) continue
 
-      const currentPosition = positionStateByMarketId.get(market.onchainMarketId) ?? {
+      let currentPosition = positionStateByMarketId.get(market.onchainMarketId) ?? {
         yesSharesHeld: 0,
         noSharesHeld: 0,
+      }
+      try {
+        const [yesBalance, noBalance] = await Promise.all([
+          publicClient.readContract({
+            address: config.managerAddress,
+            abi: PREDICTION_MARKET_MANAGER_ABI,
+            functionName: 'yesBalances',
+            args: [BigInt(market.onchainMarketId), account.address],
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: config.managerAddress,
+            abi: PREDICTION_MARKET_MANAGER_ABI,
+            functionName: 'noBalances',
+            args: [BigInt(market.onchainMarketId), account.address],
+          }) as Promise<bigint>,
+        ])
+        currentPosition = {
+          yesSharesHeld: season4AtomicToDisplay(yesBalance),
+          noSharesHeld: season4AtomicToDisplay(noBalance),
+        }
+        positionStateByMarketId.set(market.onchainMarketId, currentPosition)
+      } catch {
+        // Use the last known position snapshot when a direct balance refresh fails.
       }
 
       const context = {
@@ -1522,12 +1594,9 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
       }
 
       const providedDecision = providedDecisionByModelMarket.get(`${row.modelKey}:${liveMarket.marketSlug}`)
-      let cappedDecision: ReturnType<typeof capSeason4TradeDecision>
+      let rawDecision: ModelDecisionResult
       if (providedDecision) {
-        cappedDecision = capSeason4TradeDecision({
-          decision: providedDecision,
-          tradeCaps: preview.tradeCaps,
-        })
+        rawDecision = providedDecision
       } else {
         if (!canGenerateDecision) {
           summary.skipped.push({
@@ -1553,11 +1622,50 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
           continue
         }
 
-        cappedDecision = capSeason4TradeDecision({
-          decision: generated.generation.result,
-          tradeCaps: generated.tradeCaps,
-        })
+        rawDecision = generated.generation.result
       }
+
+      let cappedDecision = capSeason4TradeDecision({
+        decision: rawDecision,
+        tradeCaps: preview.tradeCaps,
+      })
+      const freshBeforeSubmit = (await loadContractMarketStates([liveMarket.onchainMarketId])).get(liveMarket.onchainMarketId)
+      if (!freshBeforeSubmit) {
+        summary.skipped.push({
+          modelKey: row.modelKey,
+          marketSlug: liveMarket.marketSlug,
+          reason: 'Could not refresh onchain market state immediately before submitting the trade.',
+        })
+        continue
+      }
+
+      const priceMoveBps = Math.abs(freshBeforeSubmit.priceYes - context.priceYes) * 10_000
+      if (priceMoveBps > tradeSlippageBps) {
+        summary.skipped.push({
+          modelKey: row.modelKey,
+          marketSlug: liveMarket.marketSlug,
+          reason: `Onchain price moved ${Math.round(priceMoveBps)} bps after the model decision, above the ${tradeSlippageBps} bps tolerance.`,
+        })
+        continue
+      }
+
+      liveMarket = {
+        ...liveMarket,
+        ...freshBeforeSubmit,
+      }
+      marketStateById.set(liveMarket.onchainMarketId, liveMarket)
+      const freshContext = {
+        ...context,
+        qYesDisplay: liveMarket.qYesDisplay,
+        qNoDisplay: liveMarket.qNoDisplay,
+        liquidityBDisplay: liveMarket.liquidityBDisplay,
+        priceYes: liveMarket.priceYes,
+        asOf: new Date(),
+      }
+      cappedDecision = capSeason4TradeDecision({
+        decision: rawDecision,
+        tradeCaps: buildSeason4ModelDecisionInput(freshContext).tradeCaps,
+      })
       if (cappedDecision.actionType === 'HOLD' || cappedDecision.executedAmountUsd <= 0) {
         summary.skipped.push({
           modelKey: row.modelKey,
@@ -1582,6 +1690,10 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
         })
         continue
       }
+      const expectedOutputAtomic = tradeExecution.contractFunctionName === 'buyYes' || tradeExecution.contractFunctionName === 'buyNo'
+        ? tradeExecution.amountAtomic
+        : season4DisplayToAtomic(cappedDecision.executedAmountUsd)
+      const minOutputAtomic = applySlippageLimit(expectedOutputAtomic, tradeSlippageBps)
 
       try {
         if (tradeExecution.contractFunctionName === 'buyYes' || tradeExecution.contractFunctionName === 'buyNo') {
@@ -1624,7 +1736,7 @@ export async function runSeason4ModelCycle(options: RunSeason4ModelCycleOptions 
           address: config.managerAddress,
           abi: PREDICTION_MARKET_MANAGER_ABI,
           functionName: tradeExecution.contractFunctionName,
-          args: [BigInt(liveMarket.onchainMarketId), tradeExecution.amountAtomic, BigInt(0)],
+          args: [BigInt(liveMarket.onchainMarketId), tradeExecution.amountAtomic, minOutputAtomic],
           account,
         })
         await publicClient.waitForTransactionReceipt({ hash: txHash })

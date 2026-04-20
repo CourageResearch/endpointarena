@@ -203,7 +203,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
                 key: 'run-model-cycle',
                 url: '/api/admin/season4/model-cycle/run',
                 fallbackMessage: 'Failed to run the season 4 model cycle',
-                successMessage: (result) => `Model cycle complete. ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'} executed.`,
+                successMessage: (result) => `Model cycle complete. Executed ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'}.`,
               })}
               disabled={pendingAction !== null || !initialData.chain.enabled}
               className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff] disabled:cursor-not-allowed disabled:opacity-50"
@@ -245,7 +245,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
         <article className="rounded-none border border-[#e8ddd0] bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-[#1a1a1a]">Railway workers</h2>
           <p className="mt-1 text-sm text-[#6f665b]">
-            The recurring Railway job mirrors Base Sepolia state. Model cycles are manual-only.
+            The only recurring Season 4 worker mirrors Base Sepolia state. Model cycles are manual-only.
           </p>
 
           <div className="mt-4 rounded-none border border-[#e8ddd0] bg-[#fcfaf7] p-3 text-sm text-[#5b5148]">
@@ -254,7 +254,7 @@ export function Season4BaseDesk({ initialData }: { initialData: Season4OpsDashbo
               npm run season4:indexer:worker
             </code>
             <p className="mt-3 text-xs text-[#6f665b]">
-              The model-cycle worker command is intentionally disabled for production. Each admin-started cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
+              The model-cycle worker command is intentionally disabled for production. Run model cycles manually from the admin panel when ready. Each cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
             </p>
           </div>
         </article>

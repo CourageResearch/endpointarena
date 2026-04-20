@@ -1,17 +1,17 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { createPublicClient, http } from 'viem'
-import { baseSepolia } from 'viem/chains'
 import { db } from '@/lib/db'
 import { NotFoundError } from '@/lib/errors'
 import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4OnchainConfig } from '@/lib/onchain/config'
+import { MOCK_USDC_DISPLAY_SCALE, SEASON4_CHAIN } from '@/lib/onchain/constants'
 import { syncSeason4OnchainIndex } from '@/lib/onchain/indexer'
 import { normalizeWalletAddress } from '@/lib/onchain/wallet-link'
 import { getSeason4FaucetClaimState } from '@/lib/season4-faucet-eligibility'
 import { formatSeason4FaucetEthAmount, formatSeason4FaucetUsdcAmount } from '@/lib/season4-faucet-config'
 import { onchainBalances, onchainEvents, onchainMarkets, onchainUserWallets, users } from '@/lib/schema'
 
-const MARKET_DECIMALS = 1_000_000
+const MARKET_DECIMALS = MOCK_USDC_DISPLAY_SCALE
 
 export type Season4ProfileHolding = {
   marketId: string
@@ -132,7 +132,7 @@ async function loadMarketPrices(marketIds: string[]): Promise<Map<string, number
   }
 
   const client = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl ?? undefined),
   })
 
@@ -247,7 +247,7 @@ export async function getSeason4ProfileData(
   if (walletAddress && config.enabled && config.collateralTokenAddress) {
     try {
       const client = createPublicClient({
-        chain: baseSepolia,
+        chain: SEASON4_CHAIN,
         transport: http(config.rpcUrl ?? undefined),
       })
       const tokenBalance = await client.readContract({
@@ -421,7 +421,7 @@ export async function getSeason4ProfileData(
   if ((config.target === 'toy' || !faucetClaimState.hasClaimed) && walletAddress && config.enabled && config.faucetAddress) {
     try {
       const client = createPublicClient({
-        chain: baseSepolia,
+        chain: SEASON4_CHAIN,
         transport: http(config.rpcUrl ?? undefined),
       })
 

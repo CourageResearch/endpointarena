@@ -1,7 +1,7 @@
 import type { Address } from 'viem'
-import { baseSepolia } from 'viem/chains'
 import { getActiveDatabaseTarget, type DatabaseTarget } from '@/lib/database-target'
 import { ConfigurationError } from '@/lib/errors'
+import { SEASON4_CHAIN_ID, SEASON4_CHAIN_NAME } from '@/lib/onchain/constants'
 
 function trimOrNull(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
@@ -107,7 +107,7 @@ export function getSeason4OnchainConfig(target: DatabaseTarget = getImplicitOnch
     target === 'toy'
       ? readTargetEnv('toy', 'CHAIN_ID') ?? process.env.SEASON4_CHAIN_ID
       : process.env.SEASON4_CHAIN_ID,
-    baseSepolia.id,
+    SEASON4_CHAIN_ID,
   )
   const rpcUrl = readRpcUrl(target)
   const managerAddress = normalizeAddress(readTargetEnv(target, 'MARKET_MANAGER_ADDRESS'))
@@ -125,7 +125,7 @@ export function getSeason4OnchainConfig(target: DatabaseTarget = getImplicitOnch
     target,
     enabled,
     chainId,
-    chainName: chainId === baseSepolia.id ? baseSepolia.name : `Chain ${chainId}`,
+    chainName: chainId === SEASON4_CHAIN_ID ? SEASON4_CHAIN_NAME : `Chain ${chainId}`,
     rpcUrl,
     managerAddress,
     faucetAddress,

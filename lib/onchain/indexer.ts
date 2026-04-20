@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { createPublicClient, decodeEventLog, http, type Address, type PublicClient } from 'viem'
 import { db } from '@/lib/db'
 import {
@@ -12,6 +12,15 @@ import {
 } from '@/lib/schema'
 import { PREDICTION_MARKET_MANAGER_ABI, SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4OnchainConfig, requireSeason4OnchainConfig } from '@/lib/onchain/config'
+import {
+  DEFAULT_SEASON4_INDEXER_CONFIRMATIONS,
+  MOCK_USDC_DISPLAY_SCALE,
+  SEASON4_INDEXER_MAX_LOG_RANGE,
+  SEASON4_ONCHAIN_INDEXER_ADVISORY_LOCK_KEY,
+} from '@/lib/onchain/constants'
+
+type IndexerDbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
+type ChainLog = Awaited<ReturnType<PublicClient['getLogs']>>[number]
 
 type IndexedAddressTarget = {
   cursorId: string
@@ -33,9 +42,6 @@ type WalletIdentity = {
   modelKey: string | null
 }
 
-const MOCK_USDC_DECIMALS = BigInt(6)
-const MAX_LOG_RANGE = BigInt(9_999)
-
 function lowercaseAddress(value: string | null | undefined): string | null {
   return typeof value === 'string' ? value.toLowerCase() : null
 }
@@ -50,9 +56,27 @@ function serializeForJson(value: unknown): unknown {
   return value
 }
 
-function formatTokenDisplay(value: bigint, decimals = MOCK_USDC_DECIMALS): number {
-  const divisor = Number(BigInt(10) ** decimals)
-  return Number(value) / divisor
+function formatTokenDisplay(value: bigint): number {
+  return Number(value) / MOCK_USDC_DISPLAY_SCALE
+}
+
+function parseIndexerConfirmations(): bigint {
+  const raw = process.env.SEASON4_INDEXER_CONFIRMATIONS?.trim()
+  if (!raw) return BigInt(DEFAULT_SEASON4_INDEXER_CONFIRMATIONS)
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return BigInt(DEFAULT_SEASON4_INDEXER_CONFIRMATIONS)
+  }
+  return BigInt(parsed)
+}
+
+async function withIndexerLock<T>(work: () => Promise<T>): Promise<T> {
+  await db.execute(sql`select pg_advisory_lock(${SEASON4_ONCHAIN_INDEXER_ADVISORY_LOCK_KEY})`)
+  try {
+    return await work()
+  } finally {
+    await db.execute(sql`select pg_advisory_unlock(${SEASON4_ONCHAIN_INDEXER_ADVISORY_LOCK_KEY})`)
+  }
 }
 
 function createClient(): PublicClient {
@@ -76,9 +100,9 @@ async function fetchLogsInChunks(args: {
   let cursor = args.fromBlock
 
   while (cursor <= args.toBlock) {
-    const chunkToBlock = cursor + MAX_LOG_RANGE > args.toBlock
+    const chunkToBlock = cursor + SEASON4_INDEXER_MAX_LOG_RANGE > args.toBlock
       ? args.toBlock
-      : cursor + MAX_LOG_RANGE
+      : cursor + SEASON4_INDEXER_MAX_LOG_RANGE
 
     const chunkLogs = await args.client.getLogs({
       address: args.address,
@@ -92,7 +116,10 @@ async function fetchLogsInChunks(args: {
   return logs
 }
 
-async function getCursorBlock(target: IndexedAddressTarget, fallbackBlock: bigint): Promise<bigint> {
+async function getCursorBlock(target: IndexedAddressTarget, fallbackBlock: bigint): Promise<{
+  block: bigint
+  exists: boolean
+}> {
   const [existing] = await db.select({
     lastSyncedBlock: onchainIndexerCursors.lastSyncedBlock,
   })
@@ -103,16 +130,17 @@ async function getCursorBlock(target: IndexedAddressTarget, fallbackBlock: bigin
     ))
     .limit(1)
 
-  if (!existing) return fallbackBlock
+  if (!existing) return { block: fallbackBlock, exists: false }
 
   try {
-    return BigInt(existing.lastSyncedBlock)
+    return { block: BigInt(existing.lastSyncedBlock), exists: true }
   } catch {
-    return fallbackBlock
+    return { block: fallbackBlock, exists: false }
   }
 }
 
-async function saveCursor(target: IndexedAddressTarget, blockNumber: bigint): Promise<void> {
+async function saveCursor(target: IndexedAddressTarget, blockNumber: bigint, latestSeenBlock = blockNumber): Promise<void> {
+  const chainId = getSeason4OnchainConfig().chainId
   const [existing] = await db.select({
     id: onchainIndexerCursors.id,
   })
@@ -123,10 +151,10 @@ async function saveCursor(target: IndexedAddressTarget, blockNumber: bigint): Pr
   if (existing) {
     await db.update(onchainIndexerCursors)
       .set({
-        chainId: getSeason4OnchainConfig().chainId,
+        chainId,
         contractAddress: target.address,
         lastSyncedBlock: blockNumber.toString(),
-        latestSeenBlock: blockNumber.toString(),
+        latestSeenBlock: latestSeenBlock.toString(),
         updatedAt: new Date(),
       })
       .where(eq(onchainIndexerCursors.id, target.cursorId))
@@ -135,29 +163,29 @@ async function saveCursor(target: IndexedAddressTarget, blockNumber: bigint): Pr
 
   await db.insert(onchainIndexerCursors).values({
     id: target.cursorId,
-    chainId: getSeason4OnchainConfig().chainId,
+    chainId,
     contractAddress: target.address,
     lastSyncedBlock: blockNumber.toString(),
-    latestSeenBlock: blockNumber.toString(),
+    latestSeenBlock: latestSeenBlock.toString(),
     updatedAt: new Date(),
   })
 }
 
-async function resolveWalletIdentity(walletAddress: string): Promise<WalletIdentity> {
+async function resolveWalletIdentity(database: IndexerDbClient, walletAddress: string): Promise<WalletIdentity> {
   const normalized = lowercaseAddress(walletAddress)
   if (!normalized) {
     return { userId: null, modelKey: null }
   }
 
   const [userWallet, modelWallet] = await Promise.all([
-    db.select({
+    database.select({
       userId: onchainUserWallets.userId,
     })
       .from(onchainUserWallets)
       .where(eq(onchainUserWallets.walletAddress, normalized))
       .limit(1)
       .then((rows) => rows[0] ?? null),
-    db.select({
+    database.select({
       modelKey: onchainModelWallets.modelKey,
     })
       .from(onchainModelWallets)
@@ -172,7 +200,7 @@ async function resolveWalletIdentity(walletAddress: string): Promise<WalletIdent
   }
 }
 
-async function upsertBalanceRow(args: {
+async function upsertBalanceRow(database: IndexerDbClient, args: {
   walletAddress: string
   marketRef: string
   collateralDelta?: number
@@ -183,55 +211,77 @@ async function upsertBalanceRow(args: {
   const walletAddress = lowercaseAddress(args.walletAddress)
   if (!walletAddress) return
 
-  const identity = await resolveWalletIdentity(walletAddress)
-  const [existing] = await db.select({
-    id: onchainBalances.id,
-    collateralDisplay: onchainBalances.collateralDisplay,
-    yesShares: onchainBalances.yesShares,
-    noShares: onchainBalances.noShares,
-  })
-    .from(onchainBalances)
-    .where(and(
-      eq(onchainBalances.chainId, getSeason4OnchainConfig().chainId),
-      eq(onchainBalances.walletAddress, walletAddress),
-      eq(onchainBalances.marketRef, args.marketRef),
-    ))
-    .limit(1)
+  const identity = await resolveWalletIdentity(database, walletAddress)
+  const chainId = getSeason4OnchainConfig().chainId
+  const collateralDelta = args.collateralDelta ?? 0
+  const yesShareDelta = args.yesShareDelta ?? 0
+  const noShareDelta = args.noShareDelta ?? 0
 
-  const nextCollateral = Math.max(0, (existing?.collateralDisplay ?? 0) + (args.collateralDelta ?? 0))
-  const nextYesShares = Math.max(0, (existing?.yesShares ?? 0) + (args.yesShareDelta ?? 0))
-  const nextNoShares = Math.max(0, (existing?.noShares ?? 0) + (args.noShareDelta ?? 0))
-
-  if (existing) {
-    await db.update(onchainBalances)
-      .set({
+  await database.insert(onchainBalances)
+    .values({
+      chainId,
+      walletAddress,
+      marketRef: args.marketRef,
+      userId: identity.userId,
+      modelKey: identity.modelKey,
+      collateralDisplay: Math.max(0, collateralDelta),
+      yesShares: Math.max(0, yesShareDelta),
+      noShares: Math.max(0, noShareDelta),
+      lastIndexedBlock: args.blockNumber.toString(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [onchainBalances.chainId, onchainBalances.walletAddress, onchainBalances.marketRef],
+      set: {
         userId: identity.userId,
         modelKey: identity.modelKey,
-        collateralDisplay: nextCollateral,
-        yesShares: nextYesShares,
-        noShares: nextNoShares,
+        collateralDisplay: sql`GREATEST(0, ${onchainBalances.collateralDisplay} + ${collateralDelta})`,
+        yesShares: sql`GREATEST(0, ${onchainBalances.yesShares} + ${yesShareDelta})`,
+        noShares: sql`GREATEST(0, ${onchainBalances.noShares} + ${noShareDelta})`,
         lastIndexedBlock: args.blockNumber.toString(),
         updatedAt: new Date(),
-      })
-      .where(eq(onchainBalances.id, existing.id))
-    return
-  }
-
-  await db.insert(onchainBalances).values({
-    chainId: getSeason4OnchainConfig().chainId,
-    walletAddress,
-    marketRef: args.marketRef,
-    userId: identity.userId,
-    modelKey: identity.modelKey,
-    collateralDisplay: nextCollateral,
-    yesShares: nextYesShares,
-    noShares: nextNoShares,
-    lastIndexedBlock: args.blockNumber.toString(),
-    updatedAt: new Date(),
-  })
+      },
+    })
 }
 
-async function persistEventRow(args: {
+async function clearPositionBalanceRow(database: IndexerDbClient, args: {
+  walletAddress: string
+  marketRef: string
+  blockNumber: bigint
+}): Promise<void> {
+  const walletAddress = lowercaseAddress(args.walletAddress)
+  if (!walletAddress) return
+
+  const identity = await resolveWalletIdentity(database, walletAddress)
+  const chainId = getSeason4OnchainConfig().chainId
+
+  await database.insert(onchainBalances)
+    .values({
+      chainId,
+      walletAddress,
+      marketRef: args.marketRef,
+      userId: identity.userId,
+      modelKey: identity.modelKey,
+      collateralDisplay: 0,
+      yesShares: 0,
+      noShares: 0,
+      lastIndexedBlock: args.blockNumber.toString(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [onchainBalances.chainId, onchainBalances.walletAddress, onchainBalances.marketRef],
+      set: {
+        userId: identity.userId,
+        modelKey: identity.modelKey,
+        yesShares: 0,
+        noShares: 0,
+        lastIndexedBlock: args.blockNumber.toString(),
+        updatedAt: new Date(),
+      },
+    })
+}
+
+async function persistEventRow(database: IndexerDbClient, args: {
   chainId: number
   contractAddress: string
   txHash: string
@@ -243,38 +293,28 @@ async function persistEventRow(args: {
   walletAddress?: string | null
   payload: Record<string, unknown>
 }): Promise<boolean> {
-  const [existing] = await db.select({
-    id: onchainEvents.id,
-  })
-    .from(onchainEvents)
-    .where(and(
-      eq(onchainEvents.chainId, args.chainId),
-      eq(onchainEvents.txHash, args.txHash),
-      eq(onchainEvents.logIndex, args.logIndex),
-    ))
-    .limit(1)
+  const inserted = await database.insert(onchainEvents)
+    .values({
+      chainId: args.chainId,
+      contractAddress: lowercaseAddress(args.contractAddress) ?? args.contractAddress,
+      txHash: args.txHash,
+      blockHash: args.blockHash,
+      blockNumber: args.blockNumber.toString(),
+      logIndex: args.logIndex,
+      eventName: args.eventName,
+      marketRef: args.marketRef ?? null,
+      walletAddress: lowercaseAddress(args.walletAddress) ?? null,
+      payload: serializeForJson(args.payload) as Record<string, unknown>,
+    })
+    .onConflictDoNothing({
+      target: [onchainEvents.chainId, onchainEvents.txHash, onchainEvents.logIndex],
+    })
+    .returning({ id: onchainEvents.id })
 
-  if (existing) {
-    return false
-  }
-
-  await db.insert(onchainEvents).values({
-    chainId: args.chainId,
-    contractAddress: lowercaseAddress(args.contractAddress) ?? args.contractAddress,
-    txHash: args.txHash,
-    blockHash: args.blockHash,
-    blockNumber: args.blockNumber.toString(),
-    logIndex: args.logIndex,
-    eventName: args.eventName,
-    marketRef: args.marketRef ?? null,
-    walletAddress: lowercaseAddress(args.walletAddress) ?? null,
-    payload: serializeForJson(args.payload) as Record<string, unknown>,
-  })
-
-  return true
+  return inserted.length > 0
 }
 
-async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<ReturnType<PublicClient['getLogs']>>[number]) {
+async function handleManagerLog(database: IndexerDbClient, target: IndexedAddressTarget, log: ChainLog) {
   let decoded: ReturnType<typeof decodeEventLog<typeof PREDICTION_MARKET_MANAGER_ABI>>
   try {
     decoded = decodeEventLog({
@@ -290,7 +330,7 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
   const marketRef = 'marketId' in decoded.args ? String(decoded.args.marketId) : null
   const walletAddress = 'trader' in decoded.args ? String(decoded.args.trader) : null
 
-  const inserted = await persistEventRow({
+  const inserted = await persistEventRow(database, {
     chainId,
     contractAddress: target.address,
     txHash: log.transactionHash!,
@@ -307,7 +347,7 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
 
   if (eventName === 'MarketCreated') {
     const marketId = String(decoded.args.marketId)
-    const [existing] = await db.select({
+    const [existing] = await database.select({
       id: onchainMarkets.id,
       marketSlug: onchainMarkets.marketSlug,
       title: onchainMarkets.title,
@@ -334,11 +374,11 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
     }
 
     if (existing) {
-      await db.update(onchainMarkets)
+      await database.update(onchainMarkets)
         .set(baseValues)
         .where(eq(onchainMarkets.id, existing.id))
     } else {
-      await db.insert(onchainMarkets).values({
+      await database.insert(onchainMarkets).values({
         trialQuestionId: null,
         marketSlug: `season4-market-${marketId}`,
         title: `Season 4 Market ${marketId}`,
@@ -348,7 +388,7 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
   }
 
   if (eventName === 'MarketResolved') {
-    await db.update(onchainMarkets)
+    await database.update(onchainMarkets)
       .set({
         status: 'resolved',
         resolvedOutcome: decoded.args.outcomeYes ? 'YES' : 'NO',
@@ -366,13 +406,13 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
     const collateralDelta = formatTokenDisplay(decoded.args.collateralAmount) * (decoded.args.isBuy ? -1 : 1)
     const shareDelta = formatTokenDisplay(decoded.args.shareDelta)
     const isYes = Boolean(decoded.args.isYes)
-    await upsertBalanceRow({
+    await upsertBalanceRow(database, {
       walletAddress: String(decoded.args.trader),
       marketRef: 'collateral',
       collateralDelta,
       blockNumber: log.blockNumber!,
     })
-    await upsertBalanceRow({
+    await upsertBalanceRow(database, {
       walletAddress: String(decoded.args.trader),
       marketRef: `market:${decoded.args.marketId.toString()}`,
       yesShareDelta: isYes ? (decoded.args.isBuy ? shareDelta : -shareDelta) : 0,
@@ -382,10 +422,15 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
   }
 
   if (eventName === 'WinningsRedeemed') {
-    await upsertBalanceRow({
+    await upsertBalanceRow(database, {
       walletAddress: String(decoded.args.trader),
       marketRef: 'collateral',
       collateralDelta: formatTokenDisplay(decoded.args.collateralAmount),
+      blockNumber: log.blockNumber!,
+    })
+    await clearPositionBalanceRow(database, {
+      walletAddress: String(decoded.args.trader),
+      marketRef: `market:${decoded.args.marketId.toString()}`,
       blockNumber: log.blockNumber!,
     })
   }
@@ -393,7 +438,7 @@ async function handleManagerLog(target: IndexedAddressTarget, log: Awaited<Retur
   return { marketEvents: 1 }
 }
 
-async function handleFaucetLog(target: IndexedAddressTarget, log: Awaited<ReturnType<PublicClient['getLogs']>>[number]) {
+async function handleFaucetLog(database: IndexerDbClient, target: IndexedAddressTarget, log: ChainLog) {
   let decoded: ReturnType<typeof decodeEventLog<typeof SEASON4_FAUCET_ABI>>
   try {
     decoded = decodeEventLog({
@@ -405,7 +450,7 @@ async function handleFaucetLog(target: IndexedAddressTarget, log: Awaited<Return
     return { faucetEvents: 0 }
   }
 
-  const inserted = await persistEventRow({
+  const inserted = await persistEventRow(database, {
     chainId: getSeason4OnchainConfig().chainId,
     contractAddress: target.address,
     txHash: log.transactionHash!,
@@ -420,7 +465,7 @@ async function handleFaucetLog(target: IndexedAddressTarget, log: Awaited<Return
   if (!inserted) return { faucetEvents: 0 }
 
   const walletAddress = lowercaseAddress(String(decoded.args.recipient)) ?? String(decoded.args.recipient)
-  const [claim] = await db.select({
+  const [claim] = await database.select({
     id: onchainFaucetClaims.id,
   })
     .from(onchainFaucetClaims)
@@ -431,7 +476,7 @@ async function handleFaucetLog(target: IndexedAddressTarget, log: Awaited<Return
     .limit(1)
 
   if (claim) {
-    await db.update(onchainFaucetClaims)
+    await database.update(onchainFaucetClaims)
       .set({
         status: 'confirmed',
         processedAt: new Date(),
@@ -440,7 +485,7 @@ async function handleFaucetLog(target: IndexedAddressTarget, log: Awaited<Return
       .where(eq(onchainFaucetClaims.id, claim.id))
   }
 
-  await upsertBalanceRow({
+  await upsertBalanceRow(database, {
     walletAddress,
     marketRef: 'collateral',
     collateralDelta: formatTokenDisplay(decoded.args.amount),
@@ -451,9 +496,15 @@ async function handleFaucetLog(target: IndexedAddressTarget, log: Awaited<Return
 }
 
 export async function syncSeason4OnchainIndex(): Promise<Season4IndexerSummary> {
+  return withIndexerLock(syncSeason4OnchainIndexUnlocked)
+}
+
+async function syncSeason4OnchainIndexUnlocked(): Promise<Season4IndexerSummary> {
   const config = requireSeason4OnchainConfig()
   const client = createClient()
   const latestBlock = await client.getBlockNumber()
+  const confirmationLag = parseIndexerConfirmations()
+  const latestSafeBlock = latestBlock > confirmationLag ? latestBlock - confirmationLag : BigInt(0)
   const targets: IndexedAddressTarget[] = [
     {
       cursorId: 'season4-manager',
@@ -473,12 +524,14 @@ export async function syncSeason4OnchainIndex(): Promise<Season4IndexerSummary> 
   const fromBlocks: Record<string, string> = {}
 
   for (const target of targets) {
-    const cursorBlock = await getCursorBlock(target, config.indexFromBlock)
-    const fromBlock = cursorBlock === BigInt(0) ? config.indexFromBlock : cursorBlock + BigInt(1)
+    const cursor = await getCursorBlock(target, config.indexFromBlock)
+    const fromBlock = cursor.exists ? cursor.block + BigInt(1) : cursor.block
     fromBlocks[target.cursorId] = fromBlock.toString()
 
-    if (fromBlock > latestBlock) {
-      await saveCursor(target, latestBlock)
+    if (fromBlock > latestSafeBlock) {
+      if (cursor.exists) {
+        await saveCursor(target, cursor.block, latestBlock)
+      }
       continue
     }
 
@@ -486,23 +539,23 @@ export async function syncSeason4OnchainIndex(): Promise<Season4IndexerSummary> 
       client,
       address: target.address,
       fromBlock,
-      toBlock: latestBlock,
+      toBlock: latestSafeBlock,
     })
 
     for (const log of logs) {
       if (!log.transactionHash || log.blockNumber == null || log.logIndex == null) continue
 
-      if (target.kind === 'manager') {
-        const result = await handleManagerLog(target, log)
-        marketEvents += result.marketEvents
-      } else {
-        const result = await handleFaucetLog(target, log)
-        faucetEvents += result.faucetEvents
-      }
+      const result = await db.transaction(async (tx) => (
+        target.kind === 'manager'
+          ? handleManagerLog(tx, target, log)
+          : handleFaucetLog(tx, target, log)
+      ))
+      marketEvents += 'marketEvents' in result ? result.marketEvents : 0
+      faucetEvents += 'faucetEvents' in result ? result.faucetEvents : 0
       logsIndexed += 1
     }
 
-    await saveCursor(target, latestBlock)
+    await saveCursor(target, latestSafeBlock, latestBlock)
   }
 
   return {

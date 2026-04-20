@@ -34,7 +34,6 @@ type NamespaceCounts = {
   marketRunLogs: number
   modelDecisionSnapshots: number
   marketPriceSnapshots: number
-  marketDailySnapshots: number
   trialMonitorRuns: number
   trialSyncRuns: number
   trialSyncRunItems: number
@@ -211,7 +210,6 @@ async function loadCounts(sql: postgres.Sql): Promise<NamespaceCounts> {
       (select count(*)::int from market_run_logs) as "marketRunLogs",
       (select count(*)::int from model_decision_snapshots) as "modelDecisionSnapshots",
       (select count(*)::int from market_price_snapshots) as "marketPriceSnapshots",
-      (select count(*)::int from market_daily_snapshots) as "marketDailySnapshots",
       (select count(*)::int from trial_monitor_runs) as "trialMonitorRuns",
       (select count(*)::int from trial_sync_runs) as "trialSyncRuns",
       (select count(*)::int from trial_sync_run_items) as "trialSyncRunItems",
@@ -251,7 +249,6 @@ async function loadCounts(sql: postgres.Sql): Promise<NamespaceCounts> {
     marketRunLogs: row?.marketRunLogs ?? 0,
     modelDecisionSnapshots: row?.modelDecisionSnapshots ?? 0,
     marketPriceSnapshots: row?.marketPriceSnapshots ?? 0,
-    marketDailySnapshots: row?.marketDailySnapshots ?? 0,
     trialMonitorRuns: row?.trialMonitorRuns ?? 0,
     trialSyncRuns: row?.trialSyncRuns ?? 0,
     trialSyncRunItems: row?.trialSyncRunItems ?? 0,
@@ -403,7 +400,6 @@ async function executeReset(tx: postgres.Sql, humanRows: HumanResetRow[]): Promi
   await tx`delete from market_run_logs`
   await tx`delete from market_runs`
   await tx`delete from market_price_snapshots`
-  await tx`delete from market_daily_snapshots`
   await tx`delete from market_positions`
   await tx`delete from prediction_markets`
   await tx`delete from trial_questions`
@@ -490,7 +486,6 @@ async function verifyPostReset(sql: postgres.Sql, expectedHumanTotalCash: number
     || summary.counts.marketRunLogs !== 0
     || summary.counts.modelDecisionSnapshots !== 0
     || summary.counts.marketPriceSnapshots !== 0
-    || summary.counts.marketDailySnapshots !== 0
     || summary.counts.trialMonitorRuns !== 0
     || summary.counts.trialSyncRuns !== 0
     || summary.counts.trialSyncRunItems !== 0

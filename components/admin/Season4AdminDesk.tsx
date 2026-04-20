@@ -343,7 +343,7 @@ export function Season4AdminDesk({ initialData }: { initialData: Season4OpsDashb
                 key: 'run-model-cycle',
                 url: '/api/admin/season4/model-cycle/run',
                 fallbackMessage: 'Failed to run the season 4 model cycle',
-                successMessage: (result) => `Model cycle complete. ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'} executed.`,
+                successMessage: (result) => `Model cycle complete. Executed ${result.summary.tradesExecuted.toLocaleString('en-US')} trade${result.summary.tradesExecuted === 1 ? '' : 's'}.`,
               })}
               disabled={pendingAction !== null || !initialData.chain.enabled}
               className="rounded-none border border-[#5BA5ED]/25 bg-[#eef6ff] px-4 py-2 text-left text-sm font-medium text-[#3f5f86] transition-colors hover:bg-[#e1efff] disabled:cursor-not-allowed disabled:opacity-50"
@@ -373,7 +373,7 @@ export function Season4AdminDesk({ initialData }: { initialData: Season4OpsDashb
               npm run season4:indexer:worker
             </code>
             <p className="mt-3 text-xs text-[#6f665b]">
-              Railway only runs the indexer on a schedule. Model cycles are never scheduled by a worker; each manual cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
+              Railway only runs the indexer on a schedule. Model cycles are never scheduled by a worker; run them manually from this panel when ready. Each cycle uses {formatUsd(initialData.automation.tradeAmountDisplay)} per trade across up to {initialData.automation.maxMarketsPerCycle} market{initialData.automation.maxMarketsPerCycle === 1 ? '' : 's'}.
             </p>
           </div>
         </article>

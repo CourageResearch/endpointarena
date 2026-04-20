@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { MODEL_IDS, isModelId, type ModelId } from '@/lib/constants'
 import { db } from '@/lib/db'
 import type { OpenMarketRow } from '@/lib/markets/overview-shared'
+import { MOCK_USDC_DISPLAY_SCALE } from '@/lib/onchain/constants'
 import type { Season4MarketDetail } from '@/lib/season4-market-data'
 import {
   modelDecisionSnapshots,
@@ -24,7 +25,7 @@ function atomicToDisplay(value: unknown): number {
     ? Number(value)
     : Number.NaN
   if (!Number.isFinite(numeric)) return 0
-  return numeric / 1_000_000
+  return numeric / MOCK_USDC_DISPLAY_SCALE
 }
 
 function normalizeResolvedOutcome(value: string | null | undefined): 'YES' | 'NO' | null {

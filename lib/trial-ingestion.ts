@@ -5,7 +5,6 @@ import {
   marketActions,
   marketAccounts,
   marketActors,
-  marketDailySnapshots,
   marketPositions,
   marketPriceSnapshots,
   marketRunLogs,
@@ -165,7 +164,6 @@ async function resetTrialData(): Promise<void> {
     await tx.delete(marketRunLogs)
     await tx.delete(marketRuns)
     await tx.delete(marketPriceSnapshots)
-    await tx.delete(marketDailySnapshots)
     await tx.delete(marketPositions)
     await tx.delete(predictionMarkets)
     await tx.delete(trialQuestions)

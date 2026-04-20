@@ -5,6 +5,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   real,
   text,
@@ -12,6 +13,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
+import { SEASON4_CHAIN_ID } from '@/lib/onchain/constants'
 import { TRIAL_THERAPEUTIC_AREAS } from '@/lib/trial-therapeutic-areas'
 
 const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true })
@@ -918,31 +920,6 @@ export const marketPriceSnapshots = pgTable('market_price_snapshots', {
   ),
 }))
 
-export const marketDailySnapshots = pgTable('market_daily_snapshots', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  snapshotDate: utcDate('snapshot_date').notNull(),
-  actorId: text('actor_id').notNull().references(() => marketActors.id, { onDelete: 'cascade' }),
-  cashBalance: real('cash_balance').notNull(),
-  positionsValue: real('positions_value').notNull(),
-  totalEquity: real('total_equity').notNull(),
-  createdAt: utcTimestamp('created_at').notNull().$defaultFn(() => new Date()),
-}, (table) => ({
-  actorDateUniqueIdx: uniqueIndex('market_daily_snapshots_actor_date_idx').on(table.actorId, table.snapshotDate),
-  actorIdx: index('market_daily_snapshots_actor_idx').on(table.actorId),
-  cashBalanceCheck: check(
-    'market_daily_snapshots_cash_balance_check',
-    sql`${table.cashBalance} >= 0`
-  ),
-  positionsValueCheck: check(
-    'market_daily_snapshots_positions_value_check',
-    sql`${table.positionsValue} >= 0`
-  ),
-  totalEquityCheck: check(
-    'market_daily_snapshots_total_equity_check',
-    sql`${table.totalEquity} >= 0`
-  ),
-}))
-
 export const marketRuntimeConfigs = pgTable('market_runtime_configs', {
   id: text('id').primaryKey(),
   toyTrialCount: integer('toy_trial_count').notNull().default(0),
@@ -1138,7 +1115,6 @@ export const marketActorsRelations = relations(marketActors, ({ one, many }) => 
   positions: many(marketPositions),
   actions: many(marketActions),
   decisionSnapshots: many(modelDecisionSnapshots),
-  dailySnapshots: many(marketDailySnapshots),
   runLogs: many(marketRunLogs),
 }))
 
@@ -1247,18 +1223,11 @@ export const marketPriceSnapshotsRelations = relations(marketPriceSnapshots, ({ 
   }),
 }))
 
-export const marketDailySnapshotsRelations = relations(marketDailySnapshots, ({ one }) => ({
-  actor: one(marketActors, {
-    fields: [marketDailySnapshots.actorId],
-    references: [marketActors.id],
-  }),
-}))
-
 export const onchainUserWallets = pgTable('onchain_user_wallets', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   privyUserId: text('privy_user_id'),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   walletAddress: text('wallet_address'),
   provisioningStatus: text('provisioning_status').notNull().default('pending'),
   firstClaimedAt: utcTimestamp('first_claimed_at'),
@@ -1281,7 +1250,7 @@ export const onchainModelWallets = pgTable('onchain_model_wallets', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   modelKey: text('model_key').notNull(),
   displayName: text('display_name').notNull(),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   walletAddress: text('wallet_address'),
   fundingStatus: text('funding_status').notNull().default('pending'),
   bankrollDisplay: real('bankroll_display').notNull().default(0),
@@ -1309,7 +1278,7 @@ export const onchainMarkets = pgTable('onchain_markets', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   trialQuestionId: text('trial_question_id').references(() => trialQuestions.id, { onDelete: 'set null' }),
   marketSlug: text('market_slug').notNull(),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   managerAddress: text('manager_address').notNull(),
   onchainMarketId: text('onchain_market_id'),
   title: text('title').notNull(),
@@ -1353,7 +1322,7 @@ export const onchainFaucetClaims = pgTable('onchain_faucet_claims', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   walletAddress: text('wallet_address').notNull(),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   amountAtomic: text('amount_atomic').notNull(),
   amountDisplay: real('amount_display').notNull(),
   status: text('status').notNull().default('requested'),
@@ -1377,7 +1346,7 @@ export const onchainFaucetClaims = pgTable('onchain_faucet_claims', {
 
 export const onchainIndexerCursors = pgTable('onchain_indexer_cursors', {
   id: text('id').primaryKey(),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   contractAddress: text('contract_address').notNull(),
   lastSyncedBlock: text('last_synced_block').notNull().default('0'),
   latestSeenBlock: text('latest_seen_block').notNull().default('0'),
@@ -1392,7 +1361,7 @@ export const onchainIndexerCursors = pgTable('onchain_indexer_cursors', {
 
 export const onchainEvents = pgTable('onchain_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   contractAddress: text('contract_address').notNull(),
   txHash: text('tx_hash').notNull(),
   blockHash: text('block_hash'),
@@ -1419,14 +1388,14 @@ export const onchainEvents = pgTable('onchain_events', {
 
 export const onchainBalances = pgTable('onchain_balances', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  chainId: integer('chain_id').notNull().default(84532),
+  chainId: integer('chain_id').notNull().default(SEASON4_CHAIN_ID),
   marketRef: text('market_ref').notNull().default('collateral'),
   walletAddress: text('wallet_address').notNull(),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   modelKey: text('model_key'),
-  collateralDisplay: real('collateral_display').notNull().default(0),
-  yesShares: real('yes_shares').notNull().default(0),
-  noShares: real('no_shares').notNull().default(0),
+  collateralDisplay: numeric('collateral_display', { precision: 24, scale: 6, mode: 'number' }).notNull().default(0),
+  yesShares: numeric('yes_shares', { precision: 24, scale: 6, mode: 'number' }).notNull().default(0),
+  noShares: numeric('no_shares', { precision: 24, scale: 6, mode: 'number' }).notNull().default(0),
   lastIndexedBlock: text('last_indexed_block').notNull().default('0'),
   updatedAt: utcTimestamp('updated_at').notNull().$defaultFn(() => new Date()),
 }, (table) => ({
@@ -1527,8 +1496,6 @@ export type MarketRunLog = typeof marketRunLogs.$inferSelect
 export type NewMarketRunLog = typeof marketRunLogs.$inferInsert
 export type MarketPriceSnapshot = typeof marketPriceSnapshots.$inferSelect
 export type NewMarketPriceSnapshot = typeof marketPriceSnapshots.$inferInsert
-export type MarketDailySnapshot = typeof marketDailySnapshots.$inferSelect
-export type NewMarketDailySnapshot = typeof marketDailySnapshots.$inferInsert
 export type MarketRuntimeConfig = typeof marketRuntimeConfigs.$inferSelect
 export type NewMarketRuntimeConfig = typeof marketRuntimeConfigs.$inferInsert
 export type OnchainUserWallet = typeof onchainUserWallets.$inferSelect

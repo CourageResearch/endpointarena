@@ -105,10 +105,10 @@ test('season 4 state transitions cover all buy and sell sides without negative b
     noSharesHeld: 0,
     actionType: 'BUY_YES',
     executedAmountUsd: 5,
-    shareAmountDisplay: 10,
+    shareAmountDisplay: 5,
   })
-  assert.equal(afterBuyYes.qYesDisplay, 10)
-  assert.equal(afterBuyYes.yesSharesHeld, 10)
+  assert.equal(afterBuyYes.qYesDisplay, 5)
+  assert.equal(afterBuyYes.yesSharesHeld, 5)
   assert.equal(afterBuyYes.collateralBalanceDisplay, 15)
 
   const afterBuyNo = applySeason4TradeToState({
@@ -120,10 +120,10 @@ test('season 4 state transitions cover all buy and sell sides without negative b
     noSharesHeld: afterBuyYes.noSharesHeld,
     actionType: 'BUY_NO',
     executedAmountUsd: 3,
-    shareAmountDisplay: 6,
+    shareAmountDisplay: 3,
   })
-  assert.equal(afterBuyNo.qNoDisplay, 6)
-  assert.equal(afterBuyNo.noSharesHeld, 6)
+  assert.equal(afterBuyNo.qNoDisplay, 3)
+  assert.equal(afterBuyNo.noSharesHeld, 3)
   assert.equal(afterBuyNo.collateralBalanceDisplay, 12)
 
   const afterSellYes = applySeason4TradeToState({
@@ -137,8 +137,8 @@ test('season 4 state transitions cover all buy and sell sides without negative b
     executedAmountUsd: 2,
     shareAmountDisplay: 4,
   })
-  assert.equal(afterSellYes.qYesDisplay, 6)
-  assert.equal(afterSellYes.yesSharesHeld, 6)
+  assert.equal(afterSellYes.qYesDisplay, 1)
+  assert.equal(afterSellYes.yesSharesHeld, 1)
   assert.equal(afterSellYes.collateralBalanceDisplay, 14)
 
   const afterOversellNo = applySeason4TradeToState({

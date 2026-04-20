@@ -1,9 +1,24 @@
+const path = require('path')
+
+const farcasterSolanaStub = path.resolve(__dirname, 'lib/privy-farcaster-solana-stub.js')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
   turbopack: {
     root: __dirname,
+    resolveAlias: {
+      '@farcaster/mini-app-solana': './lib/privy-farcaster-solana-stub.js',
+    },
+  },
+  webpack(config) {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@farcaster/mini-app-solana': farcasterSolanaStub,
+    }
+
+    return config
   },
   async redirects() {
     return [

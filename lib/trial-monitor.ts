@@ -278,7 +278,7 @@ function normalizeMonitorText(value: string): string {
 function truncateMonitorText(value: string, maxChars: number): string {
   const trimmed = normalizeMonitorText(value)
   if (trimmed.length <= maxChars) return trimmed
-  return `${trimmed.slice(0, Math.max(0, maxChars - 1)).trimEnd()}â€¦`
+  return `${trimmed.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`
 }
 
 function getErrorMessage(error: unknown): string {

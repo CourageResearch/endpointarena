@@ -1,4 +1,6 @@
-export const MOCK_USDC_DECIMALS = 1_000_000
+import { MOCK_USDC_DISPLAY_SCALE } from '@/lib/onchain/constants'
+
+export const MOCK_USDC_DECIMALS = MOCK_USDC_DISPLAY_SCALE
 
 export const DEFAULT_SEASON4_FAUCET_CLAIM_AMOUNT_ATOMIC = BigInt(1_000_000_000)
 

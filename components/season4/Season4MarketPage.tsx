@@ -5,7 +5,6 @@ import { startTransition, useEffect, useEffectEvent, useMemo, useState, type Key
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useSendTransaction, useWallets, type ConnectedWallet } from '@privy-io/react-auth'
 import { createPublicClient, encodeFunctionData, http, maxUint256, parseUnits, type Address } from 'viem'
-import { baseSepolia } from 'viem/chains'
 import { TrialOracleRunsPanel } from '@/components/TrialOracleRunsPanel'
 import { MarketDecisionSnapshotsPanel } from '@/components/markets/dashboard/decision-snapshots-panel'
 import { MarketDetailsPanel, MarketResolutionPanel } from '@/components/markets/dashboard/details-panel'
@@ -38,6 +37,14 @@ import { glossaryLookupAnchor } from '@/lib/glossary'
 import { getSeason4ModelInfo, getSeason4PositionModelLabel } from '@/lib/season4-model-labels'
 import { resolveSeason4TrialTab, type Season4TrialTab } from '@/lib/season4-trial-tabs'
 import { MOCK_USDC_ABI, PREDICTION_MARKET_MANAGER_ABI } from '@/lib/onchain/abi'
+import {
+  DEFAULT_SEASON4_TRADE_SLIPPAGE_BPS,
+  MOCK_USDC_DECIMAL_PLACES,
+  MOCK_USDC_DISPLAY_SCALE,
+  SEASON4_APPROVE_TX_GAS_LIMIT,
+  SEASON4_CHAIN,
+  SEASON4_TRADE_TX_GAS_LIMIT,
+} from '@/lib/onchain/constants'
 import type { Season4MarketDetail, Season4TradeRow, Season4ViewerState } from '@/lib/season4-market-data'
 import type { OpenMarketRow } from '@/lib/markets/overview-shared'
 import { getMarketQuestion, isMarketClosedToTrading } from '@/lib/markets/overview-shared'
@@ -51,8 +58,6 @@ const BASESCAN_TX_BASE_URL = 'https://sepolia.basescan.org/tx'
 const PRIVY_ENABLED = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim())
 const TRADE_DIRECTION_TAB_CLASS = 'relative -mb-px inline-flex h-9 items-center justify-center border-b-2 px-3 font-medium uppercase transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:border-transparent disabled:text-[#b8aa99]'
 const TRADE_DIRECTION_TAB_LABEL_CLASS = 'text-[11px] tracking-[0.12em]'
-const APPROVE_TX_GAS_LIMIT = BigInt(90_000)
-const TRADE_TX_GAS_LIMIT = BigInt(500_000)
 const ALLOWANCE_POLL_ATTEMPTS = 12
 const ALLOWANCE_POLL_DELAY_MS = 1500
 
@@ -143,7 +148,7 @@ function formatShares(value: number | null | undefined): string {
 }
 
 function formatTradeAmountInput(value: number): string {
-  const rounded = Math.round(Math.max(0, value) * 1_000_000) / 1_000_000
+  const rounded = Math.round(Math.max(0, value) * MOCK_USDC_DISPLAY_SCALE) / MOCK_USDC_DISPLAY_SCALE
   return Number.isInteger(rounded)
     ? String(rounded)
     : rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
@@ -1077,7 +1082,7 @@ export function Season4MarketPage({
       await activeWallet.switchChain(detail.chain.chainId)
 
       const marketId = BigInt(detail.market.onchainMarketId)
-      const amountAtomic = parseUnits(amount, 6)
+      const amountAtomic = parseUnits(amount, MOCK_USDC_DECIMAL_PLACES)
       const walletAddress = detail.viewer.walletAddress as Address
       const managerAddress = detail.chain.managerAddress as Address
       const collateralAddress = detail.chain.collateralTokenAddress as Address
@@ -1087,7 +1092,7 @@ export function Season4MarketPage({
         sponsor: true,
       } as const
       const publicClient = createPublicClient({
-        chain: baseSepolia,
+        chain: SEASON4_CHAIN,
         transport: http(),
       })
       const readAllowance = async (): Promise<bigint> => {
@@ -1122,7 +1127,7 @@ export function Season4MarketPage({
             to: collateralAddress,
             data: approveData,
             chainId: detail.chain.chainId,
-            gasLimit: APPROVE_TX_GAS_LIMIT,
+            gasLimit: SEASON4_APPROVE_TX_GAS_LIMIT,
           }, sponsoredTransactionOptions)
           approvalTxHash = approveResult.hash
           await publicClient.waitForTransactionReceipt({ hash: approveResult.hash as `0x${string}` })
@@ -1141,10 +1146,15 @@ export function Season4MarketPage({
       const functionName = direction === 'buy'
         ? (outcome === 'yes' ? 'buyYes' : 'buyNo')
         : (outcome === 'yes' ? 'sellYes' : 'sellNo')
+      const sidePrice = outcome === 'yes' ? currentPriceYes : 1 - currentPriceYes
+      const expectedOutputAtomic = direction === 'buy'
+        ? amountAtomic
+        : parseUnits((numericAmount * sidePrice).toFixed(MOCK_USDC_DECIMAL_PLACES), MOCK_USDC_DECIMAL_PLACES)
+      const minOutputAtomic = (expectedOutputAtomic * BigInt(10_000 - DEFAULT_SEASON4_TRADE_SLIPPAGE_BPS)) / BigInt(10_000)
       const tradeData = encodeFunctionData({
         abi: PREDICTION_MARKET_MANAGER_ABI,
         functionName,
-        args: [marketId, amountAtomic, BigInt(0)],
+        args: [marketId, amountAtomic, minOutputAtomic],
       })
 
       const tradeResult = await sendTransaction({
@@ -1152,7 +1162,7 @@ export function Season4MarketPage({
         to: managerAddress,
         data: tradeData,
         chainId: detail.chain.chainId,
-        gasLimit: TRADE_TX_GAS_LIMIT,
+        gasLimit: SEASON4_TRADE_TX_GAS_LIMIT,
       }, sponsoredTransactionOptions)
 
       startTransition(() => {

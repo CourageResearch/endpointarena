@@ -1,23 +1,18 @@
 import dotenv from 'dotenv'
 import { createPublicClient, createWalletClient, formatEther, http, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import { closeDbConnections } from '@/lib/db'
 import { SEASON4_FAUCET_ABI } from '@/lib/onchain/abi'
 import { getSeason4DeployerPrivateKey, requireSeason4OnchainConfig } from '@/lib/onchain/config'
+import {
+  DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
+  MIN_SEASON4_MODEL_ETH_BALANCE_WEI,
+  SEASON4_CHAIN,
+} from '@/lib/onchain/constants'
 import { seedSeason4ModelWallets } from '@/lib/season4-ops'
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
-
-const DEFAULT_ETH_TOP_UP_WEI = BigInt(20_000_000_000_000)
-const MIN_ETH_BALANCE_WEI = BigInt(10_000_000_000_000)
-
-function trimOrNull(value: string | null | undefined): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
 
 async function main() {
   const config = requireSeason4OnchainConfig()
@@ -32,12 +27,12 @@ async function main() {
 
   const deployer = privateKeyToAccount(privateKey)
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
   const walletClient = createWalletClient({
     account: deployer,
-    chain: baseSepolia,
+    chain: SEASON4_CHAIN,
     transport: http(config.rpcUrl),
   })
 
@@ -76,12 +71,12 @@ async function main() {
     }
 
     const gasBalance = await publicClient.getBalance({ address: walletAddress })
-    if (gasBalance < MIN_ETH_BALANCE_WEI) {
+    if (gasBalance < MIN_SEASON4_MODEL_ETH_BALANCE_WEI) {
       gasTopUpTxHash = await walletClient.sendTransaction({
         account: deployer,
         to: walletAddress,
-        value: DEFAULT_ETH_TOP_UP_WEI,
-        chain: baseSepolia,
+        value: DEFAULT_SEASON4_MODEL_ETH_TOP_UP_WEI,
+        chain: SEASON4_CHAIN,
       })
       await publicClient.waitForTransactionReceipt({ hash: gasTopUpTxHash })
     }

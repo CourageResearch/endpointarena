@@ -144,16 +144,6 @@ type MarketAccountRow = {
   updated_at: Date
 }
 
-type MarketDailySnapshotRow = {
-  id: string
-  snapshot_date: Date
-  actor_id: string
-  cash_balance: number
-  positions_value: number
-  total_equity: number
-  created_at: Date
-}
-
 type ActorIdRow = { actor_id: string }
 type CashRestoreRow = { actor_id: string, cash_restore: number }
 
@@ -169,7 +159,6 @@ type CleanupData = {
   affectedActorIds: string[]
   cashRestoreRows: CashRestoreRow[]
   accounts: MarketAccountRow[]
-  dailySnapshots: MarketDailySnapshotRow[]
   legacyTableCounts: LegacyTableCounts
   legacyTablePresence: LegacyTablePresence
 }
@@ -220,23 +209,6 @@ type ResidualPositionAdjustment = {
   yes: number
   no: number
   startsOn: string
-}
-
-type SnapshotRepairRow = {
-  snapshotId: string
-  actorId: string
-  snapshotDate: string
-  correctedCashBalance: number
-  correctedPositionsValue: number
-  correctedTotalEquity: number
-  legacyPositionsValueRemoved: number
-  cashRestoreApplied: number
-}
-
-type CurrentSnapshotRefreshSummary = {
-  snapshotDate: string
-  openMarketCount: number
-  accountCount: number
 }
 
 const DEFAULT_BASELINE: ExpectedBaseline = {
@@ -693,169 +665,6 @@ function assertPreflightMatches(summary: PreflightSummary, expected: ExpectedBas
   }
 }
 
-function buildLegacyValueRemovalsBySnapshotRow(
-  data: CleanupData,
-  residuals: Map<string, ResidualPositionAdjustment>,
-): SnapshotRepairRow[] {
-  const openMarketIdSet = new Set(data.openMarketIds)
-  const openMarkets = data.markets.filter((market) => openMarketIdSet.has(market.id))
-  const relevantSnapshots = data.dailySnapshots
-    .filter((snapshot) => {
-      const snapshotDate = toDateKey(snapshot.snapshot_date)
-      return snapshotDate !== null && snapshotDate >= HISTORY_START_DATE
-    })
-    .sort((a, b) => (
-      a.snapshot_date.getTime() - b.snapshot_date.getTime()
-      || a.actor_id.localeCompare(b.actor_id)
-      || a.id.localeCompare(b.id)
-    ))
-
-  if (relevantSnapshots.length === 0) {
-    return []
-  }
-
-  const actions = data.actions
-    .filter((action) => openMarketIdSet.has(action.market_id))
-    .filter((action) => action.status === 'ok')
-    .sort((a, b) => (
-      a.run_date.getTime() - b.run_date.getTime()
-      || a.created_at.getTime() - b.created_at.getTime()
-      || a.id.localeCompare(b.id)
-    ))
-  const priceSnapshots = data.priceSnapshots
-    .filter((snapshot) => openMarketIdSet.has(snapshot.market_id))
-    .sort((a, b) => (
-      a.snapshot_date.getTime() - b.snapshot_date.getTime()
-      || a.market_id.localeCompare(b.market_id)
-      || a.id.localeCompare(b.id)
-    ))
-
-  const positionsByActorMarket = new Map<string, PositionState>()
-  const runningCashRestoreByActor = new Map<string, number>()
-  const latestPriceByMarket = new Map<string, number>()
-  const repairedRows: SnapshotRepairRow[] = []
-
-  let actionIndex = 0
-  let priceIndex = 0
-
-  const snapshotDates = Array.from(new Set(
-    relevantSnapshots
-      .map((snapshot) => toDateKey(snapshot.snapshot_date))
-      .filter((value): value is string => typeof value === 'string'),
-  )).sort()
-
-  const snapshotsByDate = new Map<string, MarketDailySnapshotRow[]>()
-  for (const snapshot of relevantSnapshots) {
-    const dateKey = toDateKey(snapshot.snapshot_date)
-    if (!dateKey) continue
-
-    const current = snapshotsByDate.get(dateKey) ?? []
-    current.push(snapshot)
-    snapshotsByDate.set(dateKey, current)
-  }
-
-  for (const dateKey of snapshotDates) {
-    while (actionIndex < actions.length) {
-      const action = actions[actionIndex]
-      const actionDate = toDateKey(action.run_date)
-      if (actionDate === null || actionDate > dateKey) break
-
-      const positionKey = `${action.market_id}:${action.actor_id}`
-      const position = positionsByActorMarket.get(positionKey) ?? { yes: 0, no: 0 }
-      applyActionToPosition(position, action)
-      positionsByActorMarket.set(positionKey, position)
-
-      let cashRestoreDelta = 0
-      if (action.shares_delta > 0) {
-        cashRestoreDelta = action.usd_amount
-      } else if (action.shares_delta < 0) {
-        cashRestoreDelta = -action.usd_amount
-      }
-
-      runningCashRestoreByActor.set(
-        action.actor_id,
-        roundCash((runningCashRestoreByActor.get(action.actor_id) ?? 0) + cashRestoreDelta),
-      )
-
-      actionIndex += 1
-    }
-
-    while (priceIndex < priceSnapshots.length) {
-      const snapshot = priceSnapshots[priceIndex]
-      const snapshotDate = toDateKey(snapshot.snapshot_date)
-      if (snapshotDate === null || snapshotDate > dateKey) break
-
-      latestPriceByMarket.set(snapshot.market_id, snapshot.price_yes)
-      priceIndex += 1
-    }
-
-    const rows = snapshotsByDate.get(dateKey) ?? []
-    for (const row of rows) {
-      let legacyPositionsValue = 0
-      for (const market of openMarkets) {
-        const position = positionsByActorMarket.get(`${market.id}:${row.actor_id}`) ?? { yes: 0, no: 0 }
-        const marketOpenedOn = toDateKey(market.opened_at) ?? HISTORY_START_DATE
-        // Historical repairs only trust action-derived exposure; residuals are current-state cleanup only.
-        const hasExposure = position.yes > 0 || position.no > 0
-
-        if (marketOpenedOn > dateKey && !hasExposure) {
-          continue
-        }
-
-        const priceYes = latestPriceByMarket.get(market.id)
-        if (priceYes === undefined) {
-          if (!hasExposure) {
-            continue
-          }
-          throw new Error(`Missing price snapshot for market ${market.id} on or before ${dateKey}`)
-        }
-
-        if (position.yes > 0 || position.no > 0) {
-          legacyPositionsValue += computeMarkedValue(position, priceYes)
-        }
-      }
-
-      const correctedCashBalanceRaw = clampNearZero(roundCash(
-        row.cash_balance + (runningCashRestoreByActor.get(row.actor_id) ?? 0),
-      ))
-      const correctedPositionsValueRaw = roundCash(row.positions_value - legacyPositionsValue)
-      const correctedPositionsValueBase = correctedPositionsValueRaw < 0
-        && Math.abs(correctedPositionsValueRaw) <= POSITION_RECONCILIATION_EPSILON
-        ? 0
-        : clampNearZero(correctedPositionsValueRaw)
-      const correctedTotalEquityRaw = clampNearZero(roundCash(correctedCashBalanceRaw + correctedPositionsValueBase))
-
-      const correctedCashBalance = correctedCashBalanceRaw < 0 ? 0 : correctedCashBalanceRaw
-      const correctedPositionsValue = correctedCashBalanceRaw < 0
-        ? clampNearZero(roundCash(correctedTotalEquityRaw))
-        : correctedPositionsValueBase
-      const correctedTotalEquity = clampNearZero(roundCash(correctedCashBalance + correctedPositionsValue))
-
-      // When removing legacy sell proceeds pushes historical cash below zero, rebalance the
-      // deficit into positions_value so the snapshot stays valid while total equity is preserved.
-      if (correctedPositionsValue < -POSITION_RECONCILIATION_EPSILON) {
-        throw new Error(`Negative corrected positions value for actor ${row.actor_id} on ${dateKey}`)
-      }
-      if (correctedTotalEquity < -MONEY_EPSILON) {
-        throw new Error(`Negative corrected total equity for actor ${row.actor_id} on ${dateKey}`)
-      }
-
-      repairedRows.push({
-        snapshotId: row.id,
-        actorId: row.actor_id,
-        snapshotDate: dateKey,
-        correctedCashBalance,
-        correctedPositionsValue,
-        correctedTotalEquity,
-        legacyPositionsValueRemoved: roundCash(legacyPositionsValue),
-        cashRestoreApplied: roundCash(runningCashRestoreByActor.get(row.actor_id) ?? 0),
-      })
-    }
-  }
-
-  return repairedRows
-}
-
 async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
   const legacyTablePresence = await getLegacyTablePresence(client)
   const legacyTableCounts = await loadLegacyTableCounts(client, legacyTablePresence)
@@ -904,7 +713,6 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
       affectedActorIds: [],
       cashRestoreRows: [],
       accounts: [],
-      dailySnapshots: [],
       legacyTableCounts,
       legacyTablePresence,
     }
@@ -991,22 +799,14 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
   ])
 
   const affectedActorIds = affectedActorRows.map((row) => row.actor_id)
-  const [accounts, dailySnapshots]: [MarketAccountRow[], MarketDailySnapshotRow[]] = affectedActorIds.length === 0
-    ? [[], []]
-    : await Promise.all([
-      client<MarketAccountRow[]>`
-        select *
-        from market_accounts
-        where actor_id in ${client(affectedActorIds)}
-        order by actor_id asc
-      `,
-      client<MarketDailySnapshotRow[]>`
-        select *
-        from market_daily_snapshots
-        where actor_id in ${client(affectedActorIds)}
-        order by snapshot_date asc, actor_id asc, id asc
-      `,
-    ]) as [MarketAccountRow[], MarketDailySnapshotRow[]]
+  const accounts = affectedActorIds.length === 0
+    ? []
+    : await client<MarketAccountRow[]>`
+      select *
+      from market_accounts
+      where actor_id in ${client(affectedActorIds)}
+      order by actor_id asc
+    `
 
   return {
     markets,
@@ -1020,57 +820,21 @@ async function loadCleanupData(client: postgres.Sql): Promise<CleanupData> {
     affectedActorIds,
     cashRestoreRows,
     accounts,
-    dailySnapshots,
     legacyTableCounts,
     legacyTablePresence,
   }
 }
 
-async function updateHistoricalSnapshots(
-  client: postgres.Sql,
-  repairedRows: SnapshotRepairRow[],
-): Promise<number> {
-  for (const row of repairedRows) {
-    await client`
-      update market_daily_snapshots
-      set
-        cash_balance = ${row.correctedCashBalance},
-        positions_value = ${row.correctedPositionsValue},
-        total_equity = ${row.correctedTotalEquity}
-      where id = ${row.snapshotId}
-    `
-  }
-
-  return repairedRows.length
-}
-
-async function refreshCurrentSnapshots(client: postgres.Sql): Promise<CurrentSnapshotRefreshSummary> {
+async function refreshCurrentPriceSnapshots(client: postgres.Sql): Promise<{ snapshotDate: string, openMarketCount: number }> {
   const snapshotDate = normalizeRunDate(new Date())
   const snapshotDateKey = toDateKey(snapshotDate) as string
 
-  const [openMarkets, positions, accounts] = await Promise.all([
-    client<Array<{ id: string, price_yes: number | null, q_yes: number, q_no: number }>>`
-      select id, price_yes, q_yes, q_no
-      from prediction_markets
-      where status = 'OPEN'
-      order by id asc
-    `,
-    client<MarketPositionRow[]>`
-      select *
-      from market_positions
-      where market_id in (
-        select id
-        from prediction_markets
-        where status = 'OPEN'
-      )
-      order by actor_id asc, market_id asc
-    `,
-    client<MarketAccountRow[]>`
-      select *
-      from market_accounts
-      order by actor_id asc
-    `,
-  ])
+  const openMarkets = await client<Array<{ id: string, price_yes: number | null, q_yes: number, q_no: number }>>`
+    select id, price_yes, q_yes, q_no
+    from prediction_markets
+    where status = 'OPEN'
+    order by id asc
+  `
 
   for (const market of openMarkets) {
     await client`
@@ -1100,57 +864,13 @@ async function refreshCurrentSnapshots(client: postgres.Sql): Promise<CurrentSna
     `
   }
 
-  const priceByMarketId = new Map(openMarkets.map((market) => [market.id, market.price_yes]))
-  const positionsValueByActor = new Map<string, number>()
-
-  for (const position of positions) {
-    const priceYes = priceByMarketId.get(position.market_id)
-    if (priceYes == null) continue
-
-    const current = positionsValueByActor.get(position.actor_id) ?? 0
-    const next = current + (position.yes_shares * priceYes) + (position.no_shares * (1 - priceYes))
-    positionsValueByActor.set(position.actor_id, roundCash(next))
-  }
-
-  for (const account of accounts) {
-    const positionsValue = roundCash(positionsValueByActor.get(account.actor_id) ?? 0)
-    const totalEquity = roundCash(account.cash_balance + positionsValue)
-
-    await client`
-      insert into market_daily_snapshots (
-        id,
-        snapshot_date,
-        actor_id,
-        cash_balance,
-        positions_value,
-        total_equity,
-        created_at
-      )
-      values (
-        ${crypto.randomUUID()},
-        ${snapshotDate},
-        ${account.actor_id},
-        ${account.cash_balance},
-        ${positionsValue},
-        ${totalEquity},
-        ${new Date()}
-      )
-      on conflict (actor_id, snapshot_date) do update
-      set
-        cash_balance = excluded.cash_balance,
-        positions_value = excluded.positions_value,
-        total_equity = excluded.total_equity
-    `
-  }
-
   return {
     snapshotDate: snapshotDateKey,
     openMarketCount: openMarkets.length,
-    accountCount: accounts.length,
   }
 }
 
-async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: string[], affectedActorIds: string[], snapshotDate: string) {
+async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: string[]) {
   const legacyTablePresence = await getLegacyTablePresence(client)
   const legacyTableCounts = await loadLegacyTableCounts(client, legacyTablePresence)
   const [
@@ -1161,7 +881,6 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
     remainingDecisionSnapshotRow,
     remainingRunLogRow,
     negativeAccountRow,
-    refreshedSnapshotRow,
   ] = await Promise.all([
     client<{ count: string }[]>`
       select count(*)::text as count
@@ -1198,12 +917,6 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
       from market_accounts
       where cash_balance < 0
     `,
-    client<{ count: string }[]>`
-      select count(*)::text as count
-      from market_daily_snapshots
-      where snapshot_date::date = ${snapshotDate}::date
-        and actor_id in ${client(affectedActorIds)}
-    `,
   ])
 
   return {
@@ -1214,16 +927,14 @@ async function verifyPostDeleteState(client: postgres.Sql, deletedMarketIds: str
     remainingDeletedMarketDecisionSnapshots: Number(remainingDecisionSnapshotRow[0]?.count ?? '0'),
     remainingDeletedMarketRunLogs: Number(remainingRunLogRow[0]?.count ?? '0'),
     negativeAffectedAccounts: Number(negativeAccountRow[0]?.count ?? '0'),
-    refreshedSnapshotRowCount: Number(refreshedSnapshotRow[0]?.count ?? '0'),
     legacyTableCounts,
   }
 }
 
 function assertVerificationClean(input: {
   verification: Awaited<ReturnType<typeof verifyPostDeleteState>>
-  affectedActorCount: number
 }): void {
-  const { verification, affectedActorCount } = input
+  const { verification } = input
   const failures: string[] = []
 
   if (verification.remainingLegacyMarkets !== 0) {
@@ -1247,12 +958,6 @@ function assertVerificationClean(input: {
   if (verification.negativeAffectedAccounts !== 0) {
     failures.push(`negativeAccounts=${verification.negativeAffectedAccounts}`)
   }
-  if (verification.refreshedSnapshotRowCount < affectedActorCount) {
-    failures.push(
-      `refreshedSnapshotRowCount=${verification.refreshedSnapshotRowCount} expectedAtLeast=${affectedActorCount}`,
-    )
-  }
-
   for (const [tableName, count] of Object.entries(verification.legacyTableCounts)) {
     if (count !== 0) {
       failures.push(`${tableName}=${count}`)
@@ -1307,7 +1012,6 @@ async function main(): Promise<void> {
       const summary = buildPreflightSummary(data, residuals)
       assertPreflightMatches(summary, args.expectations)
 
-      const repairedRows = buildLegacyValueRemovalsBySnapshotRow(data, residuals)
       const actionCashRestoreByActor = buildCashRestoreMap(data.cashRestoreRows)
       const residualCurrentValueByActor = computeCurrentResidualValueByActor(data.markets, residuals)
       const actionCashRestoreActors = Array.from(actionCashRestoreByActor.entries())
@@ -1342,8 +1046,6 @@ async function main(): Promise<void> {
         `
       }
 
-      const historicalSnapshotCount = await updateHistoricalSnapshots(tx, repairedRows)
-
       const deletedRunLogs = data.runLogs.length > 0
         ? await tx<Array<{ id: string }>>`
             delete from market_run_logs
@@ -1374,11 +1076,10 @@ async function main(): Promise<void> {
         await tx`delete from fda_calendar_events`
       }
 
-      const refreshSummary = await refreshCurrentSnapshots(tx)
+      const refreshSummary = await refreshCurrentPriceSnapshots(tx)
 
       return {
         preflight: summary,
-        historicalSnapshotCount,
         deletedRunLogCount: deletedRunLogs.length,
         deletedMarketCount: deletedMarkets.length,
         refreshSummary,
@@ -1394,18 +1095,14 @@ async function main(): Promise<void> {
     const verification = await verifyPostDeleteState(
       sql,
       executionSummary.deletedMarketIds,
-      executionSummary.affectedActorIds,
-      executionSummary.refreshSummary.snapshotDate,
     )
     assertVerificationClean({
       verification,
-      affectedActorCount: executionSummary.affectedActorIds.length,
     })
 
     console.log(JSON.stringify({
       mode: 'execute',
       preflight: executionSummary.preflight,
-      historicalSnapshotCount: executionSummary.historicalSnapshotCount,
       deletedRunLogCount: executionSummary.deletedRunLogCount,
       deletedMarketCount: executionSummary.deletedMarketCount,
       residualAdjustmentCount: executionSummary.residualAdjustmentCount,

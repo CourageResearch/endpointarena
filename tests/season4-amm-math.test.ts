@@ -84,7 +84,7 @@ test('season 4 AMM price moves monotonically with YES and NO pressure', () => {
     noSharesHeld: 0,
     actionType: 'BUY_YES',
     executedAmountUsd: 10,
-    shareAmountDisplay: 20,
+    shareAmountDisplay: 10,
   })
   assert.ok(afterYesBuy.priceYes > startingPrice)
 
@@ -97,7 +97,7 @@ test('season 4 AMM price moves monotonically with YES and NO pressure', () => {
     noSharesHeld: 0,
     actionType: 'BUY_NO',
     executedAmountUsd: 10,
-    shareAmountDisplay: 20,
+    shareAmountDisplay: 10,
   })
   assert.ok(afterNoBuy.priceYes < startingPrice)
 
